@@ -1,0 +1,46 @@
+[toolchain]
+anchor_version = "0.32.1"
+package_manager = "pnpm"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+energy_token = "94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur"
+governance = "4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe"
+oracle = "DvdtU4quEbuxUY2FckmvcXwTpC9qp4HLJKb1PMLaqAoE"
+registry = "2XPQmFYMdXjP7ffoBB3mXeCdboSFg5Yeb6QmTSGbW8a7"
+trading = "GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/Developments/gridtokenx-platform/dev-wallet.json"
+
+[test]
+startup_wait = 5000
+shutdown_wait = 2000
+upgradeable = false
+
+[[test.genesis]]
+address = "2CVWTnckn5TXUWXdZoZE6LydiQJGMYHVVPipkoy1LVqr"
+program = "target/deploy/energy_token.so"
+
+[[test.genesis]]
+address = "Dy8JFn95L1E7NoUkXbFQtW1kGR7Ja21CkNcirNgv4ghe"
+program = "target/deploy/governance.so"
+
+[[test.genesis]]
+address = "5r8ZMs9D4PUf4ncbxKUZyuaYbWosZwxiJHA5i5Mqrti9"
+program = "target/deploy/oracle.so"
+
+[[test.genesis]]
+address = "42LoRKPphBBdvaCDx2ZjNuZFqzXuJziiiNXyiV6FhBY5"
+program = "target/deploy/registry.so"
+
+[[test.genesis]]
+address = "dS3zvp95PFVrNNBfZDXn78QL5MvhUqDCFR4rn8z9Jgh"
+program = "target/deploy/trading.so"
