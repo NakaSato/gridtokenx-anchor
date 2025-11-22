@@ -13,7 +13,13 @@ VALIDATOR_PID=$!
 echo "Validator PID: $VALIDATOR_PID"
 
 # Wait for validator to start
-sleep 3
+sleep 5
+
+# 2. Create GRX token mint
+echo "Creating GRX token mint..."
+solana-keygen new --no-bip39-passphrase --silent --force --outfile ./grx-mint-keypair.json
+MINT_PUBKEY=$(solana-keygen pubkey ./grx-mint-keypair.json)
+echo "Mint public key: $MINT_PUBKEY"
 
 # 2. Create GRX token mint
 echo "Creating GRX token mint..."
@@ -36,11 +42,19 @@ solana-keygen new --no-bip39-passphrase --silent --force --outfile ./wallet-2-ke
 WALLET2_PUBKEY=$(solana-keygen pubkey ./wallet-2-keypair.json)
 echo "Wallet 2 public key: $WALLET2_PUBKEY"
 
+solana-keygen new --no-bip39-passphrase --silent --force --outfile ./wallet-2-keypair.json
+WALLET2_PUBKEY=$(solana-keygen pubkey ./wallet-2-keypair.json)
+echo "Wallet 2 public key: $WALLET2_PUBKEY"
+
 # 4. Create token accounts
 echo "Creating token accounts..."
 spl-token create-account $TOKEN_ADDRESS --owner $WALLET1_PUBKEY
 ACCOUNT1_ADDRESS=$(spl-token address --mint-authority $WALLET1_PUBKEY --token $TOKEN_ADDRESS)
 echo "Account 1 address: $ACCOUNT1_ADDRESS"
+
+spl-token create-account $TOKEN_ADDRESS --owner $WALLET2_PUBKEY
+ACCOUNT2_ADDRESS=$(spl-token address --mint-authority $WALLET2_PUBKEY --token $TOKEN_ADDRESS)
+echo "Account 2 address: $ACCOUNT2_ADDRESS"
 
 spl-token create-account $TOKEN_ADDRESS --owner $WALLET2_PUBKEY
 ACCOUNT2_ADDRESS=$(spl-token address --mint-authority $WALLET2_PUBKEY --token $TOKEN_ADDRESS)
