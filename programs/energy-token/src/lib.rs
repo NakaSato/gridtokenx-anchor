@@ -31,25 +31,31 @@ pub mod energy_token {
     ) -> Result<()> {
         msg!("Creating GRX token mint: {} ({})", name, symbol);
         
-        // Create metadata using Metaplex Token Metadata program
-        CreateV1CpiBuilder::new(&ctx.accounts.metadata_program.to_account_info())
-            .metadata(&ctx.accounts.metadata.to_account_info())
-            .mint(&ctx.accounts.mint.to_account_info(), true)
-            .authority(&ctx.accounts.authority.to_account_info())
-            .payer(&ctx.accounts.payer.to_account_info())
-            .update_authority(&ctx.accounts.authority.to_account_info(), true)
-            .system_program(&ctx.accounts.system_program.to_account_info())
-            .spl_token_program(Some(&ctx.accounts.token_program.to_account_info()))
-            .name(name)
-            .symbol(symbol)
-            .uri(uri)
-            .seller_fee_basis_points(0)
-            .decimals(9)
-            .token_standard(TokenStandard::Fungible)
-            .print_supply(PrintSupply::Zero)
-            .invoke()?;
-        
-        msg!("GRX token mint created successfully with metadata");
+        // Check if Metaplex program is available (for localnet testing)
+        if ctx.accounts.metadata_program.executable {
+            // Create metadata using Metaplex Token Metadata program
+            CreateV1CpiBuilder::new(&ctx.accounts.metadata_program.to_account_info())
+                .metadata(&ctx.accounts.metadata.to_account_info())
+                .mint(&ctx.accounts.mint.to_account_info(), true)
+                .authority(&ctx.accounts.authority.to_account_info())
+                .payer(&ctx.accounts.payer.to_account_info())
+                .update_authority(&ctx.accounts.authority.to_account_info(), true)
+                .system_program(&ctx.accounts.system_program.to_account_info())
+                .sysvar_instructions(&ctx.accounts.sysvar_instructions.to_account_info())
+                .spl_token_program(Some(&ctx.accounts.token_program.to_account_info()))
+                .name(name)
+                .symbol(symbol)
+                .uri(uri)
+                .seller_fee_basis_points(0)
+                .decimals(9)
+                .token_standard(TokenStandard::Fungible)
+                .print_supply(PrintSupply::Zero)
+                .invoke()?;
+            
+            msg!("GRX token mint created successfully with metadata");
+        } else {
+            msg!("Metaplex program not available, creating token mint without metadata");
+        }
         
         Ok(())
     }
@@ -283,7 +289,7 @@ pub struct CreateTokenMint<'info> {
     )]
     pub mint: InterfaceAccount<'info, MintInterface>,
     
-    /// CHECK: Validated by Metaplex metadata program
+    /// CHECK: Validated by Metaplex metadata program (optional)
     #[account(mut)]
     pub metadata: UncheckedAccount<'info>,
     
@@ -294,10 +300,12 @@ pub struct CreateTokenMint<'info> {
     
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
-    /// CHECK: Metaplex metadata program address checked inline
-    #[account(address = MPL_TOKEN_METADATA_ID)]
+    /// CHECK: Metaplex metadata program (optional for localnet)
     pub metadata_program: UncheckedAccount<'info>,
     pub rent: Sysvar<'info, Rent>,
+    /// CHECK: Sysvar instructions account for Metaplex validation
+    #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
+    pub sysvar_instructions: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]

@@ -44,3 +44,6 @@ program = "target/deploy/registry.so"
 [[test.genesis]]
 address = "dS3zvp95PFVrNNBfZDXn78QL5MvhUqDCFR4rn8z9Jgh"
 program = "target/deploy/trading.so"
+
+[scripts]
+test = "pnpm ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

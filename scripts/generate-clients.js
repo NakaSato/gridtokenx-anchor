@@ -18,22 +18,22 @@ let failureCount = 0
 
 programs.forEach((program, index) => {
   console.log(`[${index + 1}/${programs.length}] Generating ${program.name}...`)
-  
+
   const idlPath = resolve(`target/idl/${program.idlName}.json`)
-  
+
   if (!existsSync(idlPath)) {
     console.error(`❌ IDL not found: ${idlPath}`)
     console.log(`   Run: anchor build\n`)
     failureCount++
     return
   }
-  
+
   try {
     // Generate client for this program
     const configPath = `./codama.config.${program.name}.js`
     execSync(`npx codama run js -c ${configPath}`, {
       stdio: 'inherit',
-      cwd: resolve('anchor'),
+      cwd: process.cwd(),
     })
     console.log(`✅ ${program.name} client generated\n`)
     successCount++
