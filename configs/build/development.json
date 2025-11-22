@@ -1,6 +1,6 @@
 {
   "environment": "development",
-  "cluster": "localnet",
+  "cluster": "http://127.0.0.1:8899",
   "skip_lint": true,
   "features": ["cpi"],
   "log_level": "debug",
@@ -37,38 +37,38 @@
     }
   ],
   "validator": {
-      "reset": true,
-      "genesis": [
-          {
-              "address": "2CVWTnckn5TXUWXdZoZE6LydiQJGMYHVVPipkoy1LVqr",
-              "program": "target/deploy/energy_token.so"
-          },
-          {
-              "address": "Dy8JFn95L1E7NoUkXbFQtW1kGR7Ja21CkNcirNgv4ghe",
-              "program": "target/deploy/governance.so"
-          },
-          {
-              "address": "5r8ZMs9D4PUf4ncbxKUZyuaYbWosZwxiJHA5i5Mqrti9",
-              "program": "target/deploy/oracle.so"
-          },
-          {
-              "address": "42LoRKPphBBdvaCDx2ZjNuZFqzXuJziiiNXyiV6FhBY5",
-              "program": "target/deploy/registry.so"
-          },
-          {
-              "address": "dS3zvp95PFVrNNBfZDXn78QL5MvhUqDCFR4rn8z9Jgh",
-              "program": "target/deploy/trading.so"
-          }
-      ]
+    "reset": true,
+    "genesis": [
+      {
+        "address": "2CVWTnckn5TXUWXdZoZE6LydiQJGMYHVVPipkoy1LVqr",
+        "program": "target/deploy/energy_token.so"
+      },
+      {
+        "address": "Dy8JFn95L1E7NoUkXbFQtW1kGR7Ja21CkNcirNgv4ghe",
+        "program": "target/deploy/governance.so"
+      },
+      {
+        "address": "5r8ZMs9D4PUf4ncbxKUZyuaYbWosZwxiJHA5i5Mqrti9",
+        "program": "target/deploy/oracle.so"
+      },
+      {
+        "address": "42LoRKPphBBdvaCDx2ZjNuZFqzXuJziiiNXyiV6FhBY5",
+        "program": "target/deploy/registry.so"
+      },
+      {
+        "address": "dS3zvp95PFVrNNBfZDXn78QL5MvhUqDCFR4rn8z9Jgh",
+        "program": "target/deploy/trading.so"
+      }
+    ]
   },
   "wallets": {
-      "default": "dev-wallet.json",
-      "test_1": "wallet-1-keypair.json",
-      "test_2": "wallet-2-keypair.json"
+    "default": "dev-wallet.json",
+    "test_1": "wallet-1-keypair.json",
+    "test_2": "wallet-2-keypair.json"
   },
   "testing": {
-      "startup_wait": 5000,
-      "shutdown_wait": 2000,
-      "upgradeable": false
+    "startup_wait": 5000,
+    "shutdown_wait": 2000,
+    "upgradeable": false
   }
 }

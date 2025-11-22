@@ -8,9 +8,14 @@
     "test": "anchor test",
     "test:grx": "anchor test --skip-local-validator tests/grx-token.test.ts",
     "test:performance": "anchor test --skip-local-validator tests/performance-benchmark.test.ts",
-    "create-token": "ts-node scripts/create-grx-token.ts",
-    "demo-token": "ts-node scripts/demo-grx-token.ts",
-    "loop-transfer": "ts-node scripts/loop-transfer-test.ts"
+    "token:create": "ts-node scripts/08-token-manager.ts create",
+    "token:mint": "ts-node scripts/08-token-manager.ts mint",
+    "token:transfer": "ts-node scripts/08-token-manager.ts transfer",
+    "wallet:create": "ts-node scripts/09-wallet-manager.ts create",
+    "wallet:airdrop": "ts-node scripts/09-wallet-manager.ts airdrop",
+    "wallet:balance": "ts-node scripts/09-wallet-manager.ts balance",
+    "setup:loop-test": "ts-node scripts/10-setup-loop-test-standalone.ts",
+    "inspect": "ts-node scripts/11-inspect.ts"
   },
   "dependencies": {
     "@codama/renderers-js": "^1.5.0",
