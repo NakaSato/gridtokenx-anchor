@@ -20,7 +20,7 @@ import {
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import {
-  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAccount,
@@ -224,7 +224,7 @@ async function checkBalances(
     mint,
     wallet1.publicKey,
     false,
-    TOKEN_2022_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
@@ -232,7 +232,7 @@ async function checkBalances(
     mint,
     wallet2.publicKey,
     false,
-    TOKEN_2022_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
@@ -244,7 +244,7 @@ async function checkBalances(
       connection,
       wallet1TokenAccount,
       undefined,
-      TOKEN_2022_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
     );
     wallet1Balance = account1.amount;
   } catch (e) {
@@ -256,7 +256,7 @@ async function checkBalances(
       connection,
       wallet2TokenAccount,
       undefined,
-      TOKEN_2022_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
     );
     wallet2Balance = account2.amount;
   } catch (e) {
@@ -309,7 +309,7 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
     mintInfo.mint,
     wallet1.publicKey,
     false,
-    TOKEN_2022_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
@@ -317,7 +317,7 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
     mintInfo.mint,
     wallet2.publicKey,
     false,
-    TOKEN_2022_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
@@ -327,13 +327,13 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
       connection,
       wallet1TokenAccount,
       undefined,
-      TOKEN_2022_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
     );
     await getAccount(
       connection,
       wallet2TokenAccount,
       undefined,
-      TOKEN_2022_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
     );
   } catch (error) {
     console.error("\n❌ Error: Token accounts not initialized.");
@@ -366,11 +366,11 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
         fromWallet, // payer
         fromAccount, // source
         toAccount, // destination
-        fromWallet, // owner
+        fromWallet.publicKey, // owner
         transferAmount,
-        [],
+        [fromWallet], // signers
         { commitment: "confirmed" },
-        TOKEN_2022_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
       );
 
       const txEnd = Date.now();
@@ -391,7 +391,7 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
       console.log(
         `  [${(i + 1).toString().padStart(3)}/${iterations}] ` +
           `${direction.padEnd(25)} ` +
-          `FAILED ❌ ${errorMsg.substring(0, 40)}`,
+          `FAILED ❌ ${errorMsg.substring(0, 200)}`,
       );
     }
 

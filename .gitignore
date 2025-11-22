@@ -73,3 +73,5 @@ coverage/
 # Generated clients
 src/client/
 **/generated/
+
+/debug/**
