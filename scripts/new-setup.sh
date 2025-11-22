@@ -1,7 +1,7 @@
 #!/bin/bash
 # Simple Setup Script for GridTokenX Project
 
-set -e  # Exit on error
+set -e
 
 echo "🚀 GridTokenX Simple Setup"
 echo "================================"
