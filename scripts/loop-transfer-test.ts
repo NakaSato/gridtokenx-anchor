@@ -1,12 +1,12 @@
 #!/usr/bin/env ts-node
 /**
  * Loop Transfer Performance Test Script
- * 
+ *
  * Tests transaction latency and throughput by looping transfers between 2 wallets.
  * Measures: latency (min/max/avg/p95/p99), throughput (tx/sec), success rate
- * 
+ *
  * Usage: ts-node scripts/loop-transfer-test.ts [iterations] [amount]
- * 
+ *
  * Examples:
  *   ts-node scripts/loop-transfer-test.ts           # Default: 100 iterations, 1 GRX
  *   ts-node scripts/loop-transfer-test.ts 50        # 50 iterations, 1 GRX
@@ -57,7 +57,9 @@ interface PerformanceMetrics {
 // Helper functions
 function loadKeypair(filePath: string): Keypair {
   if (!fs.existsSync(filePath)) {
-    throw new Error(`Keypair file not found: ${filePath}. Run 'ts-node scripts/grx-wallet-manager.ts setup' first.`);
+    throw new Error(
+      `Keypair file not found: ${filePath}. Run 'ts-node scripts/grx-wallet-manager.ts setup' first.`,
+    );
   }
   const keypairData = JSON.parse(fs.readFileSync(filePath, "utf-8"));
   return Keypair.fromSecretKey(new Uint8Array(keypairData));
@@ -65,7 +67,9 @@ function loadKeypair(filePath: string): Keypair {
 
 function loadMintInfo(): { mint: PublicKey; name: string; symbol: string } {
   if (!fs.existsSync(CONFIG.mintInfoPath)) {
-    throw new Error(`Mint info not found: ${CONFIG.mintInfoPath}. Run create-grx-token.ts first.`);
+    throw new Error(
+      `Mint info not found: ${CONFIG.mintInfoPath}. Run create-grx-token.ts first.`,
+    );
   }
   const mintInfo = JSON.parse(fs.readFileSync(CONFIG.mintInfoPath, "utf-8"));
   return {
@@ -76,18 +80,22 @@ function loadMintInfo(): { mint: PublicKey; name: string; symbol: string } {
 }
 
 function parseTokenAmount(amount: number | string): bigint {
-  return BigInt(Math.floor(Number(amount) * Math.pow(10, CONFIG.tokenDecimals)));
+  return BigInt(
+    Math.floor(Number(amount) * Math.pow(10, CONFIG.tokenDecimals)),
+  );
 }
 
 function formatTokenAmount(amount: bigint): string {
-  return (Number(amount) / Math.pow(10, CONFIG.tokenDecimals)).toFixed(CONFIG.tokenDecimals);
+  return (Number(amount) / Math.pow(10, CONFIG.tokenDecimals)).toFixed(
+    CONFIG.tokenDecimals,
+  );
 }
 
 // Calculate performance metrics
 function calculateMetrics(
   latencies: number[],
   totalDuration: number,
-  failed: number
+  failed: number,
 ): PerformanceMetrics {
   if (latencies.length === 0) {
     return {
@@ -126,15 +134,25 @@ function calculateMetrics(
 }
 
 // Print formatted performance report
-function printReport(testName: string, metrics: PerformanceMetrics, symbol: string) {
+function printReport(
+  testName: string,
+  metrics: PerformanceMetrics,
+  symbol: string,
+) {
   console.log("\n" + "=".repeat(70));
   console.log(`  ${testName}`);
   console.log("=".repeat(70));
   console.log(`  Total Transactions:      ${metrics.totalTransactions}`);
-  console.log(`  Successful:              ${metrics.successfulTransactions} ✅`);
+  console.log(
+    `  Successful:              ${metrics.successfulTransactions} ✅`,
+  );
   console.log(`  Failed:                  ${metrics.failedTransactions} ❌`);
-  console.log(`  Total Duration:          ${metrics.totalDuration.toFixed(2)} ms`);
-  console.log(`  Throughput:              ${metrics.throughput.toFixed(4)} tx/sec`);
+  console.log(
+    `  Total Duration:          ${metrics.totalDuration.toFixed(2)} ms`,
+  );
+  console.log(
+    `  Throughput:              ${metrics.throughput.toFixed(4)} tx/sec`,
+  );
   console.log("-".repeat(70));
   console.log(`  Avg Latency:             ${metrics.avgLatency.toFixed(2)} ms`);
   console.log(`  Min Latency:             ${metrics.minLatency.toFixed(2)} ms`);
@@ -145,12 +163,21 @@ function printReport(testName: string, metrics: PerformanceMetrics, symbol: stri
   console.log("=".repeat(70));
 
   // Performance criteria
-  const successRate = (metrics.successfulTransactions / metrics.totalTransactions) * 100;
+  const successRate =
+    (metrics.successfulTransactions / metrics.totalTransactions) * 100;
   console.log("\n📊 Performance Criteria:");
-  console.log(`  Throughput:      ${metrics.throughput.toFixed(4)} tx/sec ${metrics.throughput > 0.5 ? "✅ PASS" : "❌ FAIL"}`);
-  console.log(`  Avg Latency:     ${metrics.avgLatency.toFixed(2)} ms ${metrics.avgLatency < 5000 ? "✅ PASS" : "⚠️  WARNING"}`);
-  console.log(`  P95 Latency:     ${metrics.p95Latency.toFixed(2)} ms ${metrics.p95Latency < 10000 ? "✅ PASS" : "⚠️  WARNING"}`);
-  console.log(`  Success Rate:    ${successRate.toFixed(2)}% ${successRate > 90 ? "✅ PASS" : "❌ FAIL"}`);
+  console.log(
+    `  Throughput:      ${metrics.throughput.toFixed(4)} tx/sec ${metrics.throughput > 0.5 ? "✅ PASS" : "❌ FAIL"}`,
+  );
+  console.log(
+    `  Avg Latency:     ${metrics.avgLatency.toFixed(2)} ms ${metrics.avgLatency < 5000 ? "✅ PASS" : "⚠️  WARNING"}`,
+  );
+  console.log(
+    `  P95 Latency:     ${metrics.p95Latency.toFixed(2)} ms ${metrics.p95Latency < 10000 ? "✅ PASS" : "⚠️  WARNING"}`,
+  );
+  console.log(
+    `  Success Rate:    ${successRate.toFixed(2)}% ${successRate > 90 ? "✅ PASS" : "❌ FAIL"}`,
+  );
   console.log("");
 }
 
@@ -178,7 +205,9 @@ function printLatencyDistribution(latencies: number[]) {
   Object.entries(buckets).forEach(([range, count]) => {
     const percentage = ((count / latencies.length) * 100).toFixed(1);
     const bar = "█".repeat(Math.floor((count / latencies.length) * 50));
-    console.log(`  ${range.padEnd(12)} ${count.toString().padStart(4)} (${percentage.padStart(5)}%) ${bar}`);
+    console.log(
+      `  ${range.padEnd(12)} ${count.toString().padStart(4)} (${percentage.padStart(5)}%) ${bar}`,
+    );
   });
   console.log("");
 }
@@ -189,14 +218,14 @@ async function checkBalances(
   wallet1: Keypair,
   wallet2: Keypair,
   mint: PublicKey,
-  symbol: string
+  symbol: string,
 ) {
   const wallet1TokenAccount = getAssociatedTokenAddressSync(
     mint,
     wallet1.publicKey,
     false,
     TOKEN_2022_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
+    ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
   const wallet2TokenAccount = getAssociatedTokenAddressSync(
@@ -204,21 +233,31 @@ async function checkBalances(
     wallet2.publicKey,
     false,
     TOKEN_2022_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
+    ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
   let wallet1Balance = BigInt(0);
   let wallet2Balance = BigInt(0);
 
   try {
-    const account1 = await getAccount(connection, wallet1TokenAccount, undefined, TOKEN_2022_PROGRAM_ID);
+    const account1 = await getAccount(
+      connection,
+      wallet1TokenAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     wallet1Balance = account1.amount;
   } catch (e) {
     // Account doesn't exist
   }
 
   try {
-    const account2 = await getAccount(connection, wallet2TokenAccount, undefined, TOKEN_2022_PROGRAM_ID);
+    const account2 = await getAccount(
+      connection,
+      wallet2TokenAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     wallet2Balance = account2.amount;
   } catch (e) {
     // Account doesn't exist
@@ -227,7 +266,9 @@ async function checkBalances(
   console.log("\n💰 Wallet Balances:");
   console.log(`  Wallet 1: ${formatTokenAmount(wallet1Balance)} ${symbol}`);
   console.log(`  Wallet 2: ${formatTokenAmount(wallet2Balance)} ${symbol}`);
-  console.log(`  Total:    ${formatTokenAmount(wallet1Balance + wallet2Balance)} ${symbol}`);
+  console.log(
+    `  Total:    ${formatTokenAmount(wallet1Balance + wallet2Balance)} ${symbol}`,
+  );
 }
 
 // Main loop transfer test function
@@ -249,11 +290,19 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
   console.log(`Token Mint:       ${mintInfo.mint.toBase58()}`);
   console.log(`Token Symbol:     ${mintInfo.symbol}`);
   console.log(`Iterations:       ${iterations}`);
-  console.log(`Amount per TX:    ${formatTokenAmount(transferAmount)} ${mintInfo.symbol}`);
+  console.log(
+    `Amount per TX:    ${formatTokenAmount(transferAmount)} ${mintInfo.symbol}`,
+  );
   console.log("=".repeat(70));
 
   // Check initial balances
-  await checkBalances(connection, wallet1, wallet2, mintInfo.mint, mintInfo.symbol);
+  await checkBalances(
+    connection,
+    wallet1,
+    wallet2,
+    mintInfo.mint,
+    mintInfo.symbol,
+  );
 
   // Get token accounts
   const wallet1TokenAccount = getAssociatedTokenAddressSync(
@@ -261,7 +310,7 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
     wallet1.publicKey,
     false,
     TOKEN_2022_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
+    ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
   const wallet2TokenAccount = getAssociatedTokenAddressSync(
@@ -269,13 +318,23 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
     wallet2.publicKey,
     false,
     TOKEN_2022_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
+    ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
   // Verify token accounts exist
   try {
-    await getAccount(connection, wallet1TokenAccount, undefined, TOKEN_2022_PROGRAM_ID);
-    await getAccount(connection, wallet2TokenAccount, undefined, TOKEN_2022_PROGRAM_ID);
+    await getAccount(
+      connection,
+      wallet1TokenAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
+    await getAccount(
+      connection,
+      wallet2TokenAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
   } catch (error) {
     console.error("\n❌ Error: Token accounts not initialized.");
     console.error("   Run: ts-node scripts/grx-wallet-manager.ts mint 1 1000");
@@ -296,7 +355,8 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
     const fromWallet = i % 2 === 0 ? wallet1 : wallet2;
     const fromAccount = i % 2 === 0 ? wallet1TokenAccount : wallet2TokenAccount;
     const toAccount = i % 2 === 0 ? wallet2TokenAccount : wallet1TokenAccount;
-    const direction = i % 2 === 0 ? "Wallet 1 → Wallet 2" : "Wallet 2 → Wallet 1";
+    const direction =
+      i % 2 === 0 ? "Wallet 1 → Wallet 2" : "Wallet 2 → Wallet 1";
 
     const txStart = Date.now();
 
@@ -310,7 +370,7 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
         transferAmount,
         [],
         { commitment: "confirmed" },
-        TOKEN_2022_PROGRAM_ID
+        TOKEN_2022_PROGRAM_ID,
       );
 
       const txEnd = Date.now();
@@ -320,9 +380,9 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
       if ((i + 1) % 10 === 0 || i === 0) {
         console.log(
           `  [${(i + 1).toString().padStart(3)}/${iterations}] ` +
-          `${direction.padEnd(25)} ` +
-          `${latency.toFixed(0).padStart(5)}ms ` +
-          `✅`
+            `${direction.padEnd(25)} ` +
+            `${latency.toFixed(0).padStart(5)}ms ` +
+            `✅`,
         );
       }
     } catch (error: any) {
@@ -330,14 +390,14 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
       const errorMsg = error.message || String(error);
       console.log(
         `  [${(i + 1).toString().padStart(3)}/${iterations}] ` +
-        `${direction.padEnd(25)} ` +
-        `FAILED ❌ ${errorMsg.substring(0, 40)}`
+          `${direction.padEnd(25)} ` +
+          `FAILED ❌ ${errorMsg.substring(0, 40)}`,
       );
     }
 
-    // Small delay to avoid overwhelming the RPC
+    // Longer delay to avoid overwhelming the RPC
     if (i < iterations - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
 
@@ -346,11 +406,21 @@ async function runLoopTransferTest(iterations: number, transferAmount: bigint) {
 
   // Calculate and print metrics
   const metrics = calculateMetrics(latencies, totalDuration, failedCount);
-  printReport(`Loop Transfer Test (${iterations} iterations)`, metrics, mintInfo.symbol);
+  printReport(
+    `Loop Transfer Test (${iterations} iterations)`,
+    metrics,
+    mintInfo.symbol,
+  );
   printLatencyDistribution(latencies);
 
   // Check final balances
-  await checkBalances(connection, wallet1, wallet2, mintInfo.mint, mintInfo.symbol);
+  await checkBalances(
+    connection,
+    wallet1,
+    wallet2,
+    mintInfo.mint,
+    mintInfo.symbol,
+  );
 
   console.log("✅ Loop transfer test completed!\n");
 }
@@ -386,8 +456,12 @@ main()
     console.error("\n❌ Fatal Error:", error.message || error);
     console.error("\nMake sure:");
     console.error("  1. Solana validator is running (anchor localnet)");
-    console.error("  2. Wallets are set up (ts-node scripts/grx-wallet-manager.ts setup)");
-    console.error("  3. Wallets have tokens (ts-node scripts/grx-wallet-manager.ts mint 1 1000)");
+    console.error(
+      "  2. Wallets are set up (ts-node scripts/grx-wallet-manager.ts setup)",
+    );
+    console.error(
+      "  3. Wallets have tokens (ts-node scripts/grx-wallet-manager.ts mint 1 1000)",
+    );
     console.error("  4. Token accounts are initialized for both wallets");
     process.exit(1);
   });

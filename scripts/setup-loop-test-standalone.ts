@@ -1,13 +1,13 @@
 #!/usr/bin/env ts-node
 /**
  * Complete Loop Transfer Test Setup (Standalone)
- * 
+ *
  * Creates everything needed for loop transfer test without requiring Anchor workspace:
  * - Creates 2 test wallets
  * - Creates a test token mint
  * - Mints tokens to both wallets
  * - Ready to run loop transfer test
- * 
+ *
  * Usage: ts-node scripts/setup-loop-test-standalone.ts
  */
 
@@ -50,7 +50,7 @@ function loadOrCreateKeypair(filePath: string): Keypair {
     const keypairData = JSON.parse(fs.readFileSync(filePath, "utf-8"));
     return Keypair.fromSecretKey(new Uint8Array(keypairData));
   }
-  
+
   const keypair = Keypair.generate();
   fs.writeFileSync(filePath, JSON.stringify(Array.from(keypair.secretKey)));
   console.log(`   Created: ${filePath}`);
@@ -74,7 +74,7 @@ async function main() {
   console.log("=".repeat(70) + "\n");
 
   const connection = new Connection(CONFIG.rpcUrl, "confirmed");
-  
+
   // Load authority
   const authority = loadKeypair(CONFIG.authorityPath);
   console.log(`Authority: ${authority.publicKey.toBase58()}\n`);
@@ -88,11 +88,17 @@ async function main() {
   // Step 2: Airdrop SOL to wallets
   console.log("💰 Step 2: Requesting SOL airdrops...");
   try {
-    const airdrop1 = await connection.requestAirdrop(wallet1.publicKey, 2 * LAMPORTS_PER_SOL);
+    const airdrop1 = await connection.requestAirdrop(
+      wallet1.publicKey,
+      2 * LAMPORTS_PER_SOL,
+    );
     await connection.confirmTransaction(airdrop1);
     console.log(`   ✅ Wallet 1 received 2 SOL`);
-    
-    const airdrop2 = await connection.requestAirdrop(wallet2.publicKey, 2 * LAMPORTS_PER_SOL);
+
+    const airdrop2 = await connection.requestAirdrop(
+      wallet2.publicKey,
+      2 * LAMPORTS_PER_SOL,
+    );
     await connection.confirmTransaction(airdrop2);
     console.log(`   ✅ Wallet 2 received 2 SOL`);
   } catch (error) {
@@ -103,7 +109,7 @@ async function main() {
   // Step 3: Create or verify mint
   console.log("🪙 Step 3: Setting up token mint...");
   const mintKeypair = loadOrCreateKeypair(CONFIG.mintKeypairPath);
-  
+
   let mintExists = false;
   try {
     const mintInfo = await connection.getAccountInfo(mintKeypair.publicKey);
@@ -115,7 +121,7 @@ async function main() {
   if (!mintExists) {
     console.log("   Creating new token mint...");
     const lamports = await getMinimumBalanceForRentExemptMint(connection);
-    
+
     const transaction = new Transaction().add(
       SystemProgram.createAccount({
         fromPubkey: authority.publicKey,
@@ -129,16 +135,19 @@ async function main() {
         CONFIG.tokenDecimals,
         authority.publicKey,
         authority.publicKey,
-        TOKEN_2022_PROGRAM_ID
-      )
+        TOKEN_2022_PROGRAM_ID,
+      ),
     );
 
-    await sendAndConfirmTransaction(connection, transaction, [authority, mintKeypair]);
+    await sendAndConfirmTransaction(connection, transaction, [
+      authority,
+      mintKeypair,
+    ]);
     console.log(`   ✅ Mint created: ${mintKeypair.publicKey.toBase58()}`);
-    
+
     // Save mint info
     const mintInfo = {
-      name: "GridTokenX Test",
+      name: "GridTokenX",
       symbol: "GRX",
       mint: mintKeypair.publicKey.toBase58(),
       decimals: CONFIG.tokenDecimals,
@@ -147,24 +156,52 @@ async function main() {
     fs.writeFileSync(CONFIG.mintInfoPath, JSON.stringify(mintInfo, null, 2));
     console.log(`   💾 Mint info saved to ${CONFIG.mintInfoPath}`);
   } else {
-    console.log(`   ✅ Using existing mint: ${mintKeypair.publicKey.toBase58()}`);
+    console.log(
+      `   ✅ Using existing mint: ${mintKeypair.publicKey.toBase58()}`,
+    );
   }
   console.log("");
 
   // Step 4: Mint tokens to wallet 1
-  console.log(`🪙 Step 4: Minting ${CONFIG.initialMintAmount} GRX to Wallet 1...`);
-  await mintTokensToWallet(connection, authority, mintKeypair.publicKey, wallet1.publicKey, CONFIG.initialMintAmount);
+  console.log(
+    `🪙 Step 4: Minting ${CONFIG.initialMintAmount} GRX to Wallet 1...`,
+  );
+  await mintTokensToWallet(
+    connection,
+    authority,
+    mintKeypair.publicKey,
+    wallet1.publicKey,
+    CONFIG.initialMintAmount,
+  );
   console.log("");
 
   // Step 5: Mint tokens to wallet 2
-  console.log(`🪙 Step 5: Minting ${CONFIG.initialMintAmount} GRX to Wallet 2...`);
-  await mintTokensToWallet(connection, authority, mintKeypair.publicKey, wallet2.publicKey, CONFIG.initialMintAmount);
+  console.log(
+    `🪙 Step 5: Minting ${CONFIG.initialMintAmount} GRX to Wallet 2...`,
+  );
+  await mintTokensToWallet(
+    connection,
+    authority,
+    mintKeypair.publicKey,
+    wallet2.publicKey,
+    CONFIG.initialMintAmount,
+  );
   console.log("");
 
   // Step 6: Display balances
   console.log("📊 Step 6: Final balances:");
-  await displayBalance(connection, mintKeypair.publicKey, wallet1.publicKey, "Wallet 1");
-  await displayBalance(connection, mintKeypair.publicKey, wallet2.publicKey, "Wallet 2");
+  await displayBalance(
+    connection,
+    mintKeypair.publicKey,
+    wallet1.publicKey,
+    "Wallet 1",
+  );
+  await displayBalance(
+    connection,
+    mintKeypair.publicKey,
+    wallet2.publicKey,
+    "Wallet 2",
+  );
   console.log("");
 
   console.log("=".repeat(70));
@@ -181,21 +218,26 @@ async function mintTokensToWallet(
   authority: Keypair,
   mint: PublicKey,
   walletPubkey: PublicKey,
-  amount: number
+  amount: number,
 ) {
   const tokenAccount = getAssociatedTokenAddressSync(
     mint,
     walletPubkey,
     false,
     TOKEN_2022_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
+    ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
   const transaction = new Transaction();
 
   // Check if token account exists
   try {
-    await getAccount(connection, tokenAccount, undefined, TOKEN_2022_PROGRAM_ID);
+    await getAccount(
+      connection,
+      tokenAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
   } catch (error) {
     // Create token account
     transaction.add(
@@ -205,8 +247,8 @@ async function mintTokensToWallet(
         walletPubkey,
         mint,
         TOKEN_2022_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      )
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+      ),
     );
   }
 
@@ -219,11 +261,13 @@ async function mintTokensToWallet(
       authority.publicKey,
       mintAmount,
       [],
-      TOKEN_2022_PROGRAM_ID
-    )
+      TOKEN_2022_PROGRAM_ID,
+    ),
   );
 
-  const signature = await sendAndConfirmTransaction(connection, transaction, [authority]);
+  const signature = await sendAndConfirmTransaction(connection, transaction, [
+    authority,
+  ]);
   console.log(`   ✅ Minted ${amount} GRX`);
   console.log(`   Transaction: ${signature}`);
 }
@@ -232,18 +276,23 @@ async function displayBalance(
   connection: Connection,
   mint: PublicKey,
   walletPubkey: PublicKey,
-  label: string
+  label: string,
 ) {
   const tokenAccount = getAssociatedTokenAddressSync(
     mint,
     walletPubkey,
     false,
     TOKEN_2022_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
+    ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
   try {
-    const account = await getAccount(connection, tokenAccount, undefined, TOKEN_2022_PROGRAM_ID);
+    const account = await getAccount(
+      connection,
+      tokenAccount,
+      undefined,
+      TOKEN_2022_PROGRAM_ID,
+    );
     const balance = Number(account.amount) / Math.pow(10, CONFIG.tokenDecimals);
     console.log(`   ${label}: ${balance.toFixed(CONFIG.tokenDecimals)} GRX`);
   } catch (error) {
