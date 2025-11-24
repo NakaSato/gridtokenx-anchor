@@ -11,7 +11,24 @@ const programs = [
   { name: 'trading', idlName: 'trading' },
 ]
 
-console.log('🚀 Generating Codama clients for all programs...\n')
+// Parse command line arguments
+const args = process.argv.slice(2)
+const command = args[0] || 'js' // Default to 'js' if no argument provided
+
+let targets = []
+if (command === 'js') {
+  targets = ['js']
+} else if (command === 'rust') {
+  targets = ['rust']
+} else if (command === '--all' || command === 'all') {
+  targets = ['js', 'rust']
+} else {
+  console.error(`❌ Unknown command: ${command}`)
+  console.log(`   Usage: node scripts/06-generate-clients.js [js|rust|--all]`)
+  process.exit(1)
+}
+
+console.log(`🚀 Generating Codama clients (${targets.join(', ')}) for all programs...\n`)
 
 let successCount = 0
 let failureCount = 0
@@ -29,12 +46,16 @@ programs.forEach((program, index) => {
   }
 
   try {
-    // Generate client for this program
     const configPath = `./codama.config.${program.name}.js`
-    execSync(`npx codama run js -c ${configPath}`, {
-      stdio: 'inherit',
-      cwd: process.cwd(),
+    
+    // Generate clients for each target
+    targets.forEach(target => {
+      execSync(`npx codama run ${target} -c ${configPath}`, {
+        stdio: 'inherit',
+        cwd: process.cwd(),
+      })
     })
+    
     console.log(`✅ ${program.name} client generated\n`)
     successCount++
   } catch (error) {

@@ -14,16 +14,16 @@ describe("Trading Program - GridTokenXClient", () => {
     // Initialize GridTokenXClient
     client = new GridTokenXClient({
       connection: provider.connection,
-      wallet: (provider.wallet as anchor.Wallet).payer
+      wallet: (provider.wallet as anchor.Wallet).payer,
     });
 
     // Get market PDA for verification
     const programIds = client.getProgramIds();
     const tradingProgramId = new anchor.web3.PublicKey(programIds.trading);
-    
+
     [marketPda] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("market")],
-      tradingProgramId
+      tradingProgramId,
     );
   });
 
@@ -36,7 +36,9 @@ describe("Trading Program - GridTokenXClient", () => {
       const market = await client.getMarketState();
       expect(market).to.exist;
       if (market) {
-        expect(market.authority.toString()).to.equal(provider.wallet.publicKey.toString());
+        expect(market.authority.toString()).to.equal(
+          provider.wallet.publicKey.toString(),
+        );
         expect(Number(market.activeOrders)).to.equal(0);
         expect(Number(market.totalVolume)).to.equal(0);
         expect(Number(market.totalTrades)).to.equal(0);
@@ -52,7 +54,7 @@ describe("Trading Program - GridTokenXClient", () => {
       const energyAmount = BigInt(100);
       const pricePerKwh = BigInt(50);
 
-      const tx = await client.placeOrder('sell', energyAmount, pricePerKwh);
+      const tx = await client.placeOrder("sell", energyAmount, pricePerKwh);
       expect(tx).to.exist;
     });
 
@@ -64,7 +66,7 @@ describe("Trading Program - GridTokenXClient", () => {
       ];
 
       for (const order of orders) {
-        const tx = await client.placeOrder('sell', order.energy, order.price);
+        const tx = await client.placeOrder("sell", order.energy, order.price);
         expect(tx).to.exist;
       }
     });
@@ -75,7 +77,7 @@ describe("Trading Program - GridTokenXClient", () => {
       const energyAmount = BigInt(50);
       const maxPricePerKwh = BigInt(60);
 
-      const tx = await client.placeOrder('buy', energyAmount, maxPricePerKwh);
+      const tx = await client.placeOrder("buy", energyAmount, maxPricePerKwh);
       expect(tx).to.exist;
     });
 
@@ -87,7 +89,7 @@ describe("Trading Program - GridTokenXClient", () => {
       ];
 
       for (const order of orders) {
-        const tx = await client.placeOrder('buy', order.energy, order.maxPrice);
+        const tx = await client.placeOrder("buy", order.energy, order.maxPrice);
         expect(tx).to.exist;
       }
     });
@@ -100,7 +102,11 @@ describe("Trading Program - GridTokenXClient", () => {
       ];
 
       for (const variation of variations) {
-        const tx = await client.placeOrder('buy', variation.energy, variation.maxPrice);
+        const tx = await client.placeOrder(
+          "buy",
+          variation.energy,
+          variation.maxPrice,
+        );
         expect(tx).to.exist;
       }
     });
@@ -109,11 +115,11 @@ describe("Trading Program - GridTokenXClient", () => {
   describe("Order Matching", () => {
     it("should match buy and sell orders with exact price", async () => {
       // Create a sell order
-      const sellTx = await client.placeOrder('sell', BigInt(100), BigInt(50));
+      const sellTx = await client.placeOrder("sell", BigInt(100), BigInt(50));
       expect(sellTx).to.exist;
 
       // Create a buy order that can be matched (same price)
-      const buyTx = await client.placeOrder('buy', BigInt(100), BigInt(50));
+      const buyTx = await client.placeOrder("buy", BigInt(100), BigInt(50));
       expect(buyTx).to.exist;
 
       // Match orders
@@ -123,10 +129,10 @@ describe("Trading Program - GridTokenXClient", () => {
 
     it("should match orders when buy price exceeds sell price", async () => {
       // Create a sell order at lower price
-      await client.placeOrder('sell', BigInt(50), BigInt(45));
+      await client.placeOrder("sell", BigInt(50), BigInt(45));
 
       // Create a buy order with higher max price - should match
-      await client.placeOrder('buy', BigInt(50), BigInt(55));
+      await client.placeOrder("buy", BigInt(50), BigInt(55));
 
       // Match orders
       const tx = await client.matchOrders();
@@ -135,17 +141,17 @@ describe("Trading Program - GridTokenXClient", () => {
 
     it("should handle partial order matching", async () => {
       // Create a large sell order
-      await client.placeOrder('sell', BigInt(200), BigInt(50));
+      await client.placeOrder("sell", BigInt(200), BigInt(50));
 
       // Create a smaller buy order - should partially fill
-      await client.placeOrder('buy', BigInt(100), BigInt(50));
+      await client.placeOrder("buy", BigInt(100), BigInt(50));
 
       // Match orders
       const tx = await client.matchOrders();
       expect(tx).to.exist;
 
       // Create another buy order to fill remaining amount
-      await client.placeOrder('buy', BigInt(100), BigInt(50));
+      await client.placeOrder("buy", BigInt(100), BigInt(50));
 
       // Match remaining orders
       const tx2 = await client.matchOrders();
@@ -201,7 +207,9 @@ describe("Trading Program - GridTokenXClient", () => {
     it("should retrieve current market state", async () => {
       const market = await client.getMarketState();
       expect(market).to.exist;
-      expect(market?.authority.toString()).to.equal(provider.wallet.publicKey.toString());
+      expect(market?.authority.toString()).to.equal(
+        provider.wallet.publicKey.toString(),
+      );
     });
 
     it("should get order book data", async () => {

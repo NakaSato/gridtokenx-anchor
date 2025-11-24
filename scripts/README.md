@@ -40,9 +40,6 @@ ts-node scripts/08-token-manager.ts transfer wallet1 wallet2 500
 # Set up test environment
 ts-node scripts/10-setup-loop-test-standalone.ts
 
-# Run performance tests
-ts-node scripts/loop-transfer-test.ts 100 10
-
 # Inspect results
 ts-node scripts/11-inspect.ts
 ```

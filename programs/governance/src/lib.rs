@@ -3,22 +3,22 @@
 use anchor_lang::prelude::*;
 
 // Module declarations
-mod state;
-mod events;
 mod errors;
+mod events;
 mod handlers;
+mod state;
 
 // Re-exports
-pub use state::*;
-pub use events::*;
 pub use errors::*;
+pub use events::*;
+pub use state::*;
 
 declare_id!("4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe");
 
 #[program]
 pub mod governance {
     use super::*;
-    
+
     /// Initialize PoA with single REC authority for ERC certification
     pub fn initialize_poa(ctx: Context<InitializePoa>) -> Result<()> {
         handlers::initialize::handler(ctx)
@@ -43,7 +43,13 @@ pub mod governance {
         renewable_source: String,
         validation_data: String,
     ) -> Result<()> {
-        handlers::erc::issue(ctx, certificate_id, energy_amount, renewable_source, validation_data)
+        handlers::erc::issue(
+            ctx,
+            certificate_id,
+            energy_amount,
+            renewable_source,
+            validation_data,
+        )
     }
 
     /// Validate ERC for trading - REC authority only
@@ -74,7 +80,12 @@ pub mod governance {
         max_erc_amount: u64,
         erc_validity_period: i64,
     ) -> Result<()> {
-        handlers::config::update_erc_limits(ctx, min_energy_amount, max_erc_amount, erc_validity_period)
+        handlers::config::update_erc_limits(
+            ctx,
+            min_energy_amount,
+            max_erc_amount,
+            erc_validity_period,
+        )
     }
 
     /// Update authority contact info - Engineering Department only

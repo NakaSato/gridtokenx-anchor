@@ -24,6 +24,7 @@
  *   create [--anchor|--spl]      - Create GRX token (default: SPL)
  *   mint <wallet|address> <amount> - Mint tokens to wallet
  *   balance [wallet|address]      - Check token balance
+ *   total-supply                  - Show total token supply
  *   transfer <from> <to> <amount>  - Transfer tokens
  *   burn <wallet|address> <amount> - Burn tokens
  *   setup-wallets [count]         - Create test wallets (default: 2)
@@ -56,6 +57,7 @@ import {
   MINT_SIZE,
   createTransferInstruction,
   createBurnInstruction,
+  getMint,
 } from "@solana/spl-token";
 import * as fs from "fs";
 import * as path from "path";
@@ -461,6 +463,7 @@ ${colors.yellow}Commands:${colors.reset}
   create [--anchor|--spl]      Create GRX token (default: SPL)
   mint <wallet|address> <amount>  Mint tokens to wallet
   balance [wallet|address]      Check token balance
+  total-supply                  Show total token supply
   transfer <from> <to> <amount>  Transfer tokens
   burn <wallet|address> <amount> Burn tokens
   setup-wallets [count]         Create test wallets (default: 2)
@@ -503,6 +506,31 @@ async function showTokenInfo(): Promise<void> {
     console.log(`Created: ${tokenInfo.createdAt}`);
     console.log(`Decimals: ${CONFIG.tokenDecimals}`);
 
+    // Show total supply
+    try {
+      const mintAddress = tokenInfo.mintAddress || tokenInfo.mint; // Handle both field names
+      const mint = new PublicKey(mintAddress);
+      // Try Token-2022 program first, then fall back to older Token program
+      try {
+        const mintInfo = await getMint(
+          connection,
+          mint,
+          undefined,
+          TOKEN_2022_PROGRAM_ID,
+        );
+        const totalSupply = formatTokenAmount(mintInfo.supply);
+        console.log(`Total Supply: ${totalSupply} ${tokenInfo.symbol}`);
+      } catch (error) {
+        // Fall back to older Token program
+        const { getMint: getMintOld } = await import("@solana/spl-token");
+        const mintInfo = await getMintOld(connection, mint);
+        const totalSupply = formatTokenAmount(mintInfo.supply);
+        console.log(`Total Supply: ${totalSupply} ${tokenInfo.symbol}`);
+      }
+    } catch (error) {
+      console.log(`Total Supply: ${colors.red}Unable to fetch${colors.reset}`);
+    }
+
     if (tokenInfo.wallets) {
       console.log("\nWallets:");
       for (const wallet of tokenInfo.wallets) {
@@ -515,6 +543,57 @@ async function showTokenInfo(): Promise<void> {
           `  Wallet ${wallet.id}: ${wallet.publicKey} (${balance} ${tokenInfo.symbol})`,
         );
       }
+    }
+  } catch (error) {
+    log(
+      "Token information not found. Please create a token first.",
+      colors.red,
+    );
+  }
+}
+
+async function showTotalSupply(): Promise<void> {
+  try {
+    const tokenInfo = loadMintInfo();
+    const connection = new Connection(CONFIG.rpcUrl, "confirmed");
+    const mintAddress = tokenInfo.mintAddress || tokenInfo.mint; // Handle both field names
+    const mint = new PublicKey(mintAddress);
+
+    try {
+      let mintInfo;
+
+      // Try Token-2022 program first, then fall back to older Token program
+      try {
+        mintInfo = await getMint(
+          connection,
+          mint,
+          undefined,
+          TOKEN_2022_PROGRAM_ID,
+        );
+      } catch (error) {
+        // Fall back to older Token program
+        const { getMint: getMintOld } = await import("@solana/spl-token");
+        mintInfo = await getMintOld(connection, mint);
+      }
+
+      const totalSupply = formatTokenAmount(mintInfo.supply);
+
+      console.log(`${colors.blue}Token Total Supply${colors.reset}`);
+      console.log("=".repeat(50));
+      console.log(`Token: ${tokenInfo.name} (${tokenInfo.symbol})`);
+      const mintDisplay = tokenInfo.mintAddress || tokenInfo.mint;
+      console.log(`Mint: ${mintDisplay}`);
+      console.log(`Total Supply: ${totalSupply} ${tokenInfo.symbol}`);
+      console.log(
+        `Mint Authority: ${mintInfo.mintAuthority?.toBase58() || "Revoked"}`,
+      );
+      console.log(`Supply in Raw Units: ${mintInfo.supply.toString()}`);
+      console.log(`Decimals: ${mintInfo.decimals}`);
+    } catch (error) {
+      console.log(
+        `${colors.red}Error fetching mint information:${colors.reset}`,
+        error,
+      );
     }
   } catch (error) {
     log(
@@ -579,7 +658,8 @@ async function main(): Promise<void> {
         const connection = new Connection(CONFIG.rpcUrl, "confirmed");
         const authority = loadKeypair(CONFIG.authorityPath);
         const tokenInfo = loadMintInfo();
-        const mint = new PublicKey(tokenInfo.mintAddress);
+        const mintAddress = tokenInfo.mintAddress || tokenInfo.mint; // Handle both field names
+        const mint = new PublicKey(mintAddress);
 
         // Check if recipient is a wallet ID
         let recipientAddress: string | PublicKey = recipient;
@@ -604,7 +684,8 @@ async function main(): Promise<void> {
 
         const connection = new Connection(CONFIG.rpcUrl, "confirmed");
         const tokenInfo = loadMintInfo();
-        const mint = new PublicKey(tokenInfo.mintAddress);
+        const mintAddress = tokenInfo.mintAddress || tokenInfo.mint; // Handle both field names
+        const mint = new PublicKey(mintAddress);
 
         // Check if wallet is a wallet ID
         let walletAddress: string | PublicKey = wallet;
@@ -634,7 +715,8 @@ async function main(): Promise<void> {
 
         const connection = new Connection(CONFIG.rpcUrl, "confirmed");
         const tokenInfo = loadMintInfo();
-        const mint = new PublicKey(tokenInfo.mintAddress);
+        const mintAddress = tokenInfo.mintAddress || tokenInfo.mint; // Handle both field names
+        const mint = new PublicKey(mintAddress);
 
         // Load from wallet
         let fromKeypair: Keypair;
@@ -679,7 +761,8 @@ async function main(): Promise<void> {
 
         const connection = new Connection(CONFIG.rpcUrl, "confirmed");
         const tokenInfo = loadMintInfo();
-        const mint = new PublicKey(tokenInfo.mintAddress);
+        const mintAddress = tokenInfo.mintAddress || tokenInfo.mint; // Handle both field names
+        const mint = new PublicKey(mintAddress);
 
         // Load wallet
         let walletKeypair: Keypair;
@@ -717,6 +800,11 @@ async function main(): Promise<void> {
 
       case "info": {
         await showTokenInfo();
+        break;
+      }
+
+      case "total-supply": {
+        await showTotalSupply();
         break;
       }
 

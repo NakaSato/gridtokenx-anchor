@@ -8,7 +8,7 @@ declare_id!("2XPQmFYMdXjP7ffoBB3mXeCdboSFg5Yeb6QmTSGbW8a7");
 #[program]
 pub mod registry {
     use super::*;
-    
+
     /// Initialize the registry with REC authority
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let registry = &mut ctx.accounts.registry;
@@ -16,15 +16,15 @@ pub mod registry {
         registry.user_count = 0;
         registry.meter_count = 0;
         registry.created_at = Clock::get()?.unix_timestamp;
-        
+
         emit!(RegistryInitialized {
             authority: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
-        
+
         Ok(())
     }
-    
+
     /// Register a new user in the P2P energy trading system
     pub fn register_user(
         ctx: Context<RegisterUser>,
@@ -33,7 +33,7 @@ pub mod registry {
     ) -> Result<()> {
         let user_account = &mut ctx.accounts.user_account;
         let registry = &mut ctx.accounts.registry;
-        
+
         // Set user account data
         user_account.authority = ctx.accounts.user_authority.key();
         user_account.user_type = user_type;
@@ -42,20 +42,20 @@ pub mod registry {
         user_account.registered_at = Clock::get()?.unix_timestamp;
         user_account.meter_count = 0;
         user_account.created_at = Clock::get()?.unix_timestamp; // For backward compatibility
-        
+
         // Update registry counters
         registry.user_count += 1;
-        
+
         emit!(UserRegistered {
             user: ctx.accounts.user_authority.key(),
             user_type,
             location,
             timestamp: Clock::get()?.unix_timestamp,
         });
-        
+
         Ok(())
     }
-    
+
     /// Register a smart meter for an existing user
     pub fn register_meter(
         ctx: Context<RegisterMeter>,
@@ -65,13 +65,13 @@ pub mod registry {
         let meter_account = &mut ctx.accounts.meter_account;
         let user_account = &mut ctx.accounts.user_account;
         let registry = &mut ctx.accounts.registry;
-        
+
         // Verify user owns this operation
         require!(
             ctx.accounts.user_authority.key() == user_account.authority,
             ErrorCode::UnauthorizedUser
         );
-        
+
         // Set meter account data
         meter_account.meter_id = meter_id.clone();
         meter_account.owner = ctx.accounts.user_authority.key();
@@ -81,23 +81,23 @@ pub mod registry {
         meter_account.last_reading_at = 0;
         meter_account.total_generation = 0;
         meter_account.total_consumption = 0;
-        meter_account.settled_net_generation = 0;  // Initialize GRID token tracker
-        meter_account.claimed_erc_generation = 0;   // Initialize ERC certificate tracker
-        
+        meter_account.settled_net_generation = 0; // Initialize GRID token tracker
+        meter_account.claimed_erc_generation = 0; // Initialize ERC certificate tracker
+
         // Update counters
         user_account.meter_count += 1;
         registry.meter_count += 1;
-        
+
         emit!(MeterRegistered {
             meter_id: meter_id.clone(),
             owner: ctx.accounts.user_authority.key(),
             meter_type,
             timestamp: Clock::get()?.unix_timestamp,
         });
-        
+
         Ok(())
     }
-    
+
     /// Update user status (admin only)
     pub fn update_user_status(
         ctx: Context<UpdateUserStatus>,
@@ -105,26 +105,26 @@ pub mod registry {
     ) -> Result<()> {
         let user_account = &mut ctx.accounts.user_account;
         let registry = &ctx.accounts.registry;
-        
+
         // Only registry authority can update user status
         require!(
             ctx.accounts.authority.key() == registry.authority,
             ErrorCode::UnauthorizedAuthority
         );
-        
+
         let old_status = user_account.status;
         user_account.status = new_status;
-        
+
         emit!(UserStatusUpdated {
             user: user_account.authority,
             old_status,
             new_status,
             timestamp: Clock::get()?.unix_timestamp,
         });
-        
+
         Ok(())
     }
-    
+
     /// Update meter reading (for oracles and authorized services)
     pub fn update_meter_reading(
         ctx: Context<UpdateMeterReading>,
@@ -133,12 +133,12 @@ pub mod registry {
         reading_timestamp: i64,
     ) -> Result<()> {
         let meter_account = &mut ctx.accounts.meter_account;
-        
+
         // Update meter data
         meter_account.last_reading_at = reading_timestamp;
         meter_account.total_generation += energy_generated;
         meter_account.total_consumption += energy_consumed;
-        
+
         emit!(MeterReadingUpdated {
             meter_id: meter_account.meter_id.clone(),
             owner: meter_account.owner,
@@ -146,75 +146,72 @@ pub mod registry {
             energy_consumed,
             timestamp: reading_timestamp,
         });
-        
+
         Ok(())
     }
-    
+
     /// Verify if a user is valid and active
     pub fn is_valid_user(ctx: Context<IsValidUser>) -> Result<bool> {
         let user_account = &ctx.accounts.user_account;
         Ok(user_account.status == UserStatus::Active)
     }
-    
+
     /// Verify if a meter is valid and active
     pub fn is_valid_meter(ctx: Context<IsValidMeter>) -> Result<bool> {
         let meter_account = &ctx.accounts.meter_account;
         Ok(meter_account.status == MeterStatus::Active)
     }
-    
+
     /// Calculate unsettled net generation ready for tokenization
     /// This is a view function that returns how much energy can be minted as GRID tokens
     pub fn get_unsettled_balance(ctx: Context<GetUnsettledBalance>) -> Result<u64> {
         let meter = &ctx.accounts.meter_account;
-        
+
         // Calculate current net generation (total produced - total consumed)
-        let current_net_gen = meter.total_generation.saturating_sub(meter.total_consumption);
-        
+        let current_net_gen = meter
+            .total_generation
+            .saturating_sub(meter.total_consumption);
+
         // Calculate how much hasn't been tokenized yet
         let unsettled = current_net_gen.saturating_sub(meter.settled_net_generation);
-        
+
         Ok(unsettled)
     }
-    
+
     /// Settle meter balance and prepare for GRID token minting
     /// This updates the settled_net_generation tracker to prevent double-minting
     /// The actual token minting should be called by the energy_token program
-    pub fn settle_meter_balance(
-        ctx: Context<SettleMeterBalance>,
-    ) -> Result<u64> {
+    pub fn settle_meter_balance(ctx: Context<SettleMeterBalance>) -> Result<u64> {
         let meter = &mut ctx.accounts.meter_account;
-        
+
         // Verify meter is active
         require!(
             meter.status == MeterStatus::Active,
             ErrorCode::InvalidMeterStatus
         );
-        
+
         // Calculate current net generation (total produced - total consumed)
-        let current_net_gen = meter.total_generation.saturating_sub(meter.total_consumption);
-        
+        let current_net_gen = meter
+            .total_generation
+            .saturating_sub(meter.total_consumption);
+
         // Calculate new tokens to mint (what hasn't been settled yet)
         let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
-        
+
         // Only proceed if there's something new to settle
-        require!(
-            new_tokens_to_mint > 0,
-            ErrorCode::NoUnsettledBalance
-        );
-        
+        require!(new_tokens_to_mint > 0, ErrorCode::NoUnsettledBalance);
+
         // Update the settled tracker to prevent double-minting
         meter.settled_net_generation = current_net_gen;
-        
+
         // Encode settlement data as base64 for external systems
-        let settlement_data = format!("{}:{}:{}:{}", 
-            meter.meter_id, 
-            meter.owner,
-            new_tokens_to_mint,
-            current_net_gen
+        let settlement_data = format!(
+            "{}:{}:{}:{}",
+            meter.meter_id, meter.owner, new_tokens_to_mint, current_net_gen
         );
         let encoded_data = general_purpose::STANDARD.encode(settlement_data.as_bytes());
         msg!("Settlement data (base64): {}", encoded_data);
-        
+
         emit!(MeterBalanceSettled {
             meter_id: meter.meter_id.clone(),
             owner: meter.owner,
@@ -222,16 +219,9 @@ pub mod registry {
             total_settled: current_net_gen,
             timestamp: Clock::get()?.unix_timestamp,
         });
-        
+
         // Return the amount to mint so the energy_token program can use it
         Ok(new_tokens_to_mint)
-    }
-
-    pub fn assign_meter(ctx: Context<AssignMeter>, meter_id: String) -> Result<()> {
-        let registry = &mut ctx.accounts.registry;
-        registry.meter_count += 1;
-        msg!("Meter {} assigned", meter_id);
-        Ok(())
     }
 }
 
@@ -246,10 +236,10 @@ pub struct Initialize<'info> {
         bump
     )]
     pub registry: Account<'info, Registry>,
-    
+
     #[account(mut)]
     pub authority: Signer<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -258,7 +248,7 @@ pub struct Initialize<'info> {
 pub struct RegisterUser<'info> {
     #[account(mut)]
     pub registry: Account<'info, Registry>,
-    
+
     #[account(
         init,
         payer = user_authority,
@@ -267,10 +257,10 @@ pub struct RegisterUser<'info> {
         bump
     )]
     pub user_account: Account<'info, UserAccount>,
-    
+
     #[account(mut)]
     pub user_authority: Signer<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -279,10 +269,10 @@ pub struct RegisterUser<'info> {
 pub struct RegisterMeter<'info> {
     #[account(mut)]
     pub registry: Account<'info, Registry>,
-    
+
     #[account(mut)]
     pub user_account: Account<'info, UserAccount>,
-    
+
     #[account(
         init,
         payer = user_authority,
@@ -291,10 +281,10 @@ pub struct RegisterMeter<'info> {
         bump
     )]
     pub meter_account: Account<'info, MeterAccount>,
-    
+
     #[account(mut)]
     pub user_authority: Signer<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -302,10 +292,10 @@ pub struct RegisterMeter<'info> {
 pub struct UpdateUserStatus<'info> {
     #[account(has_one = authority @ ErrorCode::UnauthorizedAuthority)]
     pub registry: Account<'info, Registry>,
-    
+
     #[account(mut)]
     pub user_account: Account<'info, UserAccount>,
-    
+
     pub authority: Signer<'info>,
 }
 
@@ -313,7 +303,7 @@ pub struct UpdateUserStatus<'info> {
 pub struct UpdateMeterReading<'info> {
     #[account(mut)]
     pub meter_account: Account<'info, MeterAccount>,
-    
+
     pub oracle_authority: Signer<'info>,
 }
 
@@ -328,13 +318,6 @@ pub struct IsValidMeter<'info> {
 }
 
 #[derive(Accounts)]
-pub struct AssignMeter<'info> {
-    #[account(mut)]
-    pub registry: Account<'info, Registry>,
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
 pub struct GetUnsettledBalance<'info> {
     pub meter_account: Account<'info, MeterAccount>,
 }
@@ -343,7 +326,7 @@ pub struct GetUnsettledBalance<'info> {
 pub struct SettleMeterBalance<'info> {
     #[account(mut)]
     pub meter_account: Account<'info, MeterAccount>,
-    
+
     pub meter_owner: Signer<'info>,
 }
 
@@ -360,35 +343,35 @@ pub struct Registry {
 #[account]
 #[derive(InitSpace)]
 pub struct UserAccount {
-    pub authority: Pubkey,        // Wallet address that owns this account
-    pub user_type: UserType,       // Prosumer or Consumer
+    pub authority: Pubkey,   // Wallet address that owns this account
+    pub user_type: UserType, // Prosumer or Consumer
     #[max_len(100)]
-    pub location: String,          // User's location (max 100 chars)
-    pub status: UserStatus,        // Active, Suspended, or Inactive
-    pub registered_at: i64,        // Unix timestamp of registration
-    pub meter_count: u32,          // Number of meters owned
-    pub created_at: i64,           // Backward compatibility field
+    pub location: String, // User's location (max 100 chars)
+    pub status: UserStatus,  // Active, Suspended, or Inactive
+    pub registered_at: i64,  // Unix timestamp of registration
+    pub meter_count: u32,    // Number of meters owned
+    pub created_at: i64,     // Backward compatibility field
 }
 
 #[account]
 #[derive(InitSpace)]
 pub struct MeterAccount {
     #[max_len(50)]
-    pub meter_id: String,           // Unique meter identifier (max 50 chars)
-    pub owner: Pubkey,              // User who owns this meter
-    pub meter_type: MeterType,      // Solar, Wind, Battery, or Grid
-    pub status: MeterStatus,        // Active, Inactive, or Maintenance
-    pub registered_at: i64,         // When meter was registered
-    pub last_reading_at: i64,       // Last time reading was updated
-    pub total_generation: u64,      // Cumulative energy generated (in smallest units)
-    pub total_consumption: u64,     // Cumulative energy consumed (in smallest units)
-    
+    pub meter_id: String, // Unique meter identifier (max 50 chars)
+    pub owner: Pubkey,          // User who owns this meter
+    pub meter_type: MeterType,  // Solar, Wind, Battery, or Grid
+    pub status: MeterStatus,    // Active, Inactive, or Maintenance
+    pub registered_at: i64,     // When meter was registered
+    pub last_reading_at: i64,   // Last time reading was updated
+    pub total_generation: u64,  // Cumulative energy generated (in smallest units)
+    pub total_consumption: u64, // Cumulative energy consumed (in smallest units)
+
     // --- TOKENIZATION TRACKING ---
     // FIELD 1: Tracks the "net generation" that has already been
     // settled and minted into GRID tokens (the tradable commodity).
     // This prevents double-minting of GRID tokens.
     pub settled_net_generation: u64,
-    
+
     // FIELD 2: Tracks the "total generation" that has already been
     // claimed and converted into ERCs (the green certificates).
     // This prevents double-claiming of renewable certificates.

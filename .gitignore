@@ -75,3 +75,4 @@ src/client/
 **/generated/
 
 /debug/**
+/keypairs/**
