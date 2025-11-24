@@ -319,32 +319,7 @@ ts-node scripts/setup-loop-test-standalone.ts
 
 ## Utility Scripts
 
-### 1. generate-clients.js
 
-**Purpose**: Generates TypeScript clients for all programs using Codama.
-
-**Prerequisites**:
-- Programs built
-- IDL files generated
-
-**Test Scenarios**:
-
-#### Scenario 1: Generate All Clients
-```bash
-ts-node scripts/generate-clients.js
-```
-
-**Expected Output**:
-- Clients generated for all programs
-- Output directory created
-- Generated files listed
-
-**Verification**:
-```bash
-# Check generated clients
-ls -la src/generated/
-cat src/generated/clients.ts | head -20
-```
 
 ### 2. inspect.ts
 
@@ -385,24 +360,7 @@ ts-node scripts/inspect.ts program <program_address>
 - Program account information
 - Program state (if applicable)
 
-### 3. verify-codama.js
 
-**Purpose**: Verifies that Codama clients are correctly generated.
-
-**Prerequisites**:
-- Clients already generated
-
-**Test Scenarios**:
-
-#### Scenario 1: Verify Generated Clients
-```bash
-ts-node scripts/verify-codama.js
-```
-
-**Expected Output**:
-- Verification results
-- Any issues identified
-- Success/failure status
 
 ### 4. quick-setup-token.sh
 
@@ -458,9 +416,7 @@ For a complete end-to-end test of the entire system:
    # Build programs
    anchor build
    
-   # Generate clients
-   ts-node scripts/generate-clients.js
-   ```
+
 
 2. **Token Setup**
    ```bash
@@ -491,9 +447,6 @@ For a complete end-to-end test of the entire system:
 
 5. **Verification**
    ```bash
-   # Verify all components
-   ts-node scripts/verify-codama.js
-   
    # Check final state
    ts-node scripts/grx-wallet-manager.ts balances
    ```

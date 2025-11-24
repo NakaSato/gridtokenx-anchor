@@ -29,39 +29,25 @@
     "test:loop-transfer": "ts-node scripts/basic-transfer-test.ts 100 0.5 100",
     "test:loop-transfer-stress": "ts-node scripts/basic-transfer-test.ts 500 0.1 50",
     "inspect": "ts-node scripts/11-inspect.ts",
-    "clean": "./scripts/clean.sh",
-    "codama:registry": "npx codama run js -c codama.config.registry.js",
-    "codama:oracle": "npx codama run js -c codama.config.oracle.js",
-    "codama:governance": "npx codama run js -c codama.config.governance.js",
-    "codama:token": "npx codama run js -c codama.config.token.js",
-    "codama:trading": "npx codama run js -c codama.config.trading.js",
-    "codama:all": "node scripts/06-generate-clients.js --all",
-    "codama:js": "node scripts/06-generate-clients.js js",
-    "codama:rust": "node scripts/06-generate-clients.js rust",
-    "codama:generate": "node scripts/06-generate-clients.js"
+    "clean": "./scripts/clean.sh"
   },
   "dependencies": {
-    "@codama/renderers-js": "^1.5.0",
     "@coral-xyz/anchor": "^0.32.1",
     "@solana/kit": "^5.0.0",
-    "@solana/spl-token": "^0.4.8",
-    "@solana/web3.js": "^1.95.3",
-    "bn.js": "^5.2.1"
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
+    "bn.js": "^5.2.2"
   },
   "devDependencies": {
-    "@codama/nodes-from-anchor": "^1.3.0",
-    "@codama/renderers-rust": "^1.2.7",
-    "@codama/visitors-core": "^1.4.0",
-    "@types/bn.js": "^5.1.5",
-    "@types/chai": "^4.3.17",
-    "@types/mocha": "^10.0.7",
-    "@types/node": "^22.5.0",
+    "@types/bn.js": "^5.2.0",
+    "@types/chai": "^4.3.20",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.1",
     "chai": "^4.5.0",
-    "codama": "^1.4.0",
-    "mocha": "^10.7.3",
-    "ts-mocha": "^10.0.0",
+    "mocha": "^10.8.2",
+    "ts-mocha": "^10.1.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.5.4"
+    "typescript": "^5.9.3"
   },
   "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b"
 }
