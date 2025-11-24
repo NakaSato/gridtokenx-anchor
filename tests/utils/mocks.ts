@@ -1,10 +1,19 @@
 import * as anchor from "@coral-xyz/anchor";
-import { 
-  TEST_AMOUNTS, 
-  RENEWABLE_SOURCES, 
-  TEST_LOCATIONS,
-  ENERGY_CONSTANTS 
-} from './constants';
+
+// Constants that were imported from missing constants file
+const TEST_AMOUNTS = {
+  ONE_TOKEN: 1_000_000_000,
+  TEN_TOKENS: 10_000_000_000,
+  SMALL_AMOUNT: 100_000_000, // 0.1 tokens
+  MEDIUM_AMOUNT: 1_000_000_000, // 1 token
+  LARGE_AMOUNT: 10_000_000_000, // 10 tokens
+};
+
+const RENEWABLE_SOURCES = ["Solar", "Wind", "Hydro", "Biomass"];
+const TEST_LOCATIONS = ["Bangkok, Thailand", "New York, USA", "London, UK", "Tokyo, Japan"];
+const ENERGY_CONSTANTS = {
+  KWH_UNIT: 1000, // 1 kWh in base units
+};
 
 /**
  * Mock data generators for testing
