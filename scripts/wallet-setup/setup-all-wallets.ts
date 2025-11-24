@@ -1,267 +1,314 @@
 #!/usr/bin/env ts-node
 
 /**
- * GridTokenX Comprehensive Wallet Setup Script
- *
- * This script creates all role-based wallets needed for comprehensive testing
- * of the GridTokenX platform. It mirrors the functionality of the bash version
- * but provides better error handling and integration with the TypeScript ecosystem.
- *
- * Usage:
- *   ts-node scripts/wallet-setup/setup-all-wallets.ts [options]
- *
- * Options:
- *   --reset                 Delete existing wallets and create new ones
- *   --airdrop-only          Only perform airdrops to existing wallets
- *   --skip-airdrop          Skip SOL airdrops to wallets
- *   --keypair-dir <path>    Directory to store keypairs (default: ./keypairs)
- *   --validator-url <url>   Validator RPC URL (default: localhost)
- *   --help                  Show this help
+ * GridTokenX Wallet Setup Script
+ * 
+ * This script sets up all necessary wallets for the GridTokenX project including:
+ * - Creating wallet keypairs if they don't exist
+ * - Airdropping SOL to wallets
+ * - Setting up basic wallet configurations
+ * - Verifying all wallet configurations
  */
 
-import { execSync } from 'child_process';
-import { existsSync, mkdirSync, rmSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
-import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import * as anchor from "@coral-xyz/anchor";
+import { 
+  PublicKey, 
+  Keypair, 
+  Connection, 
+  clusterApiUrl,
+  LAMPORTS_PER_SOL,
+  SystemProgram,
+  SYSVAR_RENT_PUBKEY
+} from "@solana/web3.js";
+import * as fs from "fs";
+import * as path from "path";
 
-// Color codes for output
-const colors = {
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  reset: '\x1b[0m',
-};
+// Configuration
+const SOLANA_URL = process.env.SOLANA_URL || "http://localhost:8899";
+const KEYPAIRS_DIR = "./keypairs";
+const AIRDROP_AMOUNT = 10; // SOL
 
-// Default values
-const DEFAULT_KEYPAIR_DIR = './keypairs';
-const DEFAULT_VALIDATOR_URL = 'localhost';
-
-// Parse command line arguments
-const args = process.argv.slice(2);
-let reset = false;
-let airdropOnly = false;
-let skipAirdrop = false;
-let keypairDir = DEFAULT_KEYPAIR_DIR;
-let validatorUrl = DEFAULT_VALIDATOR_URL;
-
-// Parse arguments
-for (let i = 0; i < args.length; i++) {
-  switch (args[i]) {
-    case '--reset':
-      reset = true;
-      break;
-    case '--airdrop-only':
-      airdropOnly = true;
-      break;
-    case '--skip-airdrop':
-      skipAirdrop = true;
-      break;
-    case '--keypair-dir':
-      keypairDir = args[++i];
-      break;
-    case '--validator-url':
-      validatorUrl = args[++i];
-      break;
-    case '--help':
-      console.log('GridTokenX Wallet Setup Script');
-      console.log('');
-      console.log('Usage: ts-node scripts/wallet-setup/setup-all-wallets.ts [options]');
-      console.log('');
-      console.log('Options:');
-      console.log('  --reset                 Delete existing wallets and create new ones');
-      console.log('  --airdrop-only          Only perform airdrops to existing wallets');
-      console.log('  --skip-airdrop          Skip SOL airdrops to wallets');
-      console.log(`  --keypair-dir <path>    Directory to store keypairs (default: ${DEFAULT_KEYPAIR_DIR})`);
-      console.log(`  --validator-url <url>   Validator RPC URL (default: ${DEFAULT_VALIDATOR_URL})`);
-      console.log('  --help                  Show this help');
-      process.exit(0);
-    default:
-      console.error(`${colors.red}[ERROR]${colors.reset} Unknown option: ${args[i]}`);
-      process.exit(1);
+// Wallet configurations
+const WALLET_CONFIGS = [
+  {
+    name: "dev-wallet",
+    filename: "dev-wallet.json",
+    description: "Development and testing wallet",
+    solAmount: 100
+  },
+  {
+    name: "wallet-1",
+    filename: "wallet-1-keypair.json",
+    description: "Primary test wallet for performance testing",
+    solAmount: 5
+  },
+  {
+    name: "wallet-2",
+    filename: "wallet-2-keypair.json",
+    description: "Secondary test wallet for performance testing",
+    solAmount: 5
+  },
+  {
+    name: "producer-1",
+    filename: "producer-1.json",
+    description: "Energy producer wallet 1",
+    solAmount: 10
+  },
+  {
+    name: "producer-2",
+    filename: "producer-2.json",
+    description: "Energy producer wallet 2",
+    solAmount: 10
+  },
+  {
+    name: "producer-3",
+    filename: "producer-3.json",
+    description: "Energy producer wallet 3",
+    solAmount: 10
+  },
+  {
+    name: "consumer-1",
+    filename: "consumer-1.json",
+    description: "Energy consumer wallet 1",
+    solAmount: 10
+  },
+  {
+    name: "consumer-2",
+    filename: "consumer-2.json",
+    description: "Energy consumer wallet 2",
+    solAmount: 10
+  },
+  {
+    name: "governance-authority",
+    filename: "governance-authority.json",
+    description: "Governance authority wallet",
+    solAmount: 50
+  },
+  {
+    name: "oracle-authority",
+    filename: "oracle-authority.json",
+    description: "Oracle authority wallet",
+    solAmount: 20
+  },
+  {
+    name: "treasury-wallet",
+    filename: "treasury-wallet.json",
+    description: "Project treasury wallet",
+    solAmount: 100
+  },
+  {
+    name: "test-wallet-3",
+    filename: "test-wallet-3.json",
+    description: "Additional test wallet 3",
+    solAmount: 5
+  },
+  {
+    name: "test-wallet-4",
+    filename: "test-wallet-4.json",
+    description: "Additional test wallet 4",
+    solAmount: 5
+  },
+  {
+    name: "test-wallet-5",
+    filename: "test-wallet-5.json",
+    description: "Additional test wallet 5",
+    solAmount: 5
   }
-}
+];
 
-// Helper functions
-function log(message: string, color: string = colors.reset) {
-  console.log(`${color}${message}${colors.reset}`);
-}
+class WalletSetup {
+  private connection: Connection;
+  private provider: anchor.AnchorProvider;
+  private wallets: Map<string, Keypair> = new Map();
 
-function logInfo(message: string) {
-  log(`[INFO] ${message}`, colors.blue);
-}
-
-function logSuccess(message: string) {
-  log(`[SUCCESS] ${message}`, colors.green);
-}
-
-function logWarning(message: string) {
-  log(`[WARNING] ${message}`, colors.yellow);
-}
-
-function logError(message: string) {
-  log(`[ERROR] ${message}`, colors.red);
-}
-
-function executeCommand(command: string, errorMessage?: string): string {
-  try {
-    return execSync(command, { encoding: 'utf8' }).trim();
-  } catch (error) {
-    logError(errorMessage || `Failed to execute command: ${command}`);
-    throw error;
-  }
-}
-
-function getSolanaConfigPath(): string {
-  try {
-    const solanaConfig = executeCommand('solana config get');
-    const match = solanaConfig.match(/Keypair Path: (.+)/);
-    return match ? match[1] : join(homedir(), '.config', 'solana', 'id.json');
-  } catch (error) {
-    return join(homedir(), '.config', 'solana', 'id.json');
-  }
-}
-
-// Define all wallets with their airdrop amounts
-const walletAmounts: Record<string, number> = {
-  'dev-wallet': 1000,
-  'wallet-1': 500,
-  'wallet-2': 200,
-  'producer-1': 300,
-  'producer-2': 300,
-  'producer-3': 300,
-  'consumer-1': 250,
-  'consumer-2': 250,
-  'oracle-authority': 500,
-  'governance-authority': 500,
-  'treasury-wallet': 1000,
-  'test-wallet-3': 150,
-  'test-wallet-4': 150,
-  'test-wallet-5': 150,
-};
-
-// Function to create a single wallet
-function createWallet(walletName: string): string {
-  const walletPath = join(keypairDir, walletName);
-
-  if (existsSync(walletPath)) {
-    if (reset) {
-      logInfo(`Removing existing wallet: ${walletName}`);
-      rmSync(walletPath);
-    } else {
-      logWarning(`Wallet ${walletName} already exists. Use --reset to recreate.`);
-      return executeCommand(`solana-keygen pubkey ${walletPath}`);
-    }
+  constructor() {
+    this.connection = new Connection(SOLANA_URL, "confirmed");
+    
+    // Set up provider with a default wallet for setup operations
+    const defaultWalletKeypair = this.loadOrCreateKeypair("setup-authority-wallet.json");
+    const wallet = new anchor.Wallet(defaultWalletKeypair);
+    this.provider = new anchor.AnchorProvider(this.connection, wallet, {
+      commitment: "confirmed",
+      preflightCommitment: "confirmed"
+    });
+    anchor.setProvider(this.provider);
   }
 
-  logInfo(`Creating wallet: ${walletName}`);
-  executeCommand(`solana-keygen new --no-bip39-passphrase --silent --force --outfile ${walletPath}`);
-
-  const pubkey = executeCommand(`solana-keygen pubkey ${walletPath}`);
-  logSuccess(`Created wallet ${walletName} with public key: ${pubkey}`);
-  return pubkey;
-}
-
-// Function to airdrop SOL to a wallet
-function airdropSol(walletName: string, amount: number): void {
-  const walletPath = join(keypairDir, walletName);
-
-  if (!existsSync(walletPath)) {
-    logError(`Wallet ${walletName} not found at ${walletPath}`);
-    throw new Error(`Wallet ${walletName} not found`);
-  }
-
-  const pubkey = executeCommand(`solana-keygen pubkey ${walletPath}`);
-  logInfo(`Airdropping ${amount} SOL to ${walletName} (${pubkey})`);
-
-  try {
-    executeCommand(`solana airdrop ${amount} --keypair ${walletPath}`);
-    const balance = executeCommand(`solana balance ${pubkey} | awk '{print $1}'`);
-    logSuccess(`Airdropped ${amount} SOL to ${walletName}. New balance: ${balance} SOL`);
-  } catch (error) {
-    logError(`Failed to airdrop SOL to ${walletName}`);
-    throw error;
-  }
-}
-
-// Main function
-async function main(): Promise<void> {
-  try {
-    // Configure Solana CLI to use the specified validator
-    logInfo(`Configuring Solana CLI to use validator: ${validatorUrl}`);
-    executeCommand(`solana config set --url ${validatorUrl}`);
-
-    // Check if validator is running
+  /**
+   * Load existing keypair or create new one
+   */
+  private loadOrCreateKeypair(filename: string): Keypair {
+    const filePath = path.join(KEYPAIRS_DIR, filename);
+    
     try {
-      executeCommand('solana cluster-version');
+      if (fs.existsSync(filePath)) {
+        const secretKey = Uint8Array.from(JSON.parse(fs.readFileSync(filePath, "utf8")));
+        return Keypair.fromSecretKey(secretKey);
+      }
     } catch (error) {
-      logError(`Cannot connect to validator at ${validatorUrl}. Please ensure the validator is running.`);
+      console.warn(`⚠️  Warning: Could not load keypair from ${filePath}, creating new one`);
+    }
+
+    // Create new keypair
+    const keypair = Keypair.generate();
+    this.saveKeypair(keypair, filename);
+    return keypair;
+  }
+
+  /**
+   * Save keypair to file
+   */
+  private saveKeypair(keypair: Keypair, filename: string): void {
+    const filePath = path.join(KEYPAIRS_DIR, filename);
+    
+    // Ensure keypairs directory exists
+    if (!fs.existsSync(KEYPAIRS_DIR)) {
+      fs.mkdirSync(KEYPAIRS_DIR, { recursive: true });
+    }
+
+    fs.writeFileSync(filePath, JSON.stringify(Array.from(keypair.secretKey)));
+    console.log(`💾 Saved keypair: ${filename} -> ${keypair.publicKey.toBase58()}`);
+  }
+
+  /**
+   * Request airdrop for a wallet
+   */
+  private async requestAirdrop(address: PublicKey, amount: number): Promise<void> {
+    try {
+      const balance = await this.connection.getBalance(address);
+      const balanceInSol = balance / LAMPORTS_PER_SOL;
+      
+      console.log(`💰 Current balance for ${address.toBase58()}: ${balanceInSol.toFixed(4)} SOL`);
+
+      if (balanceInSol < amount) {
+        console.log(`🚀 Requesting airdrop of ${amount} SOL to ${address.toBase58()}...`);
+        const signature = await this.connection.requestAirdrop(address, amount * LAMPORTS_PER_SOL);
+        
+        await this.connection.confirmTransaction(signature, "confirmed");
+        console.log(`✅ Airdrop successful: ${signature}`);
+        
+        const newBalance = await this.connection.getBalance(address);
+        const newBalanceInSol = newBalance / LAMPORTS_PER_SOL;
+        console.log(`💰 New balance: ${newBalanceInSol.toFixed(4)} SOL`);
+      } else {
+        console.log(`✅ Sufficient balance already available`);
+      }
+    } catch (error) {
+      console.error(`❌ Error requesting airdrop: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Setup a single wallet
+   */
+  private async setupWallet(config: any): Promise<void> {
+    console.log(`\n🔧 Setting up ${config.name} (${config.description})`);
+
+    // Load or create wallet keypair
+    const wallet = this.loadOrCreateKeypair(config.filename);
+    this.wallets.set(config.name, wallet);
+
+    console.log(`📍 Address: ${wallet.publicKey.toBase58()}`);
+
+    // Request airdrop
+    await this.requestAirdrop(wallet.publicKey, config.solAmount);
+
+    console.log(`✅ ${config.name} setup complete`);
+  }
+
+  /**
+   * Verify all wallet configurations
+   */
+  private async verifySetup(): Promise<void> {
+    console.log(`\n🔍 Verifying wallet setup...`);
+
+    let totalSOL = 0;
+
+    for (const [name, wallet] of this.wallets) {
+      try {
+        // Check SOL balance
+        const solBalance = await this.connection.getBalance(wallet.publicKey);
+        const solBalanceInSol = solBalance / LAMPORTS_PER_SOL;
+        totalSOL += solBalanceInSol;
+
+        console.log(`  ${name}: ${solBalanceInSol.toFixed(4)} SOL`);
+      } catch (error) {
+        console.error(`  ❌ Error verifying ${name}: ${error}`);
+      }
+    }
+
+    console.log(`\n📊 Summary:`);
+    console.log(`  Total wallets: ${this.wallets.size}`);
+    console.log(`  Total SOL: ${totalSOL.toFixed(4)} SOL`);
+  }
+
+  /**
+   * Save wallet configuration summary
+   */
+  private saveWalletSummary(): void {
+    const summaryPath = path.join(KEYPAIRS_DIR, "wallet-summary.json");
+    const summary = {
+      created: new Date().toISOString(),
+      wallets: Array.from(this.wallets.entries()).map(([name, wallet]) => ({
+        name,
+        address: wallet.publicKey.toBase58(),
+        filename: path.join(KEYPAIRS_DIR, `${name}.json`)
+      }))
+    };
+
+    fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));
+    console.log(`💾 Wallet summary saved to ${summaryPath}`);
+  }
+
+  /**
+   * Main setup function
+   */
+  async setup(): Promise<void> {
+    console.log(`🚀 Starting GridTokenX Wallet Setup...`);
+    console.log(`📍 Solana URL: ${SOLANA_URL}`);
+    console.log(`📁 Keypairs directory: ${KEYPAIRS_DIR}`);
+
+    try {
+      // Check connection
+      const version = await this.connection.getVersion();
+      console.log(`✅ Connected to Solana cluster (version: ${version["solana-core"]})`);
+
+      // Setup all wallets
+      for (const config of WALLET_CONFIGS) {
+        await this.setupWallet(config);
+      }
+
+      // Verify setup
+      await this.verifySetup();
+
+      // Save summary
+      this.saveWalletSummary();
+
+      console.log(`\n🎉 GridTokenX wallet setup completed successfully!`);
+      console.log(`\n📝 Next steps:`);
+      console.log(`  1. Set your ANCHOR_WALLET environment variable:`);
+      console.log(`     export ANCHOR_WALLET=${path.join(KEYPAIRS_DIR, 'dev-wallet.json')}`);
+      console.log(`  2. Run tests: npm test`);
+      console.log(`  3. Check wallet documentation: docs/wallets/`);
+      console.log(`  4. To set up tokens later, you can run: npm run wallet:setup:tokens`);
+
+    } catch (error) {
+      console.error(`❌ Setup failed: ${error}`);
       process.exit(1);
     }
-
-    // Create keypair directory if it doesn't exist
-    if (!existsSync(keypairDir)) {
-      mkdirSync(keypairDir, { recursive: true });
-      logInfo(`Created keypair directory: ${keypairDir}`);
-    }
-
-    if (airdropOnly) {
-      logInfo('Performing airdrops only to existing wallets...');
-
-      for (const walletName in walletAmounts) {
-        if (existsSync(join(keypairDir, walletName))) {
-          airdropSol(walletName, walletAmounts[walletName]);
-        } else {
-          logWarning(`Skipping airdrop for ${walletName} - wallet does not exist`);
-        }
-      }
-
-      logSuccess('Airdrops completed for all existing wallets');
-      process.exit(0);
-    }
-
-    // Create all wallets
-    logInfo('Creating all role-based wallets...');
-
-    const walletPubkeys: Record<string, string> = {};
-
-    for (const walletName in walletAmounts) {
-      walletPubkeys[walletName] = createWallet(walletName);
-    }
-
-    // Perform airdrops if not skipped
-    if (!skipAirdrop) {
-      logInfo('Performing SOL airdrops to all wallets...');
-
-      for (const walletName in walletAmounts) {
-        airdropSol(walletName, walletAmounts[walletName]);
-      }
-    } else {
-      logWarning('Skipping SOL airdrops as requested');
-    }
-
-    // Display wallet information summary
-    logInfo('Wallet Setup Summary');
-    logInfo('=======================');
-
-    for (const walletName in walletPubkeys) {
-      const walletPath = join(keypairDir, walletName);
-      if (existsSync(walletPath)) {
-        const pubkey = executeCommand(`solana-keygen pubkey ${walletPath}`);
-        const balance = executeCommand(`solana balance ${pubkey} | awk '{print $1}'`);
-        log(`${walletName}: ${pubkey} (Balance: ${balance} SOL)`, colors.blue);
-      }
-    }
-
-    logSuccess('All wallets have been set up successfully!');
-    logInfo(`Keypair files are stored in: ${keypairDir}`);
-    logInfo('You can now run tests with these wallets using the commands in the README.');
-  } catch (error) {
-    logError(`Wallet setup failed: ${error}`);
-    process.exit(1);
   }
 }
 
-// Run the main function
-main();
+// Main execution
+async function main() {
+  const walletSetup = new WalletSetup();
+  await walletSetup.setup();
+}
+
+// Run if this file is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch(console.error);
+}
+
+export { WalletSetup };

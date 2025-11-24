@@ -18,7 +18,7 @@ url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "~/Developments/weekend/gridtokenx-anchor/dev-wallet.json"
+wallet = "~/Developments/weekend/gridtokenx-anchor/keypairs/dev-wallet.json"
 
 [test]
 startup_wait = 5000

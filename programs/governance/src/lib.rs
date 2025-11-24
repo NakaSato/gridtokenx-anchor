@@ -8,7 +8,6 @@ mod events;
 mod handlers;
 mod state;
 
-// Re-exports
 pub use errors::*;
 pub use events::*;
 pub use state::*;
