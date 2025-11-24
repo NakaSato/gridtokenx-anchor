@@ -1,13 +1,14 @@
 {
   "name": "gridtokenx-anchor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "GridTokenX Anchor Project",
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "anchor test",
     "test:grx": "anchor test --skip-local-validator tests/grx-token.test.ts",
-    "test:performance": "anchor test --skip-local-validator tests/performance-benchmark.test.ts",
+    "test:working": "ts-node test-transactions/working/run-working-test.ts",
+    "test:solana": "ts-node test-transactions/solana-only/run-solana-test.ts",
     "token:create": "ts-node scripts/08-token-manager.ts create",
     "token:mint": "ts-node scripts/08-token-manager.ts mint",
     "token:transfer": "ts-node scripts/08-token-manager.ts transfer",
@@ -15,7 +16,8 @@
     "wallet:airdrop": "ts-node scripts/09-wallet-manager.ts airdrop",
     "wallet:balance": "ts-node scripts/09-wallet-manager.ts balance",
     "setup:loop-test": "ts-node scripts/10-setup-loop-test-standalone.ts",
-    "inspect": "ts-node scripts/11-inspect.ts"
+    "inspect": "ts-node scripts/11-inspect.ts",
+    "clean": "./scripts/clean.sh"
   },
   "dependencies": {
     "@codama/renderers-js": "^1.5.0",
