@@ -11,12 +11,12 @@
     "resolveJsonModule": true,
     "declaration": true,
     "outDir": "./dist",
-    "rootDir": "./anchor/src",
+    "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["anchor/src/*"]
+      "@/*": ["*"]
     }
   },
-  "include": ["anchor/src/**/*"],
+  "include": ["scripts/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist", "target"]
 }
