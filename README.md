@@ -1,18 +1,44 @@
-gridtokenx-anchor/
-├── programs/          # Anchor programs (Solana smart contracts)
-│   ├── governance/     # Governance module
-│   ├── oracle/         # Price oracle for energy credits
-│   ├── registry/       # User registration and management
-│   ├── trading/        # Energy trading marketplace
-│   └── token/          # Energy credit token
-├── src/               # Client libraries and utilities
-│   └── client/js/     # JavaScript/TypeScript client
-├── test-transactions/ # Transaction testing utilities
-│   └── comprehensive/  # Full test suite
-├── scripts/           # Deployment and utility scripts
-├── tests/             # Anchor test suite
-└── configs/           # Configuration files
+# GridTokenX Anchor
+
+GridTokenX is a decentralized energy trading platform built on Solana using Anchor framework. It enables peer-to-peer energy trading, renewable energy certification, and grid management through smart contracts.
+
+## Project Structure
+
 ```
+gridtokenx-anchor/
+├── programs/               # Anchor programs (Solana smart contracts)
+│   ├── energy-token/       # Energy credit token program
+│   ├── governance/         # Governance module
+│   ├── oracle/             # Price oracle for energy credits
+│   ├── registry/           # User registration and management
+│   └── trading/            # Energy trading marketplace
+├── src/                   # Generated client libraries and utilities
+│   ├── client.ts          # Unified client for all programs
+│   ├── energy_token.ts    # Energy token types and client
+│   ├── governance.ts      # Governance types and client
+│   ├── oracle.ts          # Oracle types and client
+│   ├── registry.ts        # Registry types and client
+│   ├── trading.ts         # Trading types and client
+│   └── README.md          # Client documentation
+├── scripts/               # Deployment and utility scripts
+│   └── wallet-setup/      # Wallet configuration scripts
+├── tests/                 # Anchor test suite
+│   ├── performance/       # Performance testing utilities
+│   ├── transactions/      # Transaction testing utilities
+│   └── utils/             # Test utilities
+├── docs/                  # Documentation
+├── generated/             # Generated code
+├── keypairs/              # Development keypairs
+└── target/                # Build artifacts
+```
+
+## Program Addresses
+
+- **Energy Token**: `94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur`
+- **Governance**: `4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe`
+- **Oracle**: `DvdtU4quEbuxUY2FckmvcXwTpC9qp4HLJKb1PMLaqAoE`
+- **Registry**: `2XPQmFYMdXjP7ffoBB3mXeCdboSFg5Yeb6QmTSGbW8a7`
+- **Trading**: `GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk`
 
 ## Getting Started
 
@@ -22,6 +48,7 @@ gridtokenx-anchor/
 - Solana CLI 1.18+
 - Anchor CLI 0.32.1
 - Rust 1.70+
+- pnpm (recommended package manager)
 
 ### Installation
 
@@ -60,15 +87,15 @@ Use the provided script to automatically create all required wallets:
 
 ```bash
 # Create all wallets with default settings
-npm run wallet:setup-all
+npm run wallet:setup
 
 # Or use the script directly
 ts-node scripts/wallet-setup/setup-all-wallets.ts
 
-# Additional options
-npm run wallet:setup-all -- --reset          # Delete existing wallets and create new ones
-npm run wallet:setup-all -- --skip-airdrop    # Skip SOL airdrops to wallets
-npm run wallet:setup-all -- --airdrop-only    # Only perform airdrops to existing wallets
+# Additional options (if supported by script)
+npm run wallet:setup -- --reset          # Delete existing wallets and create new ones
+npm run wallet:setup -- --skip-airdrop    # Skip SOL airdrops to wallets
+npm run wallet:setup -- --airdrop-only    # Only perform airdrops to existing wallets
 ```
 
 ### Manual Wallet Setup
@@ -76,7 +103,6 @@ npm run wallet:setup-all -- --airdrop-only    # Only perform airdrops to existin
 If you prefer to set up wallets manually:
 
 ```bash
-
 # Create new keypairs for comprehensive testing
 # Base development and testing wallets
 solana-keygen new -o ./keypairs/dev-wallet
@@ -117,36 +143,94 @@ solana airdrop --keypair ./keypairs/consumer-2 250
 solana airdrop --keypair ./keypairs/oracle-authority 500
 solana airdrop --keypair ./keypairs/governance-authority 500
 solana airdrop --keypair ./keypairs/treasury-wallet 1000
-
 ```
 
 ### Running Tests
 
 ```bash
-# Basic transaction tests
-npx ts-node test-transactions/working/run-working-test.ts
-
-# Multi-wallet transaction testing
-npx ts-node test-transactions/multi-wallet/run-multi-wallet-test.ts
-
-# Energy producer/consumer flow testing
-npx ts-node test-transactions/energy-flow/run-energy-flow-test.ts
-
-# Oracle and governance testing
-npx ts-node test-transactions/oracle-gov/run-oracle-gov-test.ts
-
-# Comprehensive test suite with all keypairs
-./tests/test-transactions/run-comprehensive-test.sh
-
-# Full integration test with all wallets
-./tests/test-transactions/run-full-integration-test.sh
-
-# Stress testing with all generated keypairs
-./tests/stress/run-stress-test.sh
-
-# Anchor tests
+# Anchor test suite
+npm test
 anchor test
+
+# Specific program tests
+anchor test --skip-local-validator tests/grx-token.test.ts
+
+# Performance testing
+npm run test:performance
+
+# Architecture performance tests
+npm run test:performance-energy
+npm run test:performance-architecture
+npm run test:performance-benchmark
+
+# Quick performance check
+npm run performance:quick-check
+
+# Transaction tests
+npm run test:working
+npm run test:solana
+
+# Clean build artifacts
+npm run clean
 ```
+
+### Available NPM Scripts
+
+```bash
+# Development
+npm test                    # Run anchor tests
+npm run lint               # Run ESLint
+npm run lint:fix           # Fix ESLint issues
+
+# Testing
+npm run test:grx           # Run GRX token tests
+npm run test:working       # Run working transaction tests
+npm run test:solana        # Run Solana-only tests
+npm run test:performance   # Run performance tests
+
+# Wallet Management
+npm run wallet:setup       # Setup all development wallets
+
+# Performance
+npm run performance:quick-check  # Quick performance check
+
+# Setup
+npm run setup:loop-test    # Setup loop testing environment
+
+# Utilities
+npm run clean              # Clean build artifacts and temporary files
+```
+
+## Client Libraries
+
+### TypeScript/JavaScript Client
+
+The project includes generated TypeScript clients for all programs:
+
+```typescript
+import { Connection, Keypair } from '@solana/web3.js';
+import { Wallet } from '@coral-xyz/anchor';
+import { createGridTokenXClient } from './src/client';
+
+// Create connection
+const connection = new Connection('https://api.devnet.solana.com');
+
+// Create wallet
+const keypair = Keypair.generate();
+const wallet = new Wallet(keypair);
+
+// Create client
+const client = createGridTokenXClient(connection, wallet);
+
+// Access programs
+const energyTokenProgram = client.energyToken;
+const governanceProgram = client.governance;
+const oracleProgram = client.oracle;
+const registryProgram = client.registry;
+const tradingProgram = client.trading;
+```
+
+For detailed client usage, see [`src/README.md`](src/README.md).
 
 ## Deployment
 
@@ -160,9 +244,9 @@ anchor build
 anchor build --program-name governance
 ```
 
-## Program Architecture
+### Program Architecture
 
-### Energy Token (Token)
+### Energy Token
 
 Standard SPL Token representing energy credits with:
 - Mint authority controlled by governance
@@ -213,56 +297,64 @@ anchor test --skip-local-validator
 anchor test --skip-deploy
 ```
 
-### Integration Tests
-
-```bash
-# Transaction tests with all keypairs
-./test-transactions/comprehensive/run-comprehensive-test.sh
-
-# Multi-wallet scenarios (5+ wallets)
-./test-transactions/multi-wallet/run-test.sh
-
-# Producer-consumer transaction flows
-./test-transactions/producer-consumer/run-test.sh
-
-# Oracle and governance transactions
-./test-transactions/oracle-governance/run-test.sh
-
-# Fee testing with varying wallet balances
-./test-transactions/fee-testing/run-test.sh
-
-# Cross-program interaction testing
-./test-transactions/cross-program/run-test.sh
-```
-
-### E2E Testing
-
-```bash
-# End-to-end energy trading flow with all roles
-./test-transactions/e2e/energy-trading-flow.sh
-
-# Full governance cycle testing
-./test-transactions/e2e/governance-cycle.sh
-
-# Complete energy marketplace simulation
-./test-transactions/e2e/marketplace-simulation.sh
-
-# Stress testing with all generated keypairs
-./test-transactions/e2e/stress-all-keypairs.sh
-```
-
 ### Performance Testing
 
+The project includes comprehensive performance testing:
+
 ```bash
-# Transaction throughput with all keypairs
-./test-transactions/performance/throughput-test.sh
+# Run all performance tests
+npm run test:performance
 
-# Latency measurement across different wallet types
-./test-transactions/performance/latency-test.sh
+# Run specific performance test suites
+npm run test:performance-energy      # Energy trading performance
+npm run test:performance-architecture # Architecture performance
+npm run test:performance-benchmark   # Benchmark with JSON output
 
-# Resource usage under high load
-./test-transactions/performance/resource-test.sh
+# Quick performance check
+npm run performance:quick-check
 ```
+
+Performance tests include:
+- **Architecture Analysis**: System architecture performance evaluation
+- **Energy Trading Performance**: Energy trading transaction performance
+- **Benchmark Testing**: Comprehensive benchmarking with metrics collection
+- **Throughput Testing**: Transaction throughput under various conditions
+- **Latency Measurement**: End-to-end latency analysis
+
+### Test Files Structure
+
+```
+tests/
+├── energy-token.test.ts      # Energy token program tests
+├── governance.test.ts         # Governance program tests
+├── grx-token.test.ts         # GRX token specific tests
+├── oracle.test.ts             # Oracle program tests
+├── registry.test.ts           # Registry program tests
+├── trading.test.ts            # Trading program tests
+├── performance/               # Performance testing suite
+│   ├── README.md             # Performance testing documentation
+│   ├── architecture/         # Architecture performance tests
+│   └── utils/                # Performance testing utilities
+├── transactions/             # Transaction testing utilities
+│   └── run-comprehensive-test.ts
+└── utils/                    # Test utilities
+    └── wallet-config.ts
+```
+
+## Configuration
+
+### Anchor Configuration
+
+The project uses Anchor configuration in `Anchor.toml`:
+
+- **Toolchain**: Anchor 0.32.1 with pnpm package manager
+- **Program Addresses**: Pre-defined program IDs for localnet
+- **Test Configuration**: Optimized test settings with genesis programs
+- **Provider**: Localnet cluster with dev-wallet as default
+
+### Environment Variables
+
+The project supports environment configuration through `.env` file for sensitive data and configuration.
 
 ## Security Considerations
 
@@ -270,16 +362,29 @@ anchor test --skip-deploy
    - Never commit private keys to version control
    - Use hardware wallets for production
    - Implement proper key rotation
+   - Store sensitive data in environment variables
 
 2. **Program Security**
    - Validate all user inputs
    - Implement access controls
    - Use Solana program security best practices
+   - Regular security audits
 
 3. **Network Security**
    - Use secure RPC endpoints
    - Validate transaction signatures
    - Implement replay protection
+   - Use proper error handling
+
+## Documentation
+
+Additional documentation is available in the `docs/` directory:
+
+- Implementation guides and architecture documentation
+- Security reviews and best practices
+- Performance testing documentation
+- Wallet management guides
+- Task-specific implementation guides
 
 ## License
 

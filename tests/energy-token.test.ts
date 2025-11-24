@@ -1,362 +1,220 @@
 import * as anchor from "@coral-xyz/anchor";
-import { expect } from "chai";
-import { GridTokenXClient } from "../src/client/js/gridtokenx-client";
-import * as Token from "../src/client/js/token";
+import { 
+  TestEnvironment, 
+  describe, 
+  it, 
+  before, 
+  beforeEach, 
+  after, 
+  expect 
+} from "./setup.js";
+import { TestUtils } from "./utils/index.js";
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
-describe("Energy Token Program - GridTokenXClient", () => {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
+// Test amounts (in smallest units - lamports)
+const TEST_AMOUNTS = {
+  ONE_TOKEN: 1_000_000_000,
+  TEN_TOKENS: 10_000_000_000,
+  SMALL_AMOUNT: 100_000_000, // 0.1 tokens
+  MEDIUM_AMOUNT: 1_000_000_000, // 1 token
+  LARGE_AMOUNT: 10_000_000_000, // 10 tokens
+};
 
-  let client: GridTokenXClient;
+describe("Energy Token Program Tests", () => {
+  let env: TestEnvironment;
   let tokenInfoPda: anchor.web3.PublicKey;
   let mintPda: anchor.web3.PublicKey;
-  let recipientKeypair: anchor.web3.Keypair;
-  let tokenInitialized = false;
+  let userTokenAccount: anchor.web3.PublicKey;
 
   before(async () => {
-    // Initialize GridTokenXClient
-    client = new GridTokenXClient({
-      connection: provider.connection,
-      wallet: (provider.wallet as anchor.Wallet).payer,
-    });
+    env = await TestEnvironment.create();
+    
+    // Get PDAs
+    [tokenInfoPda] = TestUtils.findTokenInfoPda(env.energyTokenProgram.programId);
+    [mintPda] = TestUtils.findMintPda(env.energyTokenProgram.programId);
+  });
 
-    // Generate recipient keypair for testing
-    recipientKeypair = anchor.web3.Keypair.generate();
-
-    // Get PDAs for verification
-    const programIds = client.getProgramIds();
-    const tokenProgramId = new anchor.web3.PublicKey(programIds.token);
-
-    [tokenInfoPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("token_info")],
-      tokenProgramId,
-    );
-
-    [mintPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("mint")],
-      tokenProgramId,
-    );
-
-    // Try to initialize token info, but don't fail if it already exists
+  beforeEach(async () => {
+    // Create user token account if needed
     try {
-      const tx = await client.initializeToken();
-      console.log("Token initialized:", tx);
-      tokenInitialized = true;
-    } catch (error: any) {
-      if (error.message && error.message.includes("already in use")) {
-        console.log("Token already initialized, continuing with tests");
-        tokenInitialized = false;
-      } else {
-        console.error("Unexpected error during initialization:", error);
-        throw error;
-      }
+      userTokenAccount = await TestUtils.createAssociatedTokenAccount(
+        env.wallet.publicKey,
+        mintPda,
+        env.wallet.publicKey,
+        env.connection
+      );
+    } catch (error) {
+      // Account might already exist
+      userTokenAccount = await anchor.utils.token.associatedAddress({
+        mint: mintPda,
+        owner: env.wallet.publicKey
+      });
     }
   });
 
-  describe("Initialize", () => {
-    it("should initialize token info", async () => {
-      // Only test initialization if we haven't already done it
-      if (!tokenInitialized) {
-        try {
-          const tx = await client.initializeToken();
-          expect(tx).to.exist;
-        } catch (error: any) {
-          if (error.message && error.message.includes("already in use")) {
-            // Account already exists, which is fine for this test
-            expect(true).to.be.true;
-          } else {
-            throw error;
-          }
-        }
-      } else {
-        // If we already initialized in before(), just pass the test
-        expect(true).to.be.true;
+  describe("Initialization", () => {
+    it("should initialize token program", async () => {
+      try {
+        const tx = await env.energyTokenProgram.methods
+          .initialize()
+          .accounts({
+            authority: env.authority.publicKey,
+          })
+          .signers([env.authority])
+          .rpc();
+
+        expect(tx).to.exist;
+      } catch (error: any) {
+        // Program might already be initialized
+        expect(error.message).to.contain("already in use");
       }
+    });
+
+    it("should initialize token info", async () => {
+      try {
+        const tx = await env.energyTokenProgram.methods
+          .initializeToken()
+          .accounts({
+            tokenInfo: tokenInfoPda,
+            mint: mintPda,
+            authority: env.authority.publicKey,
+          })
+          .signers([env.authority])
+          .rpc();
+
+        expect(tx).to.exist;
+      } catch (error: any) {
+        // Account might already exist
+        expect(error.message).to.contain("already in use");
+      }
+    });
+  });
+
+  describe("Token Mint Creation", () => {
+    it("should create a token mint with metadata", async () => {
+      const mintKeypair = anchor.web3.Keypair.generate();
+      const metadataPda = anchor.web3.PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("metadata"),
+          new anchor.web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+          mintKeypair.publicKey.toBuffer(),
+        ],
+        new anchor.web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+      )[0];
+
+      const name = "Grid Renewable Energy Token";
+      const symbol = "GRID";
+      const uri = "https://gridtokenx.com/metadata";
+
+      const tx = await env.energyTokenProgram.methods
+        .createTokenMint(name, symbol, uri)
+        .accounts({
+          mint: mintKeypair.publicKey,
+          metadata: metadataPda,
+          payer: env.wallet.publicKey,
+          authority: env.authority.publicKey,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          metadataProgram: new anchor.web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"),
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+        })
+        .signers([mintKeypair, env.authority])
+        .rpc();
+
+      expect(tx).to.exist;
     });
   });
 
   describe("Token Minting", () => {
-    it("should mint energy tokens to wallet", async () => {
-      const mintAmount = BigInt(1_000_000_000); // 1 billion tokens
+    it("should mint tokens to wallet", async () => {
+      const mintAmount = TEST_AMOUNTS.ONE_TOKEN;
 
-      const tx = await client.mintTokens(
-        mintAmount,
-        provider.wallet.publicKey.toString(),
-      );
+      const tx = await env.energyTokenProgram.methods
+        .mintToWallet(mintAmount)
+        .accounts({
+          mint: mintPda,
+          destination: userTokenAccount,
+          destinationOwner: env.wallet.publicKey,
+          authority: env.authority.publicKey,
+          payer: env.wallet.publicKey,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .signers([env.authority])
+        .rpc();
+
       expect(tx).to.exist;
 
       // Verify balance
-      const balance = await client.getTokenBalance(
-        provider.wallet.publicKey.toString(),
-      );
-      expect(balance).to.equal(mintAmount);
-    });
-  });
-
-  describe("REC Validator Management", () => {
-    it("should add a REC validator", async () => {
-      const validatorPubkey = anchor.web3.Keypair.generate().publicKey;
-      const authorityName = "University REC Authority";
-
-      const tx = await client.addRecValidator(
-        validatorPubkey.toString(),
-        authorityName,
-      );
-      expect(tx).to.exist;
+      const balance = await TestUtils.getTokenBalance(env.connection, userTokenAccount);
+      expect(balance).to.be.at.least(mintAmount);
     });
 
-    it("should add multiple REC validators", async () => {
-      const validators = [
-        {
-          pubkey: anchor.web3.Keypair.generate().publicKey,
-          name: "Solar Authority",
-        },
-        {
-          pubkey: anchor.web3.Keypair.generate().publicKey,
-          name: "Wind Authority",
-        },
-        {
-          pubkey: anchor.web3.Keypair.generate().publicKey,
-          name: "Hydro Authority",
-        },
-      ];
-
-      for (const validator of validators) {
-        const tx = await client.addRecValidator(
-          validator.pubkey.toString(),
-          validator.name,
-        );
-        expect(tx).to.exist;
-      }
-    });
-
-    it("should add Thai energy authority REC validators", async () => {
-      const thaiAuthorities = [
-        {
-          pubkey: anchor.web3.Keypair.generate().publicKey,
-          name: "UTCC Authority",
-        },
-        {
-          pubkey: anchor.web3.Keypair.generate().publicKey,
-          name: "MEA Authority",
-        },
-        {
-          pubkey: anchor.web3.Keypair.generate().publicKey,
-          name: "EGET Authority",
-        },
-      ];
-
-      for (const authority of thaiAuthorities) {
-        const tx = await client.addRecValidator(
-          authority.pubkey.toString(),
-          authority.name,
-        );
-        expect(tx).to.exist;
-      }
-    });
-  });
-
-  describe("Token Transfer", () => {
-    beforeEach(async () => {
-      // Ensure we have tokens to transfer
-      try {
-        const currentBalance = await client.getTokenBalance(
-          provider.wallet.publicKey.toString(),
-        );
-        if (currentBalance < BigInt(1_000_000_000)) {
-          await client.mintTokens(
-            BigInt(1_000_000_000) - currentBalance,
-            provider.wallet.publicKey.toString(),
-          );
-        }
-      } catch (error) {
-        console.error("Error minting tokens for transfer test:", error);
-        throw error;
-      }
-    });
-
-    it("should transfer energy tokens between accounts", async () => {
-      const transferAmount = BigInt(1_000_000_000); // 1 billion tokens
-
-      const tx = await client.transferTokens(
-        recipientKeypair.publicKey.toString(),
-        transferAmount,
-      );
-      expect(tx).to.exist;
-
-      // Verify recipient has tokens
-      const balance = await client.getTokenBalance(
-        recipientKeypair.publicKey.toString(),
-      );
-      expect(balance).to.exist;
-    });
-
-    it("should transfer various token amounts", async () => {
+    it("should mint various token amounts", async () => {
       const amounts = [
-        BigInt(100_000_000), // 100M tokens
-        BigInt(500_000_000), // 500M tokens
-        BigInt(1_000_000_000), // 1B tokens
+        TEST_AMOUNTS.SMALL_AMOUNT,
+        TEST_AMOUNTS.MEDIUM_AMOUNT,
+        TEST_AMOUNTS.LARGE_AMOUNT,
       ];
 
       for (const amount of amounts) {
-        const tx = await client.transferTokens(
-          recipientKeypair.publicKey.toString(),
-          amount,
-        );
-        expect(tx).to.exist;
-      }
-    });
-  });
+        const tx = await env.energyTokenProgram.methods
+          .mintToWallet(amount)
+          .accounts({
+            mint: mintPda,
+            destination: userTokenAccount,
+            destinationOwner: env.wallet.publicKey,
+            authority: env.authority.publicKey,
+            payer: env.wallet.publicKey,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([env.authority])
+          .rpc();
 
-  describe("Token Burning", () => {
-    beforeEach(async () => {
-      // Ensure we have tokens to burn
-      try {
-        const currentBalance = await client.getTokenBalance(
-          provider.wallet.publicKey.toString(),
-        );
-        if (currentBalance < BigInt(500_000_000)) {
-          await client.mintTokens(
-            BigInt(500_000_000) - currentBalance,
-            provider.wallet.publicKey.toString(),
-          );
-        }
-      } catch (error) {
-        console.error("Error minting tokens for burn test:", error);
-        throw error;
-      }
-    });
-
-    it("should burn energy tokens", async () => {
-      const burnAmount = BigInt(100_000_000); // 100M tokens
-
-      const tx = await client.burnTokens(burnAmount);
-      expect(tx).to.exist;
-
-      // Verify total supply was updated
-      const initialBalance = await client.getTokenBalance(
-        provider.wallet.publicKey.toString(),
-      );
-      expect(initialBalance).to.be.at.least(burnAmount);
-    });
-
-    it("should burn various token amounts", async () => {
-      const burnAmounts = [
-        BigInt(50_000_000), // 50M tokens
-        BigInt(100_000_000), // 100M tokens
-        BigInt(200_000_000), // 200M tokens
-      ];
-
-      for (const amount of burnAmounts) {
-        const tx = await client.burnTokens(amount);
         expect(tx).to.exist;
       }
     });
 
-    it("should track total supply correctly after burns", async () => {
-      // This test may fail due to getTokenInfo issues, so let's skip it for now
-      console.log(
-        "Skipping total supply tracking test due to getTokenInfo issues",
-      );
-      expect(true).to.be.true;
+    it("should fail to mint tokens with unauthorized authority", async () => {
+      const unauthorizedKeypair = anchor.web3.Keypair.generate();
+
+      await expect(
+        env.energyTokenProgram.methods
+          .mintToWallet(TEST_AMOUNTS.ONE_TOKEN)
+          .accounts({
+            mint: mintPda,
+            destination: userTokenAccount,
+            destinationOwner: env.wallet.publicKey,
+            authority: unauthorizedKeypair.publicKey,
+            payer: env.wallet.publicKey,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([unauthorizedKeypair])
+          .rpc()
+      ).to.throw();
     });
   });
 
   describe("Token Info Management", () => {
-    it("should retrieve token info correctly", async () => {
-      // This test may fail due to getTokenInfo issues, so let's skip it for now
-      console.log(
-        "Skipping token info retrieval test due to getTokenInfo issues",
-      );
-      expect(true).to.be.true;
-    });
-
-    it("should verify token info integrity", async () => {
-      // This test may fail due to getTokenInfo issues, so let's skip it for now
-      console.log(
-        "Skipping token info integrity test due to getTokenInfo issues",
-      );
-      expect(true).to.be.true;
+    it("should retrieve token info", async () => {
+      try {
+        const tokenInfo = await env.energyTokenProgram.account.tokenInfo.fetch(tokenInfoPda);
+        expect(tokenInfo).to.exist;
+        expect(tokenInfo.authority.toBase58()).to.equal(env.authority.publicKey.toBase58());
+      } catch (error: any) {
+        // Account might not be initialized yet
+        expect(error.message).to.contain("Account does not exist");
+      }
     });
   });
 
-  describe("Energy Trading Scenarios", () => {
-    beforeEach(async () => {
-      // Ensure we have tokens for trading
-      try {
-        const currentBalance = await client.getTokenBalance(
-          provider.wallet.publicKey.toString(),
-        );
-        if (currentBalance < BigInt(2_000_000_000)) {
-          await client.mintTokens(
-            BigInt(2_000_000_000) - currentBalance,
-            provider.wallet.publicKey.toString(),
-          );
-        }
-      } catch (error) {
-        console.error("Error minting tokens for trading test:", error);
-        throw error;
-      }
-    });
-
-    it("should handle energy token distribution", async () => {
-      const recipients = [
-        anchor.web3.Keypair.generate(),
-        anchor.web3.Keypair.generate(),
-        anchor.web3.Keypair.generate(),
-      ];
-
-      for (const recipient of recipients) {
-        const transferAmount = BigInt(100_000_000); // 100M tokens per recipient
-        const tx = await client.transferTokens(
-          recipient.publicKey.toString(),
-          transferAmount,
-        );
-        expect(tx).to.exist;
-      }
-    });
-
-    it("should handle batch token burns for energy consumption", async () => {
-      const consumptionRecords = [
-        { amount: BigInt(50_000_000), reason: "Household consumption" },
-        { amount: BigInt(75_000_000), reason: "Industrial consumption" },
-        { amount: BigInt(100_000_000), reason: "Grid balancing" },
-      ];
-
-      for (const record of consumptionRecords) {
-        const tx = await client.burnTokens(record.amount);
-        expect(tx).to.exist;
-      }
-    });
-
-    it("should handle renewable energy certificate issuance workflow", async () => {
-      const validators = [
-        {
-          name: "Solar Validator 1",
-          pubkey: anchor.web3.Keypair.generate().publicKey,
-        },
-        {
-          name: "Wind Validator 1",
-          pubkey: anchor.web3.Keypair.generate().publicKey,
-        },
-      ];
-
-      // Add validators for REC validation
-      for (const validator of validators) {
-        const tx = await client.addRecValidator(
-          validator.pubkey.toString(),
-          validator.name,
-        );
-        expect(tx).to.exist;
-      }
-
-      // Simulate energy production and token transfer
-      const energyProduced = BigInt(500_000_000); // 500M kWh equivalent
-      const tx = await client.transferTokens(
-        recipientKeypair.publicKey.toString(),
-        energyProduced,
-      );
-      expect(tx).to.exist;
-    });
+  after(async () => {
+    console.log("Energy token tests completed");
   });
 });

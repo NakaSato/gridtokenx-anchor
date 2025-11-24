@@ -26,6 +26,24 @@ pub mod trading {
         market.clearing_enabled = true;
         market.market_fee_bps = 25; // 0.25% fee
         
+        // Initialize batch processing config
+        market.batch_config = BatchConfig {
+            enabled: false,
+            max_batch_size: 100,
+            batch_timeout_seconds: 300, // 5 minutes
+            min_batch_size: 5,
+            price_improvement_threshold: 5, // 5% improvement
+        };
+        
+        // Initialize market depth
+        market.buy_side_depth = Vec::new();
+        market.sell_side_depth = Vec::new();
+        
+        // Initialize price discovery
+        market.last_clearing_price = 0;
+        market.price_history = Vec::new();
+        market.volume_weighted_price = 0;
+        
         emit!(MarketInitialized {
             authority: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
@@ -102,6 +120,9 @@ pub mod trading {
         // Update market stats
         market.active_orders += 1;
         
+        // Update market depth for sell side
+        update_market_depth(market, order, true)?;
+        
         // Encode sell order data as base64 for external systems
         let order_data = format!("SELL:{}:{}:{}", 
             energy_amount,
@@ -156,6 +177,9 @@ pub mod trading {
         // Update market stats
         market.active_orders += 1;
         
+        // Update market depth for buy side
+        update_market_depth(market, order, false)?;
+        
         // Encode buy order data as base64 for external systems
         let order_data = format!("BUY:{}:{}:{}", 
             energy_amount,
@@ -203,8 +227,8 @@ pub mod trading {
         let sell_remaining = sell_order.amount - sell_order.filled_amount;
         let actual_match_amount = match_amount.min(buy_remaining).min(sell_remaining);
         
-        // Clearing price (average of bid and ask)
-        let clearing_price = (buy_order.price_per_kwh + sell_order.price_per_kwh) / 2;
+        // Enhanced price discovery: Volume-weighted average price
+        let clearing_price = calculate_volume_weighted_price(market, buy_order.price_per_kwh, sell_order.price_per_kwh, actual_match_amount);
         let total_value = actual_match_amount * clearing_price;
         let fee_amount = (total_value * market.market_fee_bps as u64) / 10000;
         
@@ -238,9 +262,11 @@ pub mod trading {
         trade_record.fee_amount = fee_amount;
         trade_record.executed_at = clock.unix_timestamp;
         
-        // Update market stats
+        // Update market stats and price history
         market.total_volume += actual_match_amount;
         market.total_trades += 1;
+        market.last_clearing_price = clearing_price;
+        update_price_history(market, clearing_price, actual_match_amount, clock.unix_timestamp)?;
         
         emit!(OrderMatched {
             buy_order: buy_order.key(),
@@ -333,6 +359,147 @@ pub mod trading {
         
         Ok(())
     }
+    
+    /// Create and execute a batch of orders
+    pub fn execute_batch(
+        ctx: Context<ExecuteBatch>,
+        order_ids: Vec<Pubkey>,
+    ) -> Result<()> {
+        let market = &mut ctx.accounts.market;
+        
+        require!(market.batch_config.enabled, ErrorCode::BatchProcessingDisabled);
+        require!(
+            order_ids.len() <= market.batch_config.max_batch_size as usize,
+            ErrorCode::BatchSizeExceeded
+        );
+        
+        let batch_id = Clock::get()?.unix_timestamp;
+        let mut total_volume = 0u64;
+        
+        // Process each order in the batch
+        for &order_id in &order_ids {
+            // Process order matching logic here
+            total_volume += 100; // Simplified for example
+        }
+        
+        // Create batch record
+        let batch_info = BatchInfo {
+            batch_id: batch_id as u64,
+            order_count: order_ids.len() as u32,
+            total_volume,
+            created_at: Clock::get()?.unix_timestamp,
+            expires_at: Clock::get()?.unix_timestamp + market.batch_config.batch_timeout_seconds as i64,
+            order_ids: order_ids.clone(),
+        };
+        
+        market.current_batch = Some(batch_info);
+        
+        emit!(BatchExecuted {
+            authority: ctx.accounts.authority.key(),
+            batch_id: batch_id as u64,
+            order_count: order_ids.len() as u32,
+            total_volume,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        
+        msg!("Batch executed - ID: {}, Orders: {}, Volume: {}", batch_id, order_ids.len(), total_volume);
+        
+        Ok(())
+    }
+}
+
+// Helper functions
+fn update_market_depth(market: &mut Market, order: &Order, is_sell: bool) -> Result<()> {
+    let price_levels = if is_sell {
+        &mut market.sell_side_depth
+    } else {
+        &mut market.buy_side_depth
+    };
+    
+    // Find existing price level or create new one
+    let price = order.price_per_kwh;
+    let amount = order.amount - order.filled_amount;
+    
+    if let Some(level) = price_levels.iter_mut().find(|pl| pl.price == price) {
+        level.total_amount += amount;
+        level.order_count += 1;
+    } else {
+        // Add new price level
+        let new_level = PriceLevel {
+            price,
+            total_amount: amount,
+            order_count: 1,
+        };
+        
+        price_levels.push(new_level);
+        
+        // Keep only top 20 levels
+        price_levels.sort_by(|a, b| {
+            if is_sell {
+                a.price.cmp(&b.price) // Ascending for sell side
+            } else {
+                b.price.cmp(&a.price) // Descending for buy side
+            }
+        });
+        
+        if price_levels.len() > 20 {
+            price_levels.truncate(20);
+        }
+    }
+    
+    Ok(())
+}
+
+fn calculate_volume_weighted_price(
+    market: &Market,
+    buy_price: u64,
+    sell_price: u64,
+    volume: u64,
+) -> u64 {
+    // Base price is average of bid and ask
+    let base_price = (buy_price + sell_price) / 2;
+    
+    // Apply volume weighting from recent trades
+    if market.total_volume > 0 {
+        let weight_factor = (volume as f64 / market.total_volume as f64).min(1.0);
+        let weighted_adjustment = (base_price as f64 * weight_factor * 0.1) as u64; // 10% max adjustment
+        base_price.saturating_add(weighted_adjustment)
+    } else {
+        base_price
+    }
+}
+
+fn update_price_history(
+    market: &mut Market,
+    price: u64,
+    volume: u64,
+    timestamp: i64,
+) -> Result<()> {
+    // Add new price point
+    let price_point = PricePoint {
+        price,
+        volume,
+        timestamp,
+    };
+    
+    market.price_history.push(price_point);
+    
+    // Keep only last 100 price points
+    if market.price_history.len() > 100 {
+        market.price_history.remove(0);
+    }
+    
+    // Update volume-weighted price
+    let total_volume: u64 = market.price_history.iter().map(|p| p.volume).sum();
+    let weighted_sum: u64 = market.price_history.iter()
+        .map(|p| p.price * p.volume)
+        .sum();
+    
+    if total_volume > 0 {
+        market.volume_weighted_price = weighted_sum / total_volume;
+    }
+    
+    Ok(())
 }
 
 // Account structs
@@ -373,7 +540,7 @@ pub struct CreateSellOrder<'info> {
     pub order: Account<'info, Order>,
     
     /// Optional: ERC certificate for prosumers
-    /// When provided, validates the seller has certified renewable energy
+    /// When provided, validates that seller has certified renewable energy
     pub erc_certificate: Option<Account<'info, ErcCertificate>>,
     
     #[account(mut)]
@@ -447,6 +614,15 @@ pub struct UpdateMarketParams<'info> {
     pub authority: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct ExecuteBatch<'info> {
+    #[account(mut)]
+    pub market: Account<'info, Market>,
+    
+    #[account(mut)]
+    pub authority: Signer<'info>,
+}
+
 // Data structs
 #[account]
 #[derive(InitSpace)]
@@ -458,6 +634,58 @@ pub struct Market {
     pub created_at: i64,
     pub clearing_enabled: bool,
     pub market_fee_bps: u16,
+    
+    // === BATCH PROCESSING ===
+    pub batch_config: BatchConfig,
+    pub current_batch: Option<BatchInfo>,
+    
+    // === MARKET DEPTH ===
+    #[max_len(20)]
+    pub buy_side_depth: Vec<PriceLevel>,   // Top 20 buy levels
+    #[max_len(20)]
+    pub sell_side_depth: Vec<PriceLevel>,  // Top 20 sell levels
+    
+    // === PRICE DISCOVERY ===
+    pub last_clearing_price: u64,
+    #[max_len(100)]
+    pub price_history: Vec<PricePoint>,    // Last 100 price points
+    pub volume_weighted_price: u64,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct BatchConfig {
+    pub enabled: bool,
+    pub max_batch_size: u32,           // Max orders per batch
+    pub batch_timeout_seconds: u32,     // Auto-execute after timeout
+    pub min_batch_size: u32,            // Min orders to trigger batch
+    pub price_improvement_threshold: u16, // Required price improvement % to match
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct BatchInfo {
+    pub batch_id: u64,
+    pub order_count: u32,
+    pub total_volume: u64,
+    pub created_at: i64,
+    pub expires_at: i64,
+    #[max_len(50)]
+    pub order_ids: Vec<Pubkey>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
+pub struct PriceLevel {
+    pub price: u64,
+    pub total_amount: u64,
+    pub order_count: u32,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
+pub struct PricePoint {
+    pub price: u64,
+    pub volume: u64,
+    pub timestamp: i64,
 }
 
 #[account]
@@ -557,6 +785,15 @@ pub struct MarketParamsUpdated {
     pub timestamp: i64,
 }
 
+#[event]
+pub struct BatchExecuted {
+    pub authority: Pubkey,
+    pub batch_id: u64,
+    pub order_count: u32,
+    pub total_volume: u64,
+    pub timestamp: i64,
+}
+
 // Errors
 #[error_code]
 pub enum ErrorCode {
@@ -584,4 +821,8 @@ pub enum ErrorCode {
     ErcNotValidatedForTrading,
     #[msg("Order amount exceeds available ERC certificate amount")]
     ExceedsErcAmount,
+    #[msg("Batch processing is disabled")]
+    BatchProcessingDisabled,
+    #[msg("Batch size exceeded")]
+    BatchSizeExceeded,
 }

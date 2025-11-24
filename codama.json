@@ -1,0 +1,9 @@
+{
+  "idl": "target/idl/energy_token.json",
+  "scripts": {
+    "js": {
+      "plugin": "@codama/renderers-js",
+      "outputDir": "generated/js"
+    }
+  }
+}

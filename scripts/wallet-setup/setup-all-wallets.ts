@@ -15,18 +15,13 @@ import {
   PublicKey, 
   Keypair, 
   Connection, 
-  clusterApiUrl,
-  LAMPORTS_PER_SOL,
-  SystemProgram,
-  SYSVAR_RENT_PUBKEY
-} from "@solana/web3.js";
+  LAMPORTS_PER_SOL} from "@solana/web3.js";
 import * as fs from "fs";
 import * as path from "path";
 
 // Configuration
 const SOLANA_URL = process.env.SOLANA_URL || "http://localhost:8899";
 const KEYPAIRS_DIR = "./keypairs";
-const AIRDROP_AMOUNT = 10; // SOL
 
 // Wallet configurations
 const WALLET_CONFIGS = [
@@ -146,7 +141,7 @@ class WalletSetup {
         return Keypair.fromSecretKey(secretKey);
       }
     } catch (error) {
-      console.warn(`⚠️  Warning: Could not load keypair from ${filePath}, creating new one`);
+      console.warn(`Warning: Could not load keypair from ${filePath}, creating new one`);
     }
 
     // Create new keypair
@@ -167,7 +162,7 @@ class WalletSetup {
     }
 
     fs.writeFileSync(filePath, JSON.stringify(Array.from(keypair.secretKey)));
-    console.log(`💾 Saved keypair: ${filename} -> ${keypair.publicKey.toBase58()}`);
+    console.log(`Saved keypair: ${filename} -> ${keypair.publicKey.toBase58()}`);
   }
 
   /**
@@ -178,10 +173,10 @@ class WalletSetup {
       const balance = await this.connection.getBalance(address);
       const balanceInSol = balance / LAMPORTS_PER_SOL;
       
-      console.log(`💰 Current balance for ${address.toBase58()}: ${balanceInSol.toFixed(4)} SOL`);
+      console.log(`Current balance for ${address.toBase58()}: ${balanceInSol.toFixed(4)} SOL`);
 
       if (balanceInSol < amount) {
-        console.log(`🚀 Requesting airdrop of ${amount} SOL to ${address.toBase58()}...`);
+        console.log(`Requesting airdrop of ${amount} SOL to ${address.toBase58()}...`);
         const signature = await this.connection.requestAirdrop(address, amount * LAMPORTS_PER_SOL);
         
         await this.connection.confirmTransaction(signature, "confirmed");
