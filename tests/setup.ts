@@ -9,11 +9,11 @@ import {
 } from "../target/types";
 
 export const PROGRAM_IDS = {
-  energy_token: "94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur",
-  governance: "4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe",
-  oracle: "DvdtU4quEbuxUY2FckmvcXwTpC9qp4HLJKb1PMLaqAoE",
+  energy_token: "54SAVMgGhjssp3iQ7zBK8kgUnEtqHJTNg3QRfzzDitHB",
+  governance: "GZP5QP6PMD2D8nNsLkhA39Lfr4er12JLMhQZJnhxyT5h",
+  oracle: "F7mEgt7zaAaKHfTNmCLeZCUutdKyZ2cxYg41ggjstBi6",
   registry: "9XS8uUEVErcA8LABrJQAdohWMXTToBwhFN7Rvur6dC5",
-  trading: "GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk",
+  trading: "2pZ8gqotjvKMAu96XzpGZ7QFcemZzj21ybtVTbaDP1zG",
 } as const;
 
 export class TestEnvironment {
@@ -64,7 +64,7 @@ export class TestEnvironment {
     return env;
   }
 
-  private async airdropSol(publicKey: anchor.web3.PublicKey, amount: number): Promise<void> {
+  public async airdropSol(publicKey: anchor.web3.PublicKey, amount: number): Promise<void> {
     const signature = await this.connection.requestAirdrop(publicKey, amount);
     await this.connection.confirmTransaction(signature);
   }

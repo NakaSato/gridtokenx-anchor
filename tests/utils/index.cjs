@@ -1,22 +1,22 @@
-import * as anchor from "@coral-xyz/anchor";
-import * as fs from 'fs/promises';
-import { 
+const anchor = require("@coral-xyz/anchor");
+const fs = require('fs').promises;
+const { 
   TOKEN_PROGRAM_ID, 
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction
-} from "@solana/spl-token";
+} = require("@solana/spl-token");
 
-export class TestUtils {
+class TestUtils {
   /**
    * Create an associated token account for a mint and owner
    */
   static async createAssociatedTokenAccount(
-    payer: anchor.web3.PublicKey,
-    mint: anchor.web3.PublicKey,
-    owner: anchor.web3.PublicKey,
-    connection: anchor.web3.Connection
-  ): Promise<anchor.web3.PublicKey> {
+    payer,
+    mint,
+    owner,
+    connection
+  ) {
     const associatedTokenAddress = await getAssociatedTokenAddress(
       mint,
       owner,
@@ -47,7 +47,7 @@ export class TestUtils {
   /**
    * Generate a unique test ID
    */
-  static generateTestId(prefix: string = "test"): string {
+  static generateTestId(prefix = "test") {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
@@ -55,10 +55,10 @@ export class TestUtils {
    * Wait for a transaction to be confirmed
    */
   static async waitForTransaction(
-    connection: anchor.web3.Connection,
-    signature: string,
-    timeout: number = 30000
-  ): Promise<void> {
+    connection,
+    signature,
+    timeout = 30000
+  ) {
     const startTime = Date.now();
     
     while (Date.now() - startTime < timeout) {
@@ -70,19 +70,19 @@ export class TestUtils {
       if (status.value?.err) {
         throw new Error(`Transaction failed: ${status.value.err}`);
       }
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await this.delay(1000);
     }
     
     throw new Error(`Transaction confirmation timeout after ${timeout}ms`);
   }
 
   /**
-   * Get the balance of a token account
+   * Get balance of a token account
    */
   static async getTokenBalance(
-    connection: anchor.web3.Connection,
-    tokenAccount: anchor.web3.PublicKey
-  ): Promise<number> {
+    connection,
+    tokenAccount
+  ) {
     const accountInfo = await connection.getAccountInfo(tokenAccount);
     if (!accountInfo) return 0;
     
@@ -92,27 +92,27 @@ export class TestUtils {
   }
 
   /**
-   * Get the supply of a token mint
+   * Get supply of a token mint
    */
   static async getTokenSupply(
-    connection: anchor.web3.Connection,
-    mint: anchor.web3.PublicKey
-  ): Promise<number> {
+    connection,
+    mint
+  ) {
     const mintInfo = await connection.getParsedAccountInfo(mint);
     if (!mintInfo.value || !('parsed' in mintInfo.value.data)) {
       throw new Error('Invalid mint account');
     }
     
-    return (mintInfo.value.data as any).parsed.info.supply;
+    return (mintInfo.value.data).parsed.info.supply;
   }
 
   /**
    * Create a test keypair with SOL airdrop
    */
   static async createFundedKeypair(
-    connection: anchor.web3.Connection,
-    solAmount: number = 10
-  ): Promise<anchor.web3.Keypair> {
+    connection,
+    solAmount = 10
+  ) {
     const keypair = anchor.web3.Keypair.generate();
     const airdropAmount = solAmount * anchor.web3.LAMPORTS_PER_SOL;
     
@@ -125,21 +125,21 @@ export class TestUtils {
   /**
    * Calculate PDAs for various programs
    */
-  static findTokenInfoPda(programId: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
+  static findTokenInfoPda(programId) {
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("token_info")],
       programId
     );
   }
 
-  static findMintPda(programId: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
+  static findMintPda(programId) {
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("mint")],
       programId
     );
   }
 
-  static findPoaConfigPda(programId: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
+  static findPoaConfigPda(programId) {
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("poa_config")],
       programId
@@ -147,16 +147,16 @@ export class TestUtils {
   }
 
   static findErcCertificatePda(
-    programId: anchor.web3.PublicKey,
-    certificateId: string
-  ): [anchor.web3.PublicKey, number] {
+    programId,
+    certificateId
+  ) {
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("erc_certificate"), Buffer.from(certificateId)],
       programId
     );
   }
 
-  static findOraclePda(programId: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
+  static findOraclePda(programId) {
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("oracle")],
       programId
@@ -164,9 +164,9 @@ export class TestUtils {
   }
 
   static findMeterAccountPda(
-    programId: anchor.web3.PublicKey,
-    owner: anchor.web3.PublicKey
-  ): [anchor.web3.PublicKey, number] {
+    programId,
+    owner
+  ) {
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("meter"), owner.toBuffer()],
       programId
@@ -174,9 +174,9 @@ export class TestUtils {
   }
 
   static findTradingAccountPda(
-    programId: anchor.web3.PublicKey,
-    user: anchor.web3.PublicKey
-  ): [anchor.web3.PublicKey, number] {
+    programId,
+    user
+  ) {
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("trading_account"), user.toBuffer()],
       programId
@@ -184,9 +184,9 @@ export class TestUtils {
   }
 
   static findUserAccountPda(
-    programId: anchor.web3.PublicKey,
-    user: anchor.web3.PublicKey
-  ): [anchor.web3.PublicKey, number] {
+    programId,
+    user
+  ) {
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("user"), user.toBuffer()],
       programId
@@ -196,35 +196,35 @@ export class TestUtils {
   /**
    * Convert lamports to SOL
    */
-  static lamportsToSol(lamports: number): number {
+  static lamportsToSol(lamports) {
     return lamports / anchor.web3.LAMPORTS_PER_SOL;
   }
 
   /**
    * Convert SOL to lamports
    */
-  static solToLamports(sol: number): number {
+  static solToLamports(sol) {
     return Math.floor(sol * anchor.web3.LAMPORTS_PER_SOL);
   }
 
   /**
    * Format token amount with decimals
    */
-  static formatTokenAmount(amount: number, decimals: number = 9): string {
+  static formatTokenAmount(amount, decimals = 9) {
     return (amount / Math.pow(10, decimals)).toFixed(decimals);
   }
 
   /**
    * Parse token amount from formatted string
    */
-  static parseTokenAmount(formattedAmount: string, decimals: number = 9): number {
+  static parseTokenAmount(formattedAmount, decimals = 9) {
     return Math.floor(parseFloat(formattedAmount) * Math.pow(10, decimals));
   }
 
   /**
    * Generate ERC data
    */
-  static generateErcData(): any {
+  static generateErcData() {
     return {
       certificateId: this.generateTestId("erc"),
       energyAmount: Math.floor(Math.random() * 100000), // Random kWh
@@ -236,15 +236,7 @@ export class TestUtils {
   /**
    * Generate energy data for multiple users
    */
-  static generateEnergyData(userCount: number, readingsPerUser: number = 10): Array<{
-    userId: string;
-    meterId: string;
-    readings: Array<{
-      timestamp: number;
-      generation: number;
-      consumption: number;
-    }>;
-  }> {
+  static generateEnergyData(userCount, readingsPerUser = 10) {
     const userData = [];
     
     for (let i = 0; i < userCount; i++) {
@@ -269,19 +261,19 @@ export class TestUtils {
   /**
    * Generate comprehensive trading data
    */
-  static generateTradingData(): any {
+  static generateTradingData() {
     return {
       orderId: this.generateTestId("order"),
       amount: Math.floor(Math.random() * 10000), // Random token amount
       price: Math.random() * 100, // Random price
-      orderType: ["buy", "sell"][Math.floor(Math.random() * 2)] as "buy" | "sell"
+      orderType: ["buy", "sell"][Math.floor(Math.random() * 2)]
     };
   }
 
   /**
    * Generate energy transfer data
    */
-  static generateEnergyTransferData(): any {
+  static generateEnergyTransferData() {
     return {
       transferId: this.generateTestId(),
       amount: Math.floor(Math.random() * 1000) + 50,
@@ -294,7 +286,7 @@ export class TestUtils {
   /**
    * Generate registry data
    */
-  static generateRegistryData(): any {
+  static generateRegistryData() {
     return {
       registryId: this.generateTestId(),
       userId: this.generateTestId(),
@@ -310,7 +302,7 @@ export class TestUtils {
   /**
    * Generate governance data
    */
-  static generateGovernanceData(): any {
+  static generateGovernanceData() {
     return {
       proposalId: this.generateTestId(),
       proposer: this.generateTestId(),
@@ -323,10 +315,10 @@ export class TestUtils {
   /**
    * Ensure directory exists
    */
-  static async ensureDirectoryExists(dirPath: string): Promise<void> {
+  static async ensureDirectoryExists(dirPath) {
     try {
       await fs.mkdir(dirPath, { recursive: true });
-    } catch (error: any) {
+    } catch (error) {
       if (error.code !== 'EEXIST') {
         throw error;
       }
@@ -336,7 +328,7 @@ export class TestUtils {
   /**
    * Write JSON file
    */
-  static async writeJsonFile(filePath: string, data: any): Promise<void> {
+  static async writeJsonFile(filePath, data) {
     const jsonData = JSON.stringify(data, null, 2);
     await fs.writeFile(filePath, jsonData, 'utf8');
   }
@@ -345,9 +337,9 @@ export class TestUtils {
    * Validate a transaction was successful
    */
   static async validateTransactionSuccess(
-    connection: anchor.web3.Connection,
-    signature: string
-  ): Promise<boolean> {
+    connection,
+    signature
+  ) {
     try {
       await this.waitForTransaction(connection, signature);
       const status = await connection.getSignatureStatus(signature);
@@ -361,45 +353,45 @@ export class TestUtils {
   /**
    * Get account data for a program account
    */
-  static async getAccountData<T>(
-    connection: anchor.web3.Connection,
-    publicKey: anchor.web3.PublicKey
-  ): Promise<T | null> {
+  static async getAccountData(
+    connection,
+    publicKey
+  ) {
     const accountInfo = await connection.getAccountInfo(publicKey);
     if (!accountInfo) return null;
     
     // Skip discriminator (8 bytes) and return rest
-    return accountInfo.data.slice(8) as T;
+    return accountInfo.data.slice(8);
   }
 
   /**
    * Compare two public keys
    */
-  static equalKeys(key1: anchor.web3.PublicKey, key2: anchor.web3.PublicKey): boolean {
+  static equalKeys(key1, key2) {
     return key1.toBase58() === key2.toBase58();
   }
 
   /**
    * Generate a delay
    */
-  static delay(ms: number): Promise<void> {
+  static delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
    * Retry a function with exponential backoff
    */
-  static async retry<T>(
-    fn: () => Promise<T>,
-    maxAttempts: number = 3,
-    baseDelay: number = 1000
-  ): Promise<T> {
-    let lastError: Error;
+  static async retry(
+    fn,
+    maxAttempts = 3,
+    baseDelay = 1000
+  ) {
+    let lastError;
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         return await fn();
-      } catch (error: any) {
+      } catch (error) {
         lastError = error;
         if (attempt === maxAttempts) break;
         
@@ -408,28 +400,28 @@ export class TestUtils {
       }
     }
     
-    throw lastError!;
+    throw lastError;
   }
 
   // Security testing methods
   static async simulateAuthorizationCheck(
-    user: anchor.web3.PublicKey,
-    action: string
-  ): Promise<boolean> {
+    user,
+    action
+  ) {
     const adminUsers = [user]; // For testing, treat current user as admin
     const restrictedActions = ["create_token", "emergency_control", "admin_only"];
     
     return restrictedActions.includes(action) && adminUsers.includes(user);
   }
 
-  static async isAdminUser(user: anchor.web3.PublicKey): Promise<boolean> {
+  static async isAdminUser(user) {
     return user.equals(anchor.web3.Keypair.generate().publicKey) === false;
   }
 
   static async createUserTestData(
-    user: anchor.web3.PublicKey,
-    meterId: string
-  ): Promise<{ dataId: string; owner: anchor.web3.PublicKey }> {
+    user,
+    meterId
+  ) {
     return {
       dataId: `${meterId}_${user.toBase58().slice(0, 8)}`,
       owner: user
@@ -437,17 +429,17 @@ export class TestUtils {
   }
 
   static async checkDataOwnership(
-    user: anchor.web3.PublicKey,
-    dataId: string
-  ): Promise<boolean> {
+    user,
+    dataId
+  ) {
     return dataId.includes(user.toBase58().slice(0, 8));
   }
 
   static async simulatePrivilegeEscalation(
-    user: anchor.web3.PublicKey,
-    currentRole: string,
-    targetRole: string
-  ): Promise<{ success: boolean; message: string }> {
+    user,
+    currentRole,
+    targetRole
+  ) {
     if (currentRole === targetRole) {
       return { success: false, message: "Already has target role" };
     }
@@ -460,9 +452,9 @@ export class TestUtils {
   }
 
   static async checkRolePermissions(
-    user: anchor.web3.PublicKey,
-    role: string
-  ): Promise<{ canCreateTokens: boolean; canEmergencyPause: boolean }> {
+    user,
+    role
+  ) {
     const rolePermissions = {
       admin: { canCreateTokens: true, canEmergencyPause: true },
       operator: { canCreateTokens: false, canEmergencyPause: true },
@@ -470,13 +462,13 @@ export class TestUtils {
       guest: { canCreateTokens: false, canEmergencyPause: false }
     };
     
-    return rolePermissions[role as keyof typeof rolePermissions] || { canCreateTokens: false, canEmergencyPause: false };
+    return rolePermissions[role] || { canCreateTokens: false, canEmergencyPause: false };
   }
 
   static async checkRestrictedResourceAccess(
-    user: anchor.web3.PublicKey,
-    resource: string
-  ): Promise<{ hasAccess: boolean; reason?: string }> {
+    user,
+    resource
+  ) {
     const restrictedResources = ["admin_only_resource", "system_config", "governance_state"];
     
     if (restrictedResources.includes(resource)) {
@@ -488,10 +480,10 @@ export class TestUtils {
   }
 
   static async checkCrossProgramAccess(
-    user: anchor.web3.PublicKey,
-    targetProgram: string,
-    requiredAuthority: string
-  ): Promise<{ unauthorized: boolean; reason?: string }> {
+    user,
+    targetProgram,
+    requiredAuthority
+  ) {
     const crossProgramRules = {
       trading_program: {
         registry_authority: false, // Trading program should not accept registry authority
@@ -503,8 +495,8 @@ export class TestUtils {
       }
     };
     
-    const rules = crossProgramRules[targetProgram as keyof typeof crossProgramRules];
-    if (rules && rules[requiredAuthority as keyof typeof rules] === false) {
+    const rules = crossProgramRules[targetProgram];
+    if (rules && rules[requiredAuthority] === false) {
       return { unauthorized: true, reason: "Cross-program authority not permitted" };
     }
     
@@ -512,10 +504,10 @@ export class TestUtils {
   }
 
   static async simulateAuthorizationWithMaliciousInput(
-    user: anchor.web3.PublicKey,
-    action: string,
-    maliciousInput: any
-  ): Promise<{ rejected: boolean; sanitized?: string }> {
+    user,
+    action,
+    maliciousInput
+  ) {
     if (typeof maliciousInput === 'string') {
       if (maliciousInput.length > 1000) {
         return { rejected: true }; // Buffer overflow protection
@@ -536,7 +528,7 @@ export class TestUtils {
   }
 
   // Helper methods for account finding
-  static async findMeterAccount(meterId?: string): Promise<anchor.web3.PublicKey> {
+  static async findMeterAccount(meterId) {
     const programId = anchor.web3.PublicKey.default; // Would use actual program ID
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("meter"), Buffer.from(meterId || this.generateTestId("meter"))],
@@ -544,7 +536,7 @@ export class TestUtils {
     )[0];
   }
 
-  static async findTokenAccount(): Promise<anchor.web3.PublicKey> {
+  static async findTokenAccount() {
     const programId = anchor.web3.PublicKey.default; // Would use actual program ID
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("token")],
@@ -552,7 +544,7 @@ export class TestUtils {
     )[0];
   }
 
-  static async findMintAccount(): Promise<anchor.web3.PublicKey> {
+  static async findMintAccount() {
     const programId = anchor.web3.PublicKey.default; // Would use actual program ID
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("mint")],
@@ -560,7 +552,7 @@ export class TestUtils {
     )[0];
   }
 
-  static async findOrderAccount(): Promise<anchor.web3.PublicKey> {
+  static async findOrderAccount() {
     const programId = anchor.web3.PublicKey.default; // Would use actual program ID
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("order")],
@@ -568,7 +560,7 @@ export class TestUtils {
     )[0];
   }
 
-  static async findGovernanceState(): Promise<anchor.web3.PublicKey> {
+  static async findGovernanceState() {
     const programId = anchor.web3.PublicKey.default; // Would use actual program ID
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("governance")],
@@ -576,7 +568,7 @@ export class TestUtils {
     )[0];
   }
 
-  static async findOraclePda(): Promise<anchor.web3.PublicKey> {
+  static async findOraclePda() {
     const programId = anchor.web3.PublicKey.default; // Would use actual program ID
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("oracle")],
@@ -584,7 +576,7 @@ export class TestUtils {
     )[0];
   }
 
-  static async findPoaConfigPda(): Promise<anchor.web3.PublicKey> {
+  static async findPoaConfigPda() {
     const programId = anchor.web3.PublicKey.default; // Would use actual program ID
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("poa_config")],
@@ -592,7 +584,7 @@ export class TestUtils {
     )[0];
   }
 
-  static async findErcCertificatePda(certificateId: string): Promise<anchor.web3.PublicKey> {
+  static async findErcCertificatePda(certificateId) {
     const programId = anchor.web3.PublicKey.default; // Would use actual program ID
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("erc_certificate"), Buffer.from(certificateId)],
@@ -602,10 +594,10 @@ export class TestUtils {
 
   // Transaction simulation methods
   static async simulateTransaction(
-    user: anchor.web3.PublicKey,
-    action: string,
-    params: any
-  ): Promise<{ signature: string; success: boolean }> {
+    user,
+    action,
+    params
+  ) {
     const signature = TestUtils.generateTestId("tx_signature");
     
     switch (action) {
@@ -626,7 +618,7 @@ export class TestUtils {
     return { signature, success: false };
   }
 
-  static async replayTransaction(signature: string): Promise<{ success: boolean; reason?: string }> {
+  static async replayTransaction(signature) {
     if (signature && signature.includes("tx_signature")) {
       return { 
         success: false, 
@@ -638,16 +630,16 @@ export class TestUtils {
   }
 
   static async simulateModifiedTransactionReplay(
-    originalSignature: string,
-    modifiedParams: any
-  ): Promise<{ success: boolean; reason?: string }> {
+    originalSignature,
+    modifiedParams
+  ) {
     return { 
       success: false, 
       reason: "Modified transaction replay detected - signature mismatch" 
     };
   }
 
-  static async validateTransactionSignature(signature: string): Promise<{ valid: boolean; reason?: string }> {
+  static async validateTransactionSignature(signature) {
     if (!signature || signature.length === 0) {
       return { valid: false, reason: "Empty signature" };
     }
@@ -672,24 +664,24 @@ export class TestUtils {
   }
 
   static async attemptSignatureForgery(
-    user: anchor.web3.PublicKey,
-    forgeryType: string
-  ): Promise<{ success: boolean; reason?: string }> {
+    user,
+    forgeryType
+  ) {
     return { 
       success: false, 
       reason: `Signature forgery prevented: ${forgeryType}` 
     };
   }
 
-  static async getUserNonce(user: anchor.web3.PublicKey): Promise<number> {
+  static async getUserNonce(user) {
     return Math.floor(Math.random() * 1000000);
   }
 
   static async simulateTransactionWithNonce(
-    user: anchor.web3.PublicKey,
-    action: string,
-    params: { amount: number; nonce: number }
-  ): Promise<{ signature: string; success: boolean; reason?: string }> {
+    user,
+    action,
+    params
+  ) {
     const currentNonce = await this.getUserNonce(user);
     
     if (params.nonce !== currentNonce && params.nonce !== currentNonce + 1) {
@@ -715,10 +707,10 @@ export class TestUtils {
   }
 
   static async simulateTransactionWithTimestamp(
-    user: anchor.web3.PublicKey,
-    action: string,
-    params: { amount: number; timestamp: number }
-  ): Promise<{ signature: string; success: boolean; reason?: string }> {
+    user,
+    action,
+    params
+  ) {
     const currentTime = Date.now();
     const timeDiff = Math.abs(params.timestamp - currentTime);
     
@@ -745,18 +737,18 @@ export class TestUtils {
   }
 
   static async simulateTransactionOnChain(
-    user: anchor.web3.PublicKey,
-    action: string,
-    params: { amount: number; chainId: string }
-  ): Promise<{ signature: string; success: boolean }> {
+    user,
+    action,
+    params
+  ) {
     const signature = TestUtils.generateTestId(`${params.chainId}_tx`);
     return { signature, success: true };
   }
 
   static async simulateTransactionReplayOnChain(
-    signature: string,
-    targetChain: string
-  ): Promise<{ success: boolean; reason?: string }> {
+    signature,
+    targetChain
+  ) {
     return { 
       success: false, 
       reason: `Cross-chain replay blocked: ${targetChain}` 
@@ -764,9 +756,9 @@ export class TestUtils {
   }
 
   static async simulateTransactionReplayOnProgram(
-    signature: string,
-    programId: string
-  ): Promise<{ success: boolean; reason?: string }> {
+    signature,
+    programId
+  ) {
     return { 
       success: false, 
       reason: `Cross-program replay blocked: ${programId}` 
@@ -774,9 +766,9 @@ export class TestUtils {
   }
 
   static async detectReplayAttack(
-    user: anchor.web3.PublicKey,
-    attackType: string
-  ): Promise<{ detected: boolean; logged: boolean; blocked: boolean }> {
+    user,
+    attackType
+  ) {
     return { 
       detected: true, 
       logged: true, 
@@ -784,7 +776,7 @@ export class TestUtils {
     };
   }
 
-  static async getReplayAttackLogs(): Promise<Array<{ type: string; timestamp: number; blocked: boolean }>> {
+  static async getReplayAttackLogs() {
     return [
       { type: "exact_replay", timestamp: Date.now(), blocked: true },
       { type: "parameter_modified", timestamp: Date.now() - 1000, blocked: true },
@@ -793,3 +785,5 @@ export class TestUtils {
     ];
   }
 }
+
+module.exports = { TestUtils };

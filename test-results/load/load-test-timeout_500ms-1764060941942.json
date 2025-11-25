@@ -1,0 +1,49 @@
+{
+  "sessionId": "timeout_500ms",
+  "timestamp": "2025-11-25T08:55:41.942Z",
+  "results": {
+    "sessionId": "timeout_500ms",
+    "metrics": {
+      "totalTransactions": 0,
+      "successfulTransactions": 0,
+      "failedTransactions": 0,
+      "averageLatency": 0,
+      "p95Latency": 0,
+      "throughput": 0,
+      "memoryUsage": {
+        "initial": {
+          "rss": 75415552,
+          "heapTotal": 33505280,
+          "heapUsed": 15210184,
+          "external": 2236619,
+          "timestamp": 1764060940279
+        },
+        "peak": 0,
+        "final": {
+          "rss": 75481088,
+          "heapTotal": 33505280,
+          "heapUsed": 15521824,
+          "external": 2236619,
+          "timestamp": 1764060941942
+        }
+      },
+      "cpuUsage": {
+        "initial": {
+          "user": 216975,
+          "system": 76067,
+          "timestamp": 1764060940279
+        },
+        "samples": []
+      },
+      "duration": 1663
+    }
+  },
+  "summary": {
+    "totalTransactions": 0,
+    "successRate": "NaN%",
+    "averageLatency": "0.00ms",
+    "p95Latency": "0.00ms",
+    "throughput": "0.00 TPS",
+    "peakMemoryUsage": "NaN MB"
+  }
+}

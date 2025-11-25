@@ -7,11 +7,11 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-energy_token = "94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur"
-governance = "4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe"
-oracle = "DvdtU4quEbuxUY2FckmvcXwTpC9qp4HLJKb1PMLaqAoE"
+energy_token = "54SAVMgGhjssp3iQ7zBK8kgUnEtqHJTNg3QRfzzDitHB"
+governance = "GZP5QP6PMD2D8nNsLkhA39Lfr4er12JLMhQZJnhxyT5h"
+oracle = "F7mEgt7zaAaKHfTNmCLeZCUutdKyZ2cxYg41ggjstBi6"
 registry = "9XS8uUEVErcA8LABrJQAdohWMXTToBwhFN7Rvur6dC5"
-trading = "GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk"
+trading = "2pZ8gqotjvKMAu96XzpGZ7QFcemZzj21ybtVTbaDP1zG"
 
 [registry]
 url = "https://api.apr.dev"
@@ -26,23 +26,23 @@ shutdown_wait = 2000
 upgradeable = false
 
 [[test.genesis]]
-address = "2CVWTnckn5TXUWXdZoZE6LydiQJGMYHVVPipkoy1LVqr"
+address = "54SAVMgGhjssp3iQ7zBK8kgUnEtqHJTNg3QRfzzDitHB"
 program = "target/deploy/energy_token.so"
 
 [[test.genesis]]
-address = "Dy8JFn95L1E7NoUkXbFQtW1kGR7Ja21CkNcirNgv4ghe"
+address = "GZP5QP6PMD2D8nNsLkhA39Lfr4er12JLMhQZJnhxyT5h"
 program = "target/deploy/governance.so"
 
 [[test.genesis]]
-address = "5r8ZMs9D4PUf4ncbxKUZyuaYbWosZwxiJHA5i5Mqrti9"
+address = "F7mEgt7zaAaKHfTNmCLeZCUutdKyZ2cxYg41ggjstBi6"
 program = "target/deploy/oracle.so"
 
 [[test.genesis]]
-address = "42LoRKPphBBdvaCDx2ZjNuZFqzXuJziiiNXyiV6FhBY5"
+address = "9XS8uUEVErcA8LABrJQAdohWMXTToBwhFN7Rvur6dC5"
 program = "target/deploy/registry.so"
 
 [[test.genesis]]
-address = "dS3zvp95PFVrNNBfZDXn78QL5MvhUqDCFR4rn8z9Jgh"
+address = "2pZ8gqotjvKMAu96XzpGZ7QFcemZzj21ybtVTbaDP1zG"
 program = "target/deploy/trading.so"
 
 [scripts]

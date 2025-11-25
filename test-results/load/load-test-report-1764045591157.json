@@ -1,0 +1,32 @@
+{
+  "summary": {
+    "totalTests": 3,
+    "passed": 0,
+    "failed": 3,
+    "totalDuration": 6283,
+    "timestamp": "2025-11-25T04:39:51.157Z"
+  },
+  "results": [
+    {
+      "testName": "High-Volume Trading Tests",
+      "success": false,
+      "duration": 111,
+      "timestamp": "2025-11-25T04:39:44.987Z",
+      "error": "Command failed: node tests/load/high-volume-trading.test.cjs"
+    },
+    {
+      "testName": "Concurrent User Tests",
+      "success": false,
+      "duration": 84,
+      "timestamp": "2025-11-25T04:39:47.073Z",
+      "error": "Command failed: node tests/load/concurrent-users.test.cjs"
+    },
+    {
+      "testName": "Network Condition Tests",
+      "success": false,
+      "duration": 83,
+      "timestamp": "2025-11-25T04:39:49.156Z",
+      "error": "Command failed: node tests/load/network-conditions.test.cjs"
+    }
+  ]
+}

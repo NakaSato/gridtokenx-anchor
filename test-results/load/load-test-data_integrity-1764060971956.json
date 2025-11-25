@@ -1,0 +1,90 @@
+{
+  "sessionId": "data_integrity",
+  "timestamp": "2025-11-25T08:56:11.956Z",
+  "results": {
+    "sessionId": "data_integrity",
+    "metrics": {
+      "totalTransactions": 80,
+      "successfulTransactions": 80,
+      "failedTransactions": 0,
+      "averageLatency": 30.45,
+      "p95Latency": 54,
+      "throughput": 282.6855123674912,
+      "memoryUsage": {
+        "initial": {
+          "rss": 85245952,
+          "heapTotal": 34029568,
+          "heapUsed": 17014240,
+          "external": 2236619,
+          "timestamp": 1764060971673
+        },
+        "peak": 0,
+        "final": {
+          "rss": 85295104,
+          "heapTotal": 34029568,
+          "heapUsed": 17420512,
+          "external": 2236619,
+          "timestamp": 1764060971956
+        }
+      },
+      "cpuUsage": {
+        "initial": {
+          "user": 187871,
+          "system": 54995,
+          "timestamp": 1764060971673
+        },
+        "samples": [
+          {
+            "user": 188769,
+            "system": 55073,
+            "timestamp": 1764060971702
+          },
+          {
+            "user": 189551,
+            "system": 55171,
+            "timestamp": 1764060971730
+          },
+          {
+            "user": 191797,
+            "system": 55415,
+            "timestamp": 1764060971748
+          },
+          {
+            "user": 192886,
+            "system": 55539,
+            "timestamp": 1764060971771
+          },
+          {
+            "user": 194648,
+            "system": 55762,
+            "timestamp": 1764060971817
+          },
+          {
+            "user": 195081,
+            "system": 55833,
+            "timestamp": 1764060971839
+          },
+          {
+            "user": 195708,
+            "system": 55935,
+            "timestamp": 1764060971891
+          },
+          {
+            "user": 195979,
+            "system": 55987,
+            "timestamp": 1764060971956
+          }
+        ]
+      },
+      "duration": 283
+    }
+  },
+  "summary": {
+    "totalTransactions": 80,
+    "successRate": "100.00%",
+    "averageLatency": "30.45ms",
+    "p95Latency": "54.00ms",
+    "throughput": "282.69 TPS",
+    "peakMemoryUsage": "NaN MB"
+  }
+}

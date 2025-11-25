@@ -1,0 +1,49 @@
+{
+  "sessionId": "extreme_user_balance",
+  "timestamp": "2025-11-25T08:56:23.947Z",
+  "results": {
+    "sessionId": "extreme_user_balance",
+    "metrics": {
+      "totalTransactions": 6,
+      "successfulTransactions": 6,
+      "failedTransactions": 0,
+      "averageLatency": 24.166666666666668,
+      "p95Latency": 29,
+      "throughput": 105.26315789473684,
+      "memoryUsage": {
+        "initial": {
+          "rss": 85229568,
+          "heapTotal": 34029568,
+          "heapUsed": 14975600,
+          "external": 2236619,
+          "timestamp": 1764060983890
+        },
+        "peak": 0,
+        "final": {
+          "rss": 85229568,
+          "heapTotal": 34029568,
+          "heapUsed": 15004840,
+          "external": 2236619,
+          "timestamp": 1764060983947
+        }
+      },
+      "cpuUsage": {
+        "initial": {
+          "user": 188568,
+          "system": 56416,
+          "timestamp": 1764060983890
+        },
+        "samples": []
+      },
+      "duration": 57
+    }
+  },
+  "summary": {
+    "totalTransactions": 6,
+    "successRate": "100.00%",
+    "averageLatency": "24.17ms",
+    "p95Latency": "29.00ms",
+    "throughput": "105.26 TPS",
+    "peakMemoryUsage": "NaN MB"
+  }
+}

@@ -53,7 +53,7 @@ test-individual: test-energy test-gov test-oracle test-registry test-trading
 
 # Development commands
 build:
-	pnpm run build || anchor build
+	anchor build
 
 clean:
 	pnpm run clean || rm -rf target/

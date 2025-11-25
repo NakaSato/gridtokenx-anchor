@@ -1,0 +1,32 @@
+{
+  "summary": {
+    "totalTests": 3,
+    "passed": 0,
+    "failed": 3,
+    "totalDuration": 10183,
+    "timestamp": "2025-11-25T04:33:09.737Z"
+  },
+  "results": [
+    {
+      "testName": "High-Volume Trading Tests",
+      "success": false,
+      "duration": 1639,
+      "timestamp": "2025-11-25T04:33:01.194Z",
+      "error": "Command failed: npx tsx tests/load/high-volume-trading.test.ts"
+    },
+    {
+      "testName": "Concurrent User Tests",
+      "success": false,
+      "duration": 1161,
+      "timestamp": "2025-11-25T04:33:04.356Z",
+      "error": "Command failed: npx tsx tests/load/concurrent-users.test.ts"
+    },
+    {
+      "testName": "Network Condition Tests",
+      "success": false,
+      "duration": 1380,
+      "timestamp": "2025-11-25T04:33:07.737Z",
+      "error": "Command failed: npx tsx tests/load/network-conditions.test.ts"
+    }
+  ]
+}

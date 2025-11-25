@@ -1,0 +1,80 @@
+{
+  "sessionId": "network_partition_edge_cases",
+  "timestamp": "2025-11-25T08:55:57.122Z",
+  "results": {
+    "sessionId": "network_partition_edge_cases",
+    "metrics": {
+      "totalTransactions": 60,
+      "successfulTransactions": 60,
+      "failedTransactions": 0,
+      "averageLatency": 76,
+      "p95Latency": 101,
+      "throughput": 41.18050789293068,
+      "memoryUsage": {
+        "initial": {
+          "rss": 71860224,
+          "heapTotal": 33767424,
+          "heapUsed": 18163232,
+          "external": 2236619,
+          "timestamp": 1764060955665
+        },
+        "peak": 0,
+        "final": {
+          "rss": 71892992,
+          "heapTotal": 33767424,
+          "heapUsed": 18468104,
+          "external": 2236619,
+          "timestamp": 1764060957122
+        }
+      },
+      "cpuUsage": {
+        "initial": {
+          "user": 246034,
+          "system": 81259,
+          "timestamp": 1764060955665
+        },
+        "samples": [
+          {
+            "user": 246408,
+            "system": 81290,
+            "timestamp": 1764060955716
+          },
+          {
+            "user": 246582,
+            "system": 81329,
+            "timestamp": 1764060955767
+          },
+          {
+            "user": 246676,
+            "system": 81345,
+            "timestamp": 1764060955818
+          },
+          {
+            "user": 247703,
+            "system": 81450,
+            "timestamp": 1764060956920
+          },
+          {
+            "user": 247777,
+            "system": 81467,
+            "timestamp": 1764060957021
+          },
+          {
+            "user": 247904,
+            "system": 81489,
+            "timestamp": 1764060957122
+          }
+        ]
+      },
+      "duration": 1457
+    }
+  },
+  "summary": {
+    "totalTransactions": 60,
+    "successRate": "100.00%",
+    "averageLatency": "76.00ms",
+    "p95Latency": "101.00ms",
+    "throughput": "41.18 TPS",
+    "peakMemoryUsage": "NaN MB"
+  }
+}

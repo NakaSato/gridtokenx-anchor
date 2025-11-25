@@ -1,0 +1,470 @@
+{
+  "sessionId": "concurrent_100_users",
+  "timestamp": "2025-11-25T04:45:56.403Z",
+  "results": {
+    "sessionId": "concurrent_100_users",
+    "metrics": {
+      "totalTransactions": 844,
+      "successfulTransactions": 0,
+      "failedTransactions": 844,
+      "averageLatency": 0,
+      "p95Latency": 0,
+      "throughput": 0,
+      "memoryUsage": {
+        "initial": {
+          "rss": 68993024,
+          "heapTotal": 19349504,
+          "heapUsed": 11690696,
+          "external": 2100051,
+          "timestamp": 1764045956388
+        },
+        "peak": 0,
+        "final": {
+          "rss": 73793536,
+          "heapTotal": 30359552,
+          "heapUsed": 12728888,
+          "external": 2098107,
+          "timestamp": 1764045956403
+        }
+      },
+      "cpuUsage": {
+        "initial": {
+          "user": 68192,
+          "system": 13884,
+          "timestamp": 1764045956388
+        },
+        "samples": [
+          {
+            "user": 70595,
+            "system": 14057,
+            "timestamp": 1764045956389
+          },
+          {
+            "user": 71135,
+            "system": 14080,
+            "timestamp": 1764045956389
+          },
+          {
+            "user": 71295,
+            "system": 14095,
+            "timestamp": 1764045956389
+          },
+          {
+            "user": 71504,
+            "system": 14108,
+            "timestamp": 1764045956389
+          },
+          {
+            "user": 71802,
+            "system": 14132,
+            "timestamp": 1764045956390
+          },
+          {
+            "user": 72014,
+            "system": 14162,
+            "timestamp": 1764045956390
+          },
+          {
+            "user": 72161,
+            "system": 14173,
+            "timestamp": 1764045956390
+          },
+          {
+            "user": 72307,
+            "system": 14185,
+            "timestamp": 1764045956390
+          },
+          {
+            "user": 72459,
+            "system": 14197,
+            "timestamp": 1764045956390
+          },
+          {
+            "user": 72607,
+            "system": 14207,
+            "timestamp": 1764045956390
+          },
+          {
+            "user": 72752,
+            "system": 14217,
+            "timestamp": 1764045956391
+          },
+          {
+            "user": 72896,
+            "system": 14227,
+            "timestamp": 1764045956391
+          },
+          {
+            "user": 73039,
+            "system": 14239,
+            "timestamp": 1764045956391
+          },
+          {
+            "user": 73183,
+            "system": 14249,
+            "timestamp": 1764045956391
+          },
+          {
+            "user": 73327,
+            "system": 14258,
+            "timestamp": 1764045956391
+          },
+          {
+            "user": 73473,
+            "system": 14269,
+            "timestamp": 1764045956391
+          },
+          {
+            "user": 73627,
+            "system": 14279,
+            "timestamp": 1764045956392
+          },
+          {
+            "user": 73770,
+            "system": 14288,
+            "timestamp": 1764045956392
+          },
+          {
+            "user": 73913,
+            "system": 14298,
+            "timestamp": 1764045956392
+          },
+          {
+            "user": 74056,
+            "system": 14308,
+            "timestamp": 1764045956392
+          },
+          {
+            "user": 74198,
+            "system": 14317,
+            "timestamp": 1764045956392
+          },
+          {
+            "user": 74341,
+            "system": 14326,
+            "timestamp": 1764045956392
+          },
+          {
+            "user": 74484,
+            "system": 14340,
+            "timestamp": 1764045956392
+          },
+          {
+            "user": 74627,
+            "system": 14350,
+            "timestamp": 1764045956393
+          },
+          {
+            "user": 74768,
+            "system": 14359,
+            "timestamp": 1764045956393
+          },
+          {
+            "user": 74911,
+            "system": 14368,
+            "timestamp": 1764045956393
+          },
+          {
+            "user": 75058,
+            "system": 14378,
+            "timestamp": 1764045956393
+          },
+          {
+            "user": 75201,
+            "system": 14388,
+            "timestamp": 1764045956393
+          },
+          {
+            "user": 75343,
+            "system": 14398,
+            "timestamp": 1764045956393
+          },
+          {
+            "user": 75489,
+            "system": 14407,
+            "timestamp": 1764045956394
+          },
+          {
+            "user": 75631,
+            "system": 14417,
+            "timestamp": 1764045956394
+          },
+          {
+            "user": 75772,
+            "system": 14427,
+            "timestamp": 1764045956394
+          },
+          {
+            "user": 75915,
+            "system": 14437,
+            "timestamp": 1764045956394
+          },
+          {
+            "user": 76057,
+            "system": 14446,
+            "timestamp": 1764045956394
+          },
+          {
+            "user": 76199,
+            "system": 14456,
+            "timestamp": 1764045956394
+          },
+          {
+            "user": 76357,
+            "system": 14468,
+            "timestamp": 1764045956394
+          },
+          {
+            "user": 76543,
+            "system": 14481,
+            "timestamp": 1764045956395
+          },
+          {
+            "user": 76684,
+            "system": 14489,
+            "timestamp": 1764045956395
+          },
+          {
+            "user": 76831,
+            "system": 14500,
+            "timestamp": 1764045956395
+          },
+          {
+            "user": 76974,
+            "system": 14510,
+            "timestamp": 1764045956395
+          },
+          {
+            "user": 77115,
+            "system": 14520,
+            "timestamp": 1764045956395
+          },
+          {
+            "user": 77257,
+            "system": 14530,
+            "timestamp": 1764045956395
+          },
+          {
+            "user": 77400,
+            "system": 14541,
+            "timestamp": 1764045956396
+          },
+          {
+            "user": 77541,
+            "system": 14552,
+            "timestamp": 1764045956396
+          },
+          {
+            "user": 79283,
+            "system": 15615,
+            "timestamp": 1764045956397
+          },
+          {
+            "user": 79457,
+            "system": 15635,
+            "timestamp": 1764045956398
+          },
+          {
+            "user": 79605,
+            "system": 15643,
+            "timestamp": 1764045956398
+          },
+          {
+            "user": 79750,
+            "system": 15651,
+            "timestamp": 1764045956398
+          },
+          {
+            "user": 79894,
+            "system": 15659,
+            "timestamp": 1764045956398
+          },
+          {
+            "user": 80037,
+            "system": 15667,
+            "timestamp": 1764045956398
+          },
+          {
+            "user": 80199,
+            "system": 15685,
+            "timestamp": 1764045956398
+          },
+          {
+            "user": 80648,
+            "system": 15732,
+            "timestamp": 1764045956399
+          },
+          {
+            "user": 81084,
+            "system": 15773,
+            "timestamp": 1764045956399
+          },
+          {
+            "user": 81526,
+            "system": 15800,
+            "timestamp": 1764045956399
+          },
+          {
+            "user": 81785,
+            "system": 15813,
+            "timestamp": 1764045956399
+          },
+          {
+            "user": 81924,
+            "system": 15821,
+            "timestamp": 1764045956399
+          },
+          {
+            "user": 82054,
+            "system": 15829,
+            "timestamp": 1764045956399
+          },
+          {
+            "user": 82185,
+            "system": 15836,
+            "timestamp": 1764045956399
+          },
+          {
+            "user": 82315,
+            "system": 15844,
+            "timestamp": 1764045956400
+          },
+          {
+            "user": 82445,
+            "system": 15851,
+            "timestamp": 1764045956400
+          },
+          {
+            "user": 82575,
+            "system": 15859,
+            "timestamp": 1764045956400
+          },
+          {
+            "user": 82705,
+            "system": 15867,
+            "timestamp": 1764045956400
+          },
+          {
+            "user": 82836,
+            "system": 15879,
+            "timestamp": 1764045956400
+          },
+          {
+            "user": 82971,
+            "system": 15889,
+            "timestamp": 1764045956400
+          },
+          {
+            "user": 83102,
+            "system": 15905,
+            "timestamp": 1764045956400
+          },
+          {
+            "user": 83232,
+            "system": 15914,
+            "timestamp": 1764045956401
+          },
+          {
+            "user": 83362,
+            "system": 15925,
+            "timestamp": 1764045956401
+          },
+          {
+            "user": 83493,
+            "system": 15937,
+            "timestamp": 1764045956401
+          },
+          {
+            "user": 83622,
+            "system": 15946,
+            "timestamp": 1764045956401
+          },
+          {
+            "user": 83753,
+            "system": 15954,
+            "timestamp": 1764045956401
+          },
+          {
+            "user": 83884,
+            "system": 15966,
+            "timestamp": 1764045956401
+          },
+          {
+            "user": 84014,
+            "system": 15976,
+            "timestamp": 1764045956401
+          },
+          {
+            "user": 84145,
+            "system": 15989,
+            "timestamp": 1764045956402
+          },
+          {
+            "user": 84275,
+            "system": 16002,
+            "timestamp": 1764045956402
+          },
+          {
+            "user": 84405,
+            "system": 16010,
+            "timestamp": 1764045956402
+          },
+          {
+            "user": 84536,
+            "system": 16020,
+            "timestamp": 1764045956402
+          },
+          {
+            "user": 84670,
+            "system": 16029,
+            "timestamp": 1764045956402
+          },
+          {
+            "user": 84800,
+            "system": 16038,
+            "timestamp": 1764045956402
+          },
+          {
+            "user": 84931,
+            "system": 16051,
+            "timestamp": 1764045956402
+          },
+          {
+            "user": 85061,
+            "system": 16059,
+            "timestamp": 1764045956403
+          },
+          {
+            "user": 85191,
+            "system": 16068,
+            "timestamp": 1764045956403
+          },
+          {
+            "user": 85321,
+            "system": 16081,
+            "timestamp": 1764045956403
+          },
+          {
+            "user": 85452,
+            "system": 16090,
+            "timestamp": 1764045956403
+          },
+          {
+            "user": 85588,
+            "system": 16102,
+            "timestamp": 1764045956403
+          }
+        ]
+      },
+      "duration": 15
+    }
+  },
+  "summary": {
+    "totalTransactions": 844,
+    "successRate": "0.00%",
+    "averageLatency": "0.00ms",
+    "p95Latency": "0.00ms",
+    "throughput": "0.00 TPS",
+    "peakMemoryUsage": "NaN MB"
+  }
+}

@@ -1,0 +1,550 @@
+{
+  "sessionId": "resource_exhaustion",
+  "timestamp": "2025-11-25T04:45:56.420Z",
+  "results": {
+    "sessionId": "resource_exhaustion",
+    "metrics": {
+      "totalTransactions": 1000,
+      "successfulTransactions": 0,
+      "failedTransactions": 1000,
+      "averageLatency": 0,
+      "p95Latency": 0,
+      "throughput": 0,
+      "memoryUsage": {
+        "initial": {
+          "rss": 74563584,
+          "heapTotal": 30359552,
+          "heapUsed": 12769600,
+          "external": 2098107,
+          "timestamp": 1764045956405
+        },
+        "peak": 0,
+        "final": {
+          "rss": 89686016,
+          "heapTotal": 50282496,
+          "heapUsed": 25405528,
+          "external": 2098107,
+          "timestamp": 1764045956420
+        }
+      },
+      "cpuUsage": {
+        "initial": {
+          "user": 86132,
+          "system": 16806,
+          "timestamp": 1764045956405
+        },
+        "samples": [
+          {
+            "user": 100267,
+            "system": 19857,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100280,
+            "system": 19867,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100288,
+            "system": 19872,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100297,
+            "system": 19879,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100306,
+            "system": 19886,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100315,
+            "system": 19891,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100324,
+            "system": 19896,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100333,
+            "system": 19903,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100341,
+            "system": 19908,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100350,
+            "system": 19913,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100358,
+            "system": 19919,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100367,
+            "system": 19923,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100376,
+            "system": 19928,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100384,
+            "system": 19933,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100393,
+            "system": 19939,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100401,
+            "system": 19944,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100410,
+            "system": 19949,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100418,
+            "system": 19956,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100427,
+            "system": 19961,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100436,
+            "system": 19967,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100444,
+            "system": 19973,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100453,
+            "system": 19980,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100462,
+            "system": 19985,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100471,
+            "system": 19990,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100480,
+            "system": 19997,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100488,
+            "system": 20002,
+            "timestamp": 1764045956418
+          },
+          {
+            "user": 100497,
+            "system": 20008,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100505,
+            "system": 20013,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100514,
+            "system": 20019,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100524,
+            "system": 20027,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100532,
+            "system": 20032,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100541,
+            "system": 20038,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100550,
+            "system": 20044,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100559,
+            "system": 20051,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100568,
+            "system": 20057,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100577,
+            "system": 20062,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100585,
+            "system": 20067,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100594,
+            "system": 20074,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100603,
+            "system": 20080,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100611,
+            "system": 20086,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100620,
+            "system": 20092,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100629,
+            "system": 20098,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100638,
+            "system": 20105,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100646,
+            "system": 20111,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100654,
+            "system": 20116,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100663,
+            "system": 20123,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100672,
+            "system": 20128,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100680,
+            "system": 20133,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100689,
+            "system": 20141,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100698,
+            "system": 20146,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100706,
+            "system": 20152,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100715,
+            "system": 20157,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100724,
+            "system": 20166,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100733,
+            "system": 20172,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100744,
+            "system": 20178,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100754,
+            "system": 20186,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100763,
+            "system": 20192,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100771,
+            "system": 20197,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100780,
+            "system": 20204,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100788,
+            "system": 20209,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100797,
+            "system": 20214,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100805,
+            "system": 20220,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100813,
+            "system": 20226,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100822,
+            "system": 20231,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100831,
+            "system": 20237,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100841,
+            "system": 20243,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100850,
+            "system": 20249,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100860,
+            "system": 20254,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100870,
+            "system": 20259,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100879,
+            "system": 20266,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100888,
+            "system": 20271,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100898,
+            "system": 20276,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100907,
+            "system": 20285,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100916,
+            "system": 20291,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100926,
+            "system": 20301,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100936,
+            "system": 20309,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100946,
+            "system": 20318,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100955,
+            "system": 20325,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100965,
+            "system": 20332,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100973,
+            "system": 20341,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100983,
+            "system": 20348,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 100992,
+            "system": 20356,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101001,
+            "system": 20362,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101010,
+            "system": 20368,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101019,
+            "system": 20373,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101027,
+            "system": 20378,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101036,
+            "system": 20384,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101044,
+            "system": 20389,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101054,
+            "system": 20394,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101062,
+            "system": 20400,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101071,
+            "system": 20406,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101079,
+            "system": 20411,
+            "timestamp": 1764045956419
+          },
+          {
+            "user": 101087,
+            "system": 20416,
+            "timestamp": 1764045956420
+          },
+          {
+            "user": 101096,
+            "system": 20422,
+            "timestamp": 1764045956420
+          },
+          {
+            "user": 101104,
+            "system": 20428,
+            "timestamp": 1764045956420
+          },
+          {
+            "user": 101112,
+            "system": 20433,
+            "timestamp": 1764045956420
+          },
+          {
+            "user": 101121,
+            "system": 20439,
+            "timestamp": 1764045956420
+          },
+          {
+            "user": 101130,
+            "system": 20444,
+            "timestamp": 1764045956420
+          },
+          {
+            "user": 101138,
+            "system": 20449,
+            "timestamp": 1764045956420
+          },
+          {
+            "user": 101146,
+            "system": 20455,
+            "timestamp": 1764045956420
+          }
+        ]
+      },
+      "duration": 15
+    }
+  },
+  "summary": {
+    "totalTransactions": 1000,
+    "successRate": "0.00%",
+    "averageLatency": "0.00ms",
+    "p95Latency": "0.00ms",
+    "throughput": "0.00 TPS",
+    "peakMemoryUsage": "NaN MB"
+  }
+}

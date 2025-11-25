@@ -1,0 +1,100 @@
+{
+  "sessionId": "high_latency_100ms",
+  "timestamp": "2025-11-25T04:44:51.655Z",
+  "results": {
+    "sessionId": "high_latency_100ms",
+    "metrics": {
+      "totalTransactions": 100,
+      "successfulTransactions": 0,
+      "failedTransactions": 100,
+      "averageLatency": 0,
+      "p95Latency": 0,
+      "throughput": 0,
+      "memoryUsage": {
+        "initial": {
+          "rss": 69074944,
+          "heapTotal": 19087360,
+          "heapUsed": 11532256,
+          "external": 2100051,
+          "timestamp": 1764045891654
+        },
+        "peak": 0,
+        "final": {
+          "rss": 69664768,
+          "heapTotal": 19087360,
+          "heapUsed": 11917224,
+          "external": 2098107,
+          "timestamp": 1764045891655
+        }
+      },
+      "cpuUsage": {
+        "initial": {
+          "user": 69127,
+          "system": 13444,
+          "timestamp": 1764045891654
+        },
+        "samples": [
+          {
+            "user": 69832,
+            "system": 13503,
+            "timestamp": 1764045891654
+          },
+          {
+            "user": 70014,
+            "system": 13517,
+            "timestamp": 1764045891654
+          },
+          {
+            "user": 70105,
+            "system": 13526,
+            "timestamp": 1764045891654
+          },
+          {
+            "user": 70765,
+            "system": 13535,
+            "timestamp": 1764045891654
+          },
+          {
+            "user": 70999,
+            "system": 13545,
+            "timestamp": 1764045891654
+          },
+          {
+            "user": 71086,
+            "system": 13554,
+            "timestamp": 1764045891655
+          },
+          {
+            "user": 71319,
+            "system": 13562,
+            "timestamp": 1764045891655
+          },
+          {
+            "user": 71404,
+            "system": 13569,
+            "timestamp": 1764045891655
+          },
+          {
+            "user": 71547,
+            "system": 13581,
+            "timestamp": 1764045891655
+          },
+          {
+            "user": 71643,
+            "system": 13590,
+            "timestamp": 1764045891655
+          }
+        ]
+      },
+      "duration": 1
+    }
+  },
+  "summary": {
+    "totalTransactions": 100,
+    "successRate": "0.00%",
+    "averageLatency": "0.00ms",
+    "p95Latency": "0.00ms",
+    "throughput": "0.00 TPS",
+    "peakMemoryUsage": "NaN MB"
+  }
+}

@@ -1,0 +1,352 @@
+{
+  "timestamp": "2025-11-25T00:19:30.117Z",
+  "framework": "GridTokenX Latency Measurement Framework",
+  "version": "1.0.0",
+  "summary": {
+    "totalMeasurements": 41,
+    "averageLatency": 152.77827129268294,
+    "medianLatency": 141.78587499999958,
+    "p50": 141.78587499999958,
+    "p95": 240.6495420000001,
+    "p99": 276.24474999999984,
+    "minLatency": 91.273709,
+    "maxLatency": 276.24474999999984,
+    "standardDeviation": 45.92110032036914
+  },
+  "trends": {
+    "direction": "stable",
+    "confidence": 0.8,
+    "slope": 0
+  },
+  "recommendations": [],
+  "measurements": [
+    {
+      "timestamp": 1764029963851,
+      "programId": "energy_token",
+      "instruction": "mint_tokens",
+      "transactionLatency": 230.44062499999998,
+      "success": true,
+      "signature": "demo_1764029964082"
+    },
+    {
+      "timestamp": 1764029964082,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 91.273709,
+      "success": true,
+      "signature": "batch_1764029964173_0"
+    },
+    {
+      "timestamp": 1764029964173,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 93.67516699999999,
+      "success": true,
+      "signature": "batch_1764029964267_1"
+    },
+    {
+      "timestamp": 1764029964267,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 121.551041,
+      "success": true,
+      "signature": "batch_1764029964388_2"
+    },
+    {
+      "timestamp": 1764029964388,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 114.27462500000001,
+      "success": true,
+      "signature": "batch_1764029964503_3"
+    },
+    {
+      "timestamp": 1764029964503,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 182.28666700000008,
+      "success": true,
+      "signature": "batch_1764029964685_4"
+    },
+    {
+      "timestamp": 1764029964685,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 115.76916600000004,
+      "success": true,
+      "signature": "batch_1764029964801_5"
+    },
+    {
+      "timestamp": 1764029964801,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 122.37016599999993,
+      "success": true,
+      "signature": "batch_1764029964923_6"
+    },
+    {
+      "timestamp": 1764029964923,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 142.62266599999998,
+      "success": true,
+      "signature": "batch_1764029965066_7"
+    },
+    {
+      "timestamp": 1764029965066,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 192.46254199999998,
+      "success": true,
+      "signature": "batch_1764029965258_8"
+    },
+    {
+      "timestamp": 1764029965258,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 192.66929200000004,
+      "success": true,
+      "signature": "batch_1764029965451_9"
+    },
+    {
+      "timestamp": 1764029965451,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 99.49345800000015,
+      "success": true,
+      "signature": "batch_1764029965550_10"
+    },
+    {
+      "timestamp": 1764029965551,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 157.305292,
+      "success": true,
+      "signature": "batch_1764029965708_11"
+    },
+    {
+      "timestamp": 1764029965708,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 125.59500000000003,
+      "success": true,
+      "signature": "batch_1764029965833_12"
+    },
+    {
+      "timestamp": 1764029965834,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 116.47229200000015,
+      "success": true,
+      "signature": "batch_1764029965950_13"
+    },
+    {
+      "timestamp": 1764029965950,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 143.06887499999993,
+      "success": true,
+      "signature": "batch_1764029966093_14"
+    },
+    {
+      "timestamp": 1764029966093,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 139.21362500000032,
+      "success": true,
+      "signature": "batch_1764029966232_15"
+    },
+    {
+      "timestamp": 1764029966232,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 187.25366600000007,
+      "success": true,
+      "signature": "batch_1764029966420_16"
+    },
+    {
+      "timestamp": 1764029966420,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 115.19275000000016,
+      "success": true,
+      "signature": "batch_1764029966535_17"
+    },
+    {
+      "timestamp": 1764029966535,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 146.65441599999986,
+      "success": true,
+      "signature": "batch_1764029966682_18"
+    },
+    {
+      "timestamp": 1764029966682,
+      "programId": "energy_token",
+      "instruction": "transfer_tokens",
+      "transactionLatency": 150.295834,
+      "success": true,
+      "signature": "batch_1764029966832_19"
+    },
+    {
+      "timestamp": 1764029966832,
+      "programId": "energy_token",
+      "instruction": "create_token",
+      "transactionLatency": 227.05991600000016,
+      "success": true,
+      "signature": "create_token_1764029967059_0"
+    },
+    {
+      "timestamp": 1764029967059,
+      "programId": "energy_token",
+      "instruction": "create_token",
+      "transactionLatency": 240.6495420000001,
+      "success": true,
+      "signature": "create_token_1764029967300_1"
+    },
+    {
+      "timestamp": 1764029967300,
+      "programId": "energy_token",
+      "instruction": "create_token",
+      "transactionLatency": 215.23866700000008,
+      "success": true,
+      "signature": "create_token_1764029967515_2"
+    },
+    {
+      "timestamp": 1764029967515,
+      "programId": "energy_token",
+      "instruction": "create_token",
+      "transactionLatency": 262.94308299999966,
+      "success": true,
+      "signature": "create_token_1764029967778_3"
+    },
+    {
+      "timestamp": 1764029967778,
+      "programId": "energy_token",
+      "instruction": "create_token",
+      "transactionLatency": 276.24474999999984,
+      "success": true,
+      "signature": "create_token_1764029968055_4"
+    },
+    {
+      "timestamp": 1764029968055,
+      "programId": "energy_token",
+      "instruction": "approve",
+      "transactionLatency": 178.41575000000012,
+      "success": true,
+      "signature": "approve_1764029968233_0"
+    },
+    {
+      "timestamp": 1764029968233,
+      "programId": "energy_token",
+      "instruction": "approve",
+      "transactionLatency": 168.26433300000008,
+      "success": true,
+      "signature": "approve_1764029968401_1"
+    },
+    {
+      "timestamp": 1764029968401,
+      "programId": "energy_token",
+      "instruction": "approve",
+      "transactionLatency": 102.33341599999949,
+      "success": true,
+      "signature": "approve_1764029968504_2"
+    },
+    {
+      "timestamp": 1764029968504,
+      "programId": "energy_token",
+      "instruction": "approve",
+      "transactionLatency": 130.46249999999964,
+      "success": true,
+      "signature": "approve_1764029968634_3"
+    },
+    {
+      "timestamp": 1764029968634,
+      "programId": "energy_token",
+      "instruction": "approve",
+      "transactionLatency": 125.5580829999999,
+      "success": true,
+      "signature": "approve_1764029968760_4"
+    },
+    {
+      "timestamp": 1764029968760,
+      "programId": "energy_token",
+      "instruction": "transfer",
+      "transactionLatency": 107.59537499999988,
+      "success": true,
+      "signature": "transfer_1764029968867_0"
+    },
+    {
+      "timestamp": 1764029968867,
+      "programId": "energy_token",
+      "instruction": "transfer",
+      "transactionLatency": 108.23508300000049,
+      "success": true,
+      "signature": "transfer_1764029968976_1"
+    },
+    {
+      "timestamp": 1764029968976,
+      "programId": "energy_token",
+      "instruction": "transfer",
+      "transactionLatency": 116.19829200000004,
+      "success": true,
+      "signature": "transfer_1764029969092_2"
+    },
+    {
+      "timestamp": 1764029969092,
+      "programId": "energy_token",
+      "instruction": "transfer",
+      "transactionLatency": 141.78587499999958,
+      "success": true,
+      "signature": "transfer_1764029969234_3"
+    },
+    {
+      "timestamp": 1764029969234,
+      "programId": "energy_token",
+      "instruction": "transfer",
+      "transactionLatency": 156.18745900000067,
+      "success": true,
+      "signature": "transfer_1764029969390_4"
+    },
+    {
+      "timestamp": 1764029969390,
+      "programId": "energy_token",
+      "instruction": "burn",
+      "transactionLatency": 153.2195410000004,
+      "success": true,
+      "signature": "burn_1764029969543_0"
+    },
+    {
+      "timestamp": 1764029969543,
+      "programId": "energy_token",
+      "instruction": "burn",
+      "transactionLatency": 130.2293750000008,
+      "success": true,
+      "signature": "burn_1764029969673_1"
+    },
+    {
+      "timestamp": 1764029969673,
+      "programId": "energy_token",
+      "instruction": "burn",
+      "transactionLatency": 131.91799999999967,
+      "success": true,
+      "signature": "burn_1764029969805_2"
+    },
+    {
+      "timestamp": 1764029969805,
+      "programId": "energy_token",
+      "instruction": "burn",
+      "transactionLatency": 175.2164590000002,
+      "success": true,
+      "signature": "burn_1764029969981_3"
+    },
+    {
+      "timestamp": 1764029969981,
+      "programId": "energy_token",
+      "instruction": "burn",
+      "transactionLatency": 136.2127499999997,
+      "success": true,
+      "signature": "burn_1764029970117_4"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "sessionId": "extreme_price",
+  "timestamp": "2025-11-25T08:56:23.588Z",
+  "results": {
+    "sessionId": "extreme_price",
+    "metrics": {
+      "totalTransactions": 9,
+      "successfulTransactions": 9,
+      "failedTransactions": 0,
+      "averageLatency": 20.333333333333332,
+      "p95Latency": 29,
+      "throughput": 169.81132075471697,
+      "memoryUsage": {
+        "initial": {
+          "rss": 85213184,
+          "heapTotal": 34029568,
+          "heapUsed": 14886208,
+          "external": 2236619,
+          "timestamp": 1764060983535
+        },
+        "peak": 0,
+        "final": {
+          "rss": 85213184,
+          "heapTotal": 34029568,
+          "heapUsed": 14941720,
+          "external": 2236619,
+          "timestamp": 1764060983588
+        }
+      },
+      "cpuUsage": {
+        "initial": {
+          "user": 187436,
+          "system": 56058,
+          "timestamp": 1764060983535
+        },
+        "samples": []
+      },
+      "duration": 53
+    }
+  },
+  "summary": {
+    "totalTransactions": 9,
+    "successRate": "100.00%",
+    "averageLatency": "20.33ms",
+    "p95Latency": "29.00ms",
+    "throughput": "169.81 TPS",
+    "peakMemoryUsage": "NaN MB"
+  }
+}
