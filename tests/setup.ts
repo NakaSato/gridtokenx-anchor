@@ -1,11 +1,11 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { 
-  EnergyTokenProgram, 
-  GovernanceProgram, 
-  OracleProgram, 
-  RegistryProgram, 
-  TradingProgram 
+import {
+  EnergyToken,
+  Governance,
+  Oracle,
+  Registry,
+  Trading
 } from "../target/types";
 
 export const PROGRAM_IDS = {
@@ -20,13 +20,13 @@ export class TestEnvironment {
   public provider: anchor.AnchorProvider;
   public connection: anchor.web3.Connection;
   public wallet: anchor.Wallet;
-  
+
   // Programs
-  public energyTokenProgram: Program<EnergyTokenProgram>;
-  public governanceProgram: Program<GovernanceProgram>;
-  public oracleProgram: Program<OracleProgram>;
-  public registryProgram: Program<RegistryProgram>;
-  public tradingProgram: Program<TradingProgram>;
+  public energyTokenProgram: Program<EnergyToken>;
+  public governanceProgram: Program<Governance>;
+  public oracleProgram: Program<Oracle>;
+  public registryProgram: Program<Registry>;
+  public tradingProgram: Program<Trading>;
 
   // Test keypairs
   public authority: anchor.web3.Keypair;
@@ -36,17 +36,17 @@ export class TestEnvironment {
   constructor() {
     this.provider = anchor.AnchorProvider.env();
     anchor.setProvider(this.provider);
-    
+
     this.connection = this.provider.connection;
     this.wallet = this.provider.wallet as anchor.Wallet;
-    
+
     // Initialize programs
-    this.energyTokenProgram = anchor.workspace.EnergyTokenProgram as Program<EnergyTokenProgram>;
-    this.governanceProgram = anchor.workspace.GovernanceProgram as Program<GovernanceProgram>;
-    this.oracleProgram = anchor.workspace.OracleProgram as Program<OracleProgram>;
-    this.registryProgram = anchor.workspace.RegistryProgram as Program<RegistryProgram>;
-    this.tradingProgram = anchor.workspace.TradingProgram as Program<TradingProgram>;
-    
+    this.energyTokenProgram = anchor.workspace.EnergyToken as Program<EnergyToken>;
+    this.governanceProgram = anchor.workspace.Governance as Program<Governance>;
+    this.oracleProgram = anchor.workspace.Oracle as Program<Oracle>;
+    this.registryProgram = anchor.workspace.Registry as Program<Registry>;
+    this.tradingProgram = anchor.workspace.Trading as Program<Trading>;
+
     // Generate test keypairs
     this.authority = anchor.web3.Keypair.generate();
     this.testUser = anchor.web3.Keypair.generate();
@@ -55,12 +55,12 @@ export class TestEnvironment {
 
   static async create(): Promise<TestEnvironment> {
     const env = new TestEnvironment();
-    
+
     // Airdrop SOL to test accounts
     await env.airdropSol(env.authority.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
     await env.airdropSol(env.testUser.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
     await env.airdropSol(env.recValidator.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
-    
+
     return env;
   }
 
@@ -80,7 +80,7 @@ export class TestEnvironment {
   async getTokenBalance(tokenAccount: anchor.web3.PublicKey): Promise<number> {
     const accountInfo = await this.connection.getAccountInfo(tokenAccount);
     if (!accountInfo) return 0;
-    
+
     // Parse SPL token account data
     const data = accountInfo.data;
     const amount = data.readBigUInt64LE(64);

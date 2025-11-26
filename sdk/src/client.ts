@@ -1,6 +1,11 @@
 import { Connection, PublicKey, Keypair, Signer } from '@solana/web3.js';
 import { Program, AnchorProvider, Wallet, Idl } from '@coral-xyz/anchor';
 import { IDLS, PROGRAM_ADDRESSES, ProgramName } from './index';
+import { EnergyToken } from './energy_token';
+import { Governance } from './governance';
+import { Oracle } from './oracle';
+import { Registry } from './registry';
+import { Trading } from './trading';
 
 /**
  * GridTokenX Client - A unified client for all GridTokenX programs
@@ -25,11 +30,10 @@ class GridTokenXClient {
     for (const [name, address] of Object.entries(PROGRAM_ADDRESSES)) {
       const programName = name as ProgramName;
       const idl = IDLS[programName] as Idl;
-      
+
       if (idl) {
         const program = new Program(
           idl,
-          new PublicKey(address),
           this.provider
         );
         this.programs.set(programName, program);
@@ -40,47 +44,47 @@ class GridTokenXClient {
   /**
    * Get a specific program by name
    */
-  getProgram(programName: ProgramName): Program<Idl> {
+  getProgram<T extends Idl>(programName: ProgramName): Program<T> {
     const program = this.programs.get(programName);
     if (!program) {
       throw new Error(`Program ${programName} not found`);
     }
-    return program;
+    return program as unknown as Program<T>;
   }
 
   /**
    * Get the Energy Token program
    */
-  get energyToken() {
-    return this.getProgram('energyToken');
+  get energyToken(): Program<EnergyToken> {
+    return this.getProgram<EnergyToken>('energyToken');
   }
 
   /**
    * Get the Governance program
    */
-  get governance() {
-    return this.getProgram('governance');
+  get governance(): Program<Governance> {
+    return this.getProgram<Governance>('governance');
   }
 
   /**
    * Get the Oracle program
    */
-  get oracle() {
-    return this.getProgram('oracle');
+  get oracle(): Program<Oracle> {
+    return this.getProgram<Oracle>('oracle');
   }
 
   /**
    * Get the Registry program
    */
-  get registry() {
-    return this.getProgram('registry');
+  get registry(): Program<Registry> {
+    return this.getProgram<Registry>('registry');
   }
 
   /**
    * Get the Trading program
    */
-  get trading() {
-    return this.getProgram('trading');
+  get trading(): Program<Trading> {
+    return this.getProgram<Trading>('trading');
   }
 
   /**

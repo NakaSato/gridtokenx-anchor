@@ -1,11 +1,5 @@
-/**
- * Program IDL in camelCase format in order to be used in JS/TS.
- *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/registry.json`.
- */
 export type Registry = {
-  "address": "2XPQmFYMdXjP7ffoBB3mXeCdboSFg5Yeb6QmTSGbW8a7",
+  "address": "9XS8uUEVErcA8LABrJQAdohWMXTToBwhFN7Rvur6dC5",
   "metadata": {
     "name": "registry",
     "version": "0.1.0",
@@ -173,7 +167,7 @@ export type Registry = {
               },
               {
                 "kind": "arg",
-                "path": "meterId"
+                "path": "meter_id"
               }
             ]
           }
@@ -197,7 +191,7 @@ export type Registry = {
           "name": "meterType",
           "type": {
             "defined": {
-              "name": "meterType"
+              "name": "MeterType"
             }
           }
         }
@@ -239,7 +233,7 @@ export type Registry = {
               },
               {
                 "kind": "account",
-                "path": "userAuthority"
+                "path": "user_authority"
               }
             ]
           }
@@ -259,7 +253,7 @@ export type Registry = {
           "name": "userType",
           "type": {
             "defined": {
-              "name": "userType"
+              "name": "UserType"
             }
           }
         },
@@ -268,6 +262,58 @@ export type Registry = {
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "settleAndMintTokens",
+      "docs": [
+        "Settle meter balance and automatically mint GRID tokens via CPI",
+        "This is a convenience function that combines settlement + minting in one transaction"
+      ],
+      "discriminator": [
+        51,
+        103,
+        164,
+        65,
+        160,
+        57,
+        142,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "meterAccount",
+          "writable": true
+        },
+        {
+          "name": "meterOwner",
+          "signer": true
+        },
+        {
+          "name": "tokenInfo",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "userTokenAccount",
+          "writable": true
+        },
+        {
+          "name": "authority"
+        },
+        {
+          "name": "energyTokenProgram",
+          "docs": [
+            "The energy token program"
+          ]
+        },
+        {
+          "name": "tokenProgram"
+        }
+      ],
+      "args": []
     },
     {
       "name": "settleMeterBalance",
@@ -375,7 +421,7 @@ export type Registry = {
           "name": "newStatus",
           "type": {
             "defined": {
-              "name": "userStatus"
+              "name": "UserStatus"
             }
           }
         }
@@ -384,7 +430,7 @@ export type Registry = {
   ],
   "accounts": [
     {
-      "name": "meterAccount",
+      "name": "MeterAccount",
       "discriminator": [
         87,
         111,
@@ -397,7 +443,7 @@ export type Registry = {
       ]
     },
     {
-      "name": "registry",
+      "name": "Registry",
       "discriminator": [
         47,
         174,
@@ -410,7 +456,7 @@ export type Registry = {
       ]
     },
     {
-      "name": "userAccount",
+      "name": "UserAccount",
       "discriminator": [
         211,
         33,
@@ -425,7 +471,7 @@ export type Registry = {
   ],
   "events": [
     {
-      "name": "meterBalanceSettled",
+      "name": "MeterBalanceSettled",
       "discriminator": [
         30,
         26,
@@ -438,7 +484,7 @@ export type Registry = {
       ]
     },
     {
-      "name": "meterReadingUpdated",
+      "name": "MeterReadingUpdated",
       "discriminator": [
         144,
         152,
@@ -451,7 +497,7 @@ export type Registry = {
       ]
     },
     {
-      "name": "meterRegistered",
+      "name": "MeterRegistered",
       "discriminator": [
         148,
         168,
@@ -464,7 +510,7 @@ export type Registry = {
       ]
     },
     {
-      "name": "registryInitialized",
+      "name": "RegistryInitialized",
       "discriminator": [
         144,
         138,
@@ -477,7 +523,7 @@ export type Registry = {
       ]
     },
     {
-      "name": "userRegistered",
+      "name": "UserRegistered",
       "discriminator": [
         21,
         42,
@@ -490,7 +536,7 @@ export type Registry = {
       ]
     },
     {
-      "name": "userStatusUpdated",
+      "name": "UserStatusUpdated",
       "discriminator": [
         215,
         22,
@@ -506,43 +552,43 @@ export type Registry = {
   "errors": [
     {
       "code": 6000,
-      "name": "unauthorizedUser",
+      "name": "UnauthorizedUser",
       "msg": "Unauthorized user"
     },
     {
       "code": 6001,
-      "name": "unauthorizedAuthority",
+      "name": "UnauthorizedAuthority",
       "msg": "Unauthorized authority"
     },
     {
       "code": 6002,
-      "name": "invalidUserStatus",
+      "name": "InvalidUserStatus",
       "msg": "Invalid user status"
     },
     {
       "code": 6003,
-      "name": "invalidMeterStatus",
+      "name": "InvalidMeterStatus",
       "msg": "Invalid meter status"
     },
     {
       "code": 6004,
-      "name": "userNotFound",
+      "name": "UserNotFound",
       "msg": "User not found"
     },
     {
       "code": 6005,
-      "name": "meterNotFound",
+      "name": "MeterNotFound",
       "msg": "Meter not found"
     },
     {
       "code": 6006,
-      "name": "noUnsettledBalance",
+      "name": "NoUnsettledBalance",
       "msg": "No unsettled balance to tokenize"
     }
   ],
   "types": [
     {
-      "name": "meterAccount",
+      "name": "MeterAccount",
       "type": {
         "kind": "struct",
         "fields": [
@@ -558,7 +604,7 @@ export type Registry = {
             "name": "meterType",
             "type": {
               "defined": {
-                "name": "meterType"
+                "name": "MeterType"
               }
             }
           },
@@ -566,7 +612,7 @@ export type Registry = {
             "name": "status",
             "type": {
               "defined": {
-                "name": "meterStatus"
+                "name": "MeterStatus"
               }
             }
           },
@@ -598,7 +644,7 @@ export type Registry = {
       }
     },
     {
-      "name": "meterBalanceSettled",
+      "name": "MeterBalanceSettled",
       "type": {
         "kind": "struct",
         "fields": [
@@ -626,7 +672,7 @@ export type Registry = {
       }
     },
     {
-      "name": "meterReadingUpdated",
+      "name": "MeterReadingUpdated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -654,7 +700,7 @@ export type Registry = {
       }
     },
     {
-      "name": "meterRegistered",
+      "name": "MeterRegistered",
       "type": {
         "kind": "struct",
         "fields": [
@@ -670,7 +716,7 @@ export type Registry = {
             "name": "meterType",
             "type": {
               "defined": {
-                "name": "meterType"
+                "name": "MeterType"
               }
             }
           },
@@ -682,44 +728,44 @@ export type Registry = {
       }
     },
     {
-      "name": "meterStatus",
+      "name": "MeterStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "active"
+            "name": "Active"
           },
           {
-            "name": "inactive"
+            "name": "Inactive"
           },
           {
-            "name": "maintenance"
+            "name": "Maintenance"
           }
         ]
       }
     },
     {
-      "name": "meterType",
+      "name": "MeterType",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "solar"
+            "name": "Solar"
           },
           {
-            "name": "wind"
+            "name": "Wind"
           },
           {
-            "name": "battery"
+            "name": "Battery"
           },
           {
-            "name": "grid"
+            "name": "Grid"
           }
         ]
       }
     },
     {
-      "name": "registry",
+      "name": "Registry",
       "type": {
         "kind": "struct",
         "fields": [
@@ -743,7 +789,7 @@ export type Registry = {
       }
     },
     {
-      "name": "registryInitialized",
+      "name": "RegistryInitialized",
       "type": {
         "kind": "struct",
         "fields": [
@@ -759,7 +805,7 @@ export type Registry = {
       }
     },
     {
-      "name": "userAccount",
+      "name": "UserAccount",
       "type": {
         "kind": "struct",
         "fields": [
@@ -771,7 +817,7 @@ export type Registry = {
             "name": "userType",
             "type": {
               "defined": {
-                "name": "userType"
+                "name": "UserType"
               }
             }
           },
@@ -783,7 +829,7 @@ export type Registry = {
             "name": "status",
             "type": {
               "defined": {
-                "name": "userStatus"
+                "name": "UserStatus"
               }
             }
           },
@@ -803,7 +849,7 @@ export type Registry = {
       }
     },
     {
-      "name": "userRegistered",
+      "name": "UserRegistered",
       "type": {
         "kind": "struct",
         "fields": [
@@ -815,7 +861,7 @@ export type Registry = {
             "name": "userType",
             "type": {
               "defined": {
-                "name": "userType"
+                "name": "UserType"
               }
             }
           },
@@ -831,24 +877,24 @@ export type Registry = {
       }
     },
     {
-      "name": "userStatus",
+      "name": "UserStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "active"
+            "name": "Active"
           },
           {
-            "name": "suspended"
+            "name": "Suspended"
           },
           {
-            "name": "inactive"
+            "name": "Inactive"
           }
         ]
       }
     },
     {
-      "name": "userStatusUpdated",
+      "name": "UserStatusUpdated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -860,7 +906,7 @@ export type Registry = {
             "name": "oldStatus",
             "type": {
               "defined": {
-                "name": "userStatus"
+                "name": "UserStatus"
               }
             }
           },
@@ -868,7 +914,7 @@ export type Registry = {
             "name": "newStatus",
             "type": {
               "defined": {
-                "name": "userStatus"
+                "name": "UserStatus"
               }
             }
           },
@@ -880,19 +926,18 @@ export type Registry = {
       }
     },
     {
-      "name": "userType",
+      "name": "UserType",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "prosumer"
+            "name": "Prosumer"
           },
           {
-            "name": "consumer"
+            "name": "Consumer"
           }
         ]
       }
     }
   ]
 };
-

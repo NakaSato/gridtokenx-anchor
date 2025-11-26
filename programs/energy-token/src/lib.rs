@@ -1,8 +1,6 @@
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
-use anchor_lang::solana_program::program::invoke;
 use anchor_lang::AccountDeserialize;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
@@ -10,7 +8,6 @@ use anchor_spl::token_interface::{
     self as token_interface, Mint as MintInterface, TokenAccount as TokenAccountInterface,
     TokenInterface,
 };
-use base64::{engine::general_purpose, Engine as _};
 use mpl_token_metadata::instructions::CreateV1CpiBuilder;
 use mpl_token_metadata::types::{PrintSupply, TokenStandard};
 
@@ -201,151 +198,6 @@ pub mod energy_token {
 
         Ok(())
     }
-
-    /// Mint GRID tokens based on settled meter balance
-    /// This function performs CPI to registry to settle the meter balance,
-    /// then mints the corresponding GRID tokens to the user
-    pub fn mint_grid_tokens(ctx: Context<MintGridTokens>) -> Result<()> {
-        // Step 1: Call registry::settle_meter_balance via CPI
-        // Create the instruction for settle_meter_balance
-        let mut settle_meter_balance_data = Vec::new();
-
-        // Add the instruction discriminator (8 bytes)
-        // For Anchor programs, this is the first 8 bytes of the SHA256 hash of "global:settle_meter_balance"
-        settle_meter_balance_data.extend_from_slice(&[229, 174, 207, 13, 109, 45, 178, 102]);
-
-        // Create the CPI accounts
-        let cpi_accounts = vec![
-            AccountMeta::new(ctx.accounts.meter_account.key(), false),
-            AccountMeta::new_readonly(ctx.accounts.meter_owner.key(), true),
-        ];
-
-        // Create the instruction
-        let settle_meter_balance_ix = Instruction {
-            program_id: ctx.accounts.registry_program.key(),
-            accounts: cpi_accounts,
-            data: settle_meter_balance_data,
-        };
-
-        // Invoke the instruction
-        invoke(
-            &settle_meter_balance_ix,
-            &[
-                ctx.accounts.meter_account.to_account_info(),
-                ctx.accounts.meter_owner.to_account_info(),
-                ctx.accounts.registry_program.to_account_info(),
-            ],
-        )?;
-
-        // Read the meter account after the CPI to get the settlement data
-        // We'll deserialize the meter account to get the settled amount
-        let meter_account_data = &ctx.accounts.meter_account.try_borrow_data()?;
-
-        // Since we don't have direct access to registry types, we'll read the raw data
-        // The meter account data structure (after the 8-byte discriminator):
-        // owner (32 bytes) + meter_id (string) + location (string) +
-        // total_generation (8 bytes) + total_consumption (8 bytes) +
-        // settled_net_generation (8 bytes) + status (1 byte) + timestamp (8 bytes)
-
-        // For simplicity, we'll skip the discriminator and read the fields we need directly
-        let data = &meter_account_data[8..];
-
-        // Skip owner (32 bytes)
-        let mut offset = 32;
-
-        // Read meter_id (length-prefixed string)
-        let meter_id_len = data[offset] as usize;
-        offset += 1 + meter_id_len;
-
-        // Read location (length-prefixed string)
-        let location_len = data[offset] as usize;
-        offset += 1 + location_len;
-
-        // Read total_generation (8 bytes)
-        let total_generation = u64::from_le_bytes([
-            data[offset],
-            data[offset + 1],
-            data[offset + 2],
-            data[offset + 3],
-            data[offset + 4],
-            data[offset + 5],
-            data[offset + 6],
-            data[offset + 7],
-        ]);
-        offset += 8;
-
-        // Read total_consumption (8 bytes)
-        let total_consumption = u64::from_le_bytes([
-            data[offset],
-            data[offset + 1],
-            data[offset + 2],
-            data[offset + 3],
-            data[offset + 4],
-            data[offset + 5],
-            data[offset + 6],
-            data[offset + 7],
-        ]);
-        offset += 8;
-
-        // Read settled_net_generation (8 bytes)
-        let settled_net_generation = u64::from_le_bytes([
-            data[offset],
-            data[offset + 1],
-            data[offset + 2],
-            data[offset + 3],
-            data[offset + 4],
-            data[offset + 5],
-            data[offset + 6],
-            data[offset + 7],
-        ]);
-
-        // Calculate the amount of tokens to mint based on the settlement
-        // The token amount is the difference between current net generation and settled amount
-        let current_net_gen = total_generation.saturating_sub(total_consumption);
-        let tokens_to_mint = current_net_gen.saturating_sub(settled_net_generation);
-
-        require!(tokens_to_mint > 0, ErrorCode::NoUnsettledBalance);
-
-        msg!("Settlement complete. Tokens to mint: {}", tokens_to_mint);
-
-        // Step 2: Mint GRID tokens using SPL Token program
-        let seeds = &[b"token_info".as_ref(), &[ctx.bumps.token_info]];
-        let signer_seeds = &[&seeds[..]];
-
-        let cpi_accounts = MintTo {
-            mint: ctx.accounts.mint.to_account_info(),
-            to: ctx.accounts.user_token_account.to_account_info(),
-            authority: ctx.accounts.token_info.to_account_info(),
-        };
-
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
-        token::mint_to(cpi_ctx, tokens_to_mint)?;
-
-        // Step 3: Update total supply
-        let token_info = &mut ctx.accounts.token_info;
-        token_info.total_supply = token_info.total_supply.saturating_add(tokens_to_mint);
-
-        msg!("Successfully minted {} GRID tokens to user", tokens_to_mint);
-
-        // Encode minting data as base64 for external systems
-        let mint_data = format!(
-            "{}:{}:{}",
-            ctx.accounts.meter_owner.key(),
-            tokens_to_mint,
-            Clock::get()?.unix_timestamp
-        );
-        let encoded_data = general_purpose::STANDARD.encode(mint_data.as_bytes());
-        msg!("Mint data (base64): {}", encoded_data);
-
-        emit!(GridTokensMinted {
-            meter_owner: ctx.accounts.meter_owner.key(),
-            amount: tokens_to_mint,
-            timestamp: Clock::get()?.unix_timestamp,
-        });
-
-        Ok(())
-    }
 }
 
 // Account structs
@@ -494,35 +346,6 @@ pub struct MintTokensDirect<'info> {
     pub authority: Signer<'info>,
 
     pub token_program: Program<'info, Token>,
-}
-
-#[derive(Accounts)]
-pub struct MintGridTokens<'info> {
-    #[account(
-        mut,
-        seeds = [b"token_info"],
-        bump
-    )]
-    pub token_info: Account<'info, TokenInfo>,
-
-    #[account(mut)]
-    pub mint: Account<'info, Mint>,
-
-    /// CHECK: This is the meter account from registry program
-    #[account(mut)]
-    pub meter_account: AccountInfo<'info>,
-
-    #[account(mut)]
-    pub user_token_account: Account<'info, TokenAccount>,
-
-    pub meter_owner: Signer<'info>,
-
-    pub token_program: Program<'info, Token>,
-
-    /// CHECK: This is the registry program
-    pub registry_program: AccountInfo<'info>,
-
-    pub system_program: Program<'info, System>,
 }
 
 // Data structs

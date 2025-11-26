@@ -1,9 +1,3 @@
-/**
- * Program IDL in camelCase format in order to be used in JS/TS.
- *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/oracle.json`.
- */
 export type Oracle = {
   "address": "DvdtU4quEbuxUY2FckmvcXwTpC9qp4HLJKb1PMLaqAoE",
   "metadata": {
@@ -13,6 +7,41 @@ export type Oracle = {
     "description": "Oracle program for P2P Energy Trading - AMI data bridge"
   },
   "instructions": [
+    {
+      "name": "addBackupOracle",
+      "docs": [
+        "Add backup oracle (admin only)"
+      ],
+      "discriminator": [
+        143,
+        248,
+        19,
+        210,
+        83,
+        36,
+        71,
+        207
+      ],
+      "accounts": [
+        {
+          "name": "oracleData",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "oracle_data"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "backupOracle",
+          "type": "pubkey"
+        }
+      ]
+    },
     {
       "name": "initialize",
       "discriminator": [
@@ -162,7 +191,7 @@ export type Oracle = {
           "name": "authority",
           "signer": true,
           "relations": [
-            "oracleData"
+            "oracle_data"
           ]
         }
       ],
@@ -197,7 +226,7 @@ export type Oracle = {
           "name": "authority",
           "signer": true,
           "relations": [
-            "oracleData"
+            "oracle_data"
           ]
         }
       ],
@@ -207,11 +236,50 @@ export type Oracle = {
           "type": "bool"
         }
       ]
+    },
+    {
+      "name": "updateValidationConfig",
+      "docs": [
+        "Update validation configuration (admin only)"
+      ],
+      "discriminator": [
+        104,
+        236,
+        139,
+        255,
+        81,
+        213,
+        77,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "oracleData",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "oracle_data"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "config",
+          "type": {
+            "defined": {
+              "name": "ValidationConfig"
+            }
+          }
+        }
+      ]
     }
   ],
   "accounts": [
     {
-      "name": "oracleData",
+      "name": "OracleData",
       "discriminator": [
         26,
         131,
@@ -226,7 +294,7 @@ export type Oracle = {
   ],
   "events": [
     {
-      "name": "apiGatewayUpdated",
+      "name": "ApiGatewayUpdated",
       "discriminator": [
         122,
         57,
@@ -239,7 +307,20 @@ export type Oracle = {
       ]
     },
     {
-      "name": "marketClearingTriggered",
+      "name": "BackupOracleAdded",
+      "discriminator": [
+        67,
+        221,
+        198,
+        96,
+        194,
+        217,
+        21,
+        22
+      ]
+    },
+    {
+      "name": "MarketClearingTriggered",
       "discriminator": [
         84,
         174,
@@ -252,7 +333,7 @@ export type Oracle = {
       ]
     },
     {
-      "name": "meterReadingSubmitted",
+      "name": "MeterReadingSubmitted",
       "discriminator": [
         116,
         23,
@@ -265,7 +346,7 @@ export type Oracle = {
       ]
     },
     {
-      "name": "oracleStatusUpdated",
+      "name": "OracleStatusUpdated",
       "discriminator": [
         161,
         176,
@@ -276,38 +357,66 @@ export type Oracle = {
         75,
         122
       ]
+    },
+    {
+      "name": "ValidationConfigUpdated",
+      "discriminator": [
+        125,
+        139,
+        159,
+        198,
+        160,
+        218,
+        9,
+        122
+      ]
     }
   ],
   "errors": [
     {
       "code": 6000,
-      "name": "unauthorizedAuthority",
+      "name": "UnauthorizedAuthority",
       "msg": "Unauthorized authority"
     },
     {
       "code": 6001,
-      "name": "unauthorizedGateway",
+      "name": "UnauthorizedGateway",
       "msg": "Unauthorized API Gateway"
     },
     {
       "code": 6002,
-      "name": "oracleInactive",
+      "name": "OracleInactive",
       "msg": "Oracle is inactive"
     },
     {
       "code": 6003,
-      "name": "invalidMeterReading",
+      "name": "InvalidMeterReading",
       "msg": "Invalid meter reading"
     },
     {
       "code": 6004,
-      "name": "marketClearingInProgress",
+      "name": "MarketClearingInProgress",
       "msg": "Market clearing in progress"
+    },
+    {
+      "code": 6005,
+      "name": "EnergyValueOutOfRange",
+      "msg": "Energy value out of range"
+    },
+    {
+      "code": 6006,
+      "name": "AnomalousReading",
+      "msg": "Anomalous reading detected"
+    },
+    {
+      "code": 6007,
+      "name": "MaxBackupOraclesReached",
+      "msg": "Maximum backup oracles reached"
     }
   ],
   "types": [
     {
-      "name": "apiGatewayUpdated",
+      "name": "ApiGatewayUpdated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -331,7 +440,27 @@ export type Oracle = {
       }
     },
     {
-      "name": "marketClearingTriggered",
+      "name": "BackupOracleAdded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "backupOracle",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketClearingTriggered",
       "type": {
         "kind": "struct",
         "fields": [
@@ -347,7 +476,7 @@ export type Oracle = {
       }
     },
     {
-      "name": "meterReadingSubmitted",
+      "name": "MeterReadingSubmitted",
       "type": {
         "kind": "struct",
         "fields": [
@@ -375,7 +504,7 @@ export type Oracle = {
       }
     },
     {
-      "name": "oracleData",
+      "name": "OracleData",
       "type": {
         "kind": "struct",
         "fields": [
@@ -406,12 +535,42 @@ export type Oracle = {
           {
             "name": "createdAt",
             "type": "i64"
+          },
+          {
+            "name": "validationConfig",
+            "type": {
+              "defined": {
+                "name": "ValidationConfig"
+              }
+            }
+          },
+          {
+            "name": "qualityMetrics",
+            "type": {
+              "defined": {
+                "name": "QualityMetrics"
+              }
+            }
+          },
+          {
+            "name": "backupOracles",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "consensusThreshold",
+            "type": "u8"
+          },
+          {
+            "name": "lastConsensusTimestamp",
+            "type": "i64"
           }
         ]
       }
     },
     {
-      "name": "oracleStatusUpdated",
+      "name": "OracleStatusUpdated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -429,7 +588,78 @@ export type Oracle = {
           }
         ]
       }
+    },
+    {
+      "name": "QualityMetrics",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "totalValidReadings",
+            "type": "u64"
+          },
+          {
+            "name": "totalRejectedReadings",
+            "type": "u64"
+          },
+          {
+            "name": "averageReadingInterval",
+            "type": "u32"
+          },
+          {
+            "name": "lastQualityScore",
+            "type": "u8"
+          },
+          {
+            "name": "qualityScoreUpdatedAt",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ValidationConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "minEnergyValue",
+            "type": "u64"
+          },
+          {
+            "name": "maxEnergyValue",
+            "type": "u64"
+          },
+          {
+            "name": "anomalyDetectionEnabled",
+            "type": "bool"
+          },
+          {
+            "name": "maxReadingDeviationPercent",
+            "type": "u16"
+          },
+          {
+            "name": "requireConsensus",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ValidationConfigUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
     }
   ]
 };
-

@@ -1,12 +1,12 @@
 import * as anchor from "@coral-xyz/anchor";
-import { 
-  TestEnvironment, 
-  describe, 
-  it, 
-  before, 
-  beforeEach, 
-  after, 
-  expect 
+import {
+  TestEnvironment,
+  describe,
+  it,
+  before,
+  beforeEach,
+  after,
+  expect
 } from "./setup.js";
 import { TestUtils } from "./utils/index.js";
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
@@ -28,7 +28,7 @@ describe("Energy Token Program Tests", () => {
 
   before(async () => {
     env = await TestEnvironment.create();
-    
+
     // Get PDAs
     [tokenInfoPda] = TestUtils.findTokenInfoPda(env.energyTokenProgram.programId);
     [mintPda] = TestUtils.findMintPda(env.energyTokenProgram.programId);
@@ -75,6 +75,7 @@ describe("Energy Token Program Tests", () => {
         const tx = await env.energyTokenProgram.methods
           .initializeToken()
           .accounts({
+            // @ts-ignore
             tokenInfo: tokenInfoPda,
             mint: mintPda,
             authority: env.authority.publicKey,
@@ -113,6 +114,7 @@ describe("Energy Token Program Tests", () => {
           metadata: metadataPda,
           payer: env.wallet.publicKey,
           authority: env.authority.publicKey,
+          // @ts-ignore
           systemProgram: anchor.web3.SystemProgram.programId,
           tokenProgram: TOKEN_PROGRAM_ID,
           metadataProgram: new anchor.web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"),
@@ -131,9 +133,10 @@ describe("Energy Token Program Tests", () => {
       const mintAmount = TEST_AMOUNTS.ONE_TOKEN;
 
       const tx = await env.energyTokenProgram.methods
-        .mintToWallet(mintAmount)
+        .mintToWallet(new anchor.BN(mintAmount))
         .accounts({
           mint: mintPda,
+          // @ts-ignore
           destination: userTokenAccount,
           destinationOwner: env.wallet.publicKey,
           authority: env.authority.publicKey,
@@ -161,9 +164,10 @@ describe("Energy Token Program Tests", () => {
 
       for (const amount of amounts) {
         const tx = await env.energyTokenProgram.methods
-          .mintToWallet(amount)
+          .mintToWallet(new anchor.BN(amount))
           .accounts({
             mint: mintPda,
+            // @ts-ignore
             destination: userTokenAccount,
             destinationOwner: env.wallet.publicKey,
             authority: env.authority.publicKey,
@@ -184,9 +188,10 @@ describe("Energy Token Program Tests", () => {
 
       await expect(
         env.energyTokenProgram.methods
-          .mintToWallet(TEST_AMOUNTS.ONE_TOKEN)
+          .mintToWallet(new anchor.BN(TEST_AMOUNTS.ONE_TOKEN))
           .accounts({
             mint: mintPda,
+            // @ts-ignore
             destination: userTokenAccount,
             destinationOwner: env.wallet.publicKey,
             authority: unauthorizedKeypair.publicKey,

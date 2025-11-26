@@ -1,9 +1,3 @@
-/**
- * Program IDL in camelCase format in order to be used in JS/TS.
- *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/trading.json`.
- */
 export type Trading = {
   "address": "GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk",
   "metadata": {
@@ -86,7 +80,7 @@ export type Trading = {
               {
                 "kind": "account",
                 "path": "market.active_orders",
-                "account": "market"
+                "account": "Market"
               }
             ]
           }
@@ -155,7 +149,7 @@ export type Trading = {
               {
                 "kind": "account",
                 "path": "market.active_orders",
-                "account": "market"
+                "account": "Market"
               }
             ]
           }
@@ -164,7 +158,7 @@ export type Trading = {
           "name": "ercCertificate",
           "docs": [
             "Optional: ERC certificate for prosumers",
-            "When provided, validates the seller has certified renewable energy"
+            "When provided, validates that seller has certified renewable energy"
           ],
           "optional": true
         },
@@ -186,6 +180,41 @@ export type Trading = {
         {
           "name": "pricePerKwh",
           "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "executeBatch",
+      "docs": [
+        "Create and execute a batch of orders"
+      ],
+      "discriminator": [
+        112,
+        159,
+        211,
+        51,
+        238,
+        70,
+        212,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "orderIds",
+          "type": {
+            "vec": "pubkey"
+          }
         }
       ]
     },
@@ -301,11 +330,11 @@ export type Trading = {
               },
               {
                 "kind": "account",
-                "path": "buyOrder"
+                "path": "buy_order"
               },
               {
                 "kind": "account",
-                "path": "sellOrder"
+                "path": "sell_order"
               }
             ]
           }
@@ -369,7 +398,7 @@ export type Trading = {
   ],
   "accounts": [
     {
-      "name": "ercCertificate",
+      "name": "ErcCertificate",
       "discriminator": [
         83,
         161,
@@ -382,7 +411,7 @@ export type Trading = {
       ]
     },
     {
-      "name": "market",
+      "name": "Market",
       "discriminator": [
         219,
         190,
@@ -395,7 +424,7 @@ export type Trading = {
       ]
     },
     {
-      "name": "order",
+      "name": "Order",
       "discriminator": [
         134,
         173,
@@ -408,7 +437,7 @@ export type Trading = {
       ]
     },
     {
-      "name": "tradeRecord",
+      "name": "TradeRecord",
       "discriminator": [
         150,
         248,
@@ -423,7 +452,20 @@ export type Trading = {
   ],
   "events": [
     {
-      "name": "buyOrderCreated",
+      "name": "BatchExecuted",
+      "discriminator": [
+        77,
+        214,
+        111,
+        72,
+        17,
+        48,
+        85,
+        77
+      ]
+    },
+    {
+      "name": "BuyOrderCreated",
       "discriminator": [
         110,
         19,
@@ -436,7 +478,7 @@ export type Trading = {
       ]
     },
     {
-      "name": "marketInitialized",
+      "name": "MarketInitialized",
       "discriminator": [
         134,
         160,
@@ -449,7 +491,7 @@ export type Trading = {
       ]
     },
     {
-      "name": "marketParamsUpdated",
+      "name": "MarketParamsUpdated",
       "discriminator": [
         88,
         163,
@@ -462,7 +504,7 @@ export type Trading = {
       ]
     },
     {
-      "name": "orderCancelled",
+      "name": "OrderCancelled",
       "discriminator": [
         108,
         56,
@@ -475,7 +517,7 @@ export type Trading = {
       ]
     },
     {
-      "name": "orderMatched",
+      "name": "OrderMatched",
       "discriminator": [
         211,
         0,
@@ -488,7 +530,7 @@ export type Trading = {
       ]
     },
     {
-      "name": "sellOrderCreated",
+      "name": "SellOrderCreated",
       "discriminator": [
         24,
         91,
@@ -504,68 +546,168 @@ export type Trading = {
   "errors": [
     {
       "code": 6000,
-      "name": "unauthorizedAuthority",
+      "name": "UnauthorizedAuthority",
       "msg": "Unauthorized authority"
     },
     {
       "code": 6001,
-      "name": "invalidAmount",
+      "name": "InvalidAmount",
       "msg": "Invalid amount"
     },
     {
       "code": 6002,
-      "name": "invalidPrice",
+      "name": "InvalidPrice",
       "msg": "Invalid price"
     },
     {
       "code": 6003,
-      "name": "inactiveSellOrder",
+      "name": "InactiveSellOrder",
       "msg": "Inactive sell order"
     },
     {
       "code": 6004,
-      "name": "inactiveBuyOrder",
+      "name": "InactiveBuyOrder",
       "msg": "Inactive buy order"
     },
     {
       "code": 6005,
-      "name": "priceMismatch",
+      "name": "PriceMismatch",
       "msg": "Price mismatch"
     },
     {
       "code": 6006,
-      "name": "orderNotCancellable",
+      "name": "OrderNotCancellable",
       "msg": "Order not cancellable"
     },
     {
       "code": 6007,
-      "name": "insufficientEscrowBalance",
+      "name": "InsufficientEscrowBalance",
       "msg": "Insufficient escrow balance"
     },
     {
       "code": 6008,
-      "name": "invalidErcCertificate",
+      "name": "InvalidErcCertificate",
       "msg": "Invalid ERC certificate status"
     },
     {
       "code": 6009,
-      "name": "ercCertificateExpired",
+      "name": "ErcCertificateExpired",
       "msg": "ERC certificate has expired"
     },
     {
       "code": 6010,
-      "name": "ercNotValidatedForTrading",
+      "name": "ErcNotValidatedForTrading",
       "msg": "ERC certificate not validated for trading"
     },
     {
       "code": 6011,
-      "name": "exceedsErcAmount",
+      "name": "ExceedsErcAmount",
       "msg": "Order amount exceeds available ERC certificate amount"
+    },
+    {
+      "code": 6012,
+      "name": "BatchProcessingDisabled",
+      "msg": "Batch processing is disabled"
+    },
+    {
+      "code": 6013,
+      "name": "BatchSizeExceeded",
+      "msg": "Batch size exceeded"
     }
   ],
   "types": [
     {
-      "name": "buyOrderCreated",
+      "name": "BatchConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "enabled",
+            "type": "bool"
+          },
+          {
+            "name": "maxBatchSize",
+            "type": "u32"
+          },
+          {
+            "name": "batchTimeoutSeconds",
+            "type": "u32"
+          },
+          {
+            "name": "minBatchSize",
+            "type": "u32"
+          },
+          {
+            "name": "priceImprovementThreshold",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BatchExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "batchId",
+            "type": "u64"
+          },
+          {
+            "name": "orderCount",
+            "type": "u32"
+          },
+          {
+            "name": "totalVolume",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BatchInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "batchId",
+            "type": "u64"
+          },
+          {
+            "name": "orderCount",
+            "type": "u32"
+          },
+          {
+            "name": "totalVolume",
+            "type": "u64"
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "expiresAt",
+            "type": "i64"
+          },
+          {
+            "name": "orderIds",
+            "type": {
+              "vec": "pubkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuyOrderCreated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -593,7 +735,7 @@ export type Trading = {
       }
     },
     {
-      "name": "ercCertificate",
+      "name": "ErcCertificate",
       "type": {
         "kind": "struct",
         "fields": [
@@ -655,7 +797,7 @@ export type Trading = {
             ],
             "type": {
               "defined": {
-                "name": "ercStatus"
+                "name": "ErcStatus"
               }
             }
           },
@@ -679,27 +821,27 @@ export type Trading = {
       }
     },
     {
-      "name": "ercStatus",
+      "name": "ErcStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "valid"
+            "name": "Valid"
           },
           {
-            "name": "expired"
+            "name": "Expired"
           },
           {
-            "name": "revoked"
+            "name": "Revoked"
           },
           {
-            "name": "pending"
+            "name": "Pending"
           }
         ]
       }
     },
     {
-      "name": "market",
+      "name": "Market",
       "type": {
         "kind": "struct",
         "fields": [
@@ -730,12 +872,68 @@ export type Trading = {
           {
             "name": "marketFeeBps",
             "type": "u16"
+          },
+          {
+            "name": "batchConfig",
+            "type": {
+              "defined": {
+                "name": "BatchConfig"
+              }
+            }
+          },
+          {
+            "name": "currentBatch",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "BatchInfo"
+                }
+              }
+            }
+          },
+          {
+            "name": "buySideDepth",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "PriceLevel"
+                }
+              }
+            }
+          },
+          {
+            "name": "sellSideDepth",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "PriceLevel"
+                }
+              }
+            }
+          },
+          {
+            "name": "lastClearingPrice",
+            "type": "u64"
+          },
+          {
+            "name": "priceHistory",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "PricePoint"
+                }
+              }
+            }
+          },
+          {
+            "name": "volumeWeightedPrice",
+            "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "marketInitialized",
+      "name": "MarketInitialized",
       "type": {
         "kind": "struct",
         "fields": [
@@ -751,7 +949,7 @@ export type Trading = {
       }
     },
     {
-      "name": "marketParamsUpdated",
+      "name": "MarketParamsUpdated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -775,7 +973,7 @@ export type Trading = {
       }
     },
     {
-      "name": "order",
+      "name": "Order",
       "type": {
         "kind": "struct",
         "fields": [
@@ -803,7 +1001,7 @@ export type Trading = {
             "name": "orderType",
             "type": {
               "defined": {
-                "name": "orderType"
+                "name": "OrderType"
               }
             }
           },
@@ -811,7 +1009,7 @@ export type Trading = {
             "name": "status",
             "type": {
               "defined": {
-                "name": "orderStatus"
+                "name": "OrderStatus"
               }
             }
           },
@@ -827,7 +1025,7 @@ export type Trading = {
       }
     },
     {
-      "name": "orderCancelled",
+      "name": "OrderCancelled",
       "type": {
         "kind": "struct",
         "fields": [
@@ -847,7 +1045,7 @@ export type Trading = {
       }
     },
     {
-      "name": "orderMatched",
+      "name": "OrderMatched",
       "type": {
         "kind": "struct",
         "fields": [
@@ -891,44 +1089,84 @@ export type Trading = {
       }
     },
     {
-      "name": "orderStatus",
+      "name": "OrderStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "active"
+            "name": "Active"
           },
           {
-            "name": "partiallyFilled"
+            "name": "PartiallyFilled"
           },
           {
-            "name": "completed"
+            "name": "Completed"
           },
           {
-            "name": "cancelled"
+            "name": "Cancelled"
           },
           {
-            "name": "expired"
+            "name": "Expired"
           }
         ]
       }
     },
     {
-      "name": "orderType",
+      "name": "OrderType",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "sell"
+            "name": "Sell"
           },
           {
-            "name": "buy"
+            "name": "Buy"
           }
         ]
       }
     },
     {
-      "name": "sellOrderCreated",
+      "name": "PriceLevel",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "totalAmount",
+            "type": "u64"
+          },
+          {
+            "name": "orderCount",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PricePoint",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "volume",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SellOrderCreated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -956,7 +1194,7 @@ export type Trading = {
       }
     },
     {
-      "name": "tradeRecord",
+      "name": "TradeRecord",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1001,4 +1239,3 @@ export type Trading = {
     }
   ]
 };
-

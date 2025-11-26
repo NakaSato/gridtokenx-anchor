@@ -102,7 +102,7 @@ export class LoadTestFramework {
       commitment: "confirmed",
       preflightCommitment: "confirmed"
     });
-    
+
     this.metrics = this.initializeMetrics();
   }
 
@@ -112,50 +112,50 @@ export class LoadTestFramework {
   async runLoadTest(config: LoadTestConfig): Promise<LoadTestMetrics> {
     console.log(`🚀 Starting enhanced load test: ${config.testType} with ${config.concurrentUsers} users`);
     console.log(`📊 Target: ${config.transactionsPerSecond} TPS for ${config.duration}s`);
-    
+
     if (config.networkConditions) {
       console.log(`🌐 Network conditions: ${config.networkConditions.latency}ms latency, ${config.networkConditions.packetLoss}% packet loss`);
     }
-    
+
     this.startTime = Date.now();
     this.metrics = this.initializeMetrics();
     this.memoryBaseline = await this.getMemoryUsage();
-    
+
     try {
       // Start resource monitoring
       if (config.resourceMonitoring) {
         this.startResourceMonitoring();
       }
-      
+
       // Phase 1: User ramp-up
       await this.rampUpUsers(config);
-      
+
       // Phase 2: Sustained load testing
       await this.sustainLoad(config);
-      
+
       // Phase 3: Graceful shutdown
       await this.rampDownUsers();
-      
+
       // Stop monitoring and calculate final metrics
       this.stopResourceMonitoring();
       const finalMetrics = await this.calculateFinalMetrics();
-      
+
       console.log("✅ Enhanced load test completed successfully");
       console.log(`📈 Final throughput: ${finalMetrics.throughput} TPS`);
       console.log(`⏱️  Average latency: ${finalMetrics.averageLatency}ms`);
       console.log(`🚨 Error rate: ${finalMetrics.errorRate}%`);
-      
+
       if (finalMetrics.resourceEfficiency) {
         console.log(`💰 Cost per transaction: $${finalMetrics.resourceEfficiency.costPerTransaction}`);
         console.log(`⚡ CU efficiency: ${finalMetrics.resourceEfficiency.computeUnitsPerTransaction} CU/tx`);
       }
-      
+
       if (finalMetrics.memoryUsage.leakDetection) {
         console.log(`🔍 Memory leak detection: ${finalMetrics.memoryUsage.leakDetection.suspectedLeaks} potential leaks`);
       }
-      
+
       return finalMetrics;
-      
+
     } catch (error) {
       this.stopResourceMonitoring();
       console.error("❌ Enhanced load test failed:", error);
@@ -168,7 +168,7 @@ export class LoadTestFramework {
    */
   startMonitoring(testName: string): string {
     const sessionId = TestUtils.generateTestId(`load_${testName}`);
-    
+
     this.testResults.set(sessionId, {
       testName,
       startTime: Date.now(),
@@ -227,7 +227,7 @@ export class LoadTestFramework {
    */
   async createConcurrentUsers(count: number, solAmount: number = 5): Promise<Keypair[]> {
     const users: Keypair[] = [];
-    
+
     for (let i = 0; i < count; i++) {
       const user = await TestUtils.createFundedKeypair(this.connection, solAmount);
       users.push(user);
@@ -244,7 +244,7 @@ export class LoadTestFramework {
     concurrency: number = 10
   ): Promise<Array<{ success: boolean; result?: T; error?: string }>> {
     const results: Array<{ success: boolean; result?: T; error?: string }> = [];
-    
+
     for (let i = 0; i < operations.length; i += concurrency) {
       const batch = operations.slice(i, i + concurrency);
       const batchPromises = batch.map(async (op, index) => {
@@ -302,17 +302,32 @@ export class LoadTestFramework {
    * Execute a single transaction with latency tracking
    */
   async executeTransaction(
+    sessionId: string,
     operation: () => Promise<any>,
     operationType: string = "unknown"
   ): Promise<{ success: boolean; result?: any; latency: number; error?: string }> {
     const startTime = Date.now();
-    
+
     try {
       const result = await operation();
       const latency = Date.now() - startTime;
-      
+
       this.latencyMeasurements.push(latency);
-      
+
+      // Store in session if exists
+      const session = this.testResults.get(sessionId);
+      if (session) {
+        session.transactions.push({
+          success: true,
+          latency,
+          timestamp: Date.now(),
+          type: operationType
+        });
+
+        session.metrics.totalTransactions++;
+        session.metrics.successfulTransactions++;
+      }
+
       return {
         success: true,
         result,
@@ -320,7 +335,27 @@ export class LoadTestFramework {
       };
     } catch (error: any) {
       const latency = Date.now() - startTime;
-      
+
+      // Store in session if exists
+      const session = this.testResults.get(sessionId);
+      if (session) {
+        session.transactions.push({
+          success: false,
+          latency,
+          timestamp: Date.now(),
+          type: operationType,
+          error: error.message
+        });
+
+        session.metrics.totalTransactions++;
+        session.metrics.failedTransactions++;
+        session.errors.push({
+          timestamp: Date.now(),
+          error: error.message,
+          type: operationType
+        });
+      }
+
       return {
         success: false,
         error: error.message,
@@ -336,7 +371,7 @@ export class LoadTestFramework {
     const reportsDir = './test-results/load';
     const filename = `load-test-results-${Date.now()}.json`;
     const filepath = `${reportsDir}/${filename}`;
-    
+
     try {
       await TestUtils.ensureDirectoryExists(reportsDir);
       await TestUtils.writeJsonFile(filepath, results);
@@ -379,10 +414,10 @@ export class LoadTestFramework {
 
   private async rampUpUsers(config: LoadTestConfig): Promise<void> {
     console.log(`📈 Ramp-up phase: Adding ${config.concurrentUsers} users over ${config.rampUpTime}s`);
-    
+
     const users = await this.createConcurrentUsers(config.concurrentUsers);
     const rampUpInterval = config.rampUpTime * 1000 / config.concurrentUsers;
-    
+
     for (let i = 0; i < users.length; i++) {
       const user: UserSimulation = {
         userId: `user_${i}`,
@@ -395,50 +430,50 @@ export class LoadTestFramework {
         lastActivity: Date.now(),
         status: 'active'
       };
-      
+
       this.activeUsers.set(user.userId, user);
-      
+
       if (i < users.length - 1) {
         await TestUtils.delay(rampUpInterval);
       }
     }
-    
+
     console.log(`✅ Ramp-up completed: ${this.activeUsers.size} active users`);
   }
 
   private async sustainLoad(config: LoadTestConfig): Promise<void> {
     console.log(`⏳ Sustained load phase: ${config.duration}s at ${config.transactionsPerSecond} TPS`);
-    
+
     const endTime = Date.now() + (config.duration * 1000);
     const targetInterval = 1000 / config.transactionsPerSecond;
-    
+
     while (Date.now() < endTime) {
       const promises: Promise<any>[] = [];
-      
+
       for (const [userId, user] of this.activeUsers) {
         if (user.status === 'active') {
           promises.push(this.executeUserOperation(user, config.testType));
         }
       }
-      
+
       if (promises.length > 0) {
         await Promise.allSettled(promises);
       }
-      
+
       await TestUtils.delay(Math.min(targetInterval, 100));
     }
-    
+
     console.log(`✅ Sustained load phase completed`);
   }
 
   private async rampDownUsers(): Promise<void> {
     console.log(`📉 Ramp-down phase: Gracefully stopping all users`);
-    
+
     for (const [userId, user] of this.activeUsers) {
       user.status = 'completed';
       user.lastActivity = Date.now();
     }
-    
+
     this.activeUsers.clear();
     console.log(`✅ All users stopped gracefully`);
   }
@@ -446,7 +481,7 @@ export class LoadTestFramework {
   private async executeUserOperation(user: UserSimulation, testType: string): Promise<void> {
     try {
       const startTime = Date.now();
-      
+
       switch (testType) {
         case 'trading':
           await this.executeTradingOperation(user);
@@ -461,12 +496,12 @@ export class LoadTestFramework {
           await this.executeGovernanceOperation(user);
           break;
       }
-      
+
       const latency = Date.now() - startTime;
       user.latencies.push(latency);
       user.transactionCount++;
       user.lastActivity = Date.now();
-      
+
     } catch (error: any) {
       user.errors++;
       user.status = 'error';
@@ -522,29 +557,29 @@ export class LoadTestFramework {
     const allLatencies = Array.from(this.activeUsers.values())
       .flatMap(user => user.latencies)
       .concat(this.latencyMeasurements);
-    
+
     if (allLatencies.length > 0) {
       allLatencies.sort((a, b) => a - b);
-      
+
       this.metrics.averageLatency = allLatencies.reduce((sum, lat) => sum + lat, 0) / allLatencies.length;
       this.metrics.p95Latency = allLatencies[Math.floor(allLatencies.length * 0.95)];
       this.metrics.p99Latency = allLatencies[Math.floor(allLatencies.length * 0.99)];
     }
-    
+
     const totalTransactions = Array.from(this.activeUsers.values())
       .reduce((sum, user) => sum + user.transactionCount, 0) + this.latencyMeasurements.length;
-    
+
     const totalErrors = Array.from(this.activeUsers.values())
       .reduce((sum, user) => sum + user.errors, 0);
-    
+
     this.metrics.totalTransactions = totalTransactions;
     this.metrics.successfulTransactions = totalTransactions - totalErrors;
     this.metrics.failedTransactions = totalErrors;
     this.metrics.errorRate = totalTransactions > 0 ? (totalErrors / totalTransactions) * 100 : 0;
-    
+
     const duration = (Date.now() - this.startTime) / 1000; // in seconds
     this.metrics.throughput = duration > 0 ? this.metrics.successfulTransactions / duration : 0;
-    
+
     // Calculate resource efficiency
     this.metrics.resourceEfficiency = {
       computeUnitsPerTransaction: 15000, // Placeholder - would calculate actual CU usage
@@ -552,27 +587,27 @@ export class LoadTestFramework {
       costPerTransaction: 0.0001, // Placeholder - would calculate actual cost
       resourceUtilizationScore: this.metrics.memoryUsage.percentage
     };
-    
+
     // Memory leak detection
     const currentMemory = this.getMemoryUsage();
     const memoryIncrease = currentMemory - this.memoryBaseline;
     const testDurationHours = duration / 3600;
-    
+
     this.metrics.memoryUsage.leakDetection = {
-      suspectedLeaks: memoryIncrease > 100 * 1024 * 1024, // 100MB increase
+      suspectedLeaks: memoryIncrease > 100 * 1024 * 1024 ? 1 : 0, // 100MB increase
       leakRate: testDurationHours > 0 ? memoryIncrease / testDurationHours : 0,
       criticalThreshold: memoryIncrease > 500 * 1024 * 1024 // 500MB increase
     };
-    
+
     return this.metrics;
   }
 
   private calculateAverageLatency(transactions: any[]): number {
     if (transactions.length === 0) return 0;
-    
+
     const successfulTransactions = transactions.filter(t => t.success);
     if (successfulTransactions.length === 0) return 0;
-    
+
     const totalLatency = successfulTransactions.reduce((sum, t) => sum + t.latency, 0);
     return totalLatency / successfulTransactions.length;
   }
@@ -598,7 +633,7 @@ export class LoadTestDataGenerator {
     orderType: "buy" | "sell";
   }> {
     const orders = [];
-    
+
     for (let i = 0; i < count; i++) {
       orders.push({
         orderId: TestUtils.generateTestId(`order_${i}`),
@@ -624,12 +659,12 @@ export class LoadTestDataGenerator {
     }>;
   }> {
     const userData = [];
-    
+
     for (let i = 0; i < userCount; i++) {
       const userId = TestUtils.generateTestId(`user_${i}`);
       const meterId = TestUtils.generateTestId(`meter_${i}`);
       const readings = [];
-      
+
       for (let j = 0; j < readingsPerUser; j++) {
         readings.push({
           timestamp: Date.now() - (j * 3600000), // Hourly readings going back
@@ -637,7 +672,7 @@ export class LoadTestDataGenerator {
           consumption: Math.floor(Math.random() * 800) + 50   // 50-850 kWh
         });
       }
-      
+
       userData.push({ userId, meterId, readings });
     }
 
@@ -657,11 +692,11 @@ export class LoadTestDataGenerator {
   }> {
     const scenarios = [];
     const actionTypes = ['create_order', 'cancel_order', 'update_meter', 'trade_energy', 'check_balance'];
-    
+
     for (let i = 0; i < userCount; i++) {
       const actionCount = Math.floor(Math.random() * 10) + 5; // 5-15 actions per user
       const actions = [];
-      
+
       for (let j = 0; j < actionCount; j++) {
         actions.push({
           type: actionTypes[Math.floor(Math.random() * actionTypes.length)],
@@ -669,7 +704,7 @@ export class LoadTestDataGenerator {
           params: TestUtils.generateTradingData()
         });
       }
-      
+
       scenarios.push({
         userId: TestUtils.generateTestId(`user_${i}`),
         actions

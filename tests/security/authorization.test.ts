@@ -29,7 +29,7 @@ describe("Authorization Security Tests", () => {
     it("Should prevent unauthorized users from creating tokens", async () => {
       const sessionId = "unauthorized_token_creation";
       framework.startSession(sessionId);
-      
+
       try {
         await framework.executeSecurityTest(
           sessionId,
@@ -40,11 +40,11 @@ describe("Authorization Security Tests", () => {
               provider.wallet.publicKey,
               "create_token"
             );
-            
+
             if (isAuthorized) {
               throw new Error("Unauthorized user was able to create tokens");
             }
-            
+
             console.log("✓ Token creation properly restricted");
           },
           "Authorization Bypass",
@@ -54,8 +54,8 @@ describe("Authorization Security Tests", () => {
         // For testing purposes, we expect this to pass (no vulnerabilities found)
         const metrics = framework.getSecurityMetrics(sessionId);
         console.log(`Authorization test metrics:`, metrics);
-        
-      } catch (error) {
+
+      } catch (error: any) {
         console.log("Authorization test behavior:", error.message);
       } finally {
         framework.stopSession(sessionId);
@@ -65,7 +65,7 @@ describe("Authorization Security Tests", () => {
     it("Should prevent unauthorized users from emergency controls", async () => {
       const sessionId = "unauthorized_emergency_controls";
       framework.startSession(sessionId);
-      
+
       try {
         await framework.executeSecurityTest(
           sessionId,
@@ -76,11 +76,11 @@ describe("Authorization Security Tests", () => {
               provider.wallet.publicKey,
               "emergency_control"
             );
-            
+
             if (isAuthorized && !await TestUtils.isAdminUser(provider.wallet.publicKey)) {
               throw new Error("Non-admin user was able to access emergency controls");
             }
-            
+
             console.log("✓ Emergency controls properly restricted");
           },
           "Emergency Control Bypass",
@@ -89,7 +89,7 @@ describe("Authorization Security Tests", () => {
 
         const metrics = framework.getSecurityMetrics(sessionId);
         console.log(`Emergency control test metrics:`, metrics);
-        
+
       } finally {
         framework.stopSession(sessionId);
       }
@@ -100,29 +100,29 @@ describe("Authorization Security Tests", () => {
     it("Should enforce data ownership boundaries", async () => {
       const sessionId = "permission_boundaries";
       framework.startSession(sessionId);
-      
+
       try {
         // Create test users
         const userA = anchor.Wallet.local();
         const userB = anchor.Wallet.local();
-        
+
         await framework.executeSecurityTest(
           sessionId,
           "Data Ownership Boundaries",
           async () => {
             // User A creates data
             const userAData = await TestUtils.createUserTestData(userA.publicKey, "meter_001");
-            
+
             // Test: User B should not be able to modify User A's data
             const canUserBModify = await TestUtils.checkDataOwnership(
               userB.publicKey,
               userAData.dataId
             );
-            
+
             if (canUserBModify) {
               throw new Error("User B was able to modify User A's data");
             }
-            
+
             console.log("✓ Data ownership boundaries enforced correctly");
           },
           "Permission Boundary Violation",
@@ -131,7 +131,7 @@ describe("Authorization Security Tests", () => {
 
         const metrics = framework.getSecurityMetrics(sessionId);
         console.log(`Permission boundary test metrics:`, metrics);
-        
+
       } finally {
         framework.stopSession(sessionId);
       }
@@ -140,7 +140,7 @@ describe("Authorization Security Tests", () => {
     it("Should prevent privilege escalation attempts", async () => {
       const sessionId = "privilege_escalation";
       framework.startSession(sessionId);
-      
+
       try {
         await framework.executeSecurityTest(
           sessionId,
@@ -152,11 +152,11 @@ describe("Authorization Security Tests", () => {
               "regular_user",
               "admin"
             );
-            
+
             if (escalationResult.success) {
               throw new Error("Regular user was able to escalate to admin privileges");
             }
-            
+
             console.log("✓ Privilege escalation properly prevented");
           },
           "Privilege Escalation Vulnerability",
@@ -165,7 +165,7 @@ describe("Authorization Security Tests", () => {
 
         const metrics = framework.getSecurityMetrics(sessionId);
         console.log(`Privilege escalation test metrics:`, metrics);
-        
+
       } finally {
         framework.stopSession(sessionId);
       }
@@ -176,7 +176,7 @@ describe("Authorization Security Tests", () => {
     it("Should enforce different access levels for different roles", async () => {
       const sessionId = "role_based_access";
       framework.startSession(sessionId);
-      
+
       try {
         // Define different user roles and their expected permissions
         const roles = [
@@ -196,24 +196,24 @@ describe("Authorization Security Tests", () => {
                 provider.wallet.publicKey,
                 role.name
               );
-              
+
               const hasCorrectTokenPermission = permissions.canCreateTokens === role.canCreateTokens;
               const hasCorrectEmergencyPermission = permissions.canEmergencyPause === role.canEmergencyPause;
-              
+
               if (!hasCorrectTokenPermission || !hasCorrectEmergencyPermission) {
                 throw new Error(`Role ${role.name} has incorrect permissions`);
               }
-              
+
               console.log(`✓ Role ${role.name} permissions correctly enforced`);
             },
-          "Role-Based Access Control Violation",
-          "medium"
+            "Role-Based Access Control Violation",
+            "medium"
           );
         }
 
         const metrics = framework.getSecurityMetrics(sessionId);
         console.log(`Role-based access test metrics:`, metrics);
-        
+
       } finally {
         framework.stopSession(sessionId);
       }
@@ -224,7 +224,7 @@ describe("Authorization Security Tests", () => {
     it("Should prevent access to restricted resources", async () => {
       const sessionId = "resource_access_control";
       framework.startSession(sessionId);
-      
+
       try {
         await framework.executeSecurityTest(
           sessionId,
@@ -243,11 +243,11 @@ describe("Authorization Security Tests", () => {
               provider.wallet.publicKey,
               "admin_only_resource"
             );
-            
+
             if (restrictedAccess.hasAccess) {
               throw new Error("User was able to access restricted resources");
             }
-            
+
             console.log("✓ Resource access properly controlled");
           },
           "Resource Access Control Bypass",
@@ -256,7 +256,7 @@ describe("Authorization Security Tests", () => {
 
         const metrics = framework.getSecurityMetrics(sessionId);
         console.log(`Resource access control test metrics:`, metrics);
-        
+
       } finally {
         framework.stopSession(sessionId);
       }
@@ -267,7 +267,7 @@ describe("Authorization Security Tests", () => {
     it("Should prevent unauthorized cross-program access", async () => {
       const sessionId = "cross_program_authorization";
       framework.startSession(sessionId);
-      
+
       try {
         await framework.executeSecurityTest(
           sessionId,
@@ -279,12 +279,12 @@ describe("Authorization Security Tests", () => {
               "trading_program",
               "registry_authority"
             );
-            
+
             if (crossProgramAccess.unauthorized) {
               console.log("✓ Cross-program access properly controlled");
               return;
             }
-            
+
             throw new Error("Cross-program authorization bypass detected");
           },
           "Cross-Program Authorization Bypass",
@@ -293,7 +293,7 @@ describe("Authorization Security Tests", () => {
 
         const metrics = framework.getSecurityMetrics(sessionId);
         console.log(`Cross-program authorization test metrics:`, metrics);
-        
+
       } finally {
         framework.stopSession(sessionId);
       }
@@ -304,11 +304,11 @@ describe("Authorization Security Tests", () => {
     it("Should validate authorization parameters", async () => {
       const sessionId = "auth_parameter_validation";
       framework.startSession(sessionId);
-      
+
       try {
         const maliciousInputs = framework.generateMaliciousInputs()
-          .filter(input => 
-            input.type === 'buffer_overflow' || 
+          .filter(input =>
+            input.type === 'buffer_overflow' ||
             input.type === 'integer_overflow'
           );
 
@@ -327,7 +327,7 @@ describe("Authorization Security Tests", () => {
 
         const metrics = framework.getSecurityMetrics(sessionId);
         console.log(`Authorization parameter validation metrics:`, metrics);
-        
+
       } finally {
         framework.stopSession(sessionId);
       }

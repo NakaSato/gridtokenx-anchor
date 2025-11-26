@@ -12,6 +12,15 @@ export interface AnalysisConfig {
   enableRegressionDetection: boolean;
 }
 
+export interface LatencyStats {
+  min: number;
+  max: number;
+  mean: number;
+  p50: number;
+  p95: number;
+  p99: number;
+}
+
 export interface PerformanceSummary {
   totalMeasurements: number;
   averageLatency: number;
@@ -44,7 +53,7 @@ export interface RegressionDetection {
 
 export class PerformanceAnalyzer {
   private config: AnalysisConfig;
-  private baselineMetrics: Map<string, PerformanceSummary> = new Map();
+  private baselineMetrics: Map<string, LatencyStats> = new Map();
 
   constructor(config: Partial<AnalysisConfig> = {}) {
     this.config = {
@@ -94,7 +103,7 @@ export class PerformanceAnalyzer {
     const variance = latencies.reduce((sum, l) => sum + Math.pow(l - mean, 2), 0) / latencies.length;
     const stdDev = Math.sqrt(variance);
 
-    const outliers = this.config.enableOutlierDetection 
+    const outliers = this.config.enableOutlierDetection
       ? this.detectOutliers(latencies, mean, stdDev)
       : [];
 
@@ -141,7 +150,7 @@ export class PerformanceAnalyzer {
    */
   private detectOutliers(latencies: number[], mean: number, stdDev: number): number[] {
     const threshold = this.config.outlierThreshold * stdDev;
-    return latencies.filter(latency => 
+    return latencies.filter(latency =>
       Math.abs(latency - mean) > threshold
     );
   }
@@ -153,11 +162,11 @@ export class PerformanceAnalyzer {
     const index = (p / 100) * (sorted.length - 1);
     const lower = Math.floor(index);
     const upper = Math.ceil(index);
-    
+
     if (lower === upper) {
       return sorted[lower];
     }
-    
+
     const weight = index - lower;
     return sorted[lower] * (1 - weight) + sorted[upper] * weight;
   }
@@ -206,7 +215,7 @@ export class PerformanceAnalyzer {
 
     // Use sliding window analysis
     const windows: Array<{ time: number; avgLatency: number }> = [];
-    
+
     for (let i = windowSize; i <= measurements.length; i++) {
       const window = measurements.slice(i - windowSize, i);
       const avgLatency = window.reduce((sum, m) => sum + m.transactionLatency, 0) / window.length;
@@ -240,12 +249,12 @@ export class PerformanceAnalyzer {
     const sumYY = points.reduce((sum, p) => sum + p.avgLatency * p.avgLatency, 0);
 
     const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const correlation = (n * sumXY - sumX * sumY) / 
+    const correlation = (n * sumXY - sumX * sumY) /
       Math.sqrt((n * sumXX - sumX * sumX) * (n * sumYY - sumY * sumY));
 
     let direction: 'improving' | 'degrading' | 'stable';
     const slopeThreshold = 0.01; // ms per millisecond threshold
-    
+
     if (slope > slopeThreshold) {
       direction = 'degrading';
     } else if (slope < -slopeThreshold) {
@@ -316,14 +325,14 @@ export class PerformanceAnalyzer {
   /**
    * Set baseline metrics for comparison
    */
-  setBaseline(operation: string, metrics: PerformanceSummary): void {
+  setBaseline(operation: string, metrics: LatencyStats): void {
     this.baselineMetrics.set(operation, metrics);
   }
 
   /**
    * Get baseline metrics
    */
-  getBaseline(operation: string): PerformanceSummary | undefined {
+  getBaseline(operation: string): LatencyStats | undefined {
     return this.baselineMetrics.get(operation);
   }
 
@@ -344,7 +353,7 @@ export class PerformanceAnalyzer {
     const errorRateChange = metrics2.errors.rate - metrics1.errors.rate;
 
     let recommendation = 'No significant change in performance';
-    
+
     if (Math.abs(latencyImprovement) > 10) {
       if (latencyImprovement > 0) {
         recommendation = 'Latency has improved significantly';
@@ -401,11 +410,11 @@ export class PerformanceAnalyzer {
     };
 
     const trends = this.analyzeTrends(measurements);
-    
+
     // Check for regressions in different program operations
     const programGroups = this.groupMeasurementsByProgram(measurements);
     const regressions: RegressionDetection[] = [];
-    
+
     for (const [programId, programMeasurements] of programGroups.entries()) {
       const metrics = this.calculateMetrics(programId, programMeasurements, 0);
       const regression = this.detectRegression(metrics);
@@ -429,7 +438,7 @@ export class PerformanceAnalyzer {
    */
   private groupMeasurementsByProgram(measurements: LatencyMeasurement[]): Map<string, LatencyMeasurement[]> {
     const groups = new Map<string, LatencyMeasurement[]>();
-    
+
     measurements.forEach(measurement => {
       const programMeasurements = groups.get(measurement.programId) || [];
       programMeasurements.push(measurement);

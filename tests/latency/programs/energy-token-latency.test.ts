@@ -25,7 +25,7 @@ describe('Energy Token Latency Tests', () => {
   let framework: any;
   let provider: anchor.AnchorProvider;
   let energyTokenProgram: any;
-  
+
   // Test wallets
   let authority: Keypair;
   let userWallet: Keypair;
@@ -33,7 +33,7 @@ describe('Energy Token Latency Tests', () => {
 
   before('Setup test environment', async () => {
     connection = new Connection('http://127.0.0.1:8899', 'confirmed');
-    
+
     // Initialize latency framework
     framework = createLatencyFramework({
       connection,
@@ -55,8 +55,8 @@ describe('Energy Token Latency Tests', () => {
     mint = Keypair.generate();
 
     // Fund wallets
-    await connection.requestAirdrop(10 * LAMPORTS_PER_SOL, authority.publicKey);
-    await connection.requestAirdrop(10 * LAMPORTS_PER_SOL, userWallet.publicKey);
+    await connection.requestAirdrop(authority.publicKey, 10 * LAMPORTS_PER_SOL);
+    await connection.requestAirdrop(userWallet.publicKey, 10 * LAMPORTS_PER_SOL);
 
     provider = new anchor.AnchorProvider(
       connection,
@@ -82,7 +82,7 @@ describe('Energy Token Latency Tests', () => {
   describe('Token Creation Operations', () => {
     it('should measure create_token_mint latency', async () => {
       const testName = 'create_token_mint';
-      
+
       const operation = async () => {
         // Simulate token creation with mock delay
         await new Promise(resolve => setTimeout(resolve, 200));
@@ -98,7 +98,7 @@ describe('Energy Token Latency Tests', () => {
 
       console.log(`Create Token Mint Latency: ${measurement.transactionLatency.toFixed(2)}ms`);
       console.log(`Compute Units: ${measurement.metadata.computeUnits}`);
-      
+
       // Assert latency is within acceptable range
       if (measurement.transactionLatency > 1000) {
         throw new Error(`Latency exceeded threshold: ${measurement.transactionLatency}ms`);
@@ -166,7 +166,7 @@ describe('Energy Token Latency Tests', () => {
       );
 
       console.log(`Mint to Wallet Latency: ${measurement.transactionLatency.toFixed(2)}ms`);
-      
+
       if (measurement.transactionLatency > 400) {
         throw new Error(`Latency exceeded threshold: ${measurement.transactionLatency}ms`);
       }
@@ -228,7 +228,7 @@ describe('Energy Token Latency Tests', () => {
       );
 
       console.log(`Transfer Tokens Latency: ${measurement.transactionLatency.toFixed(2)}ms`);
-      
+
       if (measurement.transactionLatency > 300) {
         throw new Error(`Transfer latency exceeded threshold: ${measurement.transactionLatency}ms`);
       }
@@ -291,9 +291,9 @@ describe('Energy Token Latency Tests', () => {
         await framework.runTestScenario(scenario, PROGRAM_IDS.energy_token, async () => {
           // Simulate operation for data collection
           await new Promise(resolve => setTimeout(resolve, 50 + Math.random() * 100));
-          return { 
-            signature: `mock_report_signature_${Date.now()}_${Math.random()}`, 
-            result: null 
+          return {
+            signature: `mock_report_signature_${Date.now()}_${Math.random()}`,
+            result: null
           };
         });
       }
@@ -302,21 +302,21 @@ describe('Energy Token Latency Tests', () => {
       const report = framework.analyzer.generateReport(
         framework.measurer.getMeasurements()
       );
-      
+
       console.log('=== Energy Token Performance Report ===');
       console.log(`Total Measurements: ${report.summary.totalMeasurements}`);
       console.log(`Average Latency: ${report.summary.averageLatency.toFixed(2)}ms`);
       console.log(`P95 Latency: ${report.summary.p95.toFixed(2)}ms`);
       console.log(`P99 Latency: ${report.summary.p99.toFixed(2)}ms`);
       console.log(`Outlier Rate: ${report.summary.outlierRate.toFixed(2)}%`);
-      
+
       console.log('\nTrend Analysis:');
       console.log(`Direction: ${report.trends.direction}`);
       console.log(`Confidence: ${(report.trends.confidence * 100).toFixed(1)}%`);
-      
+
       console.log('\nRegressions Detected:');
       console.log(`Count: ${report.regressions.length}`);
-      
+
       console.log('\nRecommendations:');
       report.recommendations.forEach((rec: string) => console.log(`- ${rec}`));
 
@@ -349,7 +349,7 @@ describe('Energy Token Latency Tests', () => {
         const operationType = Math.floor(Math.random() * 3); // 0: create, 1: mint, 2: transfer
         const baseDelay = [200, 150, 100][operationType];
         const variance = Math.random() * 100;
-        
+
         await new Promise(resolve => setTimeout(resolve, baseDelay + variance));
         const signature = `mock_load_test_${Date.now()}_${Math.random()}`;
         return { signature, result: null };

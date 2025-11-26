@@ -6,11 +6,11 @@ export { Registry } from './registry';
 export { Trading } from './trading';
 
 // Re-export the original IDL files for programmatic use
-import energyTokenIdl from '../target/idl/energy_token.json';
-import governanceIdl from '../target/idl/governance.json';
-import oracleIdl from '../target/idl/oracle.json';
-import registryIdl from '../target/idl/registry.json';
-import tradingIdl from '../target/idl/trading.json';
+import energyTokenIdl from '../../target/idl/energy_token.json';
+import governanceIdl from '../../target/idl/governance.json';
+import oracleIdl from '../../target/idl/oracle.json';
+import registryIdl from '../../target/idl/registry.json';
+import tradingIdl from '../../target/idl/trading.json';
 
 export const IDLS = {
   energyToken: energyTokenIdl,

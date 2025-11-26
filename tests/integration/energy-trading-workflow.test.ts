@@ -44,51 +44,51 @@ export class EnergyTradingWorkflowTest {
    */
   async testCompleteEnergyTradingJourney(): Promise<void> {
     console.log('🔄 Starting Complete Energy Trading Journey Test');
-    
+
     const workflowStartTime = Date.now();
-    
+
     try {
       // Step 1: User Registration (Registry)
       const userResult = await this.testUserRegistrationFlow();
-      
+
       // Step 2: Meter Registration (Registry)
       const meterResult = await this.testMeterRegistrationFlow();
-      
+
       // Step 3: Initial Meter Reading (Oracle → Registry)
       const readingResult = await this.testMeterReadingSubmission();
-      
+
       // Step 4: ERC Issuance (Governance)
       const ercResult = await this.testErcIssuanceFlow();
-      
+
       // Step 5: Token Minting (Energy Token)
       const tokenResult = await this.testTokenMintingFlow();
-      
+
       // Step 6: Order Creation (Trading)
       const orderResult = await this.testOrderCreationFlow();
-      
+
       // Step 7: Order Matching (Trading)
       const matchResult = await this.testOrderMatchingFlow();
-      
+
       // Step 8: Trade Execution (Trading)
       const executionResult = await this.testTradeExecutionFlow();
-      
+
       // Step 9: Token Transfer/Settlement (Energy Token)
       const settlementResult = await this.testSettlementFlow();
-      
+
       const totalDuration = Date.now() - workflowStartTime;
-      
+
       // Validate complete workflow success
       const allSuccessful = [
         userResult, meterResult, readingResult, ercResult,
         tokenResult, orderResult, matchResult, executionResult, settlementResult
       ].every(result => result.success);
-      
+
       if (!allSuccessful) {
         throw new Error('Complete energy trading journey failed at one or more steps');
       }
-      
+
       console.log(`✅ Complete Energy Trading Journey completed in ${totalDuration}ms`);
-      
+
     } catch (error: any) {
       console.error(`❌ Complete Energy Trading Journey failed: ${error.message}`);
       throw error;
@@ -101,27 +101,28 @@ export class EnergyTradingWorkflowTest {
   async testUserRegistrationFlow(): Promise<WorkflowResult> {
     const stepName = 'User Registration';
     const startTime = Date.now();
-    
+
     try {
       console.log('  👤 Registering user...');
-      
+
       // Generate test user data
       const testUser = {
         publicKey: this.env.testUser.publicKey,
         authority: this.env.authority.publicKey
       };
-      
+
       // Find user account PDA
       const [userAccountPda] = TestUtils.findUserAccountPda(
         this.env.registryProgram.programId,
         testUser.publicKey
       );
-      
+
       // Attempt to register user (may fail if already registered)
       try {
         const tx = await this.env.registryProgram.methods
-          .registerUser()
+          .registerUser({ prosumer: {} }, "Bangkok")
           .accounts({
+            // @ts-ignore
             userAccount: userAccountPda,
             user: testUser.publicKey,
             authority: this.env.authority.publicKey,
@@ -129,9 +130,9 @@ export class EnergyTradingWorkflowTest {
           })
           .signers([this.env.authority])
           .rpc();
-        
+
         this.addWorkflowStep(stepName, 'Registry', 'registerUser', Date.now() - startTime, true, tx);
-        
+
       } catch (error: any) {
         // User might already be registered - that's OK for integration test
         if (error.message.includes('already in use') || error.message.includes('Account does not exist')) {
@@ -140,7 +141,7 @@ export class EnergyTradingWorkflowTest {
           throw error;
         }
       }
-      
+
       return {
         workflowName: stepName,
         totalDuration: Date.now() - startTime,
@@ -148,7 +149,7 @@ export class EnergyTradingWorkflowTest {
         steps: this.workflowSteps,
         data: { userAccount: userAccountPda.toBase58() }
       };
-      
+
     } catch (error: any) {
       this.addWorkflowStep(stepName, 'Registry', 'registerUser', Date.now() - startTime, false, undefined, error.message);
       throw error;
@@ -161,33 +162,49 @@ export class EnergyTradingWorkflowTest {
   async testMeterRegistrationFlow(): Promise<WorkflowResult> {
     const stepName = 'Meter Registration';
     const startTime = Date.now();
-    
+
     try {
       console.log('  📊 Registering meter...');
-      
+
       // Generate test meter data
-      const meterData = TestUtils.generateEnergyData();
-      
+      const meterId = TestUtils.generateTestId("meter");
+      const meterType = { solar: {} }; // Enum variant
+
       // Find meter account PDA
       const [meterAccountPda] = TestUtils.findMeterAccountPda(
         this.env.registryProgram.programId,
         this.env.testUser.publicKey
       );
-      
+
+      // Find registry PDA
+      const [registryPda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("registry")],
+        this.env.registryProgram.programId
+      );
+
+      // Find user account PDA
+      const [userAccountPda] = TestUtils.findUserAccountPda(
+        this.env.registryProgram.programId,
+        this.env.testUser.publicKey
+      );
+
       try {
         const tx = await this.env.registryProgram.methods
-          .registerMeter(meterData.location, meterData.totalGeneration)
+          .registerMeter(meterId, meterType)
           .accounts({
+            registry: registryPda,
+            // @ts-ignore
+            userAccount: userAccountPda,
+            // @ts-ignore
             meterAccount: meterAccountPda,
-            user: this.env.testUser.publicKey,
-            authority: this.env.authority.publicKey,
+            authority: this.env.testUser.publicKey,
             systemProgram: anchor.web3.SystemProgram.programId,
           })
-          .signers([this.env.authority])
+          .signers([this.env.testUser])
           .rpc();
-        
+
         this.addWorkflowStep(stepName, 'Registry', 'registerMeter', Date.now() - startTime, true, tx);
-        
+
       } catch (error: any) {
         // Meter might already be registered
         if (error.message.includes('already in use') || error.message.includes('Account does not exist')) {
@@ -196,7 +213,7 @@ export class EnergyTradingWorkflowTest {
           throw error;
         }
       }
-      
+
       return {
         workflowName: stepName,
         totalDuration: Date.now() - startTime,
@@ -204,7 +221,7 @@ export class EnergyTradingWorkflowTest {
         steps: this.workflowSteps,
         data: { meterAccount: meterAccountPda.toBase58() }
       };
-      
+
     } catch (error: any) {
       this.addWorkflowStep(stepName, 'Registry', 'registerMeter', Date.now() - startTime, false, undefined, error.message);
       throw error;
@@ -217,10 +234,10 @@ export class EnergyTradingWorkflowTest {
   async testMeterReadingSubmission(): Promise<WorkflowResult> {
     const stepName = 'Meter Reading Submission';
     const startTime = Date.now();
-    
+
     try {
       console.log('  📝 Submitting meter reading...');
-      
+
       // Generate meter reading data
       const readingData = {
         meterId: TestUtils.generateTestId('meter'),
@@ -229,28 +246,29 @@ export class EnergyTradingWorkflowTest {
         energyConsumed: Math.floor(Math.random() * 500),
         qualityScore: 95 + Math.random() * 5, // 95-100 quality
       };
-      
+
       try {
         // Submit to Oracle program
         const oraclePda = TestUtils.findOraclePda(this.env.oracleProgram.programId)[0];
-        
+
         const tx = await this.env.oracleProgram.methods
           .submitMeterReading(
             readingData.meterId,
-            readingData.energyGenerated,
-            readingData.energyConsumed,
-            readingData.qualityScore
+            new anchor.BN(readingData.energyGenerated),
+            new anchor.BN(readingData.energyConsumed),
+            new anchor.BN(readingData.qualityScore)
           )
           .accounts({
+            // @ts-ignore
             oracle: oraclePda,
             authority: this.env.authority.publicKey,
             systemProgram: anchor.web3.SystemProgram.programId,
           })
           .signers([this.env.authority])
           .rpc();
-        
+
         this.addWorkflowStep(stepName, 'Oracle', 'submitMeterReading', Date.now() - startTime, true, tx);
-        
+
       } catch (error: any) {
         // Oracle might not be initialized - simulate for integration test
         if (error.message.includes('Account does not exist')) {
@@ -261,7 +279,7 @@ export class EnergyTradingWorkflowTest {
           throw error;
         }
       }
-      
+
       return {
         workflowName: stepName,
         totalDuration: Date.now() - startTime,
@@ -269,7 +287,7 @@ export class EnergyTradingWorkflowTest {
         steps: this.workflowSteps,
         data: readingData
       };
-      
+
     } catch (error: any) {
       this.addWorkflowStep(stepName, 'Oracle', 'submitMeterReading', Date.now() - startTime, false, undefined, error.message);
       throw error;
@@ -282,17 +300,18 @@ export class EnergyTradingWorkflowTest {
   async testErcIssuanceFlow(): Promise<WorkflowResult> {
     const stepName = 'ERC Issuance';
     const startTime = Date.now();
-    
+
     try {
       console.log('  📜 Issuing ERC certificate...');
-      
+
       const ercData = TestUtils.generateErcData();
       const poaConfigPda = TestUtils.findPoaConfigPda(this.env.governanceProgram.programId)[0];
-      
+
       try {
         const tx = await this.env.governanceProgram.methods
           .issueErc(ercData.certificateId, ercData.energyAmount, ercData.renewableSource, ercData.validationData)
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             ercCertificate: TestUtils.findErcCertificatePda(this.env.governanceProgram.programId, ercData.certificateId)[0],
             meterAccount: this.env.testUser.publicKey, // Mock meter account
@@ -300,9 +319,9 @@ export class EnergyTradingWorkflowTest {
           })
           .signers([this.env.authority])
           .rpc();
-        
+
         this.addWorkflowStep(stepName, 'Governance', 'issueErc', Date.now() - startTime, true, tx);
-        
+
       } catch (error: any) {
         // Governance might not be initialized
         if (error.message.includes('Account does not exist')) {
@@ -312,7 +331,7 @@ export class EnergyTradingWorkflowTest {
           throw error;
         }
       }
-      
+
       return {
         workflowName: stepName,
         totalDuration: Date.now() - startTime,
@@ -320,7 +339,7 @@ export class EnergyTradingWorkflowTest {
         steps: this.workflowSteps,
         data: ercData
       };
-      
+
     } catch (error: any) {
       this.addWorkflowStep(stepName, 'Governance', 'issueErc', Date.now() - startTime, false, undefined, error.message);
       throw error;
@@ -333,18 +352,19 @@ export class EnergyTradingWorkflowTest {
   async testTokenMintingFlow(): Promise<WorkflowResult> {
     const stepName = 'Token Minting';
     const startTime = Date.now();
-    
+
     try {
       console.log('  🪙 Minting energy tokens...');
-      
+
       const mintAmount = 1_000_000_000; // 1 token
       const mintPda = TestUtils.findMintPda(this.env.energyTokenProgram.programId)[0];
-      
+
       try {
         const tx = await this.env.energyTokenProgram.methods
-          .mintToWallet(mintAmount)
+          .mintToWallet(new anchor.BN(mintAmount))
           .accounts({
             mint: mintPda,
+            // @ts-ignore
             destination: this.env.testUser.publicKey, // Mock destination
             destinationOwner: this.env.testUser.publicKey,
             authority: this.env.authority.publicKey,
@@ -355,9 +375,9 @@ export class EnergyTradingWorkflowTest {
           })
           .signers([this.env.authority])
           .rpc();
-        
+
         this.addWorkflowStep(stepName, 'EnergyToken', 'mintToWallet', Date.now() - startTime, true, tx);
-        
+
       } catch (error: any) {
         // Energy Token might not be initialized
         if (error.message.includes('Account does not exist')) {
@@ -367,7 +387,7 @@ export class EnergyTradingWorkflowTest {
           throw error;
         }
       }
-      
+
       return {
         workflowName: stepName,
         totalDuration: Date.now() - startTime,
@@ -375,7 +395,7 @@ export class EnergyTradingWorkflowTest {
         steps: this.workflowSteps,
         data: { mintAmount }
       };
-      
+
     } catch (error: any) {
       this.addWorkflowStep(stepName, 'EnergyToken', 'mintToWallet', Date.now() - startTime, false, undefined, error.message);
       throw error;
@@ -388,27 +408,54 @@ export class EnergyTradingWorkflowTest {
   async testOrderCreationFlow(): Promise<WorkflowResult> {
     const stepName = 'Order Creation';
     const startTime = Date.now();
-    
+
     try {
       console.log('  📊 Creating trading order...');
-      
+
       const tradingData = TestUtils.generateTradingData();
-      const tradingAccountPda = TestUtils.findTradingAccountPda(this.env.tradingProgram.programId, this.env.testUser.publicKey)[0];
-      
+
+      // Find market PDA
+      const [marketPda] = anchor.web3.PublicKey.findProgramAddressSync(
+        [Buffer.from("market"), Buffer.from("energy_market")],
+        this.env.tradingProgram.programId
+      );
+
+      // Fetch market state to get active orders count for order PDA
+      // Note: This assumes market is initialized. If not, this will fail at runtime.
+      let orderPda: anchor.web3.PublicKey;
+      try {
+        const marketAccount = await this.env.tradingProgram.account.market.fetch(marketPda);
+        const orderIndex = marketAccount.activeOrders;
+        [orderPda] = anchor.web3.PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("order"),
+            this.env.testUser.publicKey.toBuffer(),
+            new anchor.BN(orderIndex).toArrayLike(Buffer, "le", 8),
+          ],
+          this.env.tradingProgram.programId
+        );
+      } catch (e) {
+        // If market not found, we can't proceed with real order creation
+        console.log('    ℹ️  Market not initialized - skipping real order creation');
+        throw new Error("Market not initialized");
+      }
+
       try {
         // Create sell order
         const tx = await this.env.tradingProgram.methods
-          .createSellOrder(tradingData.orderId, tradingData.amount, tradingData.price)
+          .createSellOrder(new anchor.BN(tradingData.amount), new anchor.BN(tradingData.price))
           .accounts({
-            tradingAccount: tradingAccountPda,
-            user: this.env.testUser.publicKey,
+            market: marketPda,
+            // @ts-ignore
+            order: orderPda,
+            authority: this.env.testUser.publicKey,
             systemProgram: anchor.web3.SystemProgram.programId,
           })
           .signers([this.env.testUser])
           .rpc();
-        
+
         this.addWorkflowStep(stepName, 'Trading', 'createSellOrder', Date.now() - startTime, true, tx);
-        
+
       } catch (error: any) {
         // Trading might not be initialized
         if (error.message.includes('Account does not exist')) {
@@ -418,7 +465,7 @@ export class EnergyTradingWorkflowTest {
           throw error;
         }
       }
-      
+
       return {
         workflowName: stepName,
         totalDuration: Date.now() - startTime,
@@ -426,7 +473,7 @@ export class EnergyTradingWorkflowTest {
         steps: this.workflowSteps,
         data: tradingData
       };
-      
+
     } catch (error: any) {
       this.addWorkflowStep(stepName, 'Trading', 'createSellOrder', Date.now() - startTime, false, undefined, error.message);
       throw error;
@@ -439,20 +486,20 @@ export class EnergyTradingWorkflowTest {
   async testOrderMatchingFlow(): Promise<WorkflowResult> {
     const stepName = 'Order Matching';
     const startTime = Date.now();
-    
+
     try {
       console.log('  🔄 Matching trading orders...');
-      
+
       try {
         // Simulate order matching
         await new Promise(resolve => setTimeout(resolve, 100)); // Simulate processing time
         this.addWorkflowStep(stepName, 'Trading', 'matchOrders', Date.now() - startTime, true);
-        
+
       } catch (error: any) {
         this.addWorkflowStep(stepName, 'Trading', 'matchOrders', Date.now() - startTime, false, undefined, error.message);
         throw error;
       }
-      
+
       return {
         workflowName: stepName,
         totalDuration: Date.now() - startTime,
@@ -460,7 +507,7 @@ export class EnergyTradingWorkflowTest {
         steps: this.workflowSteps,
         data: { matched: true }
       };
-      
+
     } catch (error: any) {
       this.addWorkflowStep(stepName, 'Trading', 'matchOrders', Date.now() - startTime, false, undefined, error.message);
       throw error;
@@ -473,20 +520,20 @@ export class EnergyTradingWorkflowTest {
   async testTradeExecutionFlow(): Promise<WorkflowResult> {
     const stepName = 'Trade Execution';
     const startTime = Date.now();
-    
+
     try {
       console.log('  ✅ Executing trade...');
-      
+
       try {
         // Simulate trade execution
         await new Promise(resolve => setTimeout(resolve, 150)); // Simulate processing time
         this.addWorkflowStep(stepName, 'Trading', 'executeTrade', Date.now() - startTime, true);
-        
+
       } catch (error: any) {
         this.addWorkflowStep(stepName, 'Trading', 'executeTrade', Date.now() - startTime, false, undefined, error.message);
         throw error;
       }
-      
+
       return {
         workflowName: stepName,
         totalDuration: Date.now() - startTime,
@@ -494,7 +541,7 @@ export class EnergyTradingWorkflowTest {
         steps: this.workflowSteps,
         data: { executed: true }
       };
-      
+
     } catch (error: any) {
       this.addWorkflowStep(stepName, 'Trading', 'executeTrade', Date.now() - startTime, false, undefined, error.message);
       throw error;
@@ -507,20 +554,20 @@ export class EnergyTradingWorkflowTest {
   async testSettlementFlow(): Promise<WorkflowResult> {
     const stepName = 'Settlement';
     const startTime = Date.now();
-    
+
     try {
       console.log('  💰 Settling trade...');
-      
+
       try {
         // Simulate settlement
         await new Promise(resolve => setTimeout(resolve, 100)); // Simulate processing time
         this.addWorkflowStep(stepName, 'EnergyToken', 'settleTrade', Date.now() - startTime, true);
-        
+
       } catch (error: any) {
         this.addWorkflowStep(stepName, 'EnergyToken', 'settleTrade', Date.now() - startTime, false, undefined, error.message);
         throw error;
       }
-      
+
       return {
         workflowName: stepName,
         totalDuration: Date.now() - startTime,
@@ -528,7 +575,7 @@ export class EnergyTradingWorkflowTest {
         steps: this.workflowSteps,
         data: { settled: true }
       };
-      
+
     } catch (error: any) {
       this.addWorkflowStep(stepName, 'EnergyToken', 'settleTrade', Date.now() - startTime, false, undefined, error.message);
       throw error;
@@ -541,15 +588,15 @@ export class EnergyTradingWorkflowTest {
   async testOrderExecutionFlow(): Promise<WorkflowResult> {
     const stepName = 'Order Execution Flow';
     const startTime = Date.now();
-    
+
     try {
       console.log('  📈 Testing complete order execution flow...');
-      
+
       // Combine order creation, matching, and execution
       await this.testOrderCreationFlow();
       await this.testOrderMatchingFlow();
       await this.testTradeExecutionFlow();
-      
+
       return {
         workflowName: stepName,
         totalDuration: Date.now() - startTime,
@@ -557,7 +604,7 @@ export class EnergyTradingWorkflowTest {
         steps: this.workflowSteps,
         data: { orderFlowCompleted: true }
       };
-      
+
     } catch (error: any) {
       this.addWorkflowStep(stepName, 'Trading', 'orderExecutionFlow', Date.now() - startTime, false, undefined, error.message);
       throw error;
@@ -596,9 +643,9 @@ export class EnergyTradingWorkflowTest {
     const successfulSteps = this.workflowSteps.filter(step => step.success).length;
     const totalDuration = this.workflowSteps.reduce((sum, step) => sum + step.duration, 0);
     const averageStepDuration = totalDuration / totalSteps;
-    
+
     const programMetrics: { [key: string]: { count: number; totalDuration: number; averageDuration: number } } = {};
-    
+
     this.workflowSteps.forEach(step => {
       if (!programMetrics[step.program]) {
         programMetrics[step.program] = { count: 0, totalDuration: 0, averageDuration: 0 };
@@ -606,11 +653,11 @@ export class EnergyTradingWorkflowTest {
       programMetrics[step.program].count++;
       programMetrics[step.program].totalDuration += step.duration;
     });
-    
+
     Object.keys(programMetrics).forEach(program => {
       programMetrics[program].averageDuration = programMetrics[program].totalDuration / programMetrics[program].count;
     });
-    
+
     return {
       totalSteps,
       successfulSteps,
@@ -631,12 +678,12 @@ export class EnergyTradingWorkflowTest {
     // - ERC certificates are properly validated
     // - User permissions are consistent
     // - Registry data matches trading data
-    
+
     console.log('  🔍 Validating state consistency...');
-    
+
     // Simulate validation
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     return true;
   }
 }

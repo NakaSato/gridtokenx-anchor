@@ -13,7 +13,7 @@
     "test:performance": "ts-node tests/performance/architecture/run-performance-tests.ts",
     "test:performance-energy": "ts-node tests/performance/architecture/run-performance-tests.ts --test-suite=energy-trading",
     "test:performance-architecture": "ts-node tests/performance/architecture/run-performance-tests.ts --test-suite=architecture",
-    "test:performance-benchmark": "ts-node tests/performance/architecture/run-performance-tests.ts --benchmark-only --save-json",
+    "test:performance-benchmark": "ts-node tests/performance/architecture/run-performance-tests.ts --benchmark-only --save-{",
     "test:latency": "node --loader ts-node/esm tests/latency/run-latency-tests.ts",
     "test:latency:demo": "node tests/latency/demo-runner.js",
     "test:latency:energy-token": "node tests/latency/demo-runner.js",
@@ -49,7 +49,15 @@
     "monitoring:alerts": "ts-node monitoring/alert-system.ts",
     "wallet:setup": "ts-node scripts/wallet-setup/setup-all-wallets.ts",
     "setup:loop-test": "ts-node scripts/10-setup-loop-test-standalone.ts",
-    "clean": "./scripts/clean.sh"
+    "clean": "./scripts/clean.sh",
+    "update-sdk": "ts-node scripts/update-client-sdk.ts",
+    "test:transactions": "npx tsx tests/transactions/run-transaction-tests.ts --full",
+    "test:transactions:registry": "npx tsx tests/transactions/run-transaction-tests.ts --program=registry",
+    "test:transactions:energy-token": "npx tsx tests/transactions/run-transaction-tests.ts --program=energy-token",
+    "test:transactions:governance": "npx tsx tests/transactions/run-transaction-tests.ts --program=governance",
+    "test:transactions:oracle": "npx tsx tests/transactions/run-transaction-tests.ts --program=oracle",
+    "test:transactions:trading": "npx tsx tests/transactions/run-transaction-tests.ts --program=trading",
+    "test:transactions:cross-program": "npx tsx tests/transactions/run-transaction-tests.ts --cross-program"
   },
   "dependencies": {
     "@codama/nodes-from-anchor": "^1.3.0",

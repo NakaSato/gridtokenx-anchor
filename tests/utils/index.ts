@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import * as fs from 'fs/promises';
-import { 
-  TOKEN_PROGRAM_ID, 
+import {
+  TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction
@@ -60,11 +60,11 @@ export class TestUtils {
     timeout: number = 30000
   ): Promise<void> {
     const startTime = Date.now();
-    
+
     while (Date.now() - startTime < timeout) {
       const status = await connection.getSignatureStatus(signature);
-      if (status.value?.confirmationStatus === 'confirmed' || 
-          status.value?.confirmationStatus === 'finalized') {
+      if (status.value?.confirmationStatus === 'confirmed' ||
+        status.value?.confirmationStatus === 'finalized') {
         return;
       }
       if (status.value?.err) {
@@ -72,7 +72,7 @@ export class TestUtils {
       }
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    
+
     throw new Error(`Transaction confirmation timeout after ${timeout}ms`);
   }
 
@@ -85,7 +85,7 @@ export class TestUtils {
   ): Promise<number> {
     const accountInfo = await connection.getAccountInfo(tokenAccount);
     if (!accountInfo) return 0;
-    
+
     const data = accountInfo.data;
     const amount = data.readBigUInt64LE(64);
     return Number(amount);
@@ -102,7 +102,7 @@ export class TestUtils {
     if (!mintInfo.value || !('parsed' in mintInfo.value.data)) {
       throw new Error('Invalid mint account');
     }
-    
+
     return (mintInfo.value.data as any).parsed.info.supply;
   }
 
@@ -115,10 +115,10 @@ export class TestUtils {
   ): Promise<anchor.web3.Keypair> {
     const keypair = anchor.web3.Keypair.generate();
     const airdropAmount = solAmount * anchor.web3.LAMPORTS_PER_SOL;
-    
+
     const signature = await connection.requestAirdrop(keypair.publicKey, airdropAmount);
     await this.waitForTransaction(connection, signature);
-    
+
     return keypair;
   }
 
@@ -179,6 +179,13 @@ export class TestUtils {
   ): [anchor.web3.PublicKey, number] {
     return anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("trading_account"), user.toBuffer()],
+      programId
+    );
+  }
+
+  static findRegistryPda(programId: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
+    return anchor.web3.PublicKey.findProgramAddressSync(
+      [Buffer.from("registry")],
       programId
     );
   }
@@ -246,12 +253,12 @@ export class TestUtils {
     }>;
   }> {
     const userData = [];
-    
+
     for (let i = 0; i < userCount; i++) {
       const userId = this.generateTestId(`user_${i}`);
       const meterId = this.generateTestId(`meter_${i}`);
       const readings = [];
-      
+
       for (let j = 0; j < readingsPerUser; j++) {
         readings.push({
           timestamp: Date.now() - (j * 3600000), // Hourly readings going back
@@ -259,7 +266,7 @@ export class TestUtils {
           consumption: Math.floor(Math.random() * 800) + 50   // 50-850 kWh
         });
       }
-      
+
       userData.push({ userId, meterId, readings });
     }
 
@@ -351,8 +358,8 @@ export class TestUtils {
     try {
       await this.waitForTransaction(connection, signature);
       const status = await connection.getSignatureStatus(signature);
-      return status.value?.confirmationStatus === 'confirmed' || 
-             status.value?.confirmationStatus === 'finalized';
+      return status.value?.confirmationStatus === 'confirmed' ||
+        status.value?.confirmationStatus === 'finalized';
     } catch (error) {
       return false;
     }
@@ -367,7 +374,7 @@ export class TestUtils {
   ): Promise<T | null> {
     const accountInfo = await connection.getAccountInfo(publicKey);
     if (!accountInfo) return null;
-    
+
     // Skip discriminator (8 bytes) and return rest
     return accountInfo.data.slice(8) as T;
   }
@@ -395,19 +402,19 @@ export class TestUtils {
     baseDelay: number = 1000
   ): Promise<T> {
     let lastError: Error;
-    
+
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         return await fn();
       } catch (error: any) {
         lastError = error;
         if (attempt === maxAttempts) break;
-        
+
         const delay = baseDelay * Math.pow(2, attempt - 1);
         await this.delay(delay);
       }
     }
-    
+
     throw lastError!;
   }
 
@@ -418,7 +425,7 @@ export class TestUtils {
   ): Promise<boolean> {
     const adminUsers = [user]; // For testing, treat current user as admin
     const restrictedActions = ["create_token", "emergency_control", "admin_only"];
-    
+
     return restrictedActions.includes(action) && adminUsers.includes(user);
   }
 
@@ -451,11 +458,11 @@ export class TestUtils {
     if (currentRole === targetRole) {
       return { success: false, message: "Already has target role" };
     }
-    
+
     if (targetRole === "admin") {
       return { success: false, message: "Privilege escalation blocked" };
     }
-    
+
     return { success: false, message: "Role change not permitted" };
   }
 
@@ -469,7 +476,7 @@ export class TestUtils {
       user: { canCreateTokens: false, canEmergencyPause: false },
       guest: { canCreateTokens: false, canEmergencyPause: false }
     };
-    
+
     return rolePermissions[role as keyof typeof rolePermissions] || { canCreateTokens: false, canEmergencyPause: false };
   }
 
@@ -478,12 +485,12 @@ export class TestUtils {
     resource: string
   ): Promise<{ hasAccess: boolean; reason?: string }> {
     const restrictedResources = ["admin_only_resource", "system_config", "governance_state"];
-    
+
     if (restrictedResources.includes(resource)) {
       const isAdmin = await this.isAdminUser(user);
       return { hasAccess: isAdmin, reason: isAdmin ? undefined : "Admin access required" };
     }
-    
+
     return { hasAccess: true };
   }
 
@@ -502,12 +509,12 @@ export class TestUtils {
         governance_authority: true
       }
     };
-    
+
     const rules = crossProgramRules[targetProgram as keyof typeof crossProgramRules];
     if (rules && rules[requiredAuthority as keyof typeof rules] === false) {
       return { unauthorized: true, reason: "Cross-program authority not permitted" };
     }
-    
+
     return { unauthorized: false };
   }
 
@@ -520,18 +527,18 @@ export class TestUtils {
       if (maliciousInput.length > 1000) {
         return { rejected: true }; // Buffer overflow protection
       }
-      
+
       if (maliciousInput.includes('<script>') || maliciousInput.includes('DROP TABLE')) {
         return { rejected: true }; // XSS/SQL injection protection
       }
     }
-    
+
     if (typeof maliciousInput === 'number') {
       if (maliciousInput > Number.MAX_SAFE_INTEGER) {
         return { rejected: true }; // Integer overflow protection
       }
     }
-    
+
     return { rejected: false };
   }
 
@@ -576,29 +583,7 @@ export class TestUtils {
     )[0];
   }
 
-  static async findOraclePda(): Promise<anchor.web3.PublicKey> {
-    const programId = anchor.web3.PublicKey.default; // Would use actual program ID
-    return anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("oracle")],
-      programId
-    )[0];
-  }
 
-  static async findPoaConfigPda(): Promise<anchor.web3.PublicKey> {
-    const programId = anchor.web3.PublicKey.default; // Would use actual program ID
-    return anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("poa_config")],
-      programId
-    )[0];
-  }
-
-  static async findErcCertificatePda(certificateId: string): Promise<anchor.web3.PublicKey> {
-    const programId = anchor.web3.PublicKey.default; // Would use actual program ID
-    return anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("erc_certificate"), Buffer.from(certificateId)],
-      programId
-    )[0];
-  }
 
   // Transaction simulation methods
   static async simulateTransaction(
@@ -607,7 +592,7 @@ export class TestUtils {
     params: any
   ): Promise<{ signature: string; success: boolean }> {
     const signature = TestUtils.generateTestId("tx_signature");
-    
+
     switch (action) {
       case "create_token":
         if (params.amount && params.amount > 0) {
@@ -622,18 +607,18 @@ export class TestUtils {
       default:
         return { signature: "", success: false };
     }
-    
+
     return { signature, success: false };
   }
 
   static async replayTransaction(signature: string): Promise<{ success: boolean; reason?: string }> {
     if (signature && signature.includes("tx_signature")) {
-      return { 
-        success: false, 
-        reason: "Transaction replay detected - duplicate signature" 
+      return {
+        success: false,
+        reason: "Transaction replay detected - duplicate signature"
       };
     }
-    
+
     return { success: false, reason: "Invalid signature" };
   }
 
@@ -641,9 +626,9 @@ export class TestUtils {
     originalSignature: string,
     modifiedParams: any
   ): Promise<{ success: boolean; reason?: string }> {
-    return { 
-      success: false, 
-      reason: "Modified transaction replay detected - signature mismatch" 
+    return {
+      success: false,
+      reason: "Modified transaction replay detected - signature mismatch"
     };
   }
 
@@ -651,23 +636,23 @@ export class TestUtils {
     if (!signature || signature.length === 0) {
       return { valid: false, reason: "Empty signature" };
     }
-    
+
     if (signature === "invalid_signature_123") {
       return { valid: false, reason: "Invalid signature format" };
     }
-    
+
     if (signature === "x".repeat(128)) {
       return { valid: false, reason: "Invalid signature length" };
     }
-    
+
     if (signature === "0x" + "0".repeat(126)) {
       return { valid: false, reason: "Invalid signature - all zeros" };
     }
-    
+
     if (signature.includes("tx_signature")) {
       return { valid: true };
     }
-    
+
     return { valid: false, reason: "Unknown signature format" };
   }
 
@@ -675,9 +660,9 @@ export class TestUtils {
     user: anchor.web3.PublicKey,
     forgeryType: string
   ): Promise<{ success: boolean; reason?: string }> {
-    return { 
-      success: false, 
-      reason: `Signature forgery prevented: ${forgeryType}` 
+    return {
+      success: false,
+      reason: `Signature forgery prevented: ${forgeryType}`
     };
   }
 
@@ -691,26 +676,26 @@ export class TestUtils {
     params: { amount: number; nonce: number }
   ): Promise<{ signature: string; success: boolean; reason?: string }> {
     const currentNonce = await this.getUserNonce(user);
-    
+
     if (params.nonce !== currentNonce && params.nonce !== currentNonce + 1) {
-      return { 
-        signature: "", 
-        success: false, 
-        reason: "Invalid nonce" 
+      return {
+        signature: "",
+        success: false,
+        reason: "Invalid nonce"
       };
     }
-    
+
     if (params.nonce === currentNonce) {
-      return { 
-        signature: "", 
-        success: false, 
-        reason: "Nonce reuse detected" 
+      return {
+        signature: "",
+        success: false,
+        reason: "Nonce reuse detected"
       };
     }
-    
-    return { 
-      signature: TestUtils.generateTestId("nonce_tx"), 
-      success: true 
+
+    return {
+      signature: TestUtils.generateTestId("nonce_tx"),
+      success: true
     };
   }
 
@@ -721,26 +706,26 @@ export class TestUtils {
   ): Promise<{ signature: string; success: boolean; reason?: string }> {
     const currentTime = Date.now();
     const timeDiff = Math.abs(params.timestamp - currentTime);
-    
+
     if (params.timestamp > currentTime + 300000) {
-      return { 
-        signature: "", 
-        success: false, 
-        reason: "Future timestamp not allowed" 
+      return {
+        signature: "",
+        success: false,
+        reason: "Future timestamp not allowed"
       };
     }
-    
+
     if (params.timestamp < currentTime - 86400000) {
-      return { 
-        signature: "", 
-        success: false, 
-        reason: "Timestamp expired" 
+      return {
+        signature: "",
+        success: false,
+        reason: "Timestamp expired"
       };
     }
-    
-    return { 
-      signature: TestUtils.generateTestId("timestamp_tx"), 
-      success: true 
+
+    return {
+      signature: TestUtils.generateTestId("timestamp_tx"),
+      success: true
     };
   }
 
@@ -757,9 +742,9 @@ export class TestUtils {
     signature: string,
     targetChain: string
   ): Promise<{ success: boolean; reason?: string }> {
-    return { 
-      success: false, 
-      reason: `Cross-chain replay blocked: ${targetChain}` 
+    return {
+      success: false,
+      reason: `Cross-chain replay blocked: ${targetChain}`
     };
   }
 
@@ -767,9 +752,9 @@ export class TestUtils {
     signature: string,
     programId: string
   ): Promise<{ success: boolean; reason?: string }> {
-    return { 
-      success: false, 
-      reason: `Cross-program replay blocked: ${programId}` 
+    return {
+      success: false,
+      reason: `Cross-program replay blocked: ${programId}`
     };
   }
 
@@ -777,10 +762,10 @@ export class TestUtils {
     user: anchor.web3.PublicKey,
     attackType: string
   ): Promise<{ detected: boolean; logged: boolean; blocked: boolean }> {
-    return { 
-      detected: true, 
-      logged: true, 
-      blocked: true 
+    return {
+      detected: true,
+      logged: true,
+      blocked: true
     };
   }
 

@@ -1031,6 +1031,794 @@ class ThaibahtBridge {
 }
 ```
 
+## 🏛️ Smart Contract Deep Dive
+
+### **Program Architecture Overview**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│              GridTokenX Smart Contract Programs              │
+└──────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 1. Registry Program (User & Meter Management)               │
+│    Program ID: 2XPQmFYMdXjP7ffoBB3mXeCdboSFg5Yeb6QmTSGbW8a7 │
+│                                                              │
+│    Instructions:                                             │
+│    • initialize()         - Setup registry                   │
+│    • register_user()      - Register prosumer/consumer       │
+│    • register_meter()     - Register smart meter             │
+│    • update_meter_reading() - Record meter readings          │
+│    • settle_meter_balance() - Prepare tokens for minting     │
+│    • get_unsettled_balance() - Query pending settlements     │
+│                                                              │
+│    Key Accounts:                                             │
+│    • Registry (PDA: "registry")                             │
+│    • UserAccount (PDA: "user" + wallet)                     │
+│    • MeterAccount (PDA: "meter" + meter_id)                 │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 2. Trading Program (P2P Marketplace)                        │
+│    Program ID: GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk │
+│                                                              │
+│    Instructions:                                             │
+│    • initialize_market()   - Setup trading market            │
+│    • create_sell_order()   - Prosumer creates sell order     │
+│    • create_buy_order()    - Consumer creates buy order      │
+│    • match_orders()        - Execute P2P trade               │
+│    • cancel_order()        - Cancel pending order            │
+│    • execute_batch()       - Batch order processing          │
+│    • update_market_params() - Update market parameters       │
+│                                                              │
+│    Key Accounts:                                             │
+│    • Market (PDA: "market")                                 │
+│    • Order (PDA: "order" + wallet + counter)                │
+│    • TradeRecord (PDA: "trade" + buy_order + sell_order)    │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 3. Governance Program (ERC Certificates)                    │
+│    Program ID: 4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe │
+│                                                              │
+│    Instructions:                                             │
+│    • initialize()          - Setup governance                │
+│    • issue_erc_certificate() - Issue renewable certificate   │
+│    • validate_erc()        - Validate certificate            │
+│    • retire_erc()          - Retire used certificate         │
+│                                                              │
+│    Key Accounts:                                             │
+│    • Governance (PDA: "governance")                         │
+│    • ErcCertificate (PDA: "erc" + certificate_id)           │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 4. Energy Token Program (GRID Token)                        │
+│    Program ID: 94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur │
+│                                                              │
+│    Instructions:                                             │
+│    • initialize()          - Setup token program             │
+│    • mint_tokens()         - Mint energy credits             │
+│    • transfer_tokens()     - Transfer between users          │
+│    • burn_tokens()         - Burn consumed energy            │
+│                                                              │
+│    Token Specification:                                      │
+│    • Name: GridTokenX (GRX)                                 │
+│    • Standard: SPL Token                                    │
+│    • Decimals: 9                                            │
+│    • Supply: Variable (based on generation)                 │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ 5. Oracle Program (Price Feed)                              │
+│    Program ID: DvdtU4quEbuxUY2FckmvcXwTpC9qp4HLJKb1PMLaqAoE │
+│                                                              │
+│    Instructions:                                             │
+│    • initialize()          - Setup oracle                    │
+│    • update_price()        - Update energy price             │
+│    • get_price()           - Query current price             │
+│                                                              │
+│    Key Accounts:                                             │
+│    • Oracle (PDA: "oracle")                                 │
+│    • PriceFeed (PDA: "price_feed")                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### **Cross-Program Invocation (CPI) Pattern**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│            Trading Program CPI to Governance                │
+└────────────────────────────────────────────────────────────┘
+
+Scenario: Create sell order with ERC validation
+
+1. User calls: trading.create_sell_order()
+   ├─ Parameters: energy_amount, price_per_kwh
+   └─ Optional: erc_certificate account
+
+2. Trading Program Validates:
+   ┌──────────────────────────────────────────────────┐
+   │ if erc_certificate.is_some() {                   │
+   │   • Check status == Valid                        │
+   │   • Check expires_at > now                        │
+   │   • Check validated_for_trading == true          │
+   │   • Check energy_amount <= certificate amount    │
+   │ }                                                 │
+   └──────────────────────────────────────────────────┘
+
+3. Order Created:
+   • Lock energy tokens in escrow
+   • Update market depth
+   • Emit SellOrderCreated event
+
+Real Code Example from trading program:
+```rust
+pub fn create_sell_order(
+    ctx: Context<CreateSellOrder>,
+    energy_amount: u64,
+    price_per_kwh: u64,
+) -> Result<()> {
+    // ERC VALIDATION
+    if let Some(erc_certificate) = &ctx.accounts.erc_certificate {
+        let clock = Clock::get()?;
+        
+        require!(
+            erc_certificate.status == ErcStatus::Valid,
+            ErrorCode::InvalidErcCertificate
+        );
+        
+        if let Some(expires_at) = erc_certificate.expires_at {
+            require!(
+                clock.unix_timestamp < expires_at,
+                ErrorCode::ErcCertificateExpired
+            );
+        }
+        
+        require!(
+            erc_certificate.validated_for_trading,
+            ErrorCode::ErcNotValidatedForTrading
+        );
+        
+        require!(
+            energy_amount <= erc_certificate.energy_amount,
+            ErrorCode::ExceedsErcAmount
+        );
+    }
+    
+    // Create order logic...
+    Ok(())
+}
+```
+
+---
+
+## 💾 Account Model & Data Structures
+
+### **Account Space Calculation**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                  Solana Account Structure                   │
+└────────────────────────────────────────────────────────────┘
+
+Each account needs rent exemption. Account size calculation:
+
+Base: 8 bytes (discriminator)
++ Data fields (based on types)
++ Vectors: 4 bytes (length) + (element_size * max_len)
++ Strings: 4 bytes (length) + max_utf8_bytes
+
+Example: Market Account
+┌──────────────────────────────────────────────────┐
+│ Discriminator:            8 bytes                │
+│ authority (Pubkey):       32 bytes               │
+│ active_orders (u64):      8 bytes                │
+│ total_volume (u64):       8 bytes                │
+│ total_trades (u64):       8 bytes                │
+│ created_at (i64):         8 bytes                │
+│ clearing_enabled (bool):  1 byte                 │
+│ market_fee_bps (u16):     2 bytes                │
+│ batch_config:             ~40 bytes              │
+│ current_batch (Option):   ~200 bytes             │
+│ buy_side_depth (Vec[20]): 4 + (20 * 24) = 484   │
+│ sell_side_depth (Vec[20]): 4 + (20 * 24) = 484  │
+│ last_clearing_price:      8 bytes                │
+│ price_history (Vec[100]): 4 + (100 * 24) = 2404 │
+│ volume_weighted_price:    8 bytes                │
+├──────────────────────────────────────────────────┤
+│ TOTAL:                    ~3,705 bytes           │
+│ Rent: ~0.026 SOL (2 years rent-exempt)          │
+└──────────────────────────────────────────────────┘
+```
+
+### **PDA (Program Derived Address) Seeds**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                  PDA Derivation Patterns                    │
+└────────────────────────────────────────────────────────────┘
+
+Registry Program PDAs:
+├─ Registry:      ["registry"]
+├─ UserAccount:   ["user", wallet_pubkey]
+└─ MeterAccount:  ["meter", meter_id]
+
+Trading Program PDAs:
+├─ Market:        ["market"]
+├─ Order:         ["order", wallet_pubkey, order_counter]
+└─ TradeRecord:   ["trade", buy_order_pubkey, sell_order_pubkey]
+
+Governance Program PDAs:
+├─ Governance:    ["governance"]
+└─ ErcCertificate: ["erc", certificate_id]
+
+Benefits of PDAs:
+✅ Deterministic addresses (no need to store)
+✅ Program-controlled (only program can sign)
+✅ Collision-resistant (seeds ensure uniqueness)
+✅ Cost-effective (no keypair generation needed)
+
+Example PDA Derivation in Anchor:
+```rust
+#[account(
+    init,
+    payer = authority,
+    space = 8 + Order::INIT_SPACE,
+    seeds = [
+        b"order", 
+        authority.key().as_ref(), 
+        market.active_orders.to_le_bytes().as_ref()
+    ],
+    bump
+)]
+pub order: Account<'info, Order>,
+```
+```
+
+### **Order Account Detailed Structure**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                   Order Account Layout                      │
+└────────────────────────────────────────────────────────────┘
+
+#[account]
+pub struct Order {
+    pub seller: Pubkey,           // 32 bytes - Who is selling
+    pub buyer: Pubkey,            // 32 bytes - Who is buying
+    pub amount: u64,              // 8 bytes  - Total kWh
+    pub filled_amount: u64,       // 8 bytes  - Already traded kWh
+    pub price_per_kwh: u64,       // 8 bytes  - Price in tokens
+    pub order_type: OrderType,    // 1 byte   - Buy or Sell
+    pub status: OrderStatus,      // 1 byte   - Active/Filled/Cancelled
+    pub created_at: i64,          // 8 bytes  - Creation timestamp
+    pub expires_at: i64,          // 8 bytes  - Expiration timestamp
+}
+
+OrderType Enum:
+┌──────────────┐
+│ Sell = 0     │  Seller offering energy
+│ Buy = 1      │  Buyer wanting energy
+└──────────────┘
+
+OrderStatus Enum:
+┌──────────────────────┐
+│ Active = 0           │  Available for matching
+│ PartiallyFilled = 1  │  Some amount traded
+│ Completed = 2        │  Fully executed
+│ Cancelled = 3        │  User cancelled
+│ Expired = 4          │  Time expired
+└──────────────────────┘
+
+Order Lifecycle State Machine:
+┌────────┐     ┌─────────────────┐     ┌───────────┐
+│ Active │────►│ PartiallyFilled │────►│ Completed │
+└────┬───┘     └─────────────────┘     └───────────┘
+     │                │
+     └────────────────┴──────────►┌───────────┐
+                                  │ Cancelled │
+                                  └───────────┘
+```
+
+---
+
+## ⚙️ Settlement & Token Flow Mechanics
+
+### **Meter Reading to Token Minting Flow**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│         Complete Settlement Process (Step-by-Step)         │
+└────────────────────────────────────────────────────────────┘
+
+Step 1: Smart Meter Sends Reading
+┌──────────────────────────────────────────────────────┐
+│ Meter Simulator                                      │
+│ ├─ Reading ID: R-12345                              │
+│ ├─ Meter ID: METER-001                              │
+│ ├─ Generated: 15,000 Wh (15 kWh)                    │
+│ ├─ Consumed: 8,000 Wh (8 kWh)                       │
+│ └─ Timestamp: 2025-11-25T16:30:00Z                  │
+└──────────────────────────────────────────────────────┘
+            │
+            ▼
+Step 2: Oracle Updates Meter Account
+┌──────────────────────────────────────────────────────┐
+│ registry.update_meter_reading()                      │
+│                                                      │
+│ MeterAccount State Before:                          │
+│ ├─ total_generation: 100,000 Wh                     │
+│ ├─ total_consumption: 50,000 Wh                     │
+│ ├─ settled_net_generation: 50,000 Wh                │
+│ └─ claimed_erc_generation: 80,000 Wh                │
+│                                                      │
+│ Update:                                              │
+│ ├─ total_generation += 15,000 → 115,000 Wh         │
+│ └─ total_consumption += 8,000 → 58,000 Wh          │
+│                                                      │
+│ MeterAccount State After:                           │
+│ ├─ total_generation: 115,000 Wh                     │
+│ ├─ total_consumption: 58,000 Wh                     │
+│ ├─ Net Generation: 57,000 Wh (115k - 58k)          │
+│ ├─ Unsettled: 7,000 Wh (57k - 50k settled)         │
+│ └─ claimed_erc_generation: 80,000 Wh                │
+└──────────────────────────────────────────────────────┘
+            │
+            ▼
+Step 3: User Requests Settlement
+┌──────────────────────────────────────────────────────┐
+│ registry.settle_meter_balance()                      │
+│                                                      │
+│ Calculations:                                        │
+│ current_net_gen = 115,000 - 58,000 = 57,000 Wh     │
+│ new_tokens = 57,000 - 50,000 = 7,000 Wh            │
+│                                                      │
+│ Update settled tracker:                             │
+│ settled_net_generation = 57,000 Wh                  │
+│                                                      │
+│ Returns: 7,000 Wh (ready to mint)                   │
+│                                                      │
+│ Event Emitted:                                       │
+│ MeterBalanceSettled {                               │
+│   meter_id: "METER-001",                            │
+│   owner: Wallet_ABC,                                │
+│   tokens_to_mint: 7,000,                            │
+│   total_settled: 57,000,                            │
+│   timestamp: 1732532400                             │
+│ }                                                    │
+└──────────────────────────────────────────────────────┘
+            │
+            ▼
+Step 4: Energy Token Program Mints
+┌──────────────────────────────────────────────────────┐
+│ energy_token.mint_tokens()                           │
+│                                                      │
+│ Convert to token units (9 decimals):                │
+│ 7,000 Wh × 1,000,000,000 = 7,000,000,000,000 units │
+│                                                      │
+│ SPL Token Mint:                                      │
+│ ├─ To: User's associated token account              │
+│ ├─ Amount: 7,000,000,000,000 base units            │
+│ └─ Authority: Energy token program PDA              │
+│                                                      │
+│ User Balance After:                                  │
+│ • Previous: 5,000 GRX (5,000,000,000,000 units)    │
+│ • Minted: 7,000 GRX (7,000,000,000,000 units)      │
+│ • New: 12,000 GRX (12,000,000,000,000 units)       │
+└──────────────────────────────────────────────────────┘
+
+Real Code - Settlement Logic:
+```rust
+pub fn settle_meter_balance(
+    ctx: Context<SettleMeterBalance>
+) -> Result<u64> {
+    let meter = &mut ctx.accounts.meter_account;
+    
+    // Verify meter is active
+    require!(
+        meter.status == MeterStatus::Active,
+        ErrorCode::InvalidMeterStatus
+    );
+    
+    // Calculate net generation
+    let current_net_gen = meter
+        .total_generation
+        .saturating_sub(meter.total_consumption);
+    
+    // Calculate unsettled amount
+    let new_tokens_to_mint = current_net_gen
+        .saturating_sub(meter.settled_net_generation);
+    
+    require!(
+        new_tokens_to_mint > 0,
+        ErrorCode::NoUnsettledBalance
+    );
+    
+    // Update settled tracker (prevents double-minting)
+    meter.settled_net_generation = current_net_gen;
+    
+    emit!(MeterBalanceSettled {
+        meter_id: meter.meter_id.clone(),
+        owner: meter.owner,
+        tokens_to_mint: new_tokens_to_mint,
+        total_settled: current_net_gen,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
+    
+    Ok(new_tokens_to_mint)
+}
+```
+```
+
+### **Double-Minting Prevention**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│            Two-Tracker System for Tokenization              │
+└────────────────────────────────────────────────────────────┘
+
+MeterAccount has TWO trackers:
+
+1. settled_net_generation (GRID Token Tracker)
+   • Tracks NET generation (produced - consumed)
+   • Prevents double-minting of tradable tokens
+   • Updated during settle_meter_balance()
+   
+2. claimed_erc_generation (ERC Certificate Tracker)
+   • Tracks TOTAL generation only
+   • Prevents double-claiming of green certificates
+   • Updated when ERC certificate is issued
+
+Example Scenario:
+┌──────────────────────────────────────────────────────┐
+│ Total Generation: 100 kWh                            │
+│ Total Consumption: 40 kWh                            │
+│ Net Generation: 60 kWh                               │
+│                                                      │
+│ GRID Tokens: 60 kWh (based on net)                  │
+│ ├─ Sellable energy credits                          │
+│ └─ Tracked by: settled_net_generation                │
+│                                                      │
+│ ERC Certificate: 100 kWh (based on total produced)  │
+│ ├─ Renewable energy proof                           │
+│ └─ Tracked by: claimed_erc_generation                │
+└──────────────────────────────────────────────────────┘
+
+Why Two Separate Trackers?
+• GRID tokens = Commodity (net surplus for trading)
+• ERC certificates = Proof of renewable generation
+• Prosumer can trade 60 kWh but prove 100 kWh renewable
+```
+
+---
+
+## 📊 Market Depth & Price Discovery
+
+### **Order Book Market Depth**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│              Real-Time Market Depth Tracking                │
+└────────────────────────────────────────────────────────────┘
+
+Market maintains two sides:
+
+Sell Side (Ask):                    Buy Side (Bid):
+┌──────────────────────┐           ┌──────────────────────┐
+│ Price │ Amount │ Cnt │           │ Price │ Amount │ Cnt │
+├───────┼────────┼─────┤           ├───────┼────────┼─────┤
+│ 3.5   │ 100    │ 3   │           │ 3.0   │ 200    │ 5   │
+│ 3.3   │ 250    │ 7   │           │ 2.9   │ 150    │ 4   │
+│ 3.2   │ 180    │ 5   │           │ 2.8   │ 300    │ 8   │
+│ 3.0   │ 500    │ 12  │           │ 2.7   │ 100    │ 2   │
+└──────────────────────┘           └──────────────────────┘
+      ▲                                      ▲
+      │                                      │
+   Higher asks                          Higher bids
+   (worse for buyers)                   (better for buyers)
+
+Spread: 3.0 - 3.0 = 0 (overlapping = instant match)
+
+Implementation:
+```rust
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct PriceLevel {
+    pub price: u64,         // Price per kWh
+    pub total_amount: u64,  // Total kWh at this price
+    pub order_count: u32,   // Number of orders
+}
+
+fn update_market_depth(
+    market: &mut Market,
+    order: &Order,
+    is_sell: bool
+) -> Result<()> {
+    let price_levels = if is_sell {
+        &mut market.sell_side_depth
+    } else {
+        &mut market.buy_side_depth
+    };
+    
+    let price = order.price_per_kwh;
+    let amount = order.amount - order.filled_amount;
+    
+    // Find or create price level
+    if let Some(level) = price_levels
+        .iter_mut()
+        .find(|pl| pl.price == price) 
+    {
+        level.total_amount += amount;
+        level.order_count += 1;
+    } else {
+        price_levels.push(PriceLevel {
+            price,
+            total_amount: amount,
+            order_count: 1,
+        });
+        
+        // Sort and keep top 20
+        price_levels.sort_by(|a, b| {
+            if is_sell {
+                a.price.cmp(&b.price)  // Ascending
+            } else {
+                b.price.cmp(&a.price)  // Descending
+            }
+        });
+        
+        if price_levels.len() > 20 {
+            price_levels.truncate(20);
+        }
+    }
+    
+    Ok(())
+}
+```
+```
+
+### **Volume-Weighted Price Calculation**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│            Price Discovery Mechanism                        │
+└────────────────────────────────────────────────────────────┘
+
+When orders match, clearing price is calculated using:
+
+1. Base Price (Mid-point):
+   clearing_price = (bid_price + ask_price) / 2
+
+2. Volume Weighting:
+   weight_factor = min(current_volume / total_volume, 1.0)
+   adjustment = base_price × weight_factor × 0.1  (max 10%)
+   final_price = base_price + adjustment
+
+Example:
+┌──────────────────────────────────────────────────────┐
+│ Buy Order: 50 kWh @ 3.2 GRX/kWh                      │
+│ Sell Order: 50 kWh @ 3.0 GRX/kWh                     │
+│ Market Total Volume: 1,000 kWh                       │
+│                                                      │
+│ Calculation:                                         │
+│ base = (3.2 + 3.0) / 2 = 3.1                        │
+│ weight = min(50 / 1000, 1.0) = 0.05                 │
+│ adjustment = 3.1 × 0.05 × 0.1 = 0.0155              │
+│ clearing = 3.1 + 0.0155 = 3.1155 GRX/kWh           │
+└──────────────────────────────────────────────────────┘
+
+Price History Tracking:
+• Stores last 100 trade prices
+• Each point: {price, volume, timestamp}
+• Used for VWAP calculation
+• Helps detect price trends
+```
+
+---
+
+## 🔒 ERC Certificate Validation Flow
+
+### **Complete ERC Workflow**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│    Renewable Energy Certificate (ERC) Lifecycle            │
+└────────────────────────────────────────────────────────────┘
+
+Phase 1: Generation & Certification
+┌──────────────────────────────────────────────────────┐
+│ 1. Prosumer generates 100 kWh from solar             │
+│ 2. Meter reading verified by oracle                  │
+│ 3. Request ERC certificate issuance                  │
+│                                                      │
+│ governance.issue_erc_certificate()                   │
+│ ├─ Certificate ID: ERC-2025-001                     │
+│ ├─ Energy Amount: 100 kWh                           │
+│ ├─ Source Type: Solar                               │
+│ ├─ Issuer: Governance authority                     │
+│ ├─ Status: Pending                                  │
+│ └─ Expires At: +365 days                            │
+└──────────────────────────────────────────────────────┘
+            │
+            ▼
+Phase 2: Validation for Trading
+┌──────────────────────────────────────────────────────┐
+│ governance.validate_erc()                            │
+│ ├─ Verify against meter readings                    │
+│ ├─ Check double-claiming                            │
+│ ├─ Update claimed_erc_generation                    │
+│ └─ Set validated_for_trading = true                 │
+│                                                      │
+│ Certificate Status: Valid                            │
+└──────────────────────────────────────────────────────┘
+            │
+            ▼
+Phase 3: Trading with ERC
+┌──────────────────────────────────────────────────────┐
+│ trading.create_sell_order(                           │
+│   energy_amount: 100,                                │
+│   price_per_kwh: 3.5,                                │
+│   erc_certificate: Some(erc_account)  ← Attached!   │
+│ )                                                    │
+│                                                      │
+│ Validations in Trading Program:                      │
+│ ✓ certificate.status == Valid                       │
+│ ✓ certificate.expires_at > now                      │
+│ ✓ certificate.validated_for_trading == true         │
+│ ✓ energy_amount <= certificate.energy_amount        │
+│                                                      │
+│ Result: Order created with ERC backing              │
+└──────────────────────────────────────────────────────┘
+            │
+            ▼
+Phase 4: Retirement After Trade
+┌──────────────────────────────────────────────────────┐
+│ After successful trade:                              │
+│                                                      │
+│ governance.retire_erc()                              │
+│ ├─ Status: Valid → Retired                          │
+│ ├─ Retired At: timestamp                            │
+│ └─ Cannot be reused                                 │
+│                                                      │
+│ Certificate is now proof of past renewable trade    │
+└──────────────────────────────────────────────────────┘
+
+ERC Certificate Structure:
+```rust
+pub struct ErcCertificate {
+    pub certificate_id: String,       // Unique ID
+    pub owner: Pubkey,                 // Prosumer wallet
+    pub energy_amount: u64,            // kWh certified
+    pub source_type: EnergySource,     // Solar/Wind/etc
+    pub status: ErcStatus,             // Valid/Retired/Revoked
+    pub issued_at: i64,                // Issue timestamp
+    pub expires_at: Option<i64>,       // Expiry (if any)
+    pub validated_for_trading: bool,   // Trading approval
+    pub issuer: Pubkey,                // Authority that issued
+}
+
+pub enum ErcStatus {
+    Pending,    // Just created, not validated
+    Valid,      // Validated and tradable
+    Retired,    // Used/traded
+    Revoked,    // Invalid/cancelled
+}
+```
+```
+
+---
+
+## 🚄 Batch Processing Implementation
+
+### **Batch Order Execution**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│              Batch Processing Architecture                  │
+└────────────────────────────────────────────────────────────┘
+
+Purpose:
+• Process multiple orders in single transaction
+• Reduce transaction costs
+• Improve price discovery through larger volumes
+• Enable periodic market clearing
+
+Configuration:
+```rust
+pub struct BatchConfig {
+    pub enabled: bool,                      // Feature toggle
+    pub max_batch_size: u32,                // Max 100 orders
+    pub batch_timeout_seconds: u32,         // 5 minutes default
+    pub min_batch_size: u32,                // Min 5 orders
+    pub price_improvement_threshold: u16,   // 5% minimum
+}
+```
+
+Batch Execution Flow:
+┌──────────────────────────────────────────────────────┐
+│ 1. Orders Accumulate                                 │
+│    ├─ Order 1: Sell 10 kWh @ 3.0                    │
+│    ├─ Order 2: Sell 20 kWh @ 3.1                    │
+│    ├─ Order 3: Buy 15 kWh @ 3.2                     │
+│    ├─ Order 4: Buy 25 kWh @ 3.0                     │
+│    └─ Order 5: Sell 30 kWh @ 2.9                    │
+└──────────────────────────────────────────────────────┘
+            │
+            ▼ (timeout or size threshold reached)
+┌──────────────────────────────────────────────────────┐
+│ 2. Batch Matching Algorithm                          │
+│    • Sort sells by price (ascending)                 │
+│    • Sort buys by price (descending)                 │
+│    • Match orders optimally                          │
+│    • Calculate uniform clearing price                │
+└──────────────────────────────────────────────────────┘
+            │
+            ▼
+┌──────────────────────────────────────────────────────┐
+│ 3. Atomic Batch Execution                            │
+│    All matches succeed or all fail                   │
+│                                                      │
+│    Result:                                           │
+│    ├─ Batch ID: 1732532400                          │
+│    ├─ Orders Matched: 5                             │
+│    ├─ Total Volume: 70 kWh                          │
+│    ├─ Clearing Price: 3.05 GRX/kWh                  │
+│    └─ Fee Collected: 0.175 GRX (0.25%)              │
+└──────────────────────────────────────────────────────┘
+
+Implementation:
+```rust
+pub fn execute_batch(
+    ctx: Context<ExecuteBatch>,
+    order_ids: Vec<Pubkey>,
+) -> Result<()> {
+    let market = &mut ctx.accounts.market;
+    
+    require!(
+        market.batch_config.enabled,
+        ErrorCode::BatchProcessingDisabled
+    );
+    
+    require!(
+        order_ids.len() <= market.batch_config.max_batch_size as usize,
+        ErrorCode::BatchSizeExceeded
+    );
+    
+    let batch_id = Clock::get()?.unix_timestamp;
+    let mut total_volume = 0u64;
+    
+    // Process matching logic
+    for &order_id in &order_ids {
+        // Match orders and accumulate volume
+        total_volume += process_order_match(order_id)?;
+    }
+    
+    let batch_info = BatchInfo {
+        batch_id: batch_id as u64,
+        order_count: order_ids.len() as u32,
+        total_volume,
+        created_at: batch_id,
+        expires_at: batch_id + 
+            market.batch_config.batch_timeout_seconds as i64,
+        order_ids: order_ids.clone(),
+    };
+    
+    market.current_batch = Some(batch_info);
+    
+    emit!(BatchExecuted {
+        authority: ctx.accounts.authority.key(),
+        batch_id: batch_id as u64,
+        order_count: order_ids.len() as u32,
+        total_volume,
+        timestamp: batch_id,
+    });
+    
+    Ok(())
+}
+```
+```
+
+---
+
 ## 📚 Technical References
 
 ### **Technologies Used**
@@ -1042,6 +1830,13 @@ Blockchain:
 - SPL Token Program
 - Thai Baht Chain (Ethereum-compatible)
 
+Smart Contract Programs:
+- Registry: 2XPQmFYMdXjP7ffoBB3mXeCdboSFg5Yeb6QmTSGbW8a7
+- Trading: GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk
+- Governance: 4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe
+- Energy Token: 94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur
+- Oracle: DvdtU4quEbuxUY2FckmvcXwTpC9qp4HLJKb1PMLaqAoE
+
 Backend:
 - Node.js v20+
 - TypeScript v5+
@@ -1049,11 +1844,85 @@ Backend:
 - Cross-chain Bridge Service
 
 Libraries:
-- @solana/web3.js
-- @coral-xyz/anchor
-- ethers.js (for Thai Baht Chain)
+- @solana/web3.js v1.95+
+- @coral-xyz/anchor v0.32.1
+- ethers.js v6+ (for Thai Baht Chain)
 - pg (PostgreSQL client)
-- express/fastify
+- express/fastify v4+
+- base64 encoding for data serialization
+
+Development Tools:
+- Solana CLI v1.18+
+- Anchor CLI v0.32.1
+- pnpm (package manager)
+- ts-node for TypeScript execution
+```
+
+### **Key Design Patterns**
+
+```
+1. Program Derived Addresses (PDA)
+   • Deterministic account addressing
+   • Program-controlled signing
+   • Eliminates key management overhead
+
+2. Cross-Program Invocation (CPI)
+   • Trading ←→ Governance (ERC validation)
+   • Registry ←→ Energy Token (minting)
+   • Composable program architecture
+
+3. Event-Driven Architecture
+   • On-chain events for state changes
+   • Off-chain listeners for PostgreSQL sync
+   • Real-time market updates
+
+4. Escrow Pattern
+   • Lock tokens before order creation
+   • Atomic swap during matching
+   • Auto-return on cancellation
+
+5. Double-Entry Prevention
+   • settled_net_generation tracker
+   • claimed_erc_generation tracker
+   • Saturating arithmetic for safety
+
+6. Market Depth Aggregation
+   • Price level consolidation
+   • Top-of-book tracking (20 levels)
+   • Efficient order book queries
+```
+
+### **Security Best Practices Implemented**
+
+```
+✅ Account Validation
+   • PDA seed verification
+   • has_one constraints
+   • Signer checks
+
+✅ Arithmetic Safety
+   • checked_add, checked_mul
+   • saturating_sub for balances
+   • Overflow protection
+
+✅ Reentrancy Protection
+   • State updates before external calls
+   • Guard flags where needed
+
+✅ Authority Checks
+   • Order ownership validation
+   • Admin-only functions
+   • Registry authority gates
+
+✅ Time-based Validation
+   • Order expiration checks
+   • ERC certificate expiry
+   • Batch timeout enforcement
+
+✅ Double-Spend Prevention
+   • Escrow locking
+   • Settlement trackers
+   • Status state machine
 ```
 
 ### **Further Reading**
@@ -1062,6 +1931,8 @@ Libraries:
 - [Anchor Book](https://book.anchor-lang.com/)
 - [P2P Energy Trading Research](https://www.sciencedirect.com/topics/engineering/peer-to-peer-energy-trading)
 - [Order Book Design Patterns](https://en.wikipedia.org/wiki/Order_book)
+- [SPL Token Program](https://spl.solana.com/token)
+- [Solana Program Security](https://github.com/coral-xyz/sealevel-attacks)
 
 ---
 
@@ -1080,6 +1951,44 @@ Libraries:
 - [x] Complex enough to be interesting
 - [x] Solves real P2P trading problem
 
+### **Implementation Statistics**
+
+```
+Programs Deployed: 5
+├─ Registry:      477 lines (14 KB)
+├─ Trading:       829 lines (24 KB)
+├─ Governance:    ~600 lines (18 KB)
+├─ Energy Token:  ~400 lines (12 KB)
+└─ Oracle:        ~300 lines (9 KB)
+
+Total Accounts: ~15 types
+Total Instructions: ~25 functions
+Total Events: ~20 event types
+Total Tests: 50+ test files
+
+Account Rent Cost (estimated):
+├─ Registry PDA:    ~0.01 SOL
+├─ Market PDA:      ~0.026 SOL
+├─ Order PDA:       ~0.002 SOL per order
+└─ User Account:    ~0.003 SOL per user
+
+Transaction Costs (localnet):
+• Free! (PoA local validator)
+
+Production Estimates (Solana mainnet):
+• Transaction: ~0.000005 SOL (~$0.0005)
+• Market making: ~0.00001 SOL per order
+• Very cost-effective for P2P trading
+```
+
 ---
 
-**สรุป**: Architecture นี้ออกแบบมาเพื่อความ **ง่าย ชัดเจน และทำได้จริง** โดยเน้น P2P trading เป็นหลัก ใช้ PoA เพื่อความรวดเร็ว และแยก concerns ระหว่าง on-chain/off-chain อย่างชัดเจน 🎯
+**สรุป**: Architecture นี้ออกแบบมาเพื่อความ **ง่าย ชัดเจน และทำได้จริง** โดยเน้น P2P trading เป็นหลัก ใช้ PoA เพื่อความรวดเร็ว และแยก concerns ระหว่าง on-chain/off-chain อย่างชัดเจน 
+
+**Technical Highlights**: 
+🎯 **5 interconnected programs** with CPI integration
+🔐 **Robust security** with PDA, escrow, and double-entry prevention  
+📊 **Real-time market depth** with volume-weighted pricing
+♻️ **ERC certificate validation** for renewable energy proof
+⚡ **Batch processing** for efficient market clearing
+💾 **Hybrid storage** combining on-chain immutability with off-chain speed

@@ -1,11 +1,11 @@
 import * as anchor from "@coral-xyz/anchor";
-import { 
-  TestEnvironment, 
-  describe, 
-  it, 
-  before, 
-  after, 
-  expect 
+import {
+  TestEnvironment,
+  describe,
+  it,
+  before,
+  after,
+  expect
 } from "./setup";
 import { TestUtils } from "./utils/index";
 
@@ -16,7 +16,7 @@ describe("Registry Program Tests", () => {
   before(async () => {
     env = await TestEnvironment.create();
     meterOwner = anchor.web3.Keypair.generate();
-    
+
     // Fund meter owner
     await env.airdropSol(meterOwner.publicKey, 2 * anchor.web3.LAMPORTS_PER_SOL);
   });
@@ -30,10 +30,13 @@ describe("Registry Program Tests", () => {
         const [meterPda] = TestUtils.findMeterAccountPda(env.registryProgram.programId, meterOwner.publicKey);
 
         const tx = await env.registryProgram.methods
-          .registerMeter(meterId, location)
+          .registerMeter(meterId, { solar: {} })
           .accounts({
-            meter: meterPda,
-            owner: meterOwner.publicKey,
+            registry: TestUtils.findRegistryPda(env.registryProgram.programId)[0],
+            userAccount: TestUtils.findUserAccountPda(env.registryProgram.programId, meterOwner.publicKey)[0],
+            // @ts-ignore
+            meterAccount: meterPda,
+            userAuthority: meterOwner.publicKey,
             systemProgram: anchor.web3.SystemProgram.programId,
           })
           .signers([meterOwner])
@@ -55,10 +58,13 @@ describe("Registry Program Tests", () => {
 
         // First registration
         await env.registryProgram.methods
-          .registerMeter(meterId, location)
+          .registerMeter(meterId, { solar: {} })
           .accounts({
-            meter: meterPda,
-            owner: meterOwner.publicKey,
+            registry: TestUtils.findRegistryPda(env.registryProgram.programId)[0],
+            userAccount: TestUtils.findUserAccountPda(env.registryProgram.programId, meterOwner.publicKey)[0],
+            // @ts-ignore
+            meterAccount: meterPda,
+            userAuthority: meterOwner.publicKey,
             systemProgram: anchor.web3.SystemProgram.programId,
           })
           .signers([meterOwner])
@@ -67,10 +73,13 @@ describe("Registry Program Tests", () => {
         // Second registration should fail
         await expect(
           env.registryProgram.methods
-            .registerMeter(meterId, location)
+            .registerMeter(meterId, { solar: {} })
             .accounts({
-              meter: meterPda,
-              owner: meterOwner.publicKey,
+              registry: TestUtils.findRegistryPda(env.registryProgram.programId)[0],
+              userAccount: TestUtils.findUserAccountPda(env.registryProgram.programId, meterOwner.publicKey)[0],
+              // @ts-ignore
+              meterAccount: meterPda,
+              userAuthority: meterOwner.publicKey,
               systemProgram: anchor.web3.SystemProgram.programId,
             })
             .signers([meterOwner])
@@ -93,10 +102,10 @@ describe("Registry Program Tests", () => {
         const [meterPda] = TestUtils.findMeterAccountPda(env.registryProgram.programId, meterOwner.publicKey);
 
         const tx = await env.registryProgram.methods
-          .submitEnergyData(totalGeneration, totalConsumption)
+          .updateMeterReading(new anchor.BN(totalGeneration), new anchor.BN(totalConsumption), new anchor.BN(100))
           .accounts({
-            meter: meterPda,
-            owner: meterOwner.publicKey,
+            meterAccount: meterPda,
+            oracleAuthority: meterOwner.publicKey, // In this test context, owner acts as oracle
           })
           .signers([meterOwner])
           .rpc();
@@ -118,10 +127,10 @@ describe("Registry Program Tests", () => {
 
         await expect(
           env.registryProgram.methods
-            .submitEnergyData(totalGeneration, totalConsumption)
+            .updateMeterReading(new anchor.BN(totalGeneration), new anchor.BN(totalConsumption), new anchor.BN(100))
             .accounts({
-              meter: meterPda,
-              owner: meterOwner.publicKey, // Different from signer
+              meterAccount: meterPda,
+              oracleAuthority: meterOwner.publicKey, // Different from signer
             })
             .signers([unauthorizedKeypair]) // Different keypair
             .rpc()
@@ -138,7 +147,7 @@ describe("Registry Program Tests", () => {
       const [meterPda] = TestUtils.findMeterAccountPda(env.registryProgram.programId, meterOwner.publicKey);
 
       try {
-        const meterInfo = await env.registryProgram.account.meter.fetch(meterPda);
+        const meterInfo = await env.registryProgram.account.meterAccount.fetch(meterPda);
         expect(meterInfo).to.exist;
       } catch (error: any) {
         // Program might not be initialized yet

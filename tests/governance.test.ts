@@ -1,12 +1,12 @@
 import * as anchor from "@coral-xyz/anchor";
-import { 
-  TestEnvironment, 
-  describe, 
-  it, 
-  before, 
-  beforeEach, 
-  after, 
-  expect 
+import {
+  TestEnvironment,
+  describe,
+  it,
+  before,
+  beforeEach,
+  after,
+  expect
 } from "./setup";
 import { TestUtils } from "./utils/index";
 
@@ -25,7 +25,7 @@ describe("Governance Program Tests", () => {
 
   before(async () => {
     env = await TestEnvironment.create();
-    
+
     // Get PDAs
     [poaConfigPda] = TestUtils.findPoaConfigPda(env.governanceProgram.programId);
   });
@@ -36,6 +36,7 @@ describe("Governance Program Tests", () => {
         const tx = await env.governanceProgram.methods
           .initializePoa()
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             authority: env.authority.publicKey,
           })
@@ -56,6 +57,7 @@ describe("Governance Program Tests", () => {
         env.governanceProgram.methods
           .initializePoa()
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             authority: unauthorizedKeypair.publicKey,
           })
@@ -71,6 +73,7 @@ describe("Governance Program Tests", () => {
         const tx = await env.governanceProgram.methods
           .emergencyPause()
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             authority: env.authority.publicKey,
           })
@@ -89,6 +92,7 @@ describe("Governance Program Tests", () => {
         const tx = await env.governanceProgram.methods
           .emergencyUnpause()
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             authority: env.authority.publicKey,
           })
@@ -109,6 +113,7 @@ describe("Governance Program Tests", () => {
         env.governanceProgram.methods
           .emergencyPause()
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             authority: unauthorizedKeypair.publicKey,
           })
@@ -124,14 +129,15 @@ describe("Governance Program Tests", () => {
       const energyAmount = TEST_AMOUNTS.ONE_TOKEN;
       const renewableSource = "Solar";
       const validationData = TestUtils.generateTestId("validation");
-      
+
       // Mock meter account (would normally come from registry)
       const meterAccount = anchor.web3.Keypair.generate().publicKey;
 
       try {
         const tx = await env.governanceProgram.methods
-          .issueErc(certificateId, energyAmount, renewableSource, validationData)
+          .issueErc(certificateId, new anchor.BN(energyAmount), renewableSource, validationData)
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             ercCertificate: TestUtils.findErcCertificatePda(env.governanceProgram.programId, certificateId)[0],
             meterAccount: meterAccount,
@@ -149,11 +155,12 @@ describe("Governance Program Tests", () => {
 
     it("should validate an ERC for trading", async () => {
       const certificateId = TestUtils.generateTestId("erc");
-      
+
       try {
         const tx = await env.governanceProgram.methods
           .validateErcForTrading()
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             ercCertificate: TestUtils.findErcCertificatePda(env.governanceProgram.programId, certificateId)[0],
             authority: env.authority.publicKey,
@@ -176,6 +183,7 @@ describe("Governance Program Tests", () => {
         env.governanceProgram.methods
           .validateErcForTrading()
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             ercCertificate: TestUtils.findErcCertificatePda(env.governanceProgram.programId, certificateId)[0],
             authority: unauthorizedKeypair.publicKey,
@@ -192,6 +200,7 @@ describe("Governance Program Tests", () => {
         const tx = await env.governanceProgram.methods
           .updateGovernanceConfig(true)
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             authority: env.authority.publicKey,
           })
@@ -210,6 +219,7 @@ describe("Governance Program Tests", () => {
         const tx = await env.governanceProgram.methods
           .setMaintenanceMode(true)
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             authority: env.authority.publicKey,
           })
@@ -227,11 +237,12 @@ describe("Governance Program Tests", () => {
       try {
         const tx = await env.governanceProgram.methods
           .updateErcLimits(
-            TEST_AMOUNTS.ONE_TOKEN,
-            TEST_AMOUNTS.TEN_TOKENS,
-            365 * 24 * 60 * 60 * 1000 // 1 year in milliseconds
+            new anchor.BN(TEST_AMOUNTS.ONE_TOKEN),
+            new anchor.BN(TEST_AMOUNTS.TEN_TOKENS),
+            new anchor.BN(365 * 24 * 60 * 60 * 1000) // 1 year in milliseconds
           )
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             authority: env.authority.publicKey,
           })
@@ -252,6 +263,7 @@ describe("Governance Program Tests", () => {
         const tx = await env.governanceProgram.methods
           .updateAuthorityInfo(contactInfo)
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
             authority: env.authority.publicKey,
           })
@@ -272,6 +284,7 @@ describe("Governance Program Tests", () => {
         const stats = await env.governanceProgram.methods
           .getGovernanceStats()
           .accounts({
+            // @ts-ignore
             poaConfig: poaConfigPda,
           })
           .view();

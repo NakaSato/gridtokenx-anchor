@@ -1,13 +1,7 @@
-/**
- * Program IDL in camelCase format in order to be used in JS/TS.
- *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/energy_token.json`.
- */
 export type EnergyToken = {
   "address": "94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur",
   "metadata": {
-    "name": "energyToken",
+    "name": "energy_token",
     "version": "0.1.0",
     "spec": "0.1.0",
     "description": "Energy Token program for P2P Energy Trading - SPL token wrapper"
@@ -37,7 +31,7 @@ export type EnergyToken = {
           "name": "authority",
           "signer": true,
           "relations": [
-            "tokenInfo"
+            "token_info"
           ]
         }
       ],
@@ -47,7 +41,7 @@ export type EnergyToken = {
           "type": "pubkey"
         },
         {
-          "name": "authorityName",
+          "name": "AuthorityName",
           "type": "string"
         }
       ]
@@ -261,77 +255,6 @@ export type EnergyToken = {
       "args": []
     },
     {
-      "name": "mintGridTokens",
-      "docs": [
-        "Mint GRID tokens based on settled meter balance",
-        "This function performs CPI to registry to settle the meter balance,",
-        "then mints the corresponding GRID tokens to the user"
-      ],
-      "discriminator": [
-        216,
-        110,
-        76,
-        206,
-        212,
-        49,
-        238,
-        59
-      ],
-      "accounts": [
-        {
-          "name": "tokenInfo",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  116,
-                  111,
-                  107,
-                  101,
-                  110,
-                  95,
-                  105,
-                  110,
-                  102,
-                  111
-                ]
-              }
-            ]
-          }
-        },
-        {
-          "name": "mint",
-          "writable": true
-        },
-        {
-          "name": "meterAccount",
-          "writable": true
-        },
-        {
-          "name": "userTokenAccount",
-          "writable": true
-        },
-        {
-          "name": "meterOwner",
-          "signer": true
-        },
-        {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "registryProgram"
-        },
-        {
-          "name": "systemProgram",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "mintToWallet",
       "docs": [
         "Mint GRX tokens to a wallet using Token interface"
@@ -358,11 +281,11 @@ export type EnergyToken = {
             "seeds": [
               {
                 "kind": "account",
-                "path": "destinationOwner"
+                "path": "destination_owner"
               },
               {
                 "kind": "account",
-                "path": "tokenProgram"
+                "path": "token_program"
               },
               {
                 "kind": "account",
@@ -546,7 +469,7 @@ export type EnergyToken = {
   ],
   "accounts": [
     {
-      "name": "tokenInfo",
+      "name": "TokenInfo",
       "discriminator": [
         109,
         162,
@@ -561,7 +484,7 @@ export type EnergyToken = {
   ],
   "events": [
     {
-      "name": "gridTokensMinted",
+      "name": "GridTokensMinted",
       "discriminator": [
         178,
         171,
@@ -574,7 +497,7 @@ export type EnergyToken = {
       ]
     },
     {
-      "name": "tokensMinted",
+      "name": "TokensMinted",
       "discriminator": [
         207,
         212,
@@ -587,7 +510,7 @@ export type EnergyToken = {
       ]
     },
     {
-      "name": "tokensMintedDirect",
+      "name": "TokensMintedDirect",
       "discriminator": [
         251,
         7,
@@ -603,33 +526,33 @@ export type EnergyToken = {
   "errors": [
     {
       "code": 6000,
-      "name": "unauthorizedAuthority",
+      "name": "UnauthorizedAuthority",
       "msg": "Unauthorized authority"
     },
     {
       "code": 6001,
-      "name": "invalidMeter",
+      "name": "InvalidMeter",
       "msg": "Invalid meter"
     },
     {
       "code": 6002,
-      "name": "insufficientBalance",
+      "name": "InsufficientBalance",
       "msg": "Insufficient token balance"
     },
     {
       "code": 6003,
-      "name": "invalidMetadataAccount",
+      "name": "InvalidMetadataAccount",
       "msg": "Invalid metadata account"
     },
     {
       "code": 6004,
-      "name": "noUnsettledBalance",
+      "name": "NoUnsettledBalance",
       "msg": "No unsettled balance"
     }
   ],
   "types": [
     {
-      "name": "gridTokensMinted",
+      "name": "GridTokensMinted",
       "type": {
         "kind": "struct",
         "fields": [
@@ -649,7 +572,7 @@ export type EnergyToken = {
       }
     },
     {
-      "name": "tokenInfo",
+      "name": "TokenInfo",
       "type": {
         "kind": "struct",
         "fields": [
@@ -673,7 +596,7 @@ export type EnergyToken = {
       }
     },
     {
-      "name": "tokensMinted",
+      "name": "TokensMinted",
       "type": {
         "kind": "struct",
         "fields": [
@@ -693,7 +616,7 @@ export type EnergyToken = {
       }
     },
     {
-      "name": "tokensMintedDirect",
+      "name": "TokensMintedDirect",
       "type": {
         "kind": "struct",
         "fields": [
@@ -714,4 +637,3 @@ export type EnergyToken = {
     }
   ]
 };
-

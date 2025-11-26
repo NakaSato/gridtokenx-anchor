@@ -223,6 +223,77 @@ pub mod registry {
         // Return the amount to mint so the energy_token program can use it
         Ok(new_tokens_to_mint)
     }
+
+    /// Settle meter balance and automatically mint GRID tokens via CPI
+    /// This is a convenience function that combines settlement + minting in one transaction
+    pub fn settle_and_mint_tokens(ctx: Context<SettleAndMintTokens>) -> Result<()> {
+        let meter = &mut ctx.accounts.meter_account;
+
+        // Verify meter is active
+        require!(
+            meter.status == MeterStatus::Active,
+            ErrorCode::InvalidMeterStatus
+        );
+
+        // Verify meter owner
+        require!(
+            ctx.accounts.meter_owner.key() == meter.owner,
+            ErrorCode::UnauthorizedUser
+        );
+
+        // Calculate current net generation (total produced - total consumed)
+        let current_net_gen = meter
+            .total_generation
+            .saturating_sub(meter.total_consumption);
+
+        // Calculate new tokens to mint (what hasn't been settled yet)
+        let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
+
+        // Only proceed if there's something new to settle
+        require!(new_tokens_to_mint > 0, ErrorCode::NoUnsettledBalance);
+
+        // Update the settled tracker to prevent double-minting
+        meter.settled_net_generation = current_net_gen;
+
+        msg!(
+            "Settlement complete: {} Wh ready to mint for meter {}",
+            new_tokens_to_mint,
+            meter.meter_id
+        );
+
+        emit!(MeterBalanceSettled {
+            meter_id: meter.meter_id.clone(),
+            owner: meter.owner,
+            tokens_to_mint: new_tokens_to_mint,
+            total_settled: current_net_gen,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        // CPI to energy_token program to mint tokens
+        msg!(
+            "Calling energy_token program to mint {} tokens",
+            new_tokens_to_mint
+        );
+
+        let cpi_program = ctx.accounts.energy_token_program.to_account_info();
+        let cpi_accounts = energy_token::cpi::accounts::MintTokensDirect {
+            token_info: ctx.accounts.token_info.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            user_token_account: ctx.accounts.user_token_account.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+            token_program: ctx.accounts.token_program.to_account_info(),
+        };
+
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        energy_token::cpi::mint_tokens_direct(cpi_ctx, new_tokens_to_mint)?;
+
+        msg!(
+            "Successfully minted {} GRID tokens via CPI",
+            new_tokens_to_mint
+        );
+
+        Ok(())
+    }
 }
 
 // Account structs
@@ -328,6 +399,36 @@ pub struct SettleMeterBalance<'info> {
     pub meter_account: Account<'info, MeterAccount>,
 
     pub meter_owner: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SettleAndMintTokens<'info> {
+    #[account(mut)]
+    pub meter_account: Account<'info, MeterAccount>,
+
+    pub meter_owner: Signer<'info>,
+
+    /// CHECK: Energy token program's token_info PDA
+    #[account(mut)]
+    pub token_info: AccountInfo<'info>,
+
+    /// CHECK: Energy token mint account
+    #[account(mut)]
+    pub mint: AccountInfo<'info>,
+
+    /// CHECK: User's token account for receiving minted tokens
+    #[account(mut)]
+    pub user_token_account: AccountInfo<'info>,
+
+    /// CHECK: Authority that can mint tokens (usually program authority)
+    pub authority: AccountInfo<'info>,
+
+    /// The energy token program
+    /// CHECK: This is validated by the CPI call
+    pub energy_token_program: AccountInfo<'info>,
+
+    /// CHECK: SPL Token program
+    pub token_program: AccountInfo<'info>,
 }
 
 // Data structs

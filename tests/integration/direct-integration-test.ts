@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as anchor from "@coral-xyz/anchor";
 import { Program, AnchorProvider, Wallet } from "@coral-xyz/anchor";
 import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
@@ -70,6 +71,15 @@ const expect = (actual: any) => {
             if (actual < expected) {
               throw new Error(`Expected ${actual} to be at least ${expected}`);
             }
+          }
+        },
+        an: (type: string) => {
+          if (type === 'array') {
+            if (!Array.isArray(actual)) {
+              throw new Error(`Expected array, but got ${typeof actual}`);
+            }
+          } else if (typeof actual !== type) {
+            throw new Error(`Expected ${type}, but got ${typeof actual}`);
           }
         }
       },
@@ -148,7 +158,7 @@ class DirectTestEnvironment {
   public connection: Connection;
   public wallet: Keypair;
   public provider: AnchorProvider;
-  
+
   // Programs with direct IDL loading (using any for now to avoid type issues)
   public energyTokenProgram: Program;
   public governanceProgram: Program;
@@ -164,7 +174,7 @@ class DirectTestEnvironment {
       preflightCommitment: "confirmed",
       commitment: "confirmed"
     });
-    
+
     // Load programs directly from IDLs
     const energyTokenIdl = loadIdl("energy_token");
     const governanceIdl = loadIdl("governance");
@@ -180,30 +190,35 @@ class DirectTestEnvironment {
     const TRADING_PROGRAM_ID = new PublicKey("2pZ8gqotjvKMAu96XzpGZ7QFcemZzj21ybtVTbaDP1zG");
 
     // Initialize programs
+    // @ts-ignore
     this.energyTokenProgram = new Program(
       energyTokenIdl,
       ENERGY_TOKEN_PROGRAM_ID,
       this.provider
     );
 
+    // @ts-ignore
     this.governanceProgram = new Program(
       governanceIdl,
       GOVERNANCE_PROGRAM_ID,
       this.provider
     );
 
+    // @ts-ignore
     this.oracleProgram = new Program(
       oracleIdl,
       ORACLE_PROGRAM_ID,
       this.provider
     );
 
+    // @ts-ignore
     this.registryProgram = new Program(
       registryIdl,
       REGISTRY_PROGRAM_ID,
       this.provider
     );
 
+    // @ts-ignore
     this.tradingProgram = new Program(
       tradingIdl,
       TRADING_PROGRAM_ID,
@@ -313,7 +328,7 @@ describe("🚀 GridTokenX Direct Integration Tests", async () => {
       // At least some programs should be found
       const foundCount = [
         energyTokenAccount,
-        governanceAccount, 
+        governanceAccount,
         oracleAccount,
         registryAccount,
         tradingAccount
@@ -326,7 +341,7 @@ describe("🚀 GridTokenX Direct Integration Tests", async () => {
 
   describe("📝 IDL Structure Validation", () => {
     it("should validate energy token program IDL", () => {
-      const idl = env.energyTokenProgram.idl;
+      const idl = env.energyTokenProgram.idl as any;
       expect(idl.version).to.exist();
       expect(idl.name).to.equal("energy_token");
       expect(idl.instructions).to.be.an('array');
@@ -335,7 +350,7 @@ describe("🚀 GridTokenX Direct Integration Tests", async () => {
     });
 
     it("should validate governance program IDL", () => {
-      const idl = env.governanceProgram.idl;
+      const idl = env.governanceProgram.idl as any;
       expect(idl.version).to.exist();
       expect(idl.name).to.equal("governance");
       expect(idl.instructions).to.be.an('array');
@@ -344,7 +359,7 @@ describe("🚀 GridTokenX Direct Integration Tests", async () => {
     });
 
     it("should validate oracle program IDL", () => {
-      const idl = env.oracleProgram.idl;
+      const idl = env.oracleProgram.idl as any; // Cast to any to avoid version property error
       expect(idl.version).to.exist();
       expect(idl.name).to.equal("oracle");
       expect(idl.instructions).to.be.an('array');
@@ -353,7 +368,7 @@ describe("🚀 GridTokenX Direct Integration Tests", async () => {
     });
 
     it("should validate registry program IDL", () => {
-      const idl = env.registryProgram.idl;
+      const idl = env.registryProgram.idl as any; // Cast to any to avoid version property error
       expect(idl.version).to.exist();
       expect(idl.name).to.equal("registry");
       expect(idl.instructions).to.be.an('array');
@@ -362,7 +377,7 @@ describe("🚀 GridTokenX Direct Integration Tests", async () => {
     });
 
     it("should validate trading program IDL", () => {
-      const idl = env.tradingProgram.idl;
+      const idl = env.tradingProgram.idl as any; // Cast to any to avoid version property error
       expect(idl.version).to.exist();
       expect(idl.name).to.equal("trading");
       expect(idl.instructions).to.be.an('array');

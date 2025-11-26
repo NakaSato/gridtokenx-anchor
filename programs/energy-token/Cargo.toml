@@ -22,6 +22,3 @@ anchor-spl = { version = "0.32.1", features = ["metadata"] }
 spl-token = "9.0.0"
 mpl-token-metadata = "5.0.0"
 base64 = "0.21"
-
-# Add registry program for CPI
-registry = { path = "../registry", features = ["cpi"] }

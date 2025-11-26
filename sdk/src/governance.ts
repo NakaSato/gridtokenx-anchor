@@ -1,9 +1,3 @@
-/**
- * Program IDL in camelCase format in order to be used in JS/TS.
- *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/governance.json`.
- */
 export type Governance = {
   "address": "4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe",
   "metadata": {
@@ -56,7 +50,7 @@ export type Governance = {
           "name": "authority",
           "signer": true,
           "relations": [
-            "poaConfig"
+            "poa_config"
           ]
         }
       ],
@@ -105,7 +99,7 @@ export type Governance = {
           "name": "authority",
           "signer": true,
           "relations": [
-            "poaConfig"
+            "poa_config"
           ]
         }
       ],
@@ -153,7 +147,7 @@ export type Governance = {
       "args": [],
       "returns": {
         "defined": {
-          "name": "governanceStats"
+          "name": "GovernanceStats"
         }
       }
     },
@@ -274,7 +268,7 @@ export type Governance = {
               },
               {
                 "kind": "arg",
-                "path": "certificateId"
+                "path": "certificate_id"
               }
             ]
           }
@@ -291,7 +285,7 @@ export type Governance = {
           "writable": true,
           "signer": true,
           "relations": [
-            "poaConfig"
+            "poa_config"
           ]
         },
         {
@@ -361,7 +355,7 @@ export type Governance = {
           "name": "authority",
           "signer": true,
           "relations": [
-            "poaConfig"
+            "poa_config"
           ]
         }
       ],
@@ -415,7 +409,7 @@ export type Governance = {
           "name": "authority",
           "signer": true,
           "relations": [
-            "poaConfig"
+            "poa_config"
           ]
         }
       ],
@@ -469,7 +463,7 @@ export type Governance = {
           "name": "authority",
           "signer": true,
           "relations": [
-            "poaConfig"
+            "poa_config"
           ]
         }
       ],
@@ -531,7 +525,7 @@ export type Governance = {
           "name": "authority",
           "signer": true,
           "relations": [
-            "poaConfig"
+            "poa_config"
           ]
         }
       ],
@@ -608,7 +602,7 @@ export type Governance = {
               {
                 "kind": "account",
                 "path": "erc_certificate.certificate_id",
-                "account": "ercCertificate"
+                "account": "ErcCertificate"
               }
             ]
           }
@@ -617,7 +611,7 @@ export type Governance = {
           "name": "authority",
           "signer": true,
           "relations": [
-            "poaConfig"
+            "poa_config"
           ]
         }
       ],
@@ -626,7 +620,7 @@ export type Governance = {
   ],
   "accounts": [
     {
-      "name": "ercCertificate",
+      "name": "ErcCertificate",
       "discriminator": [
         83,
         161,
@@ -639,7 +633,7 @@ export type Governance = {
       ]
     },
     {
-      "name": "meterAccount",
+      "name": "MeterAccount",
       "discriminator": [
         87,
         111,
@@ -652,7 +646,7 @@ export type Governance = {
       ]
     },
     {
-      "name": "poAConfig",
+      "name": "PoAConfig",
       "discriminator": [
         119,
         6,
@@ -667,7 +661,7 @@ export type Governance = {
   ],
   "events": [
     {
-      "name": "authorityInfoUpdated",
+      "name": "AuthorityInfoUpdated",
       "discriminator": [
         228,
         61,
@@ -680,7 +674,7 @@ export type Governance = {
       ]
     },
     {
-      "name": "emergencyPauseActivated",
+      "name": "EmergencyPauseActivated",
       "discriminator": [
         27,
         50,
@@ -693,7 +687,7 @@ export type Governance = {
       ]
     },
     {
-      "name": "emergencyPauseDeactivated",
+      "name": "EmergencyPauseDeactivated",
       "discriminator": [
         90,
         52,
@@ -706,7 +700,7 @@ export type Governance = {
       ]
     },
     {
-      "name": "ercIssued",
+      "name": "ErcIssued",
       "discriminator": [
         61,
         14,
@@ -719,7 +713,7 @@ export type Governance = {
       ]
     },
     {
-      "name": "ercLimitsUpdated",
+      "name": "ErcLimitsUpdated",
       "discriminator": [
         117,
         248,
@@ -732,7 +726,7 @@ export type Governance = {
       ]
     },
     {
-      "name": "ercValidatedForTrading",
+      "name": "ErcValidatedForTrading",
       "discriminator": [
         235,
         179,
@@ -745,7 +739,7 @@ export type Governance = {
       ]
     },
     {
-      "name": "governanceConfigUpdated",
+      "name": "GovernanceConfigUpdated",
       "discriminator": [
         76,
         140,
@@ -758,7 +752,7 @@ export type Governance = {
       ]
     },
     {
-      "name": "maintenanceModeUpdated",
+      "name": "MaintenanceModeUpdated",
       "discriminator": [
         111,
         107,
@@ -771,7 +765,7 @@ export type Governance = {
       ]
     },
     {
-      "name": "poAInitialized",
+      "name": "PoAInitialized",
       "discriminator": [
         80,
         195,
@@ -787,113 +781,113 @@ export type Governance = {
   "errors": [
     {
       "code": 6000,
-      "name": "unauthorizedAuthority",
+      "name": "UnauthorizedAuthority",
       "msg": "Unauthorized authority"
     },
     {
       "code": 6001,
-      "name": "alreadyPaused",
+      "name": "AlreadyPaused",
       "msg": "System is already paused"
     },
     {
       "code": 6002,
-      "name": "notPaused",
+      "name": "NotPaused",
       "msg": "System is not paused"
     },
     {
       "code": 6003,
-      "name": "systemPaused",
+      "name": "SystemPaused",
       "msg": "System is currently paused"
     },
     {
       "code": 6004,
-      "name": "maintenanceMode",
+      "name": "MaintenanceMode",
       "msg": "System is in maintenance mode"
     },
     {
       "code": 6005,
-      "name": "ercValidationDisabled",
+      "name": "ErcValidationDisabled",
       "msg": "ERC validation is disabled"
     },
     {
       "code": 6006,
-      "name": "invalidErcStatus",
+      "name": "InvalidErcStatus",
       "msg": "Invalid ERC status"
     },
     {
       "code": 6007,
-      "name": "alreadyValidated",
+      "name": "AlreadyValidated",
       "msg": "ERC already validated"
     },
     {
       "code": 6008,
-      "name": "belowMinimumEnergy",
+      "name": "BelowMinimumEnergy",
       "msg": "Energy amount below minimum required"
     },
     {
       "code": 6009,
-      "name": "exceedsMaximumEnergy",
+      "name": "ExceedsMaximumEnergy",
       "msg": "Energy amount exceeds maximum allowed"
     },
     {
       "code": 6010,
-      "name": "certificateIdTooLong",
+      "name": "CertificateIdTooLong",
       "msg": "Certificate ID too long"
     },
     {
       "code": 6011,
-      "name": "sourceNameTooLong",
+      "name": "SourceNameTooLong",
       "msg": "Renewable source name too long"
     },
     {
       "code": 6012,
-      "name": "ercExpired",
+      "name": "ErcExpired",
       "msg": "ERC certificate has expired"
     },
     {
       "code": 6013,
-      "name": "invalidMinimumEnergy",
+      "name": "InvalidMinimumEnergy",
       "msg": "Invalid minimum energy amount"
     },
     {
       "code": 6014,
-      "name": "invalidMaximumEnergy",
+      "name": "InvalidMaximumEnergy",
       "msg": "Invalid maximum energy amount"
     },
     {
       "code": 6015,
-      "name": "invalidValidityPeriod",
+      "name": "InvalidValidityPeriod",
       "msg": "Invalid validity period"
     },
     {
       "code": 6016,
-      "name": "contactInfoTooLong",
+      "name": "ContactInfoTooLong",
       "msg": "Contact information too long"
     },
     {
       "code": 6017,
-      "name": "invalidOracleConfidence",
+      "name": "InvalidOracleConfidence",
       "msg": "Invalid oracle confidence score (must be 0-100)"
     },
     {
       "code": 6018,
-      "name": "oracleValidationRequired",
+      "name": "OracleValidationRequired",
       "msg": "Oracle validation required but not configured"
     },
     {
       "code": 6019,
-      "name": "transfersNotAllowed",
+      "name": "TransfersNotAllowed",
       "msg": "Certificate transfers not allowed"
     },
     {
       "code": 6020,
-      "name": "insufficientUnclaimedGeneration",
+      "name": "InsufficientUnclaimedGeneration",
       "msg": "Insufficient unclaimed generation for ERC issuance"
     }
   ],
   "types": [
     {
-      "name": "authorityInfoUpdated",
+      "name": "AuthorityInfoUpdated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -917,7 +911,7 @@ export type Governance = {
       }
     },
     {
-      "name": "emergencyPauseActivated",
+      "name": "EmergencyPauseActivated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -933,7 +927,7 @@ export type Governance = {
       }
     },
     {
-      "name": "emergencyPauseDeactivated",
+      "name": "EmergencyPauseDeactivated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -949,7 +943,7 @@ export type Governance = {
       }
     },
     {
-      "name": "ercCertificate",
+      "name": "ErcCertificate",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1011,7 +1005,7 @@ export type Governance = {
             ],
             "type": {
               "defined": {
-                "name": "ercStatus"
+                "name": "ErcStatus"
               }
             }
           },
@@ -1035,7 +1029,7 @@ export type Governance = {
       }
     },
     {
-      "name": "ercIssued",
+      "name": "ErcIssued",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1063,7 +1057,7 @@ export type Governance = {
       }
     },
     {
-      "name": "ercLimitsUpdated",
+      "name": "ErcLimitsUpdated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1103,27 +1097,27 @@ export type Governance = {
       }
     },
     {
-      "name": "ercStatus",
+      "name": "ErcStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "valid"
+            "name": "Valid"
           },
           {
-            "name": "expired"
+            "name": "Expired"
           },
           {
-            "name": "revoked"
+            "name": "Revoked"
           },
           {
-            "name": "pending"
+            "name": "Pending"
           }
         ]
       }
     },
     {
-      "name": "ercValidatedForTrading",
+      "name": "ErcValidatedForTrading",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1143,7 +1137,7 @@ export type Governance = {
       }
     },
     {
-      "name": "governanceConfigUpdated",
+      "name": "GovernanceConfigUpdated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1167,7 +1161,7 @@ export type Governance = {
       }
     },
     {
-      "name": "governanceStats",
+      "name": "GovernanceStats",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1241,7 +1235,7 @@ export type Governance = {
       }
     },
     {
-      "name": "maintenanceModeUpdated",
+      "name": "MaintenanceModeUpdated",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1261,7 +1255,7 @@ export type Governance = {
       }
     },
     {
-      "name": "meterAccount",
+      "name": "MeterAccount",
       "docs": [
         "MeterAccount from registry program (for CPI validation)",
         "This mirrors the structure in the registry program"
@@ -1313,7 +1307,7 @@ export type Governance = {
       }
     },
     {
-      "name": "poAConfig",
+      "name": "PoAConfig",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1504,7 +1498,7 @@ export type Governance = {
       }
     },
     {
-      "name": "poAInitialized",
+      "name": "PoAInitialized",
       "type": {
         "kind": "struct",
         "fields": [
@@ -1525,4 +1519,3 @@ export type Governance = {
     }
   ]
 };
-
