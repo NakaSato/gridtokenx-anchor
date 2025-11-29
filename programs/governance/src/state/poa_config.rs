@@ -177,4 +177,13 @@ pub struct GovernanceStats {
     pub created_at: i64,
     pub last_updated: i64,
     pub last_erc_issued_at: Option<i64>,
+    
+    // NEW: Authority change status
+    pub pending_authority_change: bool,
+    pub pending_authority: Option<Pubkey>,
+    pub pending_authority_expires_at: Option<i64>,
+    
+    // NEW: Oracle info
+    pub oracle_authority: Option<Pubkey>,
+    pub min_oracle_confidence: u8,
 }

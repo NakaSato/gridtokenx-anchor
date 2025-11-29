@@ -13,8 +13,10 @@ pub mod registry {
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let registry = &mut ctx.accounts.registry;
         registry.authority = ctx.accounts.authority.key();
+        registry.oracle_authority = None;  // Set later via set_oracle_authority
         registry.user_count = 0;
         registry.meter_count = 0;
+        registry.active_meter_count = 0;
         registry.created_at = Clock::get()?.unix_timestamp;
 
         emit!(RegistryInitialized {
@@ -22,6 +24,30 @@ pub mod registry {
             timestamp: Clock::get()?.unix_timestamp,
         });
 
+        Ok(())
+    }
+
+    /// Set the oracle authority (admin only)
+    pub fn set_oracle_authority(
+        ctx: Context<SetOracleAuthority>,
+        oracle: Pubkey,
+    ) -> Result<()> {
+        let registry = &mut ctx.accounts.registry;
+        
+        require!(
+            ctx.accounts.authority.key() == registry.authority,
+            ErrorCode::UnauthorizedAuthority
+        );
+        
+        let old_oracle = registry.oracle_authority;
+        registry.oracle_authority = Some(oracle);
+        
+        emit!(OracleAuthoritySet {
+            old_oracle,
+            new_oracle: oracle,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        
         Ok(())
     }
 
@@ -87,6 +113,7 @@ pub mod registry {
         // Update counters
         user_account.meter_count += 1;
         registry.meter_count += 1;
+        registry.active_meter_count += 1;
 
         emit!(MeterRegistered {
             meter_id: meter_id.clone(),
@@ -126,13 +153,48 @@ pub mod registry {
     }
 
     /// Update meter reading (for oracles and authorized services)
+    /// Now requires oracle authorization via registry
     pub fn update_meter_reading(
         ctx: Context<UpdateMeterReading>,
         energy_generated: u64,
         energy_consumed: u64,
         reading_timestamp: i64,
     ) -> Result<()> {
+        let registry = &ctx.accounts.registry;
         let meter_account = &mut ctx.accounts.meter_account;
+        
+        // Validate oracle authority
+        require!(
+            registry.oracle_authority.is_some(),
+            ErrorCode::OracleNotConfigured
+        );
+        require!(
+            ctx.accounts.oracle_authority.key() == registry.oracle_authority.unwrap(),
+            ErrorCode::UnauthorizedOracle
+        );
+        
+        // Validate meter is active
+        require!(
+            meter_account.status == MeterStatus::Active,
+            ErrorCode::InvalidMeterStatus
+        );
+        
+        // Validate timestamp (must be newer than last reading)
+        require!(
+            reading_timestamp > meter_account.last_reading_at,
+            ErrorCode::StaleReading
+        );
+        
+        // Validate reading deltas (max 1 GWh per reading as safety limit)
+        const MAX_READING_DELTA: u64 = 1_000_000_000_000; // 1 GWh in Wh
+        require!(
+            energy_generated <= MAX_READING_DELTA,
+            ErrorCode::ReadingTooHigh
+        );
+        require!(
+            energy_consumed <= MAX_READING_DELTA,
+            ErrorCode::ReadingTooHigh
+        );
 
         // Update meter data
         meter_account.last_reading_at = reading_timestamp;
@@ -147,6 +209,76 @@ pub mod registry {
             timestamp: reading_timestamp,
         });
 
+        Ok(())
+    }
+
+    /// Set meter status (owner or authority)
+    pub fn set_meter_status(
+        ctx: Context<SetMeterStatus>,
+        new_status: MeterStatus,
+    ) -> Result<()> {
+        let meter = &mut ctx.accounts.meter_account;
+        let registry = &mut ctx.accounts.registry;
+        
+        // Only owner or registry authority can change status
+        let is_owner = ctx.accounts.authority.key() == meter.owner;
+        let is_admin = ctx.accounts.authority.key() == registry.authority;
+        require!(is_owner || is_admin, ErrorCode::UnauthorizedUser);
+        
+        let old_status = meter.status;
+        
+        // Update active meter count
+        if old_status == MeterStatus::Active && new_status != MeterStatus::Active {
+            registry.active_meter_count = registry.active_meter_count.saturating_sub(1);
+        } else if old_status != MeterStatus::Active && new_status == MeterStatus::Active {
+            registry.active_meter_count += 1;
+        }
+        
+        meter.status = new_status;
+        
+        emit!(MeterStatusUpdated {
+            meter_id: meter.meter_id.clone(),
+            owner: meter.owner,
+            old_status,
+            new_status,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        
+        Ok(())
+    }
+
+    /// Deactivate a meter permanently (owner only)
+    pub fn deactivate_meter(ctx: Context<DeactivateMeter>) -> Result<()> {
+        let meter = &mut ctx.accounts.meter_account;
+        let user = &mut ctx.accounts.user_account;
+        let registry = &mut ctx.accounts.registry;
+        
+        require!(
+            ctx.accounts.owner.key() == meter.owner,
+            ErrorCode::UnauthorizedUser
+        );
+        
+        require!(
+            meter.status != MeterStatus::Inactive,
+            ErrorCode::AlreadyInactive
+        );
+        
+        // Update counters if was active
+        if meter.status == MeterStatus::Active {
+            registry.active_meter_count = registry.active_meter_count.saturating_sub(1);
+        }
+        
+        meter.status = MeterStatus::Inactive;
+        user.meter_count = user.meter_count.saturating_sub(1);
+        
+        emit!(MeterDeactivated {
+            meter_id: meter.meter_id.clone(),
+            owner: meter.owner,
+            final_generation: meter.total_generation,
+            final_consumption: meter.total_consumption,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        
         Ok(())
     }
 
@@ -372,10 +504,45 @@ pub struct UpdateUserStatus<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateMeterReading<'info> {
+    pub registry: Account<'info, Registry>,
+    
     #[account(mut)]
     pub meter_account: Account<'info, MeterAccount>,
 
     pub oracle_authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SetOracleAuthority<'info> {
+    #[account(mut)]
+    pub registry: Account<'info, Registry>,
+    
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SetMeterStatus<'info> {
+    #[account(mut)]
+    pub registry: Account<'info, Registry>,
+    
+    #[account(mut)]
+    pub meter_account: Account<'info, MeterAccount>,
+    
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct DeactivateMeter<'info> {
+    #[account(mut)]
+    pub registry: Account<'info, Registry>,
+    
+    #[account(mut)]
+    pub user_account: Account<'info, UserAccount>,
+    
+    #[account(mut)]
+    pub meter_account: Account<'info, MeterAccount>,
+    
+    pub owner: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -436,8 +603,10 @@ pub struct SettleAndMintTokens<'info> {
 #[derive(InitSpace)]
 pub struct Registry {
     pub authority: Pubkey,
+    pub oracle_authority: Option<Pubkey>,  // Authorized oracle for meter readings
     pub user_count: u64,
     pub meter_count: u64,
+    pub active_meter_count: u64,           // Track active meters separately
     pub created_at: i64,
 }
 
@@ -557,6 +726,31 @@ pub struct MeterBalanceSettled {
     pub timestamp: i64,
 }
 
+#[event]
+pub struct OracleAuthoritySet {
+    pub old_oracle: Option<Pubkey>,
+    pub new_oracle: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct MeterStatusUpdated {
+    pub meter_id: String,
+    pub owner: Pubkey,
+    pub old_status: MeterStatus,
+    pub new_status: MeterStatus,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct MeterDeactivated {
+    pub meter_id: String,
+    pub owner: Pubkey,
+    pub final_generation: u64,
+    pub final_consumption: u64,
+    pub timestamp: i64,
+}
+
 // Errors
 #[error_code]
 pub enum ErrorCode {
@@ -574,4 +768,14 @@ pub enum ErrorCode {
     MeterNotFound,
     #[msg("No unsettled balance to tokenize")]
     NoUnsettledBalance,
+    #[msg("Oracle authority not configured")]
+    OracleNotConfigured,
+    #[msg("Unauthorized oracle - signer is not the configured oracle")]
+    UnauthorizedOracle,
+    #[msg("Stale reading - timestamp must be newer than last reading")]
+    StaleReading,
+    #[msg("Reading too high - exceeds maximum delta limit")]
+    ReadingTooHigh,
+    #[msg("Meter is already inactive")]
+    AlreadyInactive,
 }

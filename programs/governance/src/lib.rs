@@ -99,6 +99,58 @@ pub mod governance {
     pub fn get_governance_stats(ctx: Context<GetGovernanceStats>) -> Result<GovernanceStats> {
         handlers::stats::handler(ctx)
     }
+    
+    // ========== NEW INSTRUCTIONS: ERC Revocation ==========
+    
+    /// Revoke an ERC certificate - REC authority only
+    /// Revoked certificates cannot be traded or used
+    pub fn revoke_erc(ctx: Context<RevokeErc>, reason: String) -> Result<()> {
+        handlers::erc::revoke(ctx, reason)
+    }
+    
+    // ========== NEW INSTRUCTIONS: Certificate Transfer ==========
+    
+    /// Transfer an ERC certificate to a new owner
+    /// Requires: transfers enabled, certificate valid & validated for trading
+    pub fn transfer_erc(ctx: Context<TransferErc>) -> Result<()> {
+        handlers::erc::transfer(ctx)
+    }
+    
+    // ========== NEW INSTRUCTIONS: Multi-sig Authority ==========
+    
+    /// Propose a new authority (step 1 of 2-step transfer)
+    /// Current authority proposes, new authority must approve within 48h
+    pub fn propose_authority_change(
+        ctx: Context<ProposeAuthorityChange>,
+        new_authority: Pubkey,
+    ) -> Result<()> {
+        handlers::authority::propose_authority_change(ctx, new_authority)
+    }
+    
+    /// Approve authority change (step 2 of 2-step transfer)
+    /// Must be called by the proposed new authority
+    pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<()> {
+        handlers::authority::approve_authority_change(ctx)
+    }
+    
+    /// Cancel a pending authority change
+    /// Can only be called by current authority
+    pub fn cancel_authority_change(ctx: Context<CancelAuthorityChange>) -> Result<()> {
+        handlers::authority::cancel_authority_change(ctx)
+    }
+    
+    // ========== NEW INSTRUCTIONS: Oracle Integration ==========
+    
+    /// Set oracle authority for data validation
+    /// Configures oracle-based validation for ERC issuance
+    pub fn set_oracle_authority(
+        ctx: Context<SetOracleAuthority>,
+        oracle_authority: Pubkey,
+        min_confidence: u8,
+        require_validation: bool,
+    ) -> Result<()> {
+        handlers::authority::set_oracle_authority(ctx, oracle_authority, min_confidence, require_validation)
+    }
 }
 
 // ========== ACCOUNT STRUCTURES ==========
@@ -191,4 +243,99 @@ pub struct GetGovernanceStats<'info> {
         bump
     )]
     pub poa_config: Account<'info, PoAConfig>,
+}
+
+// ========== NEW ACCOUNT STRUCTURES: ERC Revocation ==========
+
+#[derive(Accounts)]
+pub struct RevokeErc<'info> {
+    #[account(
+        mut,
+        seeds = [b"poa_config"],
+        bump,
+        has_one = authority @ GovernanceError::UnauthorizedAuthority
+    )]
+    pub poa_config: Account<'info, PoAConfig>,
+    #[account(
+        mut,
+        seeds = [b"erc_certificate", erc_certificate.certificate_id.as_bytes()],
+        bump
+    )]
+    pub erc_certificate: Account<'info, ErcCertificate>,
+    pub authority: Signer<'info>,
+}
+
+// ========== NEW ACCOUNT STRUCTURES: Certificate Transfer ==========
+
+#[derive(Accounts)]
+pub struct TransferErc<'info> {
+    #[account(
+        seeds = [b"poa_config"],
+        bump
+    )]
+    pub poa_config: Account<'info, PoAConfig>,
+    #[account(
+        mut,
+        seeds = [b"erc_certificate", erc_certificate.certificate_id.as_bytes()],
+        bump,
+        constraint = erc_certificate.owner == current_owner.key() @ GovernanceError::UnauthorizedAuthority
+    )]
+    pub erc_certificate: Account<'info, ErcCertificate>,
+    /// Current owner of the certificate
+    pub current_owner: Signer<'info>,
+    /// New owner to transfer to
+    /// CHECK: This is the new owner address, validated in handler
+    pub new_owner: AccountInfo<'info>,
+}
+
+// ========== NEW ACCOUNT STRUCTURES: Multi-sig Authority ==========
+
+#[derive(Accounts)]
+pub struct ProposeAuthorityChange<'info> {
+    #[account(
+        mut,
+        seeds = [b"poa_config"],
+        bump,
+        has_one = authority @ GovernanceError::UnauthorizedAuthority
+    )]
+    pub poa_config: Account<'info, PoAConfig>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ApproveAuthorityChange<'info> {
+    #[account(
+        mut,
+        seeds = [b"poa_config"],
+        bump
+    )]
+    pub poa_config: Account<'info, PoAConfig>,
+    /// The proposed new authority who must sign to approve
+    pub new_authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CancelAuthorityChange<'info> {
+    #[account(
+        mut,
+        seeds = [b"poa_config"],
+        bump,
+        has_one = authority @ GovernanceError::UnauthorizedAuthority
+    )]
+    pub poa_config: Account<'info, PoAConfig>,
+    pub authority: Signer<'info>,
+}
+
+// ========== NEW ACCOUNT STRUCTURES: Oracle Integration ==========
+
+#[derive(Accounts)]
+pub struct SetOracleAuthority<'info> {
+    #[account(
+        mut,
+        seeds = [b"poa_config"],
+        bump,
+        has_one = authority @ GovernanceError::UnauthorizedAuthority
+    )]
+    pub poa_config: Account<'info, PoAConfig>,
+    pub authority: Signer<'info>,
 }

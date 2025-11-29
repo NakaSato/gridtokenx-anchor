@@ -44,6 +44,11 @@ pub fn handler(ctx: Context<InitializePoa>) -> Result<()> {
     poa_config.last_updated = clock.unix_timestamp;
     poa_config.last_erc_issued_at = None;
     
+    // Multi-sig Authority Change (initialize as None)
+    poa_config.pending_authority = None;
+    poa_config.pending_authority_proposed_at = None;
+    poa_config.pending_authority_expires_at = None;
+    
     // Validate configuration
     poa_config.validate_config()?;
     

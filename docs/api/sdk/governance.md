@@ -1,300 +1,346 @@
 # Governance SDK Module
 
+> **PoA-based ERC Certificate Management SDK**
+>
+> Version 2.0 - November 2025
+
 ## Overview
 
-The Governance module enables decentralized decision-making through proposals, voting, and parameter management.
+The Governance module manages Energy Renewable Certificates (ERCs) through Proof of Authority (PoA) governance, including certificate issuance, validation, revocation, and transfers.
 
 ---
 
 ## Program ID
 
 ```
-4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe
+4D9Mydr4f3BEiDoKxE2V8yMZBj53X6nxMjMWaNPAQKrN
 ```
 
 ---
 
 ## Methods
 
-### createProposal
+### initializePoa
 
-Create a new governance proposal.
+Initialize the Proof of Authority configuration.
 
 ```typescript
-async createProposal(params: {
-  title: string;                    // Proposal title (max 100 chars)
-  description: string;              // Detailed description
-  proposalType: ProposalType;       // Type of proposal
-  actions: ProposalAction[];        // On-chain actions to execute
-  votingPeriod?: number;            // Voting duration in seconds
+async initializePoa(): Promise<TransactionSignature>
+```
+
+**Example:**
+```typescript
+const tx = await client.governance.initializePoa();
+console.log('PoA initialized:', tx);
+```
+
+---
+
+### issueErc
+
+Issue a new Energy Renewable Certificate.
+
+```typescript
+async issueErc(params: {
+  certificateId: string;        // Unique ID (max 64 chars)
+  energyAmount: bigint;         // kWh (100 - 1,000,000)
+  renewableSource: string;      // e.g., "Solar", "Wind"
+  validationData: string;       // Additional data (max 256 chars)
+  meterAccount: PublicKey;      // Meter from Registry
 }): Promise<{
   tx: TransactionSignature;
-  proposalId: PublicKey;
+  certificatePda: PublicKey;
 }>
 ```
 
-**Parameters:**
-| Name | Type | Description |
-|------|------|-------------|
-| `title` | `string` | Proposal title |
-| `description` | `string` | Full description |
-| `proposalType` | `ProposalType` | Category of proposal |
-| `actions` | `ProposalAction[]` | Actions to execute if passed |
-| `votingPeriod` | `number` | Duration in seconds |
-
 **Example:**
 ```typescript
-const { proposalId } = await client.governance.createProposal({
-  title: 'Adjust Trading Fees',
-  description: 'Reduce trading fees from 1% to 0.5%',
-  proposalType: 'parameter_change',
-  actions: [{
-    program: TRADING_PROGRAM_ID,
-    instruction: 'updateFee',
-    data: { newFee: 50 }, // 0.5%
-  }],
-  votingPeriod: 7 * 24 * 3600, // 7 days
+const { certificatePda } = await client.governance.issueErc({
+  certificateId: 'ERC-2025-001',
+  energyAmount: 500_000n,         // 500 kWh
+  renewableSource: 'Solar',
+  validationData: 'Validated by GridTokenX Oracle',
+  meterAccount: meterPda,
 });
+console.log('Certificate issued:', certificatePda.toBase58());
 ```
 
 ---
 
-### vote
+### validateErcForTrading
 
-Cast a vote on an active proposal.
+Validate a certificate for marketplace trading.
 
 ```typescript
-async vote(params: {
-  proposal: PublicKey;
-  support: boolean;           // true = for, false = against
-  weight?: bigint;            // Vote weight (defaults to token balance)
+async validateErcForTrading(params: {
+  certificate: PublicKey;
 }): Promise<TransactionSignature>
 ```
 
-**Parameters:**
-| Name | Type | Description |
-|------|------|-------------|
-| `proposal` | `PublicKey` | Proposal PDA |
-| `support` | `boolean` | Vote direction |
-| `weight` | `bigint` | Custom vote weight |
-
 **Example:**
 ```typescript
-// Vote in favor
-const tx = await client.governance.vote({
-  proposal: proposalPda,
-  support: true,
+const tx = await client.governance.validateErcForTrading({
+  certificate: ercPda,
 });
-console.log('Vote cast:', tx);
+console.log('Certificate validated:', tx);
 ```
 
 ---
 
-### executeProposal
+### revokeErc
 
-Execute a passed proposal after voting period ends.
+Revoke an ERC certificate permanently.
 
 ```typescript
-async executeProposal(params: {
-  proposal: PublicKey;
+async revokeErc(params: {
+  certificate: PublicKey;
+  reason: string;               // Required, max 128 chars
+}): Promise<TransactionSignature>
+```
+
+**Example:**
+```typescript
+const tx = await client.governance.revokeErc({
+  certificate: ercPda,
+  reason: 'Fraudulent meter data detected',
+});
+console.log('Certificate revoked:', tx);
+```
+
+---
+
+### transferErc
+
+Transfer certificate ownership to a new owner.
+
+```typescript
+async transferErc(params: {
+  certificate: PublicKey;
+  newOwner: PublicKey;
 }): Promise<TransactionSignature>
 ```
 
 **Requirements:**
-- Voting period must be ended
-- Proposal must have passed (for > against, quorum met)
-- Not already executed
+- Transfers must be enabled in config
+- Certificate must be validated for trading
+- Certificate must not be expired
 
 **Example:**
 ```typescript
-const tx = await client.governance.executeProposal({
-  proposal: proposalPda,
+const tx = await client.governance.transferErc({
+  certificate: ercPda,
+  newOwner: recipientPubkey,
 });
-console.log('Proposal executed:', tx);
+console.log('Certificate transferred:', tx);
 ```
 
 ---
 
-### cancelProposal
+### proposeAuthorityChange
 
-Cancel a proposal (creator only, before voting ends).
+Step 1 of 2-step authority transfer.
 
 ```typescript
-async cancelProposal(params: {
-  proposal: PublicKey;
+async proposeAuthorityChange(params: {
+  newAuthority: PublicKey;
 }): Promise<TransactionSignature>
 ```
 
----
+**Note:** The proposed authority has 48 hours to approve.
 
-### getProposal
-
-Fetch proposal details.
-
+**Example:**
 ```typescript
-async getProposal(proposalId: PublicKey): Promise<Proposal | null>
-```
-
-**Returns:** Full proposal data or null
-
----
-
-### getActiveProposals
-
-Fetch all active proposals.
-
-```typescript
-async getActiveProposals(): Promise<Proposal[]>
-```
-
-**Returns:** Array of proposals in voting period
-
----
-
-### getProposalHistory
-
-Fetch past proposals.
-
-```typescript
-async getProposalHistory(params?: {
-  limit?: number;
-  status?: ProposalStatus;
-}): Promise<Proposal[]>
+const tx = await client.governance.proposeAuthorityChange({
+  newAuthority: newAuthorityPubkey,
+});
+console.log('Authority change proposed:', tx);
 ```
 
 ---
 
-### getUserVotes
+### approveAuthorityChange
 
-Get votes cast by a user.
+Step 2 of 2-step authority transfer (called by new authority).
 
 ```typescript
-async getUserVotes(wallet?: PublicKey): Promise<Vote[]>
+async approveAuthorityChange(): Promise<TransactionSignature>
+```
+
+**Example:**
+```typescript
+// Called by the new authority wallet
+const tx = await client.governance.approveAuthorityChange();
+console.log('Authority change approved:', tx);
 ```
 
 ---
 
-### getVotingPower
+### cancelAuthorityChange
 
-Get voting power for a wallet.
+Cancel a pending authority change.
 
 ```typescript
-async getVotingPower(wallet?: PublicKey): Promise<bigint>
+async cancelAuthorityChange(): Promise<TransactionSignature>
 ```
-
-**Returns:** Total voting power based on token holdings
 
 ---
 
-### delegateVotes
+### setOracleAuthority
 
-Delegate voting power to another address.
+Configure oracle for data validation.
 
 ```typescript
-async delegateVotes(params: {
-  delegate: PublicKey;
+async setOracleAuthority(params: {
+  oracleAuthority: PublicKey;
+  minConfidence: number;        // 0-100
+  requireValidation: boolean;
 }): Promise<TransactionSignature>
 ```
 
----
-
-### undelegateVotes
-
-Remove vote delegation.
-
+**Example:**
 ```typescript
-async undelegateVotes(): Promise<TransactionSignature>
+const tx = await client.governance.setOracleAuthority({
+  oracleAuthority: oraclePubkey,
+  minConfidence: 80,            // 80% minimum
+  requireValidation: true,
+});
+console.log('Oracle configured:', tx);
 ```
 
 ---
 
-## Types
+### emergencyPause / emergencyUnpause
+
+Control system operations.
 
 ```typescript
-type ProposalType = 
-  | 'parameter_change'    // Change system parameters
-  | 'fee_adjustment'      // Adjust fee structure
-  | 'oracle_update'       // Update oracle configuration
-  | 'emergency_action'    // Emergency protocol changes
-  | 'general';            // General governance
+async emergencyPause(): Promise<TransactionSignature>
+async emergencyUnpause(): Promise<TransactionSignature>
+```
 
-type ProposalStatus = 
-  | 'pending'             // Not yet active
-  | 'active'              // Voting in progress
-  | 'passed'              // Voting passed
-  | 'rejected'            // Voting failed
-  | 'executed'            // Actions executed
-  | 'cancelled';          // Cancelled by creator
+---
 
-interface Proposal {
+### getGovernanceStats
+
+Query governance statistics.
+
+```typescript
+async getGovernanceStats(): Promise<GovernanceStats>
+```
+
+**Returns:**
+```typescript
+interface GovernanceStats {
+  totalErcsIssued: bigint;
+  totalErcsValidated: bigint;
+  totalErcsRevoked: bigint;
+  totalEnergyCertified: bigint;
+  ercValidationEnabled: boolean;
+  emergencyPaused: boolean;
+  maintenanceMode: boolean;
+  minEnergyAmount: bigint;
+  maxErcAmount: bigint;
+  ercValidityPeriod: bigint;
+  requireOracleValidation: boolean;
+  allowCertificateTransfers: boolean;
+  pendingAuthorityChange: boolean;
+  pendingAuthority: PublicKey | null;
+  pendingAuthorityExpiresAt: bigint | null;
+  oracleAuthority: PublicKey | null;
+  minOracleConfidence: number;
+}
+```
+
+---
+
+### getCertificate
+
+Fetch certificate details.
+
+```typescript
+async getCertificate(certificateId: string): Promise<ErcCertificate | null>
+```
+
+**Returns:**
+```typescript
+interface ErcCertificate {
   publicKey: PublicKey;
-  creator: PublicKey;
-  title: string;
-  description: string;
-  proposalType: ProposalType;
-  status: ProposalStatus;
-  forVotes: bigint;
-  againstVotes: bigint;
-  abstainVotes: bigint;
-  quorum: bigint;
-  actions: ProposalAction[];
-  createdAt: number;
-  votingStartsAt: number;
-  votingEndsAt: number;
-  executedAt: number | null;
-  totalVoters: number;
+  certificateId: string;
+  authority: PublicKey;
+  owner: PublicKey;
+  energyAmount: bigint;
+  renewableSource: string;
+  validationData: string;
+  issuedAt: number;
+  expiresAt: number | null;
+  status: ErcStatus;
+  validatedForTrading: boolean;
+  tradingValidatedAt: number | null;
+  revocationReason: string | null;
+  revokedAt: number | null;
+  transferCount: number;
+  lastTransferredAt: number | null;
 }
 
-interface ProposalAction {
-  program: PublicKey;
-  instruction: string;
-  data: Record<string, unknown>;
-}
-
-interface Vote {
-  proposal: PublicKey;
-  voter: PublicKey;
-  support: boolean;
-  weight: bigint;
-  timestamp: number;
-}
-
-interface GovernanceConfig {
-  minProposalThreshold: bigint;   // Min tokens to create proposal
-  quorumPercentage: number;       // Required participation %
-  votingDelay: number;            // Delay before voting starts
-  votingPeriod: number;           // Default voting duration
-  executionDelay: number;         // Timelock after passing
-}
+type ErcStatus = 'Valid' | 'Expired' | 'Revoked' | 'Pending';
 ```
 
 ---
 
 ## Events
 
-### onProposalCreated
+### onErcIssued
 
 ```typescript
-client.governance.onProposalCreated((event) => {
-  console.log('New proposal:', event.title);
-  console.log('Voting ends:', new Date(event.votingEndsAt * 1000));
+client.governance.onErcIssued((event) => {
+  console.log('Certificate:', event.certificateId);
+  console.log('Energy:', event.energyAmount, 'kWh');
+  console.log('Source:', event.renewableSource);
 });
 ```
 
-### onVoteCast
+### onErcValidatedForTrading
 
 ```typescript
-client.governance.onVoteCast((event) => {
-  console.log('Vote:', event.support ? 'FOR' : 'AGAINST');
-  console.log('Weight:', event.weight.toString());
+client.governance.onErcValidatedForTrading((event) => {
+  console.log('Validated:', event.certificateId);
 });
 ```
 
-### onProposalExecuted
+### onErcRevoked
 
 ```typescript
-client.governance.onProposalExecuted((event) => {
-  console.log('Executed:', event.proposal.toBase58());
+client.governance.onErcRevoked((event) => {
+  console.log('Revoked:', event.certificateId);
+  console.log('Reason:', event.reason);
+});
+```
+
+### onErcTransferred
+
+```typescript
+client.governance.onErcTransferred((event) => {
+  console.log('Certificate:', event.certificateId);
+  console.log('From:', event.fromOwner.toBase58());
+  console.log('To:', event.toOwner.toBase58());
+});
+```
+
+### onAuthorityChangeProposed
+
+```typescript
+client.governance.onAuthorityChangeProposed((event) => {
+  console.log('Proposed:', event.proposedAuthority.toBase58());
+  console.log('Expires:', new Date(event.expiresAt * 1000));
+});
+```
+
+### onOracleAuthoritySet
+
+```typescript
+client.governance.onOracleAuthoritySet((event) => {
+  console.log('Oracle:', event.oracleAuthority.toBase58());
+  console.log('Min confidence:', event.minConfidence, '%');
 });
 ```
 
@@ -304,69 +350,86 @@ client.governance.onProposalExecuted((event) => {
 
 | Code | Description |
 |------|-------------|
-| `InsufficientVotingPower` | Not enough tokens |
-| `ProposalNotActive` | Proposal not in voting |
-| `VotingPeriodEnded` | Voting has ended |
-| `VotingPeriodNotEnded` | Voting still ongoing |
-| `AlreadyVoted` | User already voted |
-| `ProposalNotPassed` | Cannot execute failed proposal |
-| `AlreadyExecuted` | Proposal already executed |
-| `QuorumNotMet` | Quorum threshold not reached |
-| `BelowProposalThreshold` | Not enough tokens to propose |
-| `Unauthorized` | Caller not authorized |
-| `InvalidAction` | Proposal action invalid |
+| `UnauthorizedAuthority` | Not the REC authority |
+| `SystemPaused` | Emergency pause active |
+| `MaintenanceMode` | Maintenance mode active |
+| `BelowMinimumEnergy` | Energy < 100 kWh |
+| `ExceedsMaximumEnergy` | Energy > 1,000,000 kWh |
+| `InsufficientUnclaimedGeneration` | Double-claim prevention |
+| `InvalidErcStatus` | Wrong certificate status |
+| `AlreadyValidated` | Already validated |
+| `ErcExpired` | Certificate expired |
+| `AlreadyRevoked` | Already revoked |
+| `RevocationReasonRequired` | Empty reason |
+| `TransfersNotAllowed` | Transfers disabled |
+| `NotValidatedForTrading` | Not validated yet |
+| `CannotTransferToSelf` | Same owner transfer |
+| `AuthorityChangePending` | Change in progress |
+| `NoAuthorityChangePending` | No pending change |
+| `AuthorityChangeExpired` | 48h passed |
+| `InvalidOracleConfidence` | > 100 |
 
 ---
 
-## Governance Flow Example
+## Complete Workflow Example
 
 ```typescript
 import { GridTokenXClient } from '@gridtokenx/sdk';
 
-async function governanceWorkflow() {
+async function ercWorkflow() {
   const client = new GridTokenXClient({ wallet });
   
-  // 1. Check voting power
-  const votingPower = await client.governance.getVotingPower();
-  console.log('Voting power:', votingPower.toString());
+  // 1. Check governance stats
+  const stats = await client.governance.getGovernanceStats();
+  console.log('Total ERCs issued:', stats.totalErcsIssued.toString());
+  console.log('System paused:', stats.emergencyPaused);
   
-  // 2. Create proposal
-  const { proposalId } = await client.governance.createProposal({
-    title: 'Reduce minimum order size',
-    description: 'Lower minimum order from 1 kWh to 0.5 kWh',
-    proposalType: 'parameter_change',
-    actions: [{
-      program: TRADING_PROGRAM_ID,
-      instruction: 'updateMinOrder',
-      data: { minOrder: 500_000_000 }, // 0.5 kWh
-    }],
+  // 2. Issue ERC certificate
+  const { certificatePda } = await client.governance.issueErc({
+    certificateId: 'ERC-2025-001',
+    energyAmount: 500_000n,
+    renewableSource: 'Solar',
+    validationData: 'Meter: MTR-001, Period: Jan 2025',
+    meterAccount: meterPda,
   });
+  console.log('Certificate issued:', certificatePda.toBase58());
   
-  console.log('Proposal created:', proposalId.toBase58());
-  
-  // 3. Vote on proposal
-  const voteTx = await client.governance.vote({
-    proposal: proposalId,
-    support: true,
+  // 3. Validate for trading
+  await client.governance.validateErcForTrading({
+    certificate: certificatePda,
   });
+  console.log('Certificate validated for trading');
   
-  console.log('Vote cast:', voteTx);
+  // 4. Transfer to buyer
+  await client.governance.transferErc({
+    certificate: certificatePda,
+    newOwner: buyerPubkey,
+  });
+  console.log('Certificate transferred to buyer');
   
-  // 4. Check proposal status
-  const proposal = await client.governance.getProposal(proposalId);
-  console.log('For votes:', proposal.forVotes.toString());
-  console.log('Against votes:', proposal.againstVotes.toString());
+  // 5. Check certificate status
+  const cert = await client.governance.getCertificate('ERC-2025-001');
+  console.log('Owner:', cert.owner.toBase58());
+  console.log('Transfer count:', cert.transferCount);
+}
+
+// Authority transfer workflow
+async function authorityTransfer() {
+  const client = new GridTokenXClient({ wallet: currentAuthority });
+  const newClient = new GridTokenXClient({ wallet: newAuthority });
   
-  // 5. Execute after voting ends (if passed)
-  if (proposal.status === 'passed') {
-    const execTx = await client.governance.executeProposal({
-      proposal: proposalId,
-    });
-    console.log('Executed:', execTx);
-  }
+  // Step 1: Current authority proposes change
+  await client.governance.proposeAuthorityChange({
+    newAuthority: newAuthority.publicKey,
+  });
+  console.log('Authority change proposed');
+  
+  // Step 2: New authority approves (within 48h)
+  await newClient.governance.approveAuthorityChange();
+  console.log('Authority change approved');
 }
 ```
 
 ---
 
-**Document Version**: 1.0
+**Document Version**: 2.0 - November 29, 2025
