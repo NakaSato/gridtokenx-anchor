@@ -1,165 +1,243 @@
+```markdown
 # Oracle SDK Module
 
 ## Overview
 
-The Oracle module provides price feeds, meter validation, and external data integration for the GridTokenX platform.
+The Oracle module provides AMI (Advanced Metering Infrastructure) data ingestion, validation, and market clearing capabilities for the GridTokenX P2P energy trading platform.
 
 ---
 
 ## Program ID
 
 ```
-DvdtU4quEbuxUY2FckmvcXwTpC9qp4HLJKb1PMLaqAoE
+HtV8jTeaCVXKZVCQQVWjXcAvmiF6id9QSLVGP5MT5osX
+```
+
+---
+
+## PDA Derivation
+
+```typescript
+import { PublicKey } from "@solana/web3.js";
+
+const ORACLE_PROGRAM_ID = new PublicKey("HtV8jTeaCVXKZVCQQVWjXcAvmiF6id9QSLVGP5MT5osX");
+
+const [oracleDataPda] = PublicKey.findProgramAddressSync(
+  [Buffer.from("oracle_data")],
+  ORACLE_PROGRAM_ID
+);
 ```
 
 ---
 
 ## Methods
 
-### updatePriceFeed
+### initialize
 
-Update the GRX price feed (admin only).
+Initialize the oracle with API Gateway configuration.
 
 ```typescript
-async updatePriceFeed(params: {
-  price: bigint;          // Price in lamports (9 decimals)
-  source: string;         // Data source identifier
-  confidence: number;     // Confidence interval (0-100)
+async initialize(params: {
+  apiGateway: PublicKey;
 }): Promise<TransactionSignature>
 ```
 
 **Parameters:**
 | Name | Type | Description |
 |------|------|-------------|
-| `price` | `bigint` | GRX price (9 decimals) |
-| `source` | `string` | Price source identifier |
-| `confidence` | `number` | Confidence level 0-100 |
+| `apiGateway` | `PublicKey` | Authorized API gateway address |
 
 **Example:**
 ```typescript
-const tx = await adminClient.oracle.updatePriceFeed({
-  price: BigInt(3_500_000_000), // 3.5 GRX/kWh
-  source: 'MEA_TARIFF',
-  confidence: 95,
+const tx = await client.oracle.initialize({
+  apiGateway: apiGatewayPubkey,
 });
+console.log("Oracle initialized:", tx);
 ```
 
 ---
 
-### validateMeterReading
+### submitMeterReading
 
-Validate a meter reading with optional anomaly detection.
+Submit validated meter reading from AMI system. **API Gateway only.**
 
 ```typescript
-async validateMeterReading(params: {
-  meter: PublicKey;
-  reading: bigint;
-  timestamp: number;
-  signature?: Uint8Array;
-}): Promise<{
-  tx: TransactionSignature;
-  isValid: boolean;
-  anomalyDetected: boolean;
-}>
+async submitMeterReading(params: {
+  meterId: string;
+  energyProduced: bigint;
+  energyConsumed: bigint;
+  readingTimestamp: number;
+}): Promise<TransactionSignature>
 ```
 
 **Parameters:**
 | Name | Type | Description |
 |------|------|-------------|
-| `meter` | `PublicKey` | Meter PDA address |
-| `reading` | `bigint` | Current meter reading |
-| `timestamp` | `number` | Reading timestamp |
-| `signature` | `Uint8Array` | Optional cryptographic signature |
-
-**Returns:**
-- `tx` - Transaction signature
-- `isValid` - Whether reading passed validation
-- `anomalyDetected` - Whether anomaly was detected
+| `meterId` | `string` | Meter identifier |
+| `energyProduced` | `bigint` | Energy produced (kWh) |
+| `energyConsumed` | `bigint` | Energy consumed (kWh) |
+| `readingTimestamp` | `number` | Unix timestamp |
 
 **Example:**
 ```typescript
-const result = await client.oracle.validateMeterReading({
-  meter: meterPda,
-  reading: BigInt(15_500_000_000),
-  timestamp: Math.floor(Date.now() / 1000),
+const tx = await apiGatewayClient.oracle.submitMeterReading({
+  meterId: "METER-001",
+  energyProduced: BigInt(500),
+  energyConsumed: BigInt(300),
+  readingTimestamp: Math.floor(Date.now() / 1000),
 });
-
-if (result.anomalyDetected) {
-  console.log('Warning: Anomaly detected in reading');
-}
 ```
+
+**Validation:**
+- Oracle must be active
+- Caller must be the authorized `api_gateway`
+- Energy values must be within configured range (default: 0-1M kWh)
+- Production/consumption ratio must be ≤ 10:1
 
 ---
 
-### getCurrentPrice
+### triggerMarketClearing
 
-Get the current GRX price feed.
+Trigger the market clearing process. **API Gateway only.**
 
 ```typescript
-async getCurrentPrice(): Promise<PriceFeed>
+async triggerMarketClearing(): Promise<TransactionSignature>
 ```
-
-**Returns:** Current price feed data
 
 **Example:**
 ```typescript
-const price = await client.oracle.getCurrentPrice();
-console.log(`Current price: ${price.value} GRX/kWh`);
-console.log(`Last updated: ${new Date(price.timestamp * 1000)}`);
-console.log(`Confidence: ${price.confidence}%`);
+const tx = await apiGatewayClient.oracle.triggerMarketClearing();
+console.log("Market clearing triggered:", tx);
 ```
 
 ---
 
-### getPriceHistory
+### updateOracleStatus
 
-Get historical price data.
-
-```typescript
-async getPriceHistory(params?: {
-  from?: number;        // Start timestamp
-  to?: number;          // End timestamp
-  interval?: 'hour' | 'day' | 'week';
-}): Promise<PriceFeed[]>
-```
-
-**Returns:** Array of historical price feeds
-
----
-
-### getOracleState
-
-Get the oracle configuration and state.
+Activate or deactivate the oracle. **Admin only.**
 
 ```typescript
-async getOracleState(): Promise<OracleState>
-```
-
-**Returns:** Oracle configuration and authorized operators
-
----
-
-### addAuthorizedOracle
-
-Add an authorized oracle operator (admin only).
-
-```typescript
-async addAuthorizedOracle(params: {
-  oracle: PublicKey;
-  name: string;
+async updateOracleStatus(params: {
+  active: boolean;
 }): Promise<TransactionSignature>
 ```
 
+**Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| `active` | `boolean` | New oracle status |
+
+**Example:**
+```typescript
+// Pause oracle for maintenance
+await adminClient.oracle.updateOracleStatus({ active: false });
+
+// Resume oracle operations
+await adminClient.oracle.updateOracleStatus({ active: true });
+```
+
 ---
 
-### removeAuthorizedOracle
+### updateApiGateway
 
-Remove an authorized oracle operator (admin only).
+Update the authorized API Gateway address. **Admin only.**
 
 ```typescript
-async removeAuthorizedOracle(params: {
-  oracle: PublicKey;
+async updateApiGateway(params: {
+  newApiGateway: PublicKey;
 }): Promise<TransactionSignature>
+```
+
+**Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| `newApiGateway` | `PublicKey` | New gateway address |
+
+**Example:**
+```typescript
+await adminClient.oracle.updateApiGateway({
+  newApiGateway: newGatewayPubkey,
+});
+```
+
+---
+
+### updateValidationConfig
+
+Update the validation configuration. **Admin only.**
+
+```typescript
+async updateValidationConfig(params: {
+  config: ValidationConfig;
+}): Promise<TransactionSignature>
+```
+
+**Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| `config` | `ValidationConfig` | New validation configuration |
+
+**Example:**
+```typescript
+await adminClient.oracle.updateValidationConfig({
+  config: {
+    minEnergyValue: BigInt(0),
+    maxEnergyValue: BigInt(2000000), // 2M kWh
+    anomalyDetectionEnabled: true,
+    maxReadingDeviationPercent: 75,
+    requireConsensus: false,
+  },
+});
+```
+
+---
+
+### addBackupOracle
+
+Add a backup oracle for redundancy. **Admin only.**
+
+```typescript
+async addBackupOracle(params: {
+  backupOracle: PublicKey;
+}): Promise<TransactionSignature>
+```
+
+**Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| `backupOracle` | `PublicKey` | Backup oracle public key |
+
+**Example:**
+```typescript
+await adminClient.oracle.addBackupOracle({
+  backupOracle: backupOraclePubkey,
+});
+```
+
+**Constraint:** Maximum 10 backup oracles allowed.
+
+---
+
+### getOracleData
+
+Fetch the current oracle state.
+
+```typescript
+async getOracleData(): Promise<OracleData>
+```
+
+**Returns:** Complete oracle configuration and metrics.
+
+**Example:**
+```typescript
+const oracleData = await client.oracle.getOracleData();
+
+console.log("Authority:", oracleData.authority.toBase58());
+console.log("API Gateway:", oracleData.apiGateway.toBase58());
+console.log("Active:", oracleData.active);
+console.log("Total Readings:", oracleData.totalReadings.toString());
+console.log("Quality Score:", oracleData.qualityMetrics.lastQualityScore);
+console.log("Backup Oracles:", oracleData.backupOracles.length);
 ```
 
 ---
@@ -167,47 +245,72 @@ async removeAuthorizedOracle(params: {
 ## Types
 
 ```typescript
-interface PriceFeed {
-  value: bigint;           // Price value (9 decimals)
-  timestamp: number;       // Unix timestamp
-  source: string;          // Data source
-  confidence: number;      // Confidence 0-100
-  exponent: number;        // Decimal exponent (-9)
-}
-
-interface OracleState {
+interface OracleData {
   authority: PublicKey;
-  priceFeed: PriceFeed;
-  authorizedOracles: PublicKey[];
-  lastUpdate: number;
-  updateCount: bigint;
-  minConfidence: number;
-  maxStaleness: number;    // Max age in seconds
+  apiGateway: PublicKey;
+  totalReadings: bigint;
+  lastReadingTimestamp: number;
+  lastClearing: number;
+  active: boolean;
+  createdAt: number;
+  validationConfig: ValidationConfig;
+  qualityMetrics: QualityMetrics;
+  backupOracles: PublicKey[];
+  consensusThreshold: number;
+  lastConsensusTimestamp: number;
 }
 
-interface MeterValidation {
-  meter: PublicKey;
-  reading: bigint;
-  previousReading: bigint;
+interface ValidationConfig {
+  minEnergyValue: bigint;
+  maxEnergyValue: bigint;
+  anomalyDetectionEnabled: boolean;
+  maxReadingDeviationPercent: number;
+  requireConsensus: boolean;
+}
+
+interface QualityMetrics {
+  totalValidReadings: bigint;
+  totalRejectedReadings: bigint;
+  averageReadingInterval: number;
+  lastQualityScore: number;        // 0-100
+  qualityScoreUpdatedAt: number;
+}
+
+// Events
+interface MeterReadingSubmittedEvent {
+  meterId: string;
+  energyProduced: bigint;
+  energyConsumed: bigint;
   timestamp: number;
-  isValid: boolean;
-  anomalyScore: number;
-  validatedBy: PublicKey;
+  submitter: PublicKey;
 }
 
-interface PriceFeedUpdatedEvent {
-  price: bigint;
-  source: string;
-  confidence: number;
+interface MarketClearingTriggeredEvent {
+  authority: PublicKey;
   timestamp: number;
-  updatedBy: PublicKey;
 }
 
-interface MeterValidatedEvent {
-  meter: PublicKey;
-  reading: bigint;
-  isValid: boolean;
-  anomalyDetected: boolean;
+interface OracleStatusUpdatedEvent {
+  authority: PublicKey;
+  active: boolean;
+  timestamp: number;
+}
+
+interface ApiGatewayUpdatedEvent {
+  authority: PublicKey;
+  oldGateway: PublicKey;
+  newGateway: PublicKey;
+  timestamp: number;
+}
+
+interface ValidationConfigUpdatedEvent {
+  authority: PublicKey;
+  timestamp: number;
+}
+
+interface BackupOracleAddedEvent {
+  authority: PublicKey;
+  backupOracle: PublicKey;
   timestamp: number;
 }
 ```
@@ -216,25 +319,48 @@ interface MeterValidatedEvent {
 
 ## Events
 
-### onPriceFeedUpdated
+### onMeterReadingSubmitted
 
-Subscribe to price feed updates.
+Subscribe to meter reading events.
 
 ```typescript
-client.oracle.onPriceFeedUpdated((event) => {
-  console.log('New price:', event.price.toString());
-  console.log('Source:', event.source);
+client.oracle.onMeterReadingSubmitted((event) => {
+  console.log("Meter ID:", event.meterId);
+  console.log("Produced:", event.energyProduced.toString(), "kWh");
+  console.log("Consumed:", event.energyConsumed.toString(), "kWh");
+  console.log("Timestamp:", new Date(event.timestamp * 1000));
+  console.log("Submitter:", event.submitter.toBase58());
 });
 ```
 
-### onMeterValidated
+### onMarketClearingTriggered
 
-Subscribe to meter validation events.
+Subscribe to market clearing events.
 
 ```typescript
-client.oracle.onMeterValidated((event) => {
-  console.log('Meter:', event.meter.toBase58());
-  console.log('Valid:', event.isValid);
+client.oracle.onMarketClearingTriggered((event) => {
+  console.log("Market clearing at:", new Date(event.timestamp * 1000));
+});
+```
+
+### onOracleStatusUpdated
+
+Subscribe to oracle status changes.
+
+```typescript
+client.oracle.onOracleStatusUpdated((event) => {
+  console.log("Oracle status:", event.active ? "Active" : "Inactive");
+});
+```
+
+### onApiGatewayUpdated
+
+Subscribe to gateway updates.
+
+```typescript
+client.oracle.onApiGatewayUpdated((event) => {
+  console.log("Gateway changed from", event.oldGateway.toBase58());
+  console.log("Gateway changed to", event.newGateway.toBase58());
 });
 ```
 
@@ -242,71 +368,109 @@ client.oracle.onMeterValidated((event) => {
 
 ## Error Codes
 
-| Code | Description |
-|------|-------------|
-| `Unauthorized` | Caller not authorized |
-| `InvalidPrice` | Price value out of range |
-| `StalePrice` | Price feed is stale |
-| `InvalidMeter` | Meter not found or inactive |
-| `InvalidReading` | Reading validation failed |
-| `ReadingTooHigh` | Reading exceeds threshold |
-| `ReadingDecreased` | Reading lower than previous |
-| `AnomalyDetected` | Consumption anomaly detected |
-| `SignatureInvalid` | Cryptographic signature invalid |
-| `ConfidenceTooLow` | Confidence below threshold |
+| Code | Name | Description |
+|------|------|-------------|
+| 6000 | `UnauthorizedAuthority` | Caller is not the authority |
+| 6001 | `UnauthorizedGateway` | Caller is not the API gateway |
+| 6002 | `OracleInactive` | Oracle is not active |
+| 6003 | `InvalidMeterReading` | Reading failed validation |
+| 6004 | `MarketClearingInProgress` | Market clearing in progress |
+| 6005 | `EnergyValueOutOfRange` | Value outside configured range |
+| 6006 | `AnomalousReading` | Anomaly detected (ratio > 10:1) |
+| 6007 | `MaxBackupOraclesReached` | Cannot add more backup oracles |
 
 ---
 
-## Anomaly Detection
+## Usage Examples
 
-The oracle implements statistical anomaly detection:
-
-1. **Threshold Check**: Reading must not exceed maximum daily generation
-2. **Regression Check**: Reading cannot decrease (non-reversible meter)
-3. **Rate Check**: kWh/hour must be within acceptable range
-4. **Pattern Analysis**: Compares against historical patterns
+### API Gateway Integration
 
 ```typescript
-// Check for anomalies manually
-const { anomalyDetected, anomalyScore } = await client.oracle.checkAnomaly({
-  meter: meterPda,
-  reading: currentReading,
+import { GridTokenXClient } from "@gridtokenx/sdk";
+import { Keypair } from "@solana/web3.js";
+
+// Load API Gateway keypair
+const apiGatewayKeypair = Keypair.fromSecretKey(/* ... */);
+
+const apiGatewayClient = new GridTokenXClient({
+  wallet: apiGatewayKeypair,
+  network: "private",
 });
 
-if (anomalyScore > 0.8) {
-  console.log('High anomaly score - possible meter tampering');
+// Submit meter readings from AMI system
+async function submitAMIReading(reading: AMIReading) {
+  try {
+    const tx = await apiGatewayClient.oracle.submitMeterReading({
+      meterId: reading.meterId,
+      energyProduced: BigInt(reading.produced),
+      energyConsumed: BigInt(reading.consumed),
+      readingTimestamp: reading.timestamp,
+    });
+    console.log("Reading submitted:", tx);
+  } catch (error) {
+    if (error.code === 6005) {
+      console.error("Energy value out of range");
+    } else if (error.code === 6006) {
+      console.error("Anomalous reading detected");
+    }
+  }
 }
 ```
 
----
-
-## Price Feed Integration
-
-Example of automated price feed updates:
+### Admin Operations
 
 ```typescript
-import { GridTokenXClient } from '@gridtokenx/sdk';
+const adminClient = new GridTokenXClient({
+  wallet: adminWallet,
+  network: "private",
+});
 
-async function updatePriceFromMEA() {
-  const client = new GridTokenXClient({ wallet: oracleWallet });
+// Monitor oracle health
+async function checkOracleHealth() {
+  const oracleData = await adminClient.oracle.getOracleData();
   
-  // Fetch price from MEA API
-  const meaPrice = await fetchMEAPrice();
+  const qualityScore = oracleData.qualityMetrics.lastQualityScore;
+  if (qualityScore < 90) {
+    console.warn("Quality score degraded:", qualityScore);
+  }
   
-  // Update on-chain price feed
-  const tx = await client.oracle.updatePriceFeed({
-    price: BigInt(Math.floor(meaPrice * 1e9)),
-    source: 'MEA_OFFICIAL',
-    confidence: 98,
-  });
+  const totalReadings = oracleData.totalReadings;
+  const validReadings = oracleData.qualityMetrics.totalValidReadings;
+  const rejectionRate = 1 - (Number(validReadings) / Number(totalReadings));
   
-  console.log('Price updated:', tx);
+  console.log("Rejection rate:", (rejectionRate * 100).toFixed(2) + "%");
 }
 
-// Run every hour
-setInterval(updatePriceFromMEA, 3600000);
+// Update validation config for stricter checks
+async function tightenValidation() {
+  await adminClient.oracle.updateValidationConfig({
+    config: {
+      minEnergyValue: BigInt(0),
+      maxEnergyValue: BigInt(500000), // Reduce max to 500k kWh
+      anomalyDetectionEnabled: true,
+      maxReadingDeviationPercent: 30, // Stricter 30% deviation
+      requireConsensus: false,
+    },
+  });
+}
+```
+
+### Market Clearing Automation
+
+```typescript
+// Trigger market clearing every hour
+setInterval(async () => {
+  try {
+    const tx = await apiGatewayClient.oracle.triggerMarketClearing();
+    console.log("Hourly market clearing:", tx);
+  } catch (error) {
+    console.error("Market clearing failed:", error);
+  }
+}, 3600000); // 1 hour
 ```
 
 ---
 
 **Document Version**: 1.0
+
+```

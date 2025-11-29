@@ -2,43 +2,69 @@
 
 ## Program ID
 ```
-94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur
+9sAB52aZ71ciGhaVwuCg6ohTeWu8H6fDb2B29ohxsFVp
 ```
 
 ---
 
 ## initialize
 
-Initialize the energy token mint.
+Initialize the energy token program (logs message only).
 
 ### Accounts
 
 | Account | Type | Description |
 |---------|------|-------------|
 | `authority` | `Signer` | Program authority |
-| `mint` | `PDA` | Token mint account |
-| `token_state` | `PDA` | Program state |
-| `token_program` | `Program` | SPL Token program |
-| `system_program` | `Program` | System program |
-| `rent` | `Sysvar` | Rent sysvar |
-
-### Arguments
-
-| Name | Type | Description |
-|------|------|-------------|
-| `decimals` | `u8` | Token decimals (9) |
 
 ### Example
 
 ```typescript
 await program.methods
-  .initialize(9)
+  .initialize()
   .accounts({
     authority: wallet.publicKey,
+  })
+  .rpc();
+```
+
+---
+
+## initialize_token
+
+Initialize the token configuration and create the program-controlled mint.
+
+### Accounts
+
+| Account | Type | Description |
+|---------|------|-------------|
+| `token_info` | `PDA (init)` | Token configuration - seeds: `[b"token_info"]` |
+| `mint` | `PDA (init)` | SPL Token mint - seeds: `[b"mint"]` |
+| `authority` | `Signer (mut)` | Initial authority and payer |
+| `system_program` | `Program` | System program |
+| `token_program` | `Program` | SPL Token program |
+| `rent` | `Sysvar` | Rent sysvar |
+
+### Example
+
+```typescript
+const [tokenInfoPda] = PublicKey.findProgramAddressSync(
+  [Buffer.from("token_info")],
+  program.programId
+);
+const [mintPda] = PublicKey.findProgramAddressSync(
+  [Buffer.from("mint")],
+  program.programId
+);
+
+await program.methods
+  .initializeToken()
+  .accounts({
+    tokenInfo: tokenInfoPda,
     mint: mintPda,
-    tokenState: tokenStatePda,
-    tokenProgram: TOKEN_PROGRAM_ID,
+    authority: wallet.publicKey,
     systemProgram: SystemProgram.programId,
+    tokenProgram: TOKEN_PROGRAM_ID,
     rent: SYSVAR_RENT_PUBKEY,
   })
   .rpc();
@@ -46,20 +72,146 @@ await program.methods
 
 ---
 
-## mint_tokens
+## create_token_mint
 
-Mint GRID tokens for validated energy production.
+Create a new token mint with Metaplex metadata (Token 2022 compatible).
 
 ### Accounts
 
 | Account | Type | Description |
 |---------|------|-------------|
-| `authority` | `Signer` | Meter owner or oracle |
-| `mint` | `PDA` | Token mint |
-| `recipient` | `ATA` | Recipient token account |
-| `meter_account` | `PDA` | Validated meter |
-| `validation_result` | `PDA` | Oracle validation proof |
-| `token_state` | `PDA` | Program state |
+| `mint` | `Signer (init)` | New token mint keypair |
+| `metadata` | `UncheckedAccount (mut)` | Metaplex metadata PDA |
+| `payer` | `Signer (mut)` | Transaction fee payer |
+| `authority` | `Signer` | Mint authority |
+| `system_program` | `Program` | System program |
+| `token_program` | `Interface` | SPL Token or Token-2022 program |
+| `metadata_program` | `UncheckedAccount` | Metaplex Token Metadata program |
+| `rent` | `Sysvar` | Rent sysvar |
+| `sysvar_instructions` | `UncheckedAccount` | Sysvar instructions |
+
+### Arguments
+
+| Name | Type | Description |
+|------|------|-------------|
+| `name` | `string` | Token name (e.g., "Grid Renewable Energy Token") |
+| `symbol` | `string` | Token symbol (e.g., "GRID") |
+| `uri` | `string` | Metadata JSON URI |
+
+### Example
+
+```typescript
+const mintKeypair = Keypair.generate();
+const metadataPda = PublicKey.findProgramAddressSync(
+  [
+    Buffer.from("metadata"),
+    new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").toBuffer(),
+    mintKeypair.publicKey.toBuffer(),
+  ],
+  new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+)[0];
+
+await program.methods
+  .createTokenMint(
+    "Grid Renewable Energy Token",
+    "GRID",
+    "https://gridtokenx.com/metadata.json"
+  )
+  .accounts({
+    mint: mintKeypair.publicKey,
+    metadata: metadataPda,
+    payer: wallet.publicKey,
+    authority: wallet.publicKey,
+    systemProgram: SystemProgram.programId,
+    tokenProgram: TOKEN_PROGRAM_ID,
+    metadataProgram: new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"),
+    rent: SYSVAR_RENT_PUBKEY,
+    sysvarInstructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+  })
+  .signers([mintKeypair])
+  .rpc();
+```
+
+---
+
+## mint_to_wallet
+
+Mint GRID tokens to a wallet using PDA signing. Creates ATA if needed.
+
+### Accounts
+
+| Account | Type | Description |
+|---------|------|-------------|
+| `mint` | `InterfaceAccount (mut)` | Token mint |
+| `token_info` | `Account` | TokenInfo PDA (has_one = authority) |
+| `destination` | `InterfaceAccount (init_if_needed, mut)` | Recipient ATA |
+| `destination_owner` | `AccountInfo` | Owner of destination token account |
+| `authority` | `Signer` | Must match `token_info.authority` |
+| `payer` | `Signer (mut)` | Transaction fee payer |
+| `token_program` | `Interface` | SPL Token program |
+| `associated_token_program` | `Program` | Associated Token program |
+| `system_program` | `Program` | System program |
+
+### Arguments
+
+| Name | Type | Description |
+|------|------|-------------|
+| `amount` | `u64` | Amount to mint (9 decimals) |
+
+### Example
+
+```typescript
+const [tokenInfoPda] = PublicKey.findProgramAddressSync(
+  [Buffer.from("token_info")],
+  program.programId
+);
+const [mintPda] = PublicKey.findProgramAddressSync(
+  [Buffer.from("mint")],
+  program.programId
+);
+
+const recipientAta = getAssociatedTokenAddressSync(mintPda, recipientPubkey);
+
+await program.methods
+  .mintToWallet(new BN(5_000_000_000)) // 5 GRID tokens
+  .accounts({
+    mint: mintPda,
+    tokenInfo: tokenInfoPda,
+    destination: recipientAta,
+    destinationOwner: recipientPubkey,
+    authority: wallet.publicKey,
+    payer: wallet.publicKey,
+    tokenProgram: TOKEN_PROGRAM_ID,
+    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+    systemProgram: SystemProgram.programId,
+  })
+  .rpc();
+```
+
+### Events Emitted
+
+```rust
+TokensMinted {
+    recipient: Pubkey,
+    amount: u64,
+    timestamp: i64,
+}
+```
+
+---
+
+## mint_tokens_direct
+
+Mint tokens directly to a user (authority only). Used for off-chain verified meter readings.
+
+### Accounts
+
+| Account | Type | Description |
+|---------|------|-------------|
+| `token_info` | `PDA (mut)` | Token configuration - seeds: `[b"token_info"]` |
+| `mint` | `Account (mut)` | SPL Token mint |
+| `user_token_account` | `Account (mut)` | Recipient token account (must exist) |
+| `authority` | `Signer` | Must match `token_info.authority` |
 | `token_program` | `Program` | SPL Token program |
 
 ### Arguments
@@ -72,52 +224,88 @@ Mint GRID tokens for validated energy production.
 
 ```typescript
 await program.methods
-  .mintTokens(new BN(5_000_000_000)) // 5 GRID
+  .mintTokensDirect(new BN(10_000_000_000)) // 10 GRID tokens
   .accounts({
-    authority: wallet.publicKey,
+    tokenInfo: tokenInfoPda,
     mint: mintPda,
-    recipient: recipientAta,
-    meterAccount: meterPda,
-    validationResult: validationPda,
-    tokenState: tokenStatePda,
+    userTokenAccount: userAta,
+    authority: wallet.publicKey,
     tokenProgram: TOKEN_PROGRAM_ID,
   })
   .rpc();
 ```
 
+### Events Emitted
+
+```rust
+TokensMintedDirect {
+    recipient: Pubkey,
+    amount: u64,
+    timestamp: i64,
+}
+```
+
 ### Validation
 
-- Meter must be active
-- Validation must be recent (< 1 hour)
-- Amount must match validated production
-- Cannot double-mint for same validation
+- Authority must match `token_info.authority`
+- User token account must already exist
+- Updates `total_supply` in TokenInfo
 
 ### Errors
 
 | Code | Description |
 |------|-------------|
-| `InvalidMeter` | Meter not found |
-| `MeterNotActive` | Meter is inactive |
-| `InvalidValidation` | Validation proof invalid |
-| `ValidationExpired` | Validation too old |
-| `AlreadyMinted` | Already minted for validation |
-| `AmountMismatch` | Amount doesn't match validation |
-| `Unauthorized` | Caller not authorized |
+| `UnauthorizedAuthority` | Caller is not the token authority |
 
 ---
 
-## burn_tokens
+## transfer_tokens
 
-Burn GRID tokens.
+Transfer GRID tokens between accounts.
 
 ### Accounts
 
 | Account | Type | Description |
 |---------|------|-------------|
-| `authority` | `Signer` | Token owner |
-| `mint` | `PDA` | Token mint |
-| `token_account` | `ATA` | Source token account |
-| `token_state` | `PDA` | Program state |
+| `from_token_account` | `Account (mut)` | Source SPL TokenAccount |
+| `to_token_account` | `Account (mut)` | Destination SPL TokenAccount |
+| `from_authority` | `Signer` | Token owner/delegate |
+| `token_program` | `Program` | SPL Token program |
+
+### Arguments
+
+| Name | Type | Description |
+|------|------|-------------|
+| `amount` | `u64` | Amount to transfer (9 decimals) |
+
+### Example
+
+```typescript
+await program.methods
+  .transferTokens(new BN(1_000_000_000)) // 1 GRID token
+  .accounts({
+    fromTokenAccount: senderAta,
+    toTokenAccount: recipientAta,
+    fromAuthority: wallet.publicKey,
+    tokenProgram: TOKEN_PROGRAM_ID,
+  })
+  .rpc();
+```
+
+---
+
+## burn_tokens
+
+Burn GRID tokens from holder's account.
+
+### Accounts
+
+| Account | Type | Description |
+|---------|------|-------------|
+| `token_info` | `Account (mut)` | Token configuration |
+| `mint` | `Account (mut)` | SPL Token mint |
+| `token_account` | `Account (mut)` | Source token account |
+| `authority` | `Signer` | Token account owner |
 | `token_program` | `Program` | SPL Token program |
 
 ### Arguments
@@ -130,135 +318,74 @@ Burn GRID tokens.
 
 ```typescript
 await program.methods
-  .burnTokens(new BN(3_000_000_000)) // 3 GRID
+  .burnTokens(new BN(3_000_000_000)) // 3 GRID tokens
   .accounts({
-    authority: wallet.publicKey,
+    tokenInfo: tokenInfoPda,
     mint: mintPda,
-    tokenAccount: ownerAta,
-    tokenState: tokenStatePda,
+    tokenAccount: userAta,
+    authority: wallet.publicKey,
     tokenProgram: TOKEN_PROGRAM_ID,
   })
   .rpc();
 ```
 
-### Errors
+### Notes
 
-| Code | Description |
-|------|-------------|
-| `InsufficientBalance` | Not enough tokens |
-| `InvalidAmount` | Amount is zero |
+- Decrements `total_supply` in TokenInfo using `saturating_sub`
+- Use case: Energy consumption settlement
 
 ---
 
-## transfer
+## add_rec_validator
 
-Transfer GRID tokens to another wallet.
+Add a Renewable Energy Certificate validator to the system.
 
 ### Accounts
 
 | Account | Type | Description |
 |---------|------|-------------|
-| `authority` | `Signer` | Token owner |
-| `from` | `ATA` | Source token account |
-| `to` | `ATA` | Destination token account |
-| `token_program` | `Program` | SPL Token program |
+| `token_info` | `Account (mut)` | Token configuration (has_one = authority) |
+| `authority` | `Signer` | Must match `token_info.authority` |
 
 ### Arguments
 
 | Name | Type | Description |
 |------|------|-------------|
-| `amount` | `u64` | Amount to transfer (9 decimals) |
-| `memo` | `Option<String>` | Optional memo |
+| `validator_pubkey` | `Pubkey` | Validator's public key |
+| `authority_name` | `string` | Validator authority name |
 
 ### Example
 
 ```typescript
 await program.methods
-  .transfer(
-    new BN(1_000_000_000), // 1 GRID
-    'Payment for energy'
+  .addRecValidator(
+    validatorPubkey,
+    "Thailand Energy Authority"
   )
   .accounts({
+    tokenInfo: tokenInfoPda,
     authority: wallet.publicKey,
-    from: senderAta,
-    to: recipientAta,
-    tokenProgram: TOKEN_PROGRAM_ID,
   })
   .rpc();
 ```
 
-### Errors
+### Notes
 
-| Code | Description |
-|------|-------------|
-| `InsufficientBalance` | Not enough tokens |
-| `InvalidAmount` | Amount is zero |
-| `AccountFrozen` | Account is frozen |
-| `SameAccount` | Cannot transfer to self |
-
----
-
-## create_token_account
-
-Create an associated token account for GRID.
-
-### Accounts
-
-| Account | Type | Description |
-|---------|------|-------------|
-| `payer` | `Signer` | Transaction fee payer |
-| `owner` | `Account` | Token account owner |
-| `mint` | `PDA` | Token mint |
-| `token_account` | `ATA` | Account to create |
-| `token_program` | `Program` | SPL Token program |
-| `associated_token_program` | `Program` | ATA program |
-| `system_program` | `Program` | System program |
-
-### Example
-
-```typescript
-const ata = getAssociatedTokenAddressSync(mintPda, ownerPubkey);
-
-await program.methods
-  .createTokenAccount()
-  .accounts({
-    payer: wallet.publicKey,
-    owner: ownerPubkey,
-    mint: mintPda,
-    tokenAccount: ata,
-    tokenProgram: TOKEN_PROGRAM_ID,
-    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-    systemProgram: SystemProgram.programId,
-  })
-  .rpc();
-```
+- Currently logs only—no persistent storage of validators
+- Requires authority to match `token_info.authority`
 
 ---
 
 ## Account Structures
 
-### TokenState
+### TokenInfo
 
 ```rust
-pub struct TokenState {
-    pub authority: Pubkey,
-    pub mint: Pubkey,
-    pub total_minted: u64,
-    pub total_burned: u64,
-    pub minting_enabled: bool,
-    pub initialized_at: i64,
-}
-```
-
-### MintRecord
-
-```rust
-pub struct MintRecord {
-    pub meter: Pubkey,
-    pub validation: Pubkey,
-    pub amount: u64,
-    pub recipient: Pubkey,
-    pub timestamp: i64,
+pub struct TokenInfo {
+    pub authority: Pubkey,      // 32 bytes - Admin authority
+    pub mint: Pubkey,           // 32 bytes - GRID mint address
+    pub total_supply: u64,      // 8 bytes  - Total minted supply
+    pub created_at: i64,        // 8 bytes  - Unix timestamp
 }
 ```
 
@@ -271,78 +398,89 @@ pub struct MintRecord {
 ```rust
 #[event]
 pub struct TokensMinted {
-    pub meter: Pubkey,
     pub recipient: Pubkey,
     pub amount: u64,
-    pub validation: Pubkey,
     pub timestamp: i64,
 }
 ```
 
-### TokensBurned
+### TokensMintedDirect
 
 ```rust
 #[event]
-pub struct TokensBurned {
-    pub owner: Pubkey,
+pub struct TokensMintedDirect {
+    pub recipient: Pubkey,
     pub amount: u64,
     pub timestamp: i64,
 }
 ```
 
-### TokensTransferred
+### GridTokensMinted
 
 ```rust
 #[event]
-pub struct TokensTransferred {
-    pub from: Pubkey,
-    pub to: Pubkey,
+pub struct GridTokensMinted {
+    pub meter_owner: Pubkey,
     pub amount: u64,
-    pub memo: Option<String>,
     pub timestamp: i64,
 }
 ```
 
 ---
 
+## Error Codes
+
+| Code | Name | Description |
+|------|------|-------------|
+| 6000 | `UnauthorizedAuthority` | Caller is not the token authority |
+| 6001 | `InvalidMeter` | Meter not found or invalid |
+| 6002 | `InsufficientBalance` | Not enough tokens |
+| 6003 | `InvalidMetadataAccount` | Metadata account invalid |
+| 6004 | `NoUnsettledBalance` | No unsettled balance to mint |
+
+---
+
 ## Token Economics
 
-### Minting Rules
+### Specifications
 
-1. **1:1 Ratio**: 1 kWh validated production = 1 GRID token
-2. **Validation Required**: Must have oracle validation proof
-3. **Single Use**: Each validation can only mint once
-4. **Time Bound**: Validation must be < 1 hour old
+| Property | Value |
+|----------|-------|
+| Symbol | GRID |
+| Decimals | 9 |
+| Initial Supply | 0 |
+| Max Supply | Unlimited |
+| Mint Authority | TokenInfo PDA (program-controlled) |
+| Freeze Authority | None |
+
+### Common Amounts
+
+| Human Readable | Base Units |
+|----------------|------------|
+| 0.1 GRID | `100_000_000` |
+| 1 GRID | `1_000_000_000` |
+| 10 GRID | `10_000_000_000` |
+| 100 GRID | `100_000_000_000` |
 
 ### Supply Model
 
 ```
-Supply = Total Minted - Total Burned
+Circulating Supply = Total Minted - Total Burned
 ```
 
-No hard cap on total supply - backed by actual energy production.
+No hard cap on total supply—backed by actual energy production.
 
 ---
 
 ## Integration with SPL Token
 
 GRID tokens are standard SPL tokens compatible with:
-- Phantom, Solflare, and other wallets
+- Phantom, Solflare, and other Solana wallets
 - Jupiter, Raydium DEXs
 - Standard token transfers
-- Token metadata standards
-
-### Metadata
-
-```typescript
-const metadata = {
-  name: 'GridTokenX Energy',
-  symbol: 'GRID',
-  decimals: 9,
-  image: 'https://gridtokenx.io/logo.png',
-};
-```
+- Token metadata standards (Metaplex)
 
 ---
 
-**Document Version**: 1.0
+**Document Version**: 2.0  
+**Last Updated**: November 2024

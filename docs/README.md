@@ -116,11 +116,21 @@ flowchart TB
 
 | Program | Description | Program ID |
 |---------|-------------|------------|
-| **Registry** | User and meter registration | `2XPQm...V2ek` |
-| **Oracle** | Smart meter validation | `DvdtU...qAoE` |
-| **Energy Token** | GRID token minting | `94G1r...yEur` |
-| **Trading** | P2P marketplace | `GZnqN...sctk` |
-| **Governance** | ERC & PoA governance | `4DY97...SvXe` |
+| **Registry** | User and meter registration | `FQYhgNRRWDCvy9WPeZPo5oZw63iHpJZToi1uUp25jE4a` |
+| **Oracle** | Smart meter data validation | `HtV8jTeaCVXKZVCQQVWjXcAvmiF6id9QSLVGP5MT5osX` |
+| **Energy Token** | GRID token minting | `9sAB52aZ71ciGhaVwuCg6ohTeWu8H6fDb2B29ohxsFVp` |
+| **Trading** | P2P marketplace | `9t3s8sCgVUG9kAgVPsozj8mDpJp9cy6SF5HwRK5nvAHb` |
+| **Governance** | ERC & PoA governance | `4D9Mydr4f3BEiDoKxE2V8yMZBj53X6nxMjMWaNPAQKrN` |
+
+### Program Documentation
+
+Detailed technical specifications for each program:
+
+- [Registry Program](./programs/registry-program.md) - User/meter registration, oracle authorization, settlement
+- [Oracle Program](./programs/oracle-program.md) - AMI data bridge, validation pipeline, quality metrics
+- [Energy Token Program](./programs/energy-token-program.md) - GRID token management, PDA authority pattern
+- [Trading Program](./programs/trading-program.md) - P2P marketplace, order book, ERC validation, VWAP pricing
+- [Governance Program](./programs/governance-program.md) - ERC certificates, PoA system, multi-sig authority
 
 ---
 

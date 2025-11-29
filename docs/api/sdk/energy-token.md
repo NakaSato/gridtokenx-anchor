@@ -9,7 +9,7 @@ The Energy Token module manages GRID token operations including minting, burning
 ## Program ID
 
 ```
-94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur
+9sAB52aZ71ciGhaVwuCg6ohTeWu8H6fDb2B29ohxsFVp
 ```
 
 ---
@@ -20,74 +20,142 @@ The Energy Token module manages GRID token operations including minting, burning
 |----------|-------|
 | Symbol | GRID |
 | Decimals | 9 |
-| Type | SPL Token |
-| Mint Authority | Program PDA |
+| Type | SPL Token (Token-2022 compatible) |
+| Mint Authority | TokenInfo PDA (program-controlled) |
+
+---
+
+## PDA Addresses
+
+### Token Info PDA
+```typescript
+const [tokenInfoPda] = PublicKey.findProgramAddressSync(
+  [Buffer.from("token_info")],
+  ENERGY_TOKEN_PROGRAM_ID
+);
+```
+
+### Mint PDA
+```typescript
+const [mintPda] = PublicKey.findProgramAddressSync(
+  [Buffer.from("mint")],
+  ENERGY_TOKEN_PROGRAM_ID
+);
+```
 
 ---
 
 ## Methods
 
-### mintTokens
+### initializeToken
 
-Mint new GRID tokens for validated energy production.
+Initialize the token configuration and create the program-controlled mint.
 
 ```typescript
-async mintTokens(params: {
-  meter: PublicKey;         // Meter PDA
-  amount: bigint;           // Amount to mint (9 decimals)
-  readingProof: PublicKey;  // Oracle validation proof
+async initializeToken(): Promise<TransactionSignature>
+```
+
+**Returns:**
+- `TransactionSignature` - Transaction signature
+
+**Example:**
+```typescript
+const tx = await client.energyToken.initializeToken();
+console.log('Token initialized:', tx);
+```
+
+---
+
+### createTokenMint
+
+Create a standalone mint with Metaplex metadata.
+
+```typescript
+async createTokenMint(params: {
+  name: string;         // Token name
+  symbol: string;       // Token symbol
+  uri: string;          // Metadata JSON URI
 }): Promise<{
   tx: TransactionSignature;
-  mintedAmount: bigint;
+  mint: PublicKey;
 }>
 ```
 
 **Parameters:**
 | Name | Type | Description |
 |------|------|-------------|
-| `meter` | `PublicKey` | Registered meter PDA |
-| `amount` | `bigint` | Token amount (9 decimals) |
-| `readingProof` | `PublicKey` | Oracle validation proof |
+| `name` | `string` | Token name (e.g., "Grid Renewable Energy Token") |
+| `symbol` | `string` | Token symbol (e.g., "GRID") |
+| `uri` | `string` | Metadata JSON URI |
 
 **Returns:**
 - `tx` - Transaction signature
-- `mintedAmount` - Actual minted amount
+- `mint` - Created mint address
 
 **Example:**
 ```typescript
-const { tx, mintedAmount } = await client.energyToken.mintTokens({
-  meter: meterPda,
-  amount: BigInt(5_000_000_000), // 5 kWh
-  readingProof: validationPda,
+const { tx, mint } = await client.energyToken.createTokenMint({
+  name: "Grid Renewable Energy Token",
+  symbol: "GRID",
+  uri: "https://gridtokenx.com/metadata.json",
 });
-console.log('Minted:', mintedAmount.toString(), 'GRID');
+console.log('Mint created:', mint.toBase58());
 ```
 
 ---
 
-### burnTokens
+### mintToWallet
 
-Burn GRID tokens (for consumed energy settlement).
+Mint GRID tokens to a wallet. Creates ATA if needed.
 
 ```typescript
-async burnTokens(params: {
-  amount: bigint;           // Amount to burn
-  meter?: PublicKey;        // Associated meter (optional)
+async mintToWallet(params: {
+  destinationOwner: PublicKey;  // Recipient wallet
+  amount: bigint;               // Amount to mint (9 decimals)
 }): Promise<TransactionSignature>
 ```
 
 **Parameters:**
 | Name | Type | Description |
 |------|------|-------------|
-| `amount` | `bigint` | Token amount to burn |
-| `meter` | `PublicKey` | Optional meter reference |
+| `destinationOwner` | `PublicKey` | Recipient wallet address |
+| `amount` | `bigint` | Token amount (9 decimals) |
 
 **Example:**
 ```typescript
-const tx = await client.energyToken.burnTokens({
-  amount: BigInt(3_000_000_000), // 3 kWh
+const tx = await client.energyToken.mintToWallet({
+  destinationOwner: recipientWallet,
+  amount: BigInt(5_000_000_000), // 5 GRID tokens
 });
-console.log('Burned tokens:', tx);
+console.log('Minted to wallet:', tx);
+```
+
+---
+
+### mintTokensDirect
+
+Mint tokens directly to an existing token account. Updates total supply.
+
+```typescript
+async mintTokensDirect(params: {
+  userTokenAccount: PublicKey;  // Recipient token account (must exist)
+  amount: bigint;               // Amount to mint (9 decimals)
+}): Promise<TransactionSignature>
+```
+
+**Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| `userTokenAccount` | `PublicKey` | Existing token account |
+| `amount` | `bigint` | Token amount (9 decimals) |
+
+**Example:**
+```typescript
+const tx = await client.energyToken.mintTokensDirect({
+  userTokenAccount: userAta,
+  amount: BigInt(10_000_000_000), // 10 GRID tokens
+});
+console.log('Minted directly:', tx);
 ```
 
 ---
@@ -98,26 +166,49 @@ Transfer GRID tokens to another wallet.
 
 ```typescript
 async transfer(params: {
-  to: PublicKey;            // Recipient wallet
+  to: PublicKey;            // Recipient token account
   amount: bigint;           // Transfer amount
-  memo?: string;            // Optional memo
 }): Promise<TransactionSignature>
 ```
 
 **Parameters:**
 | Name | Type | Description |
 |------|------|-------------|
-| `to` | `PublicKey` | Recipient address |
-| `amount` | `bigint` | Transfer amount |
-| `memo` | `string` | Optional memo |
+| `to` | `PublicKey` | Recipient token account address |
+| `amount` | `bigint` | Transfer amount (9 decimals) |
 
 **Example:**
 ```typescript
 const tx = await client.energyToken.transfer({
-  to: recipientWallet,
-  amount: BigInt(1_000_000_000), // 1 GRID
-  memo: 'Energy transfer',
+  to: recipientAta,
+  amount: BigInt(1_000_000_000), // 1 GRID token
 });
+console.log('Transfer complete:', tx);
+```
+
+---
+
+### burn
+
+Burn GRID tokens from holder's account.
+
+```typescript
+async burn(params: {
+  amount: bigint;           // Amount to burn
+}): Promise<TransactionSignature>
+```
+
+**Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| `amount` | `bigint` | Token amount to burn (9 decimals) |
+
+**Example:**
+```typescript
+const tx = await client.energyToken.burn({
+  amount: BigInt(3_000_000_000), // 3 GRID tokens
+});
+console.log('Burned tokens:', tx);
 ```
 
 ---
@@ -145,15 +236,23 @@ console.log('Balance:', Number(balance) / 1e9, 'GRID');
 
 ---
 
-### getTokenAccount
+### getTokenInfo
 
-Get token account details.
+Get token configuration and supply information.
 
 ```typescript
-async getTokenAccount(wallet?: PublicKey): Promise<TokenAccount | null>
+async getTokenInfo(): Promise<TokenInfo>
 ```
 
-**Returns:** Token account info or null if not exists
+**Returns:** TokenInfo account data
+
+**Example:**
+```typescript
+const tokenInfo = await client.energyToken.getTokenInfo();
+console.log('Authority:', tokenInfo.authority.toBase58());
+console.log('Total supply:', Number(tokenInfo.totalSupply) / 1e9, 'GRID');
+console.log('Created at:', new Date(tokenInfo.createdAt * 1000));
+```
 
 ---
 
@@ -170,56 +269,20 @@ async getMintInfo(): Promise<MintInfo>
 **Example:**
 ```typescript
 const mint = await client.energyToken.getMintInfo();
-console.log('Total supply:', mint.supply.toString());
 console.log('Decimals:', mint.decimals);
+console.log('Supply:', mint.supply.toString());
 ```
-
----
-
-### createTokenAccount
-
-Create associated token account for GRID tokens.
-
-```typescript
-async createTokenAccount(wallet?: PublicKey): Promise<{
-  tx: TransactionSignature;
-  tokenAccount: PublicKey;
-}>
-```
-
-**Returns:**
-- `tx` - Transaction signature
-- `tokenAccount` - Created ATA address
-
----
-
-### getTransactionHistory
-
-Get token transaction history.
-
-```typescript
-async getTransactionHistory(params?: {
-  limit?: number;
-  before?: string;
-}): Promise<TokenTransaction[]>
-```
-
-**Returns:** Array of token transactions
 
 ---
 
 ## Types
 
 ```typescript
-interface TokenAccount {
-  address: PublicKey;
-  owner: PublicKey;
+interface TokenInfo {
+  authority: PublicKey;
   mint: PublicKey;
-  amount: bigint;
-  delegate: PublicKey | null;
-  delegatedAmount: bigint;
-  isInitialized: boolean;
-  isFrozen: boolean;
+  totalSupply: bigint;
+  createdAt: number;
 }
 
 interface MintInfo {
@@ -231,35 +294,15 @@ interface MintInfo {
   isInitialized: boolean;
 }
 
-interface TokenTransaction {
-  signature: string;
-  type: 'mint' | 'burn' | 'transfer';
-  amount: bigint;
-  from: PublicKey | null;
-  to: PublicKey | null;
-  timestamp: number;
-  slot: number;
-  fee: number;
-}
-
-interface TokensMintedEvent {
-  meter: PublicKey;
+interface TokenAccount {
+  address: PublicKey;
   owner: PublicKey;
+  mint: PublicKey;
   amount: bigint;
-  timestamp: number;
-}
-
-interface TokensBurnedEvent {
-  owner: PublicKey;
-  amount: bigint;
-  timestamp: number;
-}
-
-interface TokensTransferredEvent {
-  from: PublicKey;
-  to: PublicKey;
-  amount: bigint;
-  timestamp: number;
+  delegate: PublicKey | null;
+  delegatedAmount: bigint;
+  isInitialized: boolean;
+  isFrozen: boolean;
 }
 ```
 
@@ -267,103 +310,125 @@ interface TokensTransferredEvent {
 
 ## Events
 
-### onTokensMinted
+### TokensMinted
 
-Subscribe to token minting events.
+Emitted when tokens are minted via `mintToWallet`.
 
 ```typescript
+interface TokensMinted {
+  recipient: PublicKey;
+  amount: bigint;
+  timestamp: number;
+}
+
 client.energyToken.onTokensMinted((event) => {
-  console.log('Minted:', event.amount.toString());
-  console.log('Meter:', event.meter.toBase58());
+  console.log('Minted:', Number(event.amount) / 1e9, 'GRID');
+  console.log('To:', event.recipient.toBase58());
 });
 ```
 
-### onTokensBurned
+### TokensMintedDirect
 
-Subscribe to token burning events.
+Emitted when tokens are minted via `mintTokensDirect`.
 
 ```typescript
-client.energyToken.onTokensBurned((event) => {
-  console.log('Burned:', event.amount.toString());
+interface TokensMintedDirect {
+  recipient: PublicKey;
+  amount: bigint;
+  timestamp: number;
+}
+
+client.energyToken.onTokensMintedDirect((event) => {
+  console.log('Direct mint:', Number(event.amount) / 1e9, 'GRID');
 });
 ```
 
-### onTokensTransferred
+### GridTokensMinted
 
-Subscribe to token transfer events.
+Emitted for grid meter-based minting.
 
 ```typescript
-client.energyToken.onTokensTransferred((event) => {
-  console.log('From:', event.from.toBase58());
-  console.log('To:', event.to.toBase58());
-  console.log('Amount:', event.amount.toString());
-});
+interface GridTokensMinted {
+  meterOwner: PublicKey;
+  amount: bigint;
+  timestamp: number;
+}
 ```
 
 ---
 
 ## Error Codes
 
-| Code | Description |
-|------|-------------|
-| `InsufficientBalance` | Not enough tokens |
-| `InvalidMeter` | Meter not registered |
-| `MeterNotActive` | Meter is inactive |
-| `InvalidReadingProof` | Oracle validation missing |
-| `MintingNotAllowed` | Minting restricted |
-| `BurnAmountTooHigh` | Cannot burn more than balance |
-| `TokenAccountNotFound` | ATA doesn't exist |
-| `AccountFrozen` | Token account is frozen |
-| `Unauthorized` | Caller not authorized |
+| Code | Name | Description |
+|------|------|-------------|
+| 6000 | `UnauthorizedAuthority` | Caller is not the token authority |
+| 6001 | `InvalidMeter` | Meter not found or invalid |
+| 6002 | `InsufficientBalance` | Not enough tokens |
+| 6003 | `InvalidMetadataAccount` | Metadata account invalid |
+| 6004 | `NoUnsettledBalance` | No unsettled balance to mint |
 
 ---
 
-## Minting Flow Example
-
-Complete energy-to-token conversion flow:
+## Complete Flow Example
 
 ```typescript
 import { GridTokenXClient } from '@gridtokenx/sdk';
+import { Connection, Keypair } from '@solana/web3.js';
 
-async function mintFromMeterReading() {
-  const client = new GridTokenXClient({ wallet });
+async function energyTokenDemo() {
+  // Initialize client
+  const connection = new Connection('http://localhost:8899', 'confirmed');
+  const wallet = Keypair.generate();
+  const client = new GridTokenXClient(connection, wallet);
   
-  // 1. Get meter and previous reading
-  const meter = await client.registry.getMeter(meterPda);
-  const previousReading = meter.lastReading;
+  // 1. Initialize token (one-time setup)
+  await client.energyToken.initializeToken();
   
-  // 2. Get current meter reading
-  const currentReading = BigInt(16_500_000_000); // 16.5 kWh total
+  // 2. Get token info
+  const tokenInfo = await client.energyToken.getTokenInfo();
+  console.log('Token authority:', tokenInfo.authority.toBase58());
   
-  // 3. Validate with oracle
-  const validation = await client.oracle.validateMeterReading({
-    meter: meterPda,
-    reading: currentReading,
-    timestamp: Math.floor(Date.now() / 1000),
+  // 3. Mint tokens to a user
+  const recipientWallet = Keypair.generate().publicKey;
+  await client.energyToken.mintToWallet({
+    destinationOwner: recipientWallet,
+    amount: BigInt(100_000_000_000), // 100 GRID
   });
   
-  if (!validation.isValid) {
-    throw new Error('Reading validation failed');
-  }
+  // 4. Check balance
+  const balance = await client.energyToken.getBalance(recipientWallet);
+  console.log('Balance:', Number(balance) / 1e9, 'GRID');
   
-  // 4. Calculate production delta
-  const produced = currentReading - previousReading;
-  
-  // 5. Mint tokens for produced energy
-  const { mintedAmount } = await client.energyToken.mintTokens({
-    meter: meterPda,
-    amount: produced,
-    readingProof: validation.proofPda,
+  // 5. Transfer tokens
+  const anotherWallet = Keypair.generate().publicKey;
+  await client.energyToken.transfer({
+    to: anotherWallet,
+    amount: BigInt(10_000_000_000), // 10 GRID
   });
   
-  console.log('Minted', Number(mintedAmount) / 1e9, 'GRID tokens');
+  // 6. Burn tokens
+  await client.energyToken.burn({
+    amount: BigInt(5_000_000_000), // 5 GRID
+  });
   
-  // 6. Check new balance
-  const balance = await client.energyToken.getBalance();
-  console.log('Total balance:', Number(balance) / 1e9, 'GRID');
+  // 7. Check final token info
+  const finalInfo = await client.energyToken.getTokenInfo();
+  console.log('Total supply:', Number(finalInfo.totalSupply) / 1e9, 'GRID');
 }
 ```
 
 ---
 
-**Document Version**: 1.0
+## Common Token Amounts
+
+| Amount | Base Units | Description |
+|--------|------------|-------------|
+| 0.1 GRID | `100_000_000` | Small amount |
+| 1 GRID | `1_000_000_000` | Standard unit |
+| 10 GRID | `10_000_000_000` | Medium amount |
+| 100 GRID | `100_000_000_000` | Large amount |
+
+---
+
+**Document Version**: 2.0  
+**Last Updated**: November 2024

@@ -4,9 +4,9 @@
 
 ## Overview
 
-The Governance Program manages the certification and verification of renewable energy production on the GridTokenX platform. It implements a robust Proof-of-Attribution (PoA) system and Energy Renewable Certificate (ERC) lifecycle management.
+The Governance Program manages the certification and verification of renewable energy production on the GridTokenX platform. It implements a robust Proof-of-Attribution (PoA) system and Energy Renewable Certificate (ERC) lifecycle management with multi-sig authority transfers, certificate revocation, ERC transfers, and oracle integration for data validation.
 
-**Program ID:** `4D9Mydr4f3BEiDoKxE2V8yMZPo5oZw63iHpJZToi1uUp25jE4a`
+**Program ID:** `4D9Mydr4f3BEiDoKxE2V8yMZBj53X6nxMjMWaNPAQKrN`
 
 ---
 
@@ -16,23 +16,28 @@ The Governance Program manages the certification and verification of renewable e
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Governance Program                                │
+│                    Governance Program v2.0                           │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌─────────────────┐    ┌──────────────────┐    ┌────────────────┐  │
-│  │   PoA Config    │    │ ERC Certificate  │    │ Verification   │  │
-│  │                 │    │                  │    │    Status      │  │
-│  │ • Attribution   │    │ • Energy Amount  │    │                │
-│  │   Rules         │    │ • Source Type    │    │ • Trading      │  │
-│  │ • Verification  │    │ • Time Period    │    │   Ready        │  │
-│  │   Threshold     │    │ • Status         │    │ • Valid        │  │
-│  │ • Certificate   │    │ • Owner          │    │ • Expired      │  │
-│  │   Expiry        │    │ • Verifications  │    │                │  │
+│  │   PoA Config    │    │ ERC Certificate  │    │   Advanced     │  │
+│  │                 │    │                  │    │   Features     │  │
+│  │ • Authority     │    │ • Certificate ID │    │                │  │
+│  │ • Emergency     │    │ • Energy Amount  │    │ • Multi-sig    │  │
+│  │   Controls      │    │ • Source Type    │    │   Authority    │  │
+│  │ • ERC Config    │    │ • Status         │    │ • Revocation   │  │
+│  │ • Oracle Auth   │    │ • Owner          │    │ • Transfers    │  │
+│  │ • Statistics    │    │ • Expiration     │    │ • Oracle       │  │
 │  └─────────────────┘    └──────────────────┘    └────────────────┘  │
 │                                                                      │
 │  ┌─────────────────────────────────────────────────────────────────┐│
-│  │                    Verification Flow                             ││
-│  │  Issue ERC → Add Verifications → Validate → Ready for Trading   ││
+│  │                    Certificate Lifecycle                         ││
+│  │  Issue ERC → Validate for Trading → Transfer/Trade → Revoke     ││
+│  └─────────────────────────────────────────────────────────────────┘│
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐│
+│  │                    Authority Management                          ││
+│  │  Propose → Approve (2-step) | Cancel | Oracle Integration       ││
 │  └─────────────────────────────────────────────────────────────────┘│
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -42,9 +47,9 @@ The Governance Program manages the certification and verification of renewable e
 
 | Component | Purpose | Key Fields |
 |-----------|---------|------------|
-| **PoAConfig** | Platform-wide governance settings | attribution_rules, verification_threshold, certificate_validity_days |
-| **ErcCertificate** | Individual renewable energy certificate | energy_amount_kwh, source_type, status, verification_count |
-| **Verification** | Oracle verification record | verifier, timestamp, attestation_hash |
+| **PoAConfig** | Platform-wide governance settings | authority, emergency_paused, erc_validation_enabled, oracle_authority, pending_authority |
+| **ErcCertificate** | Individual renewable energy certificate | certificate_id, owner, energy_amount, status, validated_for_trading, revocation_reason |
+| **MeterAccount** | Meter reference for ERC issuance | Imported from Registry program for tracking claimed_erc_generation |
 
 ---
 
