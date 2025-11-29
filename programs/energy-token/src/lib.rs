@@ -14,7 +14,7 @@ use mpl_token_metadata::types::{PrintSupply, TokenStandard};
 // Metaplex Token Metadata Program ID
 const MPL_TOKEN_METADATA_ID: Pubkey = mpl_token_metadata::ID;
 
-declare_id!("94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur");
+declare_id!("9sAB52aZ71ciGhaVwuCg6ohTeWu8H6fDb2B29ohxsFVp");
 
 #[program]
 pub mod energy_token {
@@ -70,11 +70,15 @@ pub mod energy_token {
         let cpi_accounts = token_interface::MintTo {
             mint: ctx.accounts.mint.to_account_info(),
             to: ctx.accounts.destination.to_account_info(),
-            authority: ctx.accounts.authority.to_account_info(),
+            authority: ctx.accounts.token_info.to_account_info(),
         };
 
         let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+
+        let seeds = &[b"token_info".as_ref(), &[ctx.bumps.token_info]];
+        let signer = &[&seeds[..]];
+
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
 
         token_interface::mint_to(cpi_ctx, amount)?;
 
@@ -239,6 +243,13 @@ pub struct CreateTokenMint<'info> {
 pub struct MintToWallet<'info> {
     #[account(mut)]
     pub mint: InterfaceAccount<'info, MintInterface>,
+
+    #[account(
+        seeds = [b"token_info"],
+        bump,
+        has_one = authority,
+    )]
+    pub token_info: Account<'info, TokenInfo>,
 
     #[account(
         init_if_needed,

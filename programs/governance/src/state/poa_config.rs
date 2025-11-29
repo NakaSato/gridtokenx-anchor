@@ -64,6 +64,14 @@ pub struct PoAConfig {
     pub last_updated: i64,
     /// Last ERC issued timestamp
     pub last_erc_issued_at: Option<i64>,
+    
+    // === NEW: Multi-sig Authority Change ===
+    /// Pending new authority (for 2-step transfer)
+    pub pending_authority: Option<Pubkey>,
+    /// When the pending authority change was proposed
+    pub pending_authority_proposed_at: Option<i64>,
+    /// When the pending authority change expires (48 hours)
+    pub pending_authority_expires_at: Option<i64>,
 }
 
 impl PoAConfig {
@@ -103,7 +111,12 @@ impl PoAConfig {
         // Timestamps
         8 +     // created_at
         8 +     // last_updated
-        9;      // last_erc_issued_at (Option<i64>)
+        9 +     // last_erc_issued_at (Option<i64>)
+        
+        // Multi-sig Authority Change
+        33 +    // pending_authority (Option<Pubkey>)
+        9 +     // pending_authority_proposed_at (Option<i64>)
+        9;      // pending_authority_expires_at (Option<i64>)
     
     /// Validate that config parameters are within acceptable ranges
     pub fn validate_config(&self) -> Result<()> {

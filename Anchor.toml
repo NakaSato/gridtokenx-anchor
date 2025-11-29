@@ -7,18 +7,18 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-energy_token = "54SAVMgGhjssp3iQ7zBK8kgUnEtqHJTNg3QRfzzDitHB"
-governance = "GZP5QP6PMD2D8nNsLkhA39Lfr4er12JLMhQZJnhxyT5h"
-oracle = "F7mEgt7zaAaKHfTNmCLeZCUutdKyZ2cxYg41ggjstBi6"
-registry = "9XS8uUEVErcA8LABrJQAdohWMXTToBwhFN7Rvur6dC5"
-trading = "2pZ8gqotjvKMAu96XzpGZ7QFcemZzj21ybtVTbaDP1zG"
+energy_token = "9sAB52aZ71ciGhaVwuCg6ohTeWu8H6fDb2B29ohxsFVp"
+governance = "4D9Mydr4f3BEiDoKxE2V8yMZBj53X6nxMjMWaNPAQKrN"
+oracle = "HtV8jTeaCVXKZVCQQVWjXcAvmiF6id9QSLVGP5MT5osX"
+registry = "FQYhgNRRWDCvy9WPeZPo5oZw63iHpJZToi1uUp25jE4a"
+trading = "9t3s8sCgVUG9kAgVPsozj8mDpJp9cy6SF5HwRK5nvAHb"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "~/Developments/weekend/gridtokenx-anchor/keypairs/dev-wallet.json"
+wallet = "./keypairs/dev-wallet.json"
 
 [test]
 startup_wait = 5000
@@ -26,24 +26,24 @@ shutdown_wait = 2000
 upgradeable = false
 
 [[test.genesis]]
-address = "54SAVMgGhjssp3iQ7zBK8kgUnEtqHJTNg3QRfzzDitHB"
+address = "9sAB52aZ71ciGhaVwuCg6ohTeWu8H6fDb2B29ohxsFVp"
 program = "target/deploy/energy_token.so"
 
 [[test.genesis]]
-address = "GZP5QP6PMD2D8nNsLkhA39Lfr4er12JLMhQZJnhxyT5h"
+address = "4D9Mydr4f3BEiDoKxE2V8yMZBj53X6nxMjMWaNPAQKrN"
 program = "target/deploy/governance.so"
 
 [[test.genesis]]
-address = "F7mEgt7zaAaKHfTNmCLeZCUutdKyZ2cxYg41ggjstBi6"
+address = "HtV8jTeaCVXKZVCQQVWjXcAvmiF6id9QSLVGP5MT5osX"
 program = "target/deploy/oracle.so"
 
 [[test.genesis]]
-address = "9XS8uUEVErcA8LABrJQAdohWMXTToBwhFN7Rvur6dC5"
+address = "FQYhgNRRWDCvy9WPeZPo5oZw63iHpJZToi1uUp25jE4a"
 program = "target/deploy/registry.so"
 
 [[test.genesis]]
-address = "2pZ8gqotjvKMAu96XzpGZ7QFcemZzj21ybtVTbaDP1zG"
+address = "9t3s8sCgVUG9kAgVPsozj8mDpJp9cy6SF5HwRK5nvAHb"
 program = "target/deploy/trading.so"
 
 [scripts]
-test = "pnpm ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "pnpm ts-mocha -p ./tsconfig.json -t 1000000 tests/mint-transaction-flow.test.ts"

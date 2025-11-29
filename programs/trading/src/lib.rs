@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 use base64::{engine::general_purpose, Engine as _};
 use governance::{ErcCertificate, ErcStatus};
 
-declare_id!("GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk");
+declare_id!("9t3s8sCgVUG9kAgVPsozj8mDpJp9cy6SF5HwRK5nvAHb");
 
 #[program]
 pub mod trading {
@@ -14,7 +14,7 @@ pub mod trading {
         msg!("Trading program initialized");
         Ok(())
     }
-    
+
     /// Initialize the trading market
     pub fn initialize_market(ctx: Context<InitializeMarket>) -> Result<()> {
         let market = &mut ctx.accounts.market;
@@ -25,7 +25,7 @@ pub mod trading {
         market.created_at = Clock::get()?.unix_timestamp;
         market.clearing_enabled = true;
         market.market_fee_bps = 25; // 0.25% fee
-        
+
         // Initialize batch processing config
         market.batch_config = BatchConfig {
             enabled: false,
@@ -34,24 +34,24 @@ pub mod trading {
             min_batch_size: 5,
             price_improvement_threshold: 5, // 5% improvement
         };
-        
+
         // Initialize market depth
         market.buy_side_depth = Vec::new();
         market.sell_side_depth = Vec::new();
-        
+
         // Initialize price discovery
         market.last_clearing_price = 0;
         market.price_history = Vec::new();
         market.volume_weighted_price = 0;
-        
+
         emit!(MarketInitialized {
             authority: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
-        
+
         Ok(())
     }
-    
+
     /// Create a sell order for energy
     /// Validates that the seller has a valid ERC certificate before allowing the order
     pub fn create_sell_order(
@@ -61,18 +61,18 @@ pub mod trading {
     ) -> Result<()> {
         require!(energy_amount > 0, ErrorCode::InvalidAmount);
         require!(price_per_kwh > 0, ErrorCode::InvalidPrice);
-        
+
         // === ERC VALIDATION ===
         // Only allow sell orders if the seller has a valid ERC certificate
         if let Some(erc_certificate) = &ctx.accounts.erc_certificate {
             let clock = Clock::get()?;
-            
+
             // Check certificate status
             require!(
                 erc_certificate.status == ErcStatus::Valid,
                 ErrorCode::InvalidErcCertificate
             );
-            
+
             // Check expiration
             if let Some(expires_at) = erc_certificate.expires_at {
                 require!(
@@ -80,20 +80,21 @@ pub mod trading {
                     ErrorCode::ErcCertificateExpired
                 );
             }
-            
+
             // Check if validated for trading
             require!(
                 erc_certificate.validated_for_trading,
                 ErrorCode::ErcNotValidatedForTrading
             );
-            
+
             // Verify energy amount doesn't exceed certificate amount
             require!(
                 energy_amount <= erc_certificate.energy_amount,
                 ErrorCode::ExceedsErcAmount
             );
-            
-            msg!("ERC validation passed - Certificate ID: {}, Available: {} kWh, Requested: {} kWh",
+
+            msg!(
+                "ERC validation passed - Certificate ID: {}, Available: {} kWh, Requested: {} kWh",
                 erc_certificate.certificate_id,
                 erc_certificate.energy_amount,
                 energy_amount
@@ -101,11 +102,11 @@ pub mod trading {
         } else {
             msg!("Warning: No ERC certificate provided - order allowed but may fail validation");
         }
-        
+
         let market = &mut ctx.accounts.market;
         let order = &mut ctx.accounts.order;
         let clock = Clock::get()?;
-        
+
         // Initialize order
         order.seller = ctx.accounts.authority.key();
         order.buyer = Pubkey::default(); // Not yet matched
@@ -116,22 +117,23 @@ pub mod trading {
         order.status = OrderStatus::Active;
         order.created_at = clock.unix_timestamp;
         order.expires_at = clock.unix_timestamp + 86400; // 24 hours
-        
+
         // Update market stats
         market.active_orders += 1;
-        
+
         // Update market depth for sell side
         update_market_depth(market, order, true)?;
-        
+
         // Encode sell order data as base64 for external systems
-        let order_data = format!("SELL:{}:{}:{}", 
+        let order_data = format!(
+            "SELL:{}:{}:{}",
             energy_amount,
             price_per_kwh,
             ctx.accounts.authority.key()
         );
         let encoded_data = general_purpose::STANDARD.encode(order_data.as_bytes());
         msg!("Sell order data (base64): {}", encoded_data);
-        
+
         emit!(SellOrderCreated {
             seller: ctx.accounts.authority.key(),
             order_id: order.key(),
@@ -139,17 +141,17 @@ pub mod trading {
             price_per_kwh,
             timestamp: clock.unix_timestamp,
         });
-        
+
         msg!(
             "Sell order created - ID: {}, Amount: {} kWh, Price: {} tokens/kWh",
             order.key(),
             energy_amount,
             price_per_kwh
         );
-        
+
         Ok(())
     }
-    
+
     /// Create a buy order for energy
     pub fn create_buy_order(
         ctx: Context<CreateBuyOrder>,
@@ -158,11 +160,11 @@ pub mod trading {
     ) -> Result<()> {
         require!(energy_amount > 0, ErrorCode::InvalidAmount);
         require!(max_price_per_kwh > 0, ErrorCode::InvalidPrice);
-        
+
         let market = &mut ctx.accounts.market;
         let order = &mut ctx.accounts.order;
         let clock = Clock::get()?;
-        
+
         // Initialize order
         order.buyer = ctx.accounts.authority.key();
         order.seller = Pubkey::default(); // Not yet matched
@@ -173,22 +175,23 @@ pub mod trading {
         order.status = OrderStatus::Active;
         order.created_at = clock.unix_timestamp;
         order.expires_at = clock.unix_timestamp + 86400; // 24 hours
-        
+
         // Update market stats
         market.active_orders += 1;
-        
+
         // Update market depth for buy side
         update_market_depth(market, order, false)?;
-        
+
         // Encode buy order data as base64 for external systems
-        let order_data = format!("BUY:{}:{}:{}", 
+        let order_data = format!(
+            "BUY:{}:{}:{}",
             energy_amount,
             max_price_per_kwh,
             ctx.accounts.authority.key()
         );
         let encoded_data = general_purpose::STANDARD.encode(order_data.as_bytes());
         msg!("Buy order data (base64): {}", encoded_data);
-        
+
         emit!(BuyOrderCreated {
             buyer: ctx.accounts.authority.key(),
             order_id: order.key(),
@@ -196,46 +199,62 @@ pub mod trading {
             price_per_kwh: max_price_per_kwh,
             timestamp: clock.unix_timestamp,
         });
-        
+
         msg!(
             "Buy order created - ID: {}, Amount: {} kWh, Max Price: {} tokens/kWh",
             order.key(),
             energy_amount,
             max_price_per_kwh
         );
-        
+
         Ok(())
     }
-    
+
     /// Match a buy order with a sell order
     pub fn match_orders(ctx: Context<MatchOrders>, match_amount: u64) -> Result<()> {
         require!(match_amount > 0, ErrorCode::InvalidAmount);
-        
+
         let market = &mut ctx.accounts.market;
         let buy_order = &mut ctx.accounts.buy_order;
         let sell_order = &mut ctx.accounts.sell_order;
         let trade_record = &mut ctx.accounts.trade_record;
         let clock = Clock::get()?;
-        
+
         // Validate orders
-        require!(buy_order.status == OrderStatus::Active || buy_order.status == OrderStatus::PartiallyFilled, ErrorCode::InactiveBuyOrder);
-        require!(sell_order.status == OrderStatus::Active || sell_order.status == OrderStatus::PartiallyFilled, ErrorCode::InactiveSellOrder);
-        require!(buy_order.price_per_kwh >= sell_order.price_per_kwh, ErrorCode::PriceMismatch);
-        
+        require!(
+            buy_order.status == OrderStatus::Active
+                || buy_order.status == OrderStatus::PartiallyFilled,
+            ErrorCode::InactiveBuyOrder
+        );
+        require!(
+            sell_order.status == OrderStatus::Active
+                || sell_order.status == OrderStatus::PartiallyFilled,
+            ErrorCode::InactiveSellOrder
+        );
+        require!(
+            buy_order.price_per_kwh >= sell_order.price_per_kwh,
+            ErrorCode::PriceMismatch
+        );
+
         // Calculate match details
         let buy_remaining = buy_order.amount - buy_order.filled_amount;
         let sell_remaining = sell_order.amount - sell_order.filled_amount;
         let actual_match_amount = match_amount.min(buy_remaining).min(sell_remaining);
-        
+
         // Enhanced price discovery: Volume-weighted average price
-        let clearing_price = calculate_volume_weighted_price(market, buy_order.price_per_kwh, sell_order.price_per_kwh, actual_match_amount);
+        let clearing_price = calculate_volume_weighted_price(
+            market,
+            buy_order.price_per_kwh,
+            sell_order.price_per_kwh,
+            actual_match_amount,
+        );
         let total_value = actual_match_amount * clearing_price;
         let fee_amount = (total_value * market.market_fee_bps as u64) / 10000;
-        
+
         // Update orders
         buy_order.filled_amount += actual_match_amount;
         sell_order.filled_amount += actual_match_amount;
-        
+
         // Update order statuses
         if buy_order.filled_amount >= buy_order.amount {
             buy_order.status = OrderStatus::Completed;
@@ -243,14 +262,14 @@ pub mod trading {
         } else {
             buy_order.status = OrderStatus::PartiallyFilled;
         }
-        
+
         if sell_order.filled_amount >= sell_order.amount {
             sell_order.status = OrderStatus::Completed;
             market.active_orders = market.active_orders.saturating_sub(1);
         } else {
             sell_order.status = OrderStatus::PartiallyFilled;
         }
-        
+
         // Create trade record
         trade_record.buy_order = buy_order.key();
         trade_record.sell_order = sell_order.key();
@@ -261,13 +280,18 @@ pub mod trading {
         trade_record.total_value = total_value;
         trade_record.fee_amount = fee_amount;
         trade_record.executed_at = clock.unix_timestamp;
-        
+
         // Update market stats and price history
         market.total_volume += actual_match_amount;
         market.total_trades += 1;
         market.last_clearing_price = clearing_price;
-        update_price_history(market, clearing_price, actual_match_amount, clock.unix_timestamp)?;
-        
+        update_price_history(
+            market,
+            clearing_price,
+            actual_match_amount,
+            clock.unix_timestamp,
+        )?;
+
         emit!(OrderMatched {
             buy_order: buy_order.key(),
             sell_order: sell_order.key(),
@@ -279,7 +303,7 @@ pub mod trading {
             fee_amount,
             timestamp: clock.unix_timestamp,
         });
-        
+
         msg!(
             "Orders matched - Amount: {} kWh, Price: {}, Buyer: {}, Seller: {}",
             actual_match_amount,
@@ -287,53 +311,53 @@ pub mod trading {
             buy_order.buyer,
             sell_order.seller
         );
-        
+
         Ok(())
     }
-    
+
     /// Cancel an active order
     pub fn cancel_order(ctx: Context<CancelOrder>) -> Result<()> {
         let market = &mut ctx.accounts.market;
         let order = &mut ctx.accounts.order;
         let clock = Clock::get()?;
-        
+
         // Validate order ownership
         let order_owner = if order.order_type == OrderType::Buy {
             order.buyer
         } else {
             order.seller
         };
-        
+
         require!(
             ctx.accounts.authority.key() == order_owner,
             ErrorCode::UnauthorizedAuthority
         );
-        
+
         // Validate order can be cancelled
         require!(
             order.status == OrderStatus::Active || order.status == OrderStatus::PartiallyFilled,
             ErrorCode::OrderNotCancellable
         );
-        
+
         // Update order status
         order.status = OrderStatus::Cancelled;
-        
+
         // Update market stats (only if order was active)
         if order.status == OrderStatus::Active || order.status == OrderStatus::PartiallyFilled {
             market.active_orders = market.active_orders.saturating_sub(1);
         }
-        
+
         emit!(OrderCancelled {
             order_id: order.key(),
             user: ctx.accounts.authority.key(),
             timestamp: clock.unix_timestamp,
         });
-        
+
         msg!("Order cancelled - ID: {}", order.key());
-        
+
         Ok(())
     }
-    
+
     /// Update market parameters (admin only)
     pub fn update_market_params(
         ctx: Context<UpdateMarketParams>,
@@ -341,59 +365,60 @@ pub mod trading {
         clearing_enabled: bool,
     ) -> Result<()> {
         let market = &mut ctx.accounts.market;
-        
+
         require!(
             ctx.accounts.authority.key() == market.authority,
             ErrorCode::UnauthorizedAuthority
         );
-        
+
         market.market_fee_bps = market_fee_bps;
         market.clearing_enabled = clearing_enabled;
-        
+
         emit!(MarketParamsUpdated {
             authority: ctx.accounts.authority.key(),
             market_fee_bps,
             clearing_enabled,
             timestamp: Clock::get()?.unix_timestamp,
         });
-        
+
         Ok(())
     }
-    
+
     /// Create and execute a batch of orders
-    pub fn execute_batch(
-        ctx: Context<ExecuteBatch>,
-        order_ids: Vec<Pubkey>,
-    ) -> Result<()> {
+    pub fn execute_batch(ctx: Context<ExecuteBatch>, order_ids: Vec<Pubkey>) -> Result<()> {
         let market = &mut ctx.accounts.market;
-        
-        require!(market.batch_config.enabled, ErrorCode::BatchProcessingDisabled);
+
+        require!(
+            market.batch_config.enabled,
+            ErrorCode::BatchProcessingDisabled
+        );
         require!(
             order_ids.len() <= market.batch_config.max_batch_size as usize,
             ErrorCode::BatchSizeExceeded
         );
-        
+
         let batch_id = Clock::get()?.unix_timestamp;
         let mut total_volume = 0u64;
-        
+
         // Process each order in the batch
         for &order_id in &order_ids {
             // Process order matching logic here
             total_volume += 100; // Simplified for example
         }
-        
+
         // Create batch record
         let batch_info = BatchInfo {
             batch_id: batch_id as u64,
             order_count: order_ids.len() as u32,
             total_volume,
             created_at: Clock::get()?.unix_timestamp,
-            expires_at: Clock::get()?.unix_timestamp + market.batch_config.batch_timeout_seconds as i64,
+            expires_at: Clock::get()?.unix_timestamp
+                + market.batch_config.batch_timeout_seconds as i64,
             order_ids: order_ids.clone(),
         };
-        
+
         market.current_batch = Some(batch_info);
-        
+
         emit!(BatchExecuted {
             authority: ctx.accounts.authority.key(),
             batch_id: batch_id as u64,
@@ -401,9 +426,14 @@ pub mod trading {
             total_volume,
             timestamp: Clock::get()?.unix_timestamp,
         });
-        
-        msg!("Batch executed - ID: {}, Orders: {}, Volume: {}", batch_id, order_ids.len(), total_volume);
-        
+
+        msg!(
+            "Batch executed - ID: {}, Orders: {}, Volume: {}",
+            batch_id,
+            order_ids.len(),
+            total_volume
+        );
+
         Ok(())
     }
 }
@@ -415,11 +445,11 @@ fn update_market_depth(market: &mut Market, order: &Order, is_sell: bool) -> Res
     } else {
         &mut market.buy_side_depth
     };
-    
+
     // Find existing price level or create new one
     let price = order.price_per_kwh;
     let amount = order.amount - order.filled_amount;
-    
+
     if let Some(level) = price_levels.iter_mut().find(|pl| pl.price == price) {
         level.total_amount += amount;
         level.order_count += 1;
@@ -430,9 +460,9 @@ fn update_market_depth(market: &mut Market, order: &Order, is_sell: bool) -> Res
             total_amount: amount,
             order_count: 1,
         };
-        
+
         price_levels.push(new_level);
-        
+
         // Keep only top 20 levels
         price_levels.sort_by(|a, b| {
             if is_sell {
@@ -441,12 +471,12 @@ fn update_market_depth(market: &mut Market, order: &Order, is_sell: bool) -> Res
                 b.price.cmp(&a.price) // Descending for buy side
             }
         });
-        
+
         if price_levels.len() > 20 {
             price_levels.truncate(20);
         }
     }
-    
+
     Ok(())
 }
 
@@ -458,7 +488,7 @@ fn calculate_volume_weighted_price(
 ) -> u64 {
     // Base price is average of bid and ask
     let base_price = (buy_price + sell_price) / 2;
-    
+
     // Apply volume weighting from recent trades
     if market.total_volume > 0 {
         let weight_factor = (volume as f64 / market.total_volume as f64).min(1.0);
@@ -481,24 +511,26 @@ fn update_price_history(
         volume,
         timestamp,
     };
-    
+
     market.price_history.push(price_point);
-    
+
     // Keep only last 100 price points
     if market.price_history.len() > 100 {
         market.price_history.remove(0);
     }
-    
+
     // Update volume-weighted price
     let total_volume: u64 = market.price_history.iter().map(|p| p.volume).sum();
-    let weighted_sum: u64 = market.price_history.iter()
+    let weighted_sum: u64 = market
+        .price_history
+        .iter()
         .map(|p| p.price * p.volume)
         .sum();
-    
+
     if total_volume > 0 {
         market.volume_weighted_price = weighted_sum / total_volume;
     }
-    
+
     Ok(())
 }
 
@@ -518,10 +550,10 @@ pub struct InitializeMarket<'info> {
         bump
     )]
     pub market: Account<'info, Market>,
-    
+
     #[account(mut)]
     pub authority: Signer<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -529,7 +561,7 @@ pub struct InitializeMarket<'info> {
 pub struct CreateSellOrder<'info> {
     #[account(mut)]
     pub market: Account<'info, Market>,
-    
+
     #[account(
         init,
         payer = authority,
@@ -538,14 +570,14 @@ pub struct CreateSellOrder<'info> {
         bump
     )]
     pub order: Account<'info, Order>,
-    
+
     /// Optional: ERC certificate for prosumers
     /// When provided, validates that seller has certified renewable energy
     pub erc_certificate: Option<Account<'info, ErcCertificate>>,
-    
+
     #[account(mut)]
     pub authority: Signer<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -553,7 +585,7 @@ pub struct CreateSellOrder<'info> {
 pub struct CreateBuyOrder<'info> {
     #[account(mut)]
     pub market: Account<'info, Market>,
-    
+
     #[account(
         init,
         payer = authority,
@@ -562,10 +594,10 @@ pub struct CreateBuyOrder<'info> {
         bump
     )]
     pub order: Account<'info, Order>,
-    
+
     #[account(mut)]
     pub authority: Signer<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -573,13 +605,13 @@ pub struct CreateBuyOrder<'info> {
 pub struct MatchOrders<'info> {
     #[account(mut)]
     pub market: Account<'info, Market>,
-    
+
     #[account(mut)]
     pub buy_order: Account<'info, Order>,
-    
+
     #[account(mut)]
     pub sell_order: Account<'info, Order>,
-    
+
     #[account(
         init,
         payer = authority,
@@ -588,10 +620,10 @@ pub struct MatchOrders<'info> {
         bump
     )]
     pub trade_record: Account<'info, TradeRecord>,
-    
+
     #[account(mut)]
     pub authority: Signer<'info>,
-    
+
     pub system_program: Program<'info, System>,
 }
 
@@ -599,10 +631,10 @@ pub struct MatchOrders<'info> {
 pub struct CancelOrder<'info> {
     #[account(mut)]
     pub market: Account<'info, Market>,
-    
+
     #[account(mut)]
     pub order: Account<'info, Order>,
-    
+
     pub authority: Signer<'info>,
 }
 
@@ -610,7 +642,7 @@ pub struct CancelOrder<'info> {
 pub struct UpdateMarketParams<'info> {
     #[account(mut, has_one = authority @ ErrorCode::UnauthorizedAuthority)]
     pub market: Account<'info, Market>,
-    
+
     pub authority: Signer<'info>,
 }
 
@@ -618,7 +650,7 @@ pub struct UpdateMarketParams<'info> {
 pub struct ExecuteBatch<'info> {
     #[account(mut)]
     pub market: Account<'info, Market>,
-    
+
     #[account(mut)]
     pub authority: Signer<'info>,
 }
@@ -634,21 +666,21 @@ pub struct Market {
     pub created_at: i64,
     pub clearing_enabled: bool,
     pub market_fee_bps: u16,
-    
+
     // === BATCH PROCESSING ===
     pub batch_config: BatchConfig,
     pub current_batch: Option<BatchInfo>,
-    
+
     // === MARKET DEPTH ===
     #[max_len(20)]
-    pub buy_side_depth: Vec<PriceLevel>,   // Top 20 buy levels
+    pub buy_side_depth: Vec<PriceLevel>, // Top 20 buy levels
     #[max_len(20)]
-    pub sell_side_depth: Vec<PriceLevel>,  // Top 20 sell levels
-    
+    pub sell_side_depth: Vec<PriceLevel>, // Top 20 sell levels
+
     // === PRICE DISCOVERY ===
     pub last_clearing_price: u64,
     #[max_len(100)]
-    pub price_history: Vec<PricePoint>,    // Last 100 price points
+    pub price_history: Vec<PricePoint>, // Last 100 price points
     pub volume_weighted_price: u64,
 }
 
@@ -656,9 +688,9 @@ pub struct Market {
 #[derive(InitSpace)]
 pub struct BatchConfig {
     pub enabled: bool,
-    pub max_batch_size: u32,           // Max orders per batch
-    pub batch_timeout_seconds: u32,     // Auto-execute after timeout
-    pub min_batch_size: u32,            // Min orders to trigger batch
+    pub max_batch_size: u32,              // Max orders per batch
+    pub batch_timeout_seconds: u32,       // Auto-execute after timeout
+    pub min_batch_size: u32,              // Min orders to trigger batch
     pub price_improvement_threshold: u16, // Required price improvement % to match
 }
 

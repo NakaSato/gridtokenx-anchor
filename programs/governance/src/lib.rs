@@ -12,7 +12,7 @@ pub use errors::*;
 pub use events::*;
 pub use state::*;
 
-declare_id!("4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe");
+declare_id!("4D9Mydr4f3BEiDoKxE2V8yMZBj53X6nxMjMWaNPAQKrN");
 
 #[program]
 pub mod governance {

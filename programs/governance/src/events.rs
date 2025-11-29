@@ -69,3 +69,59 @@ pub struct AuthorityInfoUpdated {
     pub new_contact: String,
     pub timestamp: i64,
 }
+
+// === NEW EVENTS: Revocation ===
+
+#[event]
+pub struct ErcRevoked {
+    pub certificate_id: String,
+    pub authority: Pubkey,
+    pub reason: String,
+    pub energy_amount: u64,
+    pub timestamp: i64,
+}
+
+// === NEW EVENTS: Transfer ===
+
+#[event]
+pub struct ErcTransferred {
+    pub certificate_id: String,
+    pub from_owner: Pubkey,
+    pub to_owner: Pubkey,
+    pub energy_amount: u64,
+    pub timestamp: i64,
+}
+
+// === NEW EVENTS: Multi-sig Authority ===
+
+#[event]
+pub struct AuthorityChangeProposed {
+    pub current_authority: Pubkey,
+    pub proposed_authority: Pubkey,
+    pub expires_at: i64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct AuthorityChangeApproved {
+    pub old_authority: Pubkey,
+    pub new_authority: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct AuthorityChangeCancelled {
+    pub authority: Pubkey,
+    pub cancelled_proposal: Pubkey,
+    pub timestamp: i64,
+}
+
+// === NEW EVENTS: Oracle ===
+
+#[event]
+pub struct OracleAuthoritySet {
+    pub authority: Pubkey,
+    pub oracle_authority: Pubkey,
+    pub min_confidence: u8,
+    pub timestamp: i64,
+}
