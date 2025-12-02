@@ -15,13 +15,14 @@ export class TestUtils {
     payer: anchor.web3.PublicKey,
     mint: anchor.web3.PublicKey,
     owner: anchor.web3.PublicKey,
-    connection: anchor.web3.Connection
+    connection: anchor.web3.Connection,
+    programId: anchor.web3.PublicKey = TOKEN_PROGRAM_ID
   ): Promise<anchor.web3.PublicKey> {
     const associatedTokenAddress = await getAssociatedTokenAddress(
       mint,
       owner,
       false,
-      TOKEN_PROGRAM_ID,
+      programId,
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
 
@@ -37,9 +38,13 @@ export class TestUtils {
       associatedTokenAddress,
       owner,
       mint,
-      TOKEN_PROGRAM_ID,
+      programId,
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
+
+    const transaction = new anchor.web3.Transaction().add(instruction);
+    const signature = await connection.sendTransaction(transaction, [anchor.web3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(await fs.readFile("./keypairs/dev-wallet.json", "utf-8"))))]);
+    await TestUtils.waitForTransaction(connection, signature);
 
     return associatedTokenAddress;
   }

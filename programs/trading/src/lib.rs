@@ -401,7 +401,7 @@ pub mod trading {
         let mut total_volume = 0u64;
 
         // Process each order in the batch
-        for &order_id in &order_ids {
+        for &_order_id in &order_ids {
             // Process order matching logic here
             total_volume += 100; // Simplified for example
         }

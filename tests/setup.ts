@@ -1,12 +1,13 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import {
+import type {
   EnergyToken,
   Governance,
   Oracle,
   Registry,
   Trading
-} from "../target/types";
+} from "../target/types/index.ts";
+import * as fs from "fs";
 
 export const PROGRAM_IDS = {
   energy_token: "54SAVMgGhjssp3iQ7zBK8kgUnEtqHJTNg3QRfzzDitHB",
@@ -48,7 +49,11 @@ export class TestEnvironment {
     this.tradingProgram = anchor.workspace.Trading as Program<Trading>;
 
     // Generate test keypairs
-    this.authority = anchor.web3.Keypair.generate();
+    // Load authority from dev-wallet.json
+    const walletPath = "./keypairs/dev-wallet.json";
+    // import * as fs from "fs"; // Moved to top level
+    const walletData = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
+    this.authority = anchor.web3.Keypair.fromSecretKey(new Uint8Array(walletData));
     this.testUser = anchor.web3.Keypair.generate();
     this.recValidator = anchor.web3.Keypair.generate();
   }

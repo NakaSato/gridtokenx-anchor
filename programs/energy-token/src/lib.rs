@@ -1,20 +1,18 @@
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
-use anchor_lang::AccountDeserialize;
-use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
-use anchor_spl::token_interface::{
-    self as token_interface, Mint as MintInterface, TokenAccount as TokenAccountInterface,
-    TokenInterface,
+use anchor_spl::token::{self, Burn, MintTo, Transfer};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_interface::{
+        self as token_interface, Mint as MintInterface, TokenAccount as TokenAccountInterface,
+        TokenInterface,
+    },
 };
 use mpl_token_metadata::instructions::CreateV1CpiBuilder;
 use mpl_token_metadata::types::{PrintSupply, TokenStandard};
 
-// Metaplex Token Metadata Program ID
-const MPL_TOKEN_METADATA_ID: Pubkey = mpl_token_metadata::ID;
-
-declare_id!("9sAB52aZ71ciGhaVwuCg6ohTeWu8H6fDb2B29ohxsFVp");
+declare_id!("GHoWp5RcujaeqimAAf9RwyRQCCF23mXxVYX9iGwBYGrH");
 
 #[program]
 pub mod energy_token {
@@ -65,6 +63,10 @@ pub mod energy_token {
 
     /// Mint GRX tokens to a wallet using Token interface
     pub fn mint_to_wallet(ctx: Context<MintToWallet>, amount: u64) -> Result<()> {
+        require!(
+            ctx.accounts.token_info.authority == ctx.accounts.authority.key(),
+            ErrorCode::UnauthorizedAuthority
+        );
         msg!("Minting {} GRX tokens to wallet", amount);
 
         let cpi_accounts = token_interface::MintTo {
@@ -247,16 +249,15 @@ pub struct MintToWallet<'info> {
     #[account(
         seeds = [b"token_info"],
         bump,
-        has_one = authority,
+        constraint = token_info.authority == authority.key() @ ErrorCode::UnauthorizedAuthority,
     )]
     pub token_info: Account<'info, TokenInfo>,
 
     #[account(
-        init_if_needed,
-        payer = payer,
-        associated_token::mint = mint,
-        associated_token::authority = destination_owner,
-        associated_token::token_program = token_program,
+        mut,
+        token::mint = mint,
+        token::authority = destination_owner,
+        token::token_program = token_program,
     )]
     pub destination: InterfaceAccount<'info, TokenAccountInterface>,
 
@@ -291,14 +292,15 @@ pub struct InitializeToken<'info> {
         bump,
         mint::decimals = 9,
         mint::authority = token_info,
+        mint::token_program = token_program,
     )]
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
     pub rent: Sysvar<'info, Rent>,
 }
 
@@ -313,14 +315,14 @@ pub struct AddRecValidator<'info> {
 #[derive(Accounts)]
 pub struct TransferTokens<'info> {
     #[account(mut)]
-    pub from_token_account: Account<'info, TokenAccount>,
+    pub from_token_account: InterfaceAccount<'info, TokenAccountInterface>,
 
     #[account(mut)]
-    pub to_token_account: Account<'info, TokenAccount>,
+    pub to_token_account: InterfaceAccount<'info, TokenAccountInterface>,
 
     pub from_authority: Signer<'info>,
 
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
@@ -329,14 +331,14 @@ pub struct BurnTokens<'info> {
     pub token_info: Account<'info, TokenInfo>,
 
     #[account(mut)]
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(mut)]
-    pub token_account: Account<'info, TokenAccount>,
+    pub token_account: InterfaceAccount<'info, TokenAccountInterface>,
 
     pub authority: Signer<'info>,
 
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]
@@ -349,14 +351,14 @@ pub struct MintTokensDirect<'info> {
     pub token_info: Account<'info, TokenInfo>,
 
     #[account(mut)]
-    pub mint: Account<'info, Mint>,
+    pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(mut)]
-    pub user_token_account: Account<'info, TokenAccount>,
+    pub user_token_account: InterfaceAccount<'info, TokenAccountInterface>,
 
     pub authority: Signer<'info>,
 
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 // Data structs

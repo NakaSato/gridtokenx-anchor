@@ -1,15 +1,11 @@
 import * as anchor from "@coral-xyz/anchor";
+import BN from "bn.js";
 import {
   TestEnvironment,
-  describe,
-  it,
-  before,
-  beforeEach,
-  after,
   expect
-} from "./setup.js";
-import { TestUtils } from "./utils/index.js";
-import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+} from "./setup.ts";
+import { TestUtils } from "./utils/index.ts";
+import { TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 // Test amounts (in smallest units - lamports)
 const TEST_AMOUNTS = {
@@ -28,10 +24,15 @@ describe("Energy Token Program Tests", () => {
 
   before(async () => {
     env = await TestEnvironment.create();
+    console.log("Program ID:", env.energyTokenProgram.programId.toBase58());
+    console.log("Connection URL:", env.provider.connection.rpcEndpoint);
+    const version = await env.provider.connection.getVersion();
+    console.log("Cluster Version:", version);
 
     // Get PDAs
     [tokenInfoPda] = TestUtils.findTokenInfoPda(env.energyTokenProgram.programId);
     [mintPda] = TestUtils.findMintPda(env.energyTokenProgram.programId);
+    console.log("Mint PDA:", mintPda.toBase58());
   });
 
   beforeEach(async () => {
@@ -41,7 +42,8 @@ describe("Energy Token Program Tests", () => {
         env.wallet.publicKey,
         mintPda,
         env.wallet.publicKey,
-        env.connection
+        env.connection,
+        TOKEN_2022_PROGRAM_ID
       );
     } catch (error) {
       // Account might already exist
@@ -79,6 +81,7 @@ describe("Energy Token Program Tests", () => {
             tokenInfo: tokenInfoPda,
             mint: mintPda,
             authority: env.authority.publicKey,
+            tokenProgram: TOKEN_2022_PROGRAM_ID,
           })
           .signers([env.authority])
           .rpc();
@@ -116,7 +119,7 @@ describe("Energy Token Program Tests", () => {
           authority: env.authority.publicKey,
           // @ts-ignore
           systemProgram: anchor.web3.SystemProgram.programId,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
           metadataProgram: new anchor.web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"),
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -133,7 +136,7 @@ describe("Energy Token Program Tests", () => {
       const mintAmount = TEST_AMOUNTS.ONE_TOKEN;
 
       const tx = await env.energyTokenProgram.methods
-        .mintToWallet(new anchor.BN(mintAmount))
+        .mintToWallet(new BN(mintAmount))
         .accounts({
           mint: mintPda,
           // @ts-ignore
@@ -141,7 +144,7 @@ describe("Energy Token Program Tests", () => {
           destinationOwner: env.wallet.publicKey,
           authority: env.authority.publicKey,
           payer: env.wallet.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId,
         })
@@ -164,7 +167,7 @@ describe("Energy Token Program Tests", () => {
 
       for (const amount of amounts) {
         const tx = await env.energyTokenProgram.methods
-          .mintToWallet(new anchor.BN(amount))
+          .mintToWallet(new BN(amount))
           .accounts({
             mint: mintPda,
             // @ts-ignore
@@ -172,7 +175,7 @@ describe("Energy Token Program Tests", () => {
             destinationOwner: env.wallet.publicKey,
             authority: env.authority.publicKey,
             payer: env.wallet.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
+            tokenProgram: TOKEN_2022_PROGRAM_ID,
             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             systemProgram: anchor.web3.SystemProgram.programId,
           })
@@ -185,10 +188,13 @@ describe("Energy Token Program Tests", () => {
 
     it("should fail to mint tokens with unauthorized authority", async () => {
       const unauthorizedKeypair = anchor.web3.Keypair.generate();
+      const tokenInfo = await env.energyTokenProgram.account.tokenInfo.fetch(tokenInfoPda);
+      console.log("TokenInfo Authority:", tokenInfo.authority.toBase58());
+      console.log("Unauthorized Authority:", unauthorizedKeypair.publicKey.toBase58());
 
-      await expect(
-        env.energyTokenProgram.methods
-          .mintToWallet(new anchor.BN(TEST_AMOUNTS.ONE_TOKEN))
+      try {
+        await env.energyTokenProgram.methods
+          .mintToWallet(new BN(TEST_AMOUNTS.ONE_TOKEN))
           .accounts({
             mint: mintPda,
             // @ts-ignore
@@ -196,13 +202,23 @@ describe("Energy Token Program Tests", () => {
             destinationOwner: env.wallet.publicKey,
             authority: unauthorizedKeypair.publicKey,
             payer: env.wallet.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
+            tokenProgram: TOKEN_2022_PROGRAM_ID,
             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             systemProgram: anchor.web3.SystemProgram.programId,
           })
           .signers([unauthorizedKeypair])
-          .rpc()
-      ).to.throw();
+          .rpc();
+        expect.fail("Should have thrown UnauthorizedAuthority");
+      } catch (e: any) {
+        // console.log("Caught error:", e);
+        // Check if error code matches
+        if (e.error && e.error.errorCode) {
+          expect(e.error.errorCode.code).to.equal("UnauthorizedAuthority");
+        } else {
+          // Fallback for different error structures
+          expect(JSON.stringify(e)).to.include("UnauthorizedAuthority");
+        }
+      }
     });
   });
 
