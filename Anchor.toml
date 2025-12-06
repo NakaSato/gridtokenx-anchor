@@ -18,7 +18,7 @@ url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "./keypairs/dev-wallet.json"
+wallet = "../keypairs/dev-wallet.json"
 
 [test]
 startup_wait = 5000
@@ -47,3 +47,4 @@ program = "target/deploy/trading.so"
 
 [scripts]
 test = "pnpm ts-mocha -p ./tsconfig.json -t 1000000 tests/energy-token.test.ts"
+init-market = "npx ts-node scripts/init_market.ts"
