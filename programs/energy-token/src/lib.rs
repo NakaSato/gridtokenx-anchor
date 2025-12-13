@@ -12,7 +12,7 @@ use anchor_spl::{
 use mpl_token_metadata::instructions::CreateV1CpiBuilder;
 use mpl_token_metadata::types::{PrintSupply, TokenStandard};
 
-declare_id!("GHoWp5RcujaeqimAAf9RwyRQCCF23mXxVYX9iGwBYGrH");
+declare_id!("Ct8j89GLmk4XEqGsUbB6kigeZjDnhf5xfmAT1MZhvxSj");
 
 #[program]
 pub mod energy_token {

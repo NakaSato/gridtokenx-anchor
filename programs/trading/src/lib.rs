@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 use base64::{engine::general_purpose, Engine as _};
 use governance::{ErcCertificate, ErcStatus};
 
-declare_id!("9t3s8sCgVUG9kAgVPsozj8mDpJp9cy6SF5HwRK5nvAHb");
+declare_id!("Fo9hGqQu2beFAVGS5BVKhHwU5fingYwAMoALhKdgToXq");
 
 #[program]
 pub mod trading {
