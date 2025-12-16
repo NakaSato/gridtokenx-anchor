@@ -3,7 +3,7 @@
 use anchor_lang::prelude::*;
 use base64::{engine::general_purpose, Engine as _};
 
-declare_id!("ExXGeZ2bZpWQrtHpc1CRoBNHsozEJSSj7UioVZSf4U8F");
+declare_id!("9wvMT6f2Y7A37LB8y5LEQRSJxbnwLYqw1Bqq1RBtD3oM");
 
 #[program]
 pub mod registry {

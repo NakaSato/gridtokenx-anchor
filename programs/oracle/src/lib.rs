@@ -3,7 +3,7 @@
 use anchor_lang::prelude::*;
 use base64::{engine::general_purpose, Engine as _};
 
-declare_id!("4vXCNesjspqZUsKWU1Zaa3pucDAdZNeFnbbwem7DefbT");
+declare_id!("69e8LaTfPnFycbD1kAhStfkyJxe1LnN323k3NQAMYBHr");
 
 #[program]
 pub mod oracle {
