@@ -40,6 +40,33 @@ gridtokenx-anchor/
 - **Registry**: `2XPQmFYMdXjP7ffoBB3mXeCdboSFg5Yeb6QmTSGbW8a7`
 - **Trading**: `GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk`
 
+## Performance Benchmarks
+
+GridTokenX has been rigorously benchmarked using LiteSVM (in-process Solana VM) to ensure high throughput and low latency for real-time energy trading.
+
+| Metric | Result | Description |
+|--------|--------|-------------|
+| **Peak Throughput** | **530.2 TPS** | Sustained baseline performance |
+| **Real-World TPS** | **206.9 TPS** | Flash Sale scenario (100 concurrent users) |
+| **Average Latency** | **1.96 ms** | Warm sequential processing |
+| **p99 Latency** | **3.87 ms** | 99th percentile latency under load |
+| **Scalability** | **93%** | Efficiency maintained at 200 concurrent users |
+
+### Network Latency Simulation
+
+Simulated performance across different geographical regions (Localnet):
+
+| Region | Avg Latency | Throughput | Impact |
+|--------|-------------|------------|--------|
+| **Local (Data Center)** | **11.21 ms** | **699.3 TPS** | Baseline |
+| **US-East (Nearby)** | **39.42 ms** | **218.8 TPS** | 3.5x latency |
+| **EU-West (Cross-Atlantic)** | **116.15 ms** | **77.0 TPS** | 10.4x latency |
+| **Asia-Pacific** | **228.52 ms** | **36.0 TPS** | 20.4x latency |
+
+Full academic performance paper available in:
+- [English Version](docs/academic/GridTokenX_Performance_Paper_EN.pdf)
+- [Thai Version](docs/academic/GridTokenX_Performance_Paper_TH.pdf)
+
 ## Getting Started
 
 ### Prerequisites

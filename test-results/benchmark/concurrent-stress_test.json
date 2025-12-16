@@ -1,0 +1,1433 @@
+{
+  "config": {
+    "name": "stress_test",
+    "description": "Stress test - maximum capacity test",
+    "userCount": 200,
+    "transactionsPerUser": 15,
+    "rampUpTimeMs": 2000,
+    "testDurationMs": 20000,
+    "thinkTimeMs": {
+      "min": 0,
+      "max": 10
+    }
+  },
+  "totalTransactions": 3000,
+  "totalDurationMs": 18947.155666999985,
+  "effectiveTPS": 158.3351112285978,
+  "latencyStats": {
+    "count": 3000,
+    "successRate": 6.666666666666667,
+    "minMs": 1.826666999986628,
+    "maxMs": 4.734375,
+    "avgMs": 2.4457808699998713,
+    "medianMs": 2.0025000000023283,
+    "stdDevMs": 0.7121508122668824,
+    "p50Ms": 2.0025000000023283,
+    "p75Ms": 3.0149580000143033,
+    "p90Ms": 3.6628750000090804,
+    "p95Ms": 3.878667000011774,
+    "p99Ms": 4.005625000019791
+  },
+  "userMetrics": [
+    {
+      "userId": 0,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9915420000033919,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 1,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.037540999997873,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 2,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9463749999995343,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 3,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9280410000064876,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 4,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9427499999874271,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 5,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.8972499999799766,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 6,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.077625000005355,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 7,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.046667000016896,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 8,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.094124999974156,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 9,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.9998329999798443,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 10,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.9320000000006985,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 11,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.9825830000045244,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 12,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9007500000006985,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 13,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 3.8112919999985024,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 14,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.069707999995444,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 15,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.712082999991253,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 16,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9825410000048578,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 17,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9214999999967404,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 18,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.5103330000129063,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 19,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.002457999973558,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 20,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.931416999985231,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 21,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9231250000011642,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 22,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9519999999902211,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 23,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.2447919999831356,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 24,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.992625000013504,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 25,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 3.9534160000039265,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 26,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9509580000012647,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 27,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0135000000009313,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 28,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.0557499999995343,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 29,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.9360000000160653,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 30,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.960916999989422,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 31,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.3694590000086464,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 32,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.990749999997206,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 33,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.8930420000106096,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 34,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.707125000015367,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 35,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.58104099999764,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 36,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.0532919999968726,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 37,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9192080000066198,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 38,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0016669999749865,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 39,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9217089999874588,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 40,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.247332999977516,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 41,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.8867920000047889,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 42,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9549159999878611,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 43,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.878667000011774,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 44,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.1068749999976717,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 45,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 3.6587500000023283,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 46,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.909708999999566,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 47,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9860000000044238,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 48,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.0074170000152662,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 49,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9772909999883268,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 50,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.8727079999807756,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 51,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9083749999990687,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 52,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9835829999938142,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 53,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.618917000014335,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 54,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0604159999929834,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 55,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.008791000000201,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 56,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.0027089999930467,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 57,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9159999999974389,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 58,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9616249999962747,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 59,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0237919999926817,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 60,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.952458999992814,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 61,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9790000000211876,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 62,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9400000000023283,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 63,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.971625000005588,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 64,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.8772920000192244,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 65,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9833339999895543,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 66,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.601875000022119,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 67,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9854159999813419,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 68,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9630839999881573,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 69,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.8587080000143033,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 70,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.7700000000186265,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 71,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0489159999997355,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 72,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.7267080000019632,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 73,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 3.579750000004424,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 74,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.114625000016531,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 75,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.954291000001831,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 76,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.13200000001234,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 77,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.374540999997407,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 78,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.1942500000004657,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 79,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.5350000000034925,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 80,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9636670000036247,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 81,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9511660000134725,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 82,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.1792089999944437,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 83,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.8974170000001322,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 84,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.954834000003757,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 85,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 3.573792000010144,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 86,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.168249999987893,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 87,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9357499999750871,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 88,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.5205840000126045,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 89,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9557090000016615,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 90,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.2049580000166316,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 91,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9430839999986347,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 92,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.372666000010213,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 93,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 3.3366669999959413,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 94,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9420000000100117,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 95,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9839999999967404,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 96,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.179166999994777,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 97,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0026660000148695,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 98,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0060840000223834,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 99,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.3855840000032913,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 100,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.0025000000023283,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 101,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 3.5254169999971054,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 102,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9279159999859985,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 103,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.968709000007948,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 104,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.826666999986628,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 105,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 3.6667920000036247,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 106,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.8917500000097789,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 107,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.550333999999566,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 108,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9150839999783784,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 109,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9402919999847654,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 110,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9520829999819398,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 111,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.8572080000012647,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 112,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9832919999898877,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 113,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9505000000062864,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 114,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0332089999865275,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 115,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9632909999927506,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 116,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.240958000009414,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 117,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.9780829999945126,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 118,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.76995800001896,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 119,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.934917000005953,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 120,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.8893749999988358,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 121,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0895829999935813,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 122,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.22879200000898,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 123,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.327832999988459,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 124,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.001083999988623,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 125,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.3481249999895226,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 126,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9959999999846332,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 127,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.00104200001806,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 128,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 4.036667000007583,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 129,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0461249999934807,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 130,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 2.052166000008583,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 131,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.6628750000090804,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 132,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.9673750000074506,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 133,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9418339999974705,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 134,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.937540999992052,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 135,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9946669999917503,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 136,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.949916999990819,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 137,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9497499999997672,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 138,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.0149580000143033,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 139,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.8856659999873955,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 140,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.8363329999847338,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 141,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.919792000000598,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 142,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.111709000018891,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 143,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.936374999990221,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 144,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.166625000012573,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 145,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9521670000103768,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 146,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9792920000036247,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 147,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.5877089999848977,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 148,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.305791999999201,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 149,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.075541999976849,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 150,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9871670000138693,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 151,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9539999999979045,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 152,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.355583000025945,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 153,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.3191249999799766,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 154,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.5582500000018626,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 155,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.0873330000031274,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 156,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.0915420000092126,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 157,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9238749999785796,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 158,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.832457999989856,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 159,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.3311659999890253,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 160,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9190419999940787,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 161,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9990840000100434,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 162,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9617089999956079,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 163,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.92554199998267,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 164,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9477079999924172,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 165,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9531669999996666,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 166,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.8899169999931473,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 167,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9504589999851305,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 168,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9784579999977723,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 169,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 3.7341669999877922,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 170,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.8958330000168644,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 171,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9173329999903217,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 172,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 4.005625000019791,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 173,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.017167000012705,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 174,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 3.8892500000074506,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 175,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.4244999999937136,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 176,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.9510000000009313,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 177,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9407920000085142,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 178,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.8847920000262093,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 179,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9504170000145677,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 180,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.2829170000040904,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 181,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.924332999973558,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 182,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9164999999920838,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 183,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9565000000002328,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 184,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.072708000021521,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 185,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 2.796165999985533,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 186,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9492920000047889,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 187,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9218330000003334,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 188,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 2.233915999997407,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 189,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 3.2872500000230502,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 190,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9667919999919832,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 191,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 1.908625000010943,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 192,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 3.138334000017494,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 193,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 4.734375,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 194,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9318330000096466,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 195,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 3.9541669999889564,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 196,
+      "behavior": "trader",
+      "transactions": 15,
+      "avgLatencyMs": 1.962375000002794,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 197,
+      "behavior": "producer",
+      "transactions": 15,
+      "avgLatencyMs": 1.8720420000026934,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 198,
+      "behavior": "consumer",
+      "transactions": 15,
+      "avgLatencyMs": 1.9153750000114087,
+      "successRate": 6.666666666666667
+    },
+    {
+      "userId": 199,
+      "behavior": "observer",
+      "transactions": 15,
+      "avgLatencyMs": 2.673125000001164,
+      "successRate": 6.666666666666667
+    }
+  ]
+}

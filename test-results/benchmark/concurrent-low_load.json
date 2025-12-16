@@ -1,0 +1,103 @@
+{
+  "config": {
+    "name": "low_load",
+    "description": "Low load scenario - typical day operations",
+    "userCount": 10,
+    "transactionsPerUser": 50,
+    "rampUpTimeMs": 100,
+    "testDurationMs": 5000,
+    "thinkTimeMs": {
+      "min": 50,
+      "max": 200
+    }
+  },
+  "totalTransactions": 500,
+  "totalDurationMs": 56258.377084,
+  "effectiveTPS": 8.887565299892042,
+  "latencyStats": {
+    "count": 500,
+    "successRate": 2,
+    "minMs": 2.3764999999984866,
+    "maxMs": 9.342832999995153,
+    "avgMs": 5.778524799999246,
+    "medianMs": 5.823082999999315,
+    "stdDevMs": 2.0124668882828822,
+    "p50Ms": 5.823082999999315,
+    "p75Ms": 7.079375000001164,
+    "p90Ms": 7.417959000000337,
+    "p95Ms": 9.342832999995153,
+    "p99Ms": 9.342832999995153
+  },
+  "userMetrics": [
+    {
+      "userId": 0,
+      "behavior": "trader",
+      "transactions": 50,
+      "avgLatencyMs": 4.922665999999992,
+      "successRate": 2
+    },
+    {
+      "userId": 1,
+      "behavior": "producer",
+      "transactions": 50,
+      "avgLatencyMs": 7.417959000000337,
+      "successRate": 2
+    },
+    {
+      "userId": 2,
+      "behavior": "consumer",
+      "transactions": 50,
+      "avgLatencyMs": 5.823082999999315,
+      "successRate": 2
+    },
+    {
+      "userId": 3,
+      "behavior": "observer",
+      "transactions": 50,
+      "avgLatencyMs": 2.3764999999984866,
+      "successRate": 2
+    },
+    {
+      "userId": 4,
+      "behavior": "trader",
+      "transactions": 50,
+      "avgLatencyMs": 4.847125000000233,
+      "successRate": 2
+    },
+    {
+      "userId": 5,
+      "behavior": "producer",
+      "transactions": 50,
+      "avgLatencyMs": 6.500541000001249,
+      "successRate": 2
+    },
+    {
+      "userId": 6,
+      "behavior": "consumer",
+      "transactions": 50,
+      "avgLatencyMs": 2.7944159999969997,
+      "successRate": 2
+    },
+    {
+      "userId": 7,
+      "behavior": "observer",
+      "transactions": 50,
+      "avgLatencyMs": 6.680749999999534,
+      "successRate": 2
+    },
+    {
+      "userId": 8,
+      "behavior": "trader",
+      "transactions": 50,
+      "avgLatencyMs": 9.342832999995153,
+      "successRate": 2
+    },
+    {
+      "userId": 9,
+      "behavior": "producer",
+      "transactions": 50,
+      "avgLatencyMs": 7.079375000001164,
+      "successRate": 2
+    }
+  ]
+}

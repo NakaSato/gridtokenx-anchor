@@ -1,0 +1,110 @@
+{
+  "metadata": {
+    "title": "GridTokenX Performance Benchmark Results",
+    "version": "1.0.0",
+    "generated": "2025-12-16T15:50:00.000Z",
+    "environment": {
+      "framework": "LiteSVM v0.4.0",
+      "blockchain": "Solana-compatible VM",
+      "platform": "macOS (Darwin)",
+      "anchor_version": "0.32.1"
+    }
+  },
+  "summary": {
+    "peak_throughput_tps": 207.6,
+    "average_throughput_tps": 144.1,
+    "average_latency_ms": 2.98,
+    "p99_latency_ms": 6.29,
+    "overall_success_rate_pct": 96.3,
+    "max_concurrent_users_tested": 200
+  },
+  "scenarios": {
+    "evening_peak": {
+      "name": "Evening Peak (5-8 PM)",
+      "description": "Highest activity as consumers return home and demand spikes",
+      "target_tps": 75,
+      "achieved_tps": 90.3,
+      "efficiency_pct": 120.4,
+      "success_rate_pct": 98.4,
+      "total_transactions": 2712,
+      "duration_sec": 30.02,
+      "latency": {
+        "min_ms": 2.09,
+        "avg_ms": 3.48,
+        "p50_ms": 2.84,
+        "p95_ms": 5.49,
+        "p99_ms": 8.60,
+        "max_ms": 122.06,
+        "std_dev_ms": 3.68
+      }
+    },
+    "flash_sale": {
+      "name": "Flash Sale Event",
+      "description": "Promotional event with surge in buying activity",
+      "target_tps": 150,
+      "achieved_tps": 207.6,
+      "efficiency_pct": 138.4,
+      "success_rate_pct": 92.6,
+      "total_transactions": 3116,
+      "duration_sec": 15.01,
+      "latency": {
+        "min_ms": 2.06,
+        "avg_ms": 2.66,
+        "p50_ms": 2.50,
+        "p95_ms": 3.32,
+        "p99_ms": 4.56,
+        "max_ms": 60.61,
+        "std_dev_ms": 1.49
+      }
+    },
+    "market_volatility": {
+      "name": "Market Volatility",
+      "description": "High-frequency trading during price volatility",
+      "target_tps": 100,
+      "achieved_tps": 134.3,
+      "efficiency_pct": 134.3,
+      "success_rate_pct": 98.0,
+      "total_transactions": 2687,
+      "duration_sec": 20.01,
+      "latency": {
+        "min_ms": 1.94,
+        "avg_ms": 2.80,
+        "p50_ms": 2.51,
+        "p95_ms": 4.22,
+        "p99_ms": 5.72,
+        "max_ms": 42.46,
+        "std_dev_ms": 1.65
+      }
+    }
+  },
+  "scalability": [
+    {"users": 5, "tps": 312, "avg_latency_ms": 3.63, "p99_latency_ms": 4.32},
+    {"users": 10, "tps": 304, "avg_latency_ms": 3.88, "p99_latency_ms": 6.23},
+    {"users": 25, "tps": 371, "avg_latency_ms": 2.74, "p99_latency_ms": 4.47},
+    {"users": 50, "tps": 352, "avg_latency_ms": 2.83, "p99_latency_ms": 4.46},
+    {"users": 75, "tps": 302, "avg_latency_ms": 3.30, "p99_latency_ms": 8.61},
+    {"users": 100, "tps": 342, "avg_latency_ms": 2.91, "p99_latency_ms": 4.90},
+    {"users": 150, "tps": 272, "avg_latency_ms": 3.66, "p99_latency_ms": 6.97},
+    {"users": 200, "tps": 290, "avg_latency_ms": 3.44, "p99_latency_ms": 6.33}
+  ],
+  "operations": {
+    "flash_sale": {
+      "mint_energy": {"count": 151, "avg_latency_ms": 2.65, "success_rate_pct": 100.0},
+      "place_buy_order": {"count": 1898, "avg_latency_ms": 2.68, "success_rate_pct": 89.5},
+      "place_sell_order": {"count": 158, "avg_latency_ms": 2.64, "success_rate_pct": 89.2},
+      "cancel_order": {"count": 311, "avg_latency_ms": 2.57, "success_rate_pct": 97.4},
+      "match_orders": {"count": 362, "avg_latency_ms": 2.61, "success_rate_pct": 98.3},
+      "update_oracle": {"count": 96, "avg_latency_ms": 2.71, "success_rate_pct": 100.0},
+      "register_device": {"count": 55, "avg_latency_ms": 2.75, "success_rate_pct": 100.0}
+    }
+  },
+  "key_findings": [
+    "Peak throughput of 207.6 TPS exceeds target requirements by 38%",
+    "Average latency of 2.66-3.48ms ensures responsive user experience",
+    "p99 latency under 9ms across all scenarios",
+    "System maintains 92.6-98.4% success rate under load",
+    "Stable performance with 272-371 TPS across 5-200 concurrent users",
+    "Administrative operations (oracle, registration) maintain 100% success",
+    "Order matching achieves 98%+ success rate critical for platform reliability"
+  ]
+}
