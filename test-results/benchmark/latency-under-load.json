@@ -1,0 +1,42 @@
+[
+  {
+    "concurrentUsers": 10,
+    "avgLatencyMs": 0,
+    "p50LatencyMs": 0,
+    "p95LatencyMs": 0,
+    "p99LatencyMs": 0,
+    "maxLatencyMs": 0
+  },
+  {
+    "concurrentUsers": 25,
+    "avgLatencyMs": 0,
+    "p50LatencyMs": 0,
+    "p95LatencyMs": 0,
+    "p99LatencyMs": 0,
+    "maxLatencyMs": 0
+  },
+  {
+    "concurrentUsers": 50,
+    "avgLatencyMs": 1.8325644840000896,
+    "p50LatencyMs": 1.8193339999997988,
+    "p95LatencyMs": 1.96379199999501,
+    "p99LatencyMs": 2.1144169999970472,
+    "maxLatencyMs": 2.2747920000001614
+  },
+  {
+    "concurrentUsers": 100,
+    "avgLatencyMs": 1.8414821520000697,
+    "p50LatencyMs": 1.8262079999985872,
+    "p95LatencyMs": 1.985291999997571,
+    "p99LatencyMs": 2.1989170000015292,
+    "maxLatencyMs": 2.5121670000007725
+  },
+  {
+    "concurrentUsers": 200,
+    "avgLatencyMs": 1.8309468400003097,
+    "p50LatencyMs": 1.8189579999962007,
+    "p95LatencyMs": 1.9615829999966081,
+    "p99LatencyMs": 2.1451250000027358,
+    "maxLatencyMs": 2.312292000002344
+  }
+]

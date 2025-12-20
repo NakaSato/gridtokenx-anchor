@@ -1,0 +1,5 @@
+Benchmark,Primary Metric,Value,Unit,Avg Latency (ms),p50 Latency (ms),p95 Latency (ms),p99 Latency (ms),Success Rate (%),Total Transactions,Duration (s),Timestamp
+TPC-C,tpmC,21378,tx/min,11.34,11,18,20,99.9,23740,30,2025-12-20T11:44:37.261Z
+Smallbank,TPS,1741,tx/sec,5.72,6,9,10,99.8,52297,30,2025-12-20T11:44:37.261Z
+TPC-E,tpsE,307,trade/sec,7.89,8,15,17,97,37572,30,2025-12-20T11:44:37.261Z
+TPC-H,QphH,254930,queries/hr,69.89,65,131,145,99,2124,30,2025-12-20T11:44:37.261Z

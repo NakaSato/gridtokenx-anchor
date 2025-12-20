@@ -1,0 +1,57 @@
+
+\begin{table}[htbp]
+\centering
+\caption{GridTokenX Benchmark Results Summary}
+\label{tab:benchmark-results}
+\begin{tabular}{|l|l|r|r|r|r|}
+\hline
+\textbf{Benchmark} & \textbf{Metric} & \textbf{Value} & \textbf{p50 (ms)} & \textbf{p99 (ms)} & \textbf{Success \%} \\
+\hline
+TPC-C & tpmC & 21,378 & 11 & 20 & 99.9 \\
+Smallbank & TPS & 1,741 & 6 & 10 & 99.8 \\
+TPC-E & tpsE & 307 & 8 & 17 & 97.0 \\
+TPC-H & QphH & 254,930 & 65 & 145 & 99.0 \\
+\hline
+\end{tabular}
+\end{table}
+
+
+\begin{table}[htbp]
+\centering
+\caption{Performance Comparison with Literature}
+\label{tab:comparison}
+\begin{tabular}{|l|l|r|r|l|}
+\hline
+\textbf{Platform} & \textbf{Benchmark} & \textbf{TPS} & \textbf{Latency (ms)} & \textbf{Source} \\
+\hline
+GridTokenX (Solana/PoA) & TPC-C & 356 & 11.34 & This Study \\
+GridTokenX (Solana/PoA) & Smallbank & 1,741 & 5.72 & This Study \\
+\hline
+Hyperledger Fabric 2.2 & TPC-C & 200 & 350 & TPCTC 2023 \\
+Hyperledger Fabric 2.0 & Smallbank & 400 & 150 & Blockbench \\
+\hline
+Ethereum (PoS) & Token Transfer & 30 & 12,000 & Etherscan \\
+\hline
+PostgreSQL 15 & TPC-C & 5,000 & 2 & TPC.org \\
+\hline
+\end{tabular}
+\end{table}
+
+
+\begin{table}[htbp]
+\centering
+\caption{Scalability Analysis Results}
+\label{tab:scalability}
+\begin{tabular}{|r|r|r|r|r|}
+\hline
+\textbf{Users} & \textbf{TPS} & \textbf{Avg Latency (ms)} & \textbf{p99 (ms)} & \textbf{Efficiency} \\
+\hline
+5 & 527 & 2.25 & 2.36 & 100\% \\
+10 & 543 & 1.89 & 1.99 & 103\% \\
+25 & 519 & 1.82 & 1.93 & 98\% \\
+50 & 541 & 1.85 & 2.10 & 103\% \\
+100 & 544 & 1.84 & 2.12 & 103\% \\
+200 & 545 & 1.83 & 2.13 & 103\% \\
+\hline
+\end{tabular}
+\end{table}

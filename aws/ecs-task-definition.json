@@ -1,0 +1,97 @@
+{
+    "family": "gridtokenx-solana",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "2048",
+    "memory": "8192",
+    "executionRoleArn": "${EXECUTION_ROLE_ARN}",
+    "taskRoleArn": "${TASK_ROLE_ARN}",
+    "containerDefinitions": [
+        {
+            "name": "solana-validator",
+            "image": "${ECR_REPO_URI}:latest",
+            "essential": true,
+            "portMappings": [
+                {
+                    "containerPort": 8899,
+                    "hostPort": 8899,
+                    "protocol": "tcp",
+                    "name": "rpc"
+                },
+                {
+                    "containerPort": 8900,
+                    "hostPort": 8900,
+                    "protocol": "tcp",
+                    "name": "rpc-pubsub"
+                },
+                {
+                    "containerPort": 9900,
+                    "hostPort": 9900,
+                    "protocol": "tcp",
+                    "name": "faucet"
+                }
+            ],
+            "environment": [
+                {
+                    "name": "RUST_LOG",
+                    "value": "solana_runtime::message_processor=info"
+                },
+                {
+                    "name": "LEDGER_DIR",
+                    "value": "/data/ledger"
+                },
+                {
+                    "name": "RPC_PORT",
+                    "value": "8899"
+                }
+            ],
+            "healthCheck": {
+                "command": [
+                    "CMD-SHELL",
+                    "curl -f http://localhost:8899 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}' || exit 1"
+                ],
+                "interval": 30,
+                "timeout": 10,
+                "retries": 5,
+                "startPeriod": 120
+            },
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/gridtokenx-solana",
+                    "awslogs-region": "${AWS_REGION}",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+            "mountPoints": [
+                {
+                    "sourceVolume": "solana-ledger",
+                    "containerPath": "/data/ledger",
+                    "readOnly": false
+                }
+            ]
+        }
+    ],
+    "volumes": [
+        {
+            "name": "solana-ledger",
+            "efsVolumeConfiguration": {
+                "fileSystemId": "${EFS_FILE_SYSTEM_ID}",
+                "rootDirectory": "/",
+                "transitEncryption": "ENABLED"
+            }
+        }
+    ],
+    "tags": [
+        {
+            "key": "Project",
+            "value": "GridTokenX"
+        },
+        {
+            "key": "Environment",
+            "value": "Research"
+        }
+    ]
+}

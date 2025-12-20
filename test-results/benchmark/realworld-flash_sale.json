@@ -1,0 +1,58 @@
+{
+  "scenario": "Flash Sale Event",
+  "totalTransactions": 3423,
+  "successfulTransactions": 3190,
+  "durationMs": 15005.072458000002,
+  "effectiveTPS": 228.12285709257048,
+  "latencyStats": {
+    "min": 1.719375000000582,
+    "max": 20.11133400000108,
+    "avg": 2.217040182445256,
+    "p50": 2.14412500000617,
+    "p95": 2.63408299999719,
+    "p99": 3.506875000006403,
+    "stdDev": 0.6460346046189027
+  },
+  "operationBreakdown": {
+    "mint_energy": {
+      "count": 168,
+      "avgLatency": 2.176061232142924,
+      "successRate": 100
+    },
+    "place_buy_order": {
+      "count": 2031,
+      "avgLatency": 2.225947857607103,
+      "successRate": 90.94042343673068
+    },
+    "place_sell_order": {
+      "count": 164,
+      "avgLatency": 2.1645787913660457,
+      "successRate": 84.7560975609756
+    },
+    "cancel_order": {
+      "count": 348,
+      "avgLatency": 2.20878855786342,
+      "successRate": 96.83908045977012
+    },
+    "match_orders": {
+      "count": 437,
+      "avgLatency": 2.213060460094273,
+      "successRate": 97.48283752860412
+    },
+    "update_oracle": {
+      "count": 100,
+      "avgLatency": 2.2284115408167833,
+      "successRate": 98
+    },
+    "register_device": {
+      "count": 88,
+      "avgLatency": 2.1768177272726295,
+      "successRate": 100
+    },
+    "query_balance": {
+      "count": 87,
+      "avgLatency": 2.2702064252872156,
+      "successRate": 100
+    }
+  }
+}

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  </style>
+  
+  <rect width="600" height="400" fill="white"/>
+  
+  <text x="300" y="25" text-anchor="middle" font-size="16" font-weight="600" fill="#111827">
+    Trust Premium: Latency Comparison
+  </text>
+  
+  <line x1="70" y1="320" x2="570" y2="320" stroke="#9ca3af"/>
+  <line x1="70" y1="40" x2="70" y2="320" stroke="#9ca3af"/>
+  
+  <text x="20" y="180" text-anchor="middle" font-size="12" fill="#374151"
+        transform="rotate(-90, 20, 180)">Latency (ms) - lower is better</text>
+  
+  
+        <rect x="100" y="319.3" width="80" height="0.7000000000000001" 
+              fill="#22c55e" rx="4"/>
+        <text x="140" y="311.3" text-anchor="middle" 
+              font-size="11" fill="#374151">0.5ms</text>
+        <text x="140" y="350" text-anchor="middle" 
+              font-size="10" fill="#6b7280" style="white-space: pre-line;">
+          <tspan x="140" dy="0">PostgreSQL</tspan>
+          <tspan x="140" dy="12">(Baseline)</tspan>
+        </text>
+        <text x="140" y="380" text-anchor="middle" 
+              font-size="9" fill="#9ca3af">5000 TPS</text>
+      
+        <rect x="210" y="317.438" width="80" height="2.562" 
+              fill="#6366f1" rx="4"/>
+        <text x="250" y="309.438" text-anchor="middle" 
+              font-size="11" fill="#374151">1.83ms</text>
+        <text x="250" y="350" text-anchor="middle" 
+              font-size="10" fill="#6b7280" style="white-space: pre-line;">
+          <tspan x="250" dy="0">GridTokenX</tspan>
+          <tspan x="250" dy="12">(Solana)</tspan>
+        </text>
+        <text x="250" y="380" text-anchor="middle" 
+              font-size="9" fill="#9ca3af">545 TPS</text>
+      
+        <rect x="320" y="110" width="80" height="210" 
+              fill="#f59e0b" rx="4"/>
+        <text x="360" y="102" text-anchor="middle" 
+              font-size="11" fill="#374151">150ms</text>
+        <text x="360" y="350" text-anchor="middle" 
+              font-size="10" fill="#6b7280" style="white-space: pre-line;">
+          <tspan x="360" dy="0">Hyperledger</tspan>
+          <tspan x="360" dy="12">Fabric</tspan>
+        </text>
+        <text x="360" y="380" text-anchor="middle" 
+              font-size="9" fill="#9ca3af">300 TPS</text>
+      
+        <rect x="430" y="40" width="80" height="280" 
+              fill="#ef4444" rx="4"/>
+        <text x="470" y="32" text-anchor="middle" 
+              font-size="11" fill="#374151">12000ms</text>
+        <text x="470" y="350" text-anchor="middle" 
+              font-size="10" fill="#6b7280" style="white-space: pre-line;">
+          <tspan x="470" dy="0">Ethereum</tspan>
+          <tspan x="470" dy="12">(PoS)</tspan>
+        </text>
+        <text x="470" y="380" text-anchor="middle" 
+              font-size="9" fill="#9ca3af">30 TPS</text>
+      
+  
+  <!-- Note -->
+  <text x="300" y="395" text-anchor="middle" font-size="9" fill="#9ca3af">
+    Trust Premium = Blockchain Latency / Baseline Latency
+  </text>
+</svg>

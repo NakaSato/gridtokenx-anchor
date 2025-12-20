@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  </style>
+  
+  <!-- Background -->
+  <rect width="600" height="400" fill="white"/>
+  
+  <!-- Title -->
+  <text x="300" y="25" text-anchor="middle" font-size="16" font-weight="600" fill="#111827">
+    Throughput Comparison (TPS)
+  </text>
+  
+  <!-- Y-axis -->
+  <line x1="70" y1="40" x2="70" y2="340" stroke="#9ca3af"/>
+  <text x="20" y="200" text-anchor="middle" font-size="12" fill="#374151" 
+        transform="rotate(-90, 20, 200)">Transactions per Second</text>
+  
+        <line x1="65" y1="340" x2="70" y2="340" stroke="#9ca3af" />
+        <text x="60" y="344" text-anchor="end" font-size="10" fill="#6b7280">
+          0
+        </text>
+        <line x1="70" y1="340" x2="570" y2="340" 
+              stroke="#e5e7eb" stroke-dasharray="3,3" />
+      
+        <line x1="65" y1="265" x2="70" y2="265" stroke="#9ca3af" />
+        <text x="60" y="269" text-anchor="end" font-size="10" fill="#6b7280">
+          5,345
+        </text>
+        <line x1="70" y1="265" x2="570" y2="265" 
+              stroke="#e5e7eb" stroke-dasharray="3,3" />
+      
+        <line x1="65" y1="190" x2="70" y2="190" stroke="#9ca3af" />
+        <text x="60" y="194" text-anchor="end" font-size="10" fill="#6b7280">
+          10,689
+        </text>
+        <line x1="70" y1="190" x2="570" y2="190" 
+              stroke="#e5e7eb" stroke-dasharray="3,3" />
+      
+        <line x1="65" y1="115" x2="70" y2="115" stroke="#9ca3af" />
+        <text x="60" y="119" text-anchor="end" font-size="10" fill="#6b7280">
+          16,034
+        </text>
+        <line x1="70" y1="115" x2="570" y2="115" 
+              stroke="#e5e7eb" stroke-dasharray="3,3" />
+      
+        <line x1="65" y1="40" x2="70" y2="40" stroke="#9ca3af" />
+        <text x="60" y="44" text-anchor="end" font-size="10" fill="#6b7280">
+          21,378
+        </text>
+        <line x1="70" y1="40" x2="570" y2="40" 
+              stroke="#e5e7eb" stroke-dasharray="3,3" />
+      
+  
+  <!-- Bars -->
+  
+        <rect x="95" y="40" width="75" height="300" 
+              fill="#6366f1" rx="4" />
+        <text x="132.5" y="30" text-anchor="middle" 
+              font-size="12" fill="#374151">21,378</text>
+      
+        <rect x="195" y="315.56834128543363" width="75" height="24.431658714566378" 
+              fill="#22c55e" rx="4" />
+        <text x="232.5" y="305.56834128543363" text-anchor="middle" 
+              font-size="12" fill="#374151">1,741</text>
+      
+        <rect x="295" y="328.0718495649733" width="75" height="11.928150435026664" 
+              fill="#f59e0b" rx="4" />
+        <text x="332.5" y="318.0718495649733" text-anchor="middle" 
+              font-size="12" fill="#374151">850</text>
+      
+        <rect x="395" y="338.3160258209374" width="75" height="1.6839741790625877" 
+              fill="#8b5cf6" rx="4" />
+        <text x="432.5" y="328.3160258209374" text-anchor="middle" 
+              font-size="12" fill="#374151">120</text>
+      
+  
+  <!-- Labels -->
+  
+        <text x="132.5" y="375" text-anchor="middle" 
+              font-size="11" fill="#6b7280">TPC-C</text>
+      
+        <text x="232.5" y="375" text-anchor="middle" 
+              font-size="11" fill="#6b7280">Smallbank</text>
+      
+        <text x="332.5" y="375" text-anchor="middle" 
+              font-size="11" fill="#6b7280">TPC-E</text>
+      
+        <text x="432.5" y="375" text-anchor="middle" 
+              font-size="11" fill="#6b7280">TPC-H</text>
+      
+</svg>

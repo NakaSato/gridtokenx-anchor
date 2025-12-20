@@ -1,0 +1,117 @@
+\chapter{Research Methodology}
+\label{chap:methodology}
+
+\section{Overview}
+
+This chapter describes the methodology used to evaluate the performance of the GridTokenX blockchain platform for peer-to-peer energy trading. The evaluation follows established database benchmarking standards adapted for distributed ledger technology.
+
+\section{Benchmark Selection}
+
+\subsection{TPC Benchmark Adaptation}
+
+Following the "blockchainification" methodology established at TPC Technology Conferences (TPCTC), this research adapts traditional database benchmarks for blockchain evaluation:
+
+\begin{itemize}
+  \item \textbf{TPC-C}: OLTP benchmark adapted for energy order processing
+  \item \textbf{TPC-E}: Financial trading benchmark for DEX operations
+  \item \textbf{TPC-H}: Decision support queries for analytics
+  \item \textbf{Smallbank}: Consensus stress testing baseline
+\end{itemize}
+
+\subsection{Transaction Mapping}
+
+\begin{table}[htbp]
+\centering
+\caption{TPC-C to Energy Trading Transaction Mapping}
+\label{tab:tpc-c-mapping}
+\begin{tabular}{|l|c|l|}
+\hline
+\textbf{TPC-C Transaction} & \textbf{Frequency} & \textbf{GridTokenX Operation} \\
+\hline
+New Order & 45\% & Create Energy Order \\
+Payment & 43\% & Token Transfer \\
+Order Status & 4\% & Query Order \\
+Delivery & 4\% & Execute Trade \\
+Stock Level & 4\% & Balance Check \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Test Environment}
+
+\subsection{Platform Configuration}
+
+\begin{table}[htbp]
+\centering
+\caption{Test Environment Specifications}
+\label{tab:test-env}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Component} & \textbf{Specification} \\
+\hline
+Blockchain Platform & Solana-based with Proof of Authority (PoA) \\
+Framework & Anchor 0.32.1 \\
+Runtime & Agave 3.0.13 \\
+Instance Type & AWS ECS t3.large (2 vCPU, 8GB RAM) \\
+Test Framework & LiteSVM / Local Validator \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Consensus Mechanism}
+
+GridTokenX employs Proof of Authority (PoA) consensus, which provides:
+\begin{itemize}
+  \item Deterministic block times for predictable latency
+  \item High throughput with low validator overhead
+  \item Suitable for permissioned enterprise deployments
+\end{itemize}
+
+\section{Metrics Definition}
+
+\subsection{Primary Metrics}
+
+\begin{itemize}
+  \item \textbf{tpmC}: TPC-C transactions per minute (New Order equivalent)
+  \item \textbf{tpsE}: TPC-E trade executions per second
+  \item \textbf{QphH}: TPC-H queries per hour
+  \item \textbf{TPS}: Transactions per second (Smallbank)
+\end{itemize}
+
+\subsection{Latency Metrics}
+
+\begin{itemize}
+  \item \textbf{Average Latency}: Mean transaction confirmation time
+  \item \textbf{p50/p95/p99}: Latency percentiles
+  \item \textbf{MVCC Conflict Rate}: Multi-version concurrency control conflicts
+\end{itemize}
+
+\subsection{Trust Premium}
+
+The Trust Premium quantifies the performance cost of decentralization:
+
+\begin{equation}
+\text{Trust Premium} = \frac{\text{Blockchain Latency}}{\text{Centralized Baseline Latency}}
+\end{equation}
+
+\section{Statistical Methodology}
+
+Following TPC-C Specification v5.11, Section 5:
+
+\begin{enumerate}
+  \item \textbf{Warmup Period}: Discard first 10\% of measurements
+  \item \textbf{Steady State}: Measure during stable operation
+  \item \textbf{Outlier Handling}: Exclude samples $> 3\sigma$ from mean
+  \item \textbf{Confidence Intervals}: Report 95\% CI for all metrics
+\end{enumerate}
+
+\section{Reproducibility}
+
+All experiments can be reproduced using the following commands:
+
+\begin{verbatim}
+git clone <repository>
+pnpm install
+anchor build
+pnpm performance:research
+\end{verbatim}

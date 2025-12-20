@@ -1,0 +1,6068 @@
+{
+  "testId": "throughput_baseline_light",
+  "testName": "baseline_light",
+  "timestamp": "2025-12-20T10:47:01.832Z",
+  "environment": "litesvm",
+  "config": {
+    "name": "baseline_light",
+    "description": "Light load - 10 concurrent users",
+    "warmupIterations": 100,
+    "testIterations": 1000,
+    "concurrentUsers": 10,
+    "transactionType": "sol_transfer"
+  },
+  "latencyResults": {
+    "measurements": [
+      {
+        "timestamp": 1766227619980,
+        "latencyMs": 1.8361250000000382,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227619982,
+        "latencyMs": 1.88799999999992,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227619984,
+        "latencyMs": 1.8637089999999716,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227619986,
+        "latencyMs": 1.8252910000001066,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227619987,
+        "latencyMs": 1.8637500000002092,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227619989,
+        "latencyMs": 1.824041999999963,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227619991,
+        "latencyMs": 1.858791999999994,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227619993,
+        "latencyMs": 1.7924999999997908,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227619995,
+        "latencyMs": 2.032707999999957,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227619997,
+        "latencyMs": 1.8739170000001195,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227619999,
+        "latencyMs": 1.869707999999946,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620001,
+        "latencyMs": 2.027667000000065,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620003,
+        "latencyMs": 2.000082999999904,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620005,
+        "latencyMs": 1.9146670000000086,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620007,
+        "latencyMs": 1.82100000000014,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620008,
+        "latencyMs": 1.8735000000001492,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620010,
+        "latencyMs": 1.895542000000205,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620012,
+        "latencyMs": 1.9467909999998483,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620014,
+        "latencyMs": 1.9807089999999334,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620016,
+        "latencyMs": 1.9633750000000418,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620018,
+        "latencyMs": 1.9250420000000759,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620020,
+        "latencyMs": 1.853458000000046,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620022,
+        "latencyMs": 2.0718329999999696,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620024,
+        "latencyMs": 1.974917000000005,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620026,
+        "latencyMs": 2.115041999999903,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620028,
+        "latencyMs": 1.9456659999998465,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620030,
+        "latencyMs": 2.113749999999982,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620032,
+        "latencyMs": 1.9538339999999152,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620034,
+        "latencyMs": 1.9237500000001546,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620036,
+        "latencyMs": 1.912666000000172,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620038,
+        "latencyMs": 1.915749999999889,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620040,
+        "latencyMs": 1.8668330000000424,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620042,
+        "latencyMs": 1.9497499999999945,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620044,
+        "latencyMs": 1.9018750000000182,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620046,
+        "latencyMs": 1.9402090000000953,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620048,
+        "latencyMs": 1.9669159999998556,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620050,
+        "latencyMs": 1.9160420000000613,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620051,
+        "latencyMs": 1.8603750000002037,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620053,
+        "latencyMs": 1.8432500000001255,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620055,
+        "latencyMs": 1.7690000000000055,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620057,
+        "latencyMs": 1.7775839999999334,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620059,
+        "latencyMs": 1.8671249999999873,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620061,
+        "latencyMs": 1.9055419999999685,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620062,
+        "latencyMs": 1.84762499999988,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620064,
+        "latencyMs": 1.7798749999999472,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620066,
+        "latencyMs": 1.8696249999998145,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620068,
+        "latencyMs": 1.783042000000023,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620070,
+        "latencyMs": 1.7881250000000364,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620072,
+        "latencyMs": 1.8533330000000205,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620074,
+        "latencyMs": 2.149499999999989,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620076,
+        "latencyMs": 1.9556250000000546,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620078,
+        "latencyMs": 1.9267079999999623,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620079,
+        "latencyMs": 1.878458000000137,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620081,
+        "latencyMs": 1.8383749999998145,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620083,
+        "latencyMs": 1.7961660000000848,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620085,
+        "latencyMs": 1.7993329999999332,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620087,
+        "latencyMs": 1.8375839999998789,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620089,
+        "latencyMs": 1.835207999999966,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620091,
+        "latencyMs": 1.9203749999999218,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620092,
+        "latencyMs": 1.7967089999999644,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620094,
+        "latencyMs": 1.8571249999999964,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620096,
+        "latencyMs": 1.8988750000000891,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620098,
+        "latencyMs": 2.078999999999951,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620100,
+        "latencyMs": 1.8550830000001497,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620102,
+        "latencyMs": 1.8463339999998425,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620104,
+        "latencyMs": 1.8315000000000055,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620106,
+        "latencyMs": 1.892417000000023,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620107,
+        "latencyMs": 1.807207999999946,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620109,
+        "latencyMs": 1.8875000000000455,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620111,
+        "latencyMs": 1.8282079999999041,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620113,
+        "latencyMs": 1.8644999999999072,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620115,
+        "latencyMs": 1.8281660000000102,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620117,
+        "latencyMs": 1.8198750000001382,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620119,
+        "latencyMs": 1.8422080000000278,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620120,
+        "latencyMs": 1.784375000000182,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620122,
+        "latencyMs": 1.8984169999998812,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620124,
+        "latencyMs": 1.9409170000001268,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620126,
+        "latencyMs": 1.8702499999999418,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620128,
+        "latencyMs": 1.906624999999849,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620130,
+        "latencyMs": 1.8546670000000631,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620132,
+        "latencyMs": 1.8873329999998987,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620134,
+        "latencyMs": 1.8211249999999382,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620135,
+        "latencyMs": 1.8696250000000418,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620137,
+        "latencyMs": 1.8638750000000073,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620139,
+        "latencyMs": 1.8572090000000117,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620141,
+        "latencyMs": 1.834041999999954,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620143,
+        "latencyMs": 1.7884999999998854,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620145,
+        "latencyMs": 1.7895840000001044,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620146,
+        "latencyMs": 1.8631669999999758,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620148,
+        "latencyMs": 1.8363749999998618,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620150,
+        "latencyMs": 2.12170900000001,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620152,
+        "latencyMs": 1.931374999999889,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620154,
+        "latencyMs": 1.8586249999998472,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620156,
+        "latencyMs": 1.8474169999999503,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620158,
+        "latencyMs": 1.8015000000000327,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620160,
+        "latencyMs": 1.8475000000000819,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620162,
+        "latencyMs": 1.8165420000000267,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620163,
+        "latencyMs": 1.8510839999999007,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620165,
+        "latencyMs": 1.945208999999977,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620167,
+        "latencyMs": 1.9472500000001673,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620169,
+        "latencyMs": 1.846166999999923,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620171,
+        "latencyMs": 1.9069170000000213,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620173,
+        "latencyMs": 1.8714159999999538,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620175,
+        "latencyMs": 2.06895899999995,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620177,
+        "latencyMs": 1.804208000000017,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620179,
+        "latencyMs": 1.9309590000000298,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620181,
+        "latencyMs": 1.9205830000000788,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620183,
+        "latencyMs": 1.811333999999988,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620184,
+        "latencyMs": 1.8940000000000055,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620186,
+        "latencyMs": 1.8348329999998896,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620188,
+        "latencyMs": 1.8726670000000922,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620190,
+        "latencyMs": 1.8491249999999582,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620192,
+        "latencyMs": 1.8405409999998028,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620194,
+        "latencyMs": 1.8112919999998667,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620195,
+        "latencyMs": 1.80662499999994,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620197,
+        "latencyMs": 1.79558400000019,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620199,
+        "latencyMs": 1.8422499999999218,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620201,
+        "latencyMs": 1.909791000000041,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620203,
+        "latencyMs": 1.8632500000001073,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620205,
+        "latencyMs": 1.817166000000043,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620207,
+        "latencyMs": 1.8370829999998932,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620208,
+        "latencyMs": 1.872707999999875,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620210,
+        "latencyMs": 1.8978329999999914,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620212,
+        "latencyMs": 1.908292000000074,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620214,
+        "latencyMs": 1.8054590000001554,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620216,
+        "latencyMs": 1.8007089999998698,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620218,
+        "latencyMs": 1.7678750000000036,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620219,
+        "latencyMs": 1.7722079999998641,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620221,
+        "latencyMs": 1.8527500000000146,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620223,
+        "latencyMs": 1.8324580000000878,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620225,
+        "latencyMs": 1.8062079999999696,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620227,
+        "latencyMs": 2.022625000000062,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620229,
+        "latencyMs": 1.8397079999999733,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620231,
+        "latencyMs": 1.8776660000000902,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620232,
+        "latencyMs": 1.7595840000001317,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620234,
+        "latencyMs": 1.777417000000014,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620236,
+        "latencyMs": 1.767084000000068,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620238,
+        "latencyMs": 1.766832999999906,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620240,
+        "latencyMs": 1.839666999999963,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620241,
+        "latencyMs": 1.7477080000001024,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620243,
+        "latencyMs": 1.8386669999999867,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620245,
+        "latencyMs": 1.8445829999998296,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620247,
+        "latencyMs": 1.781916999999794,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620249,
+        "latencyMs": 1.8321670000000267,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620251,
+        "latencyMs": 1.921624999999949,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620253,
+        "latencyMs": 1.9881250000000819,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620254,
+        "latencyMs": 1.8029999999998836,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620256,
+        "latencyMs": 1.8215420000001359,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620258,
+        "latencyMs": 1.8795000000000073,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620260,
+        "latencyMs": 1.8792499999999563,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620262,
+        "latencyMs": 1.9047500000001492,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620264,
+        "latencyMs": 1.8545420000000377,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620266,
+        "latencyMs": 1.8191669999998794,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620267,
+        "latencyMs": 1.8534170000000358,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620269,
+        "latencyMs": 1.816124999999829,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620271,
+        "latencyMs": 2.0012500000000273,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620273,
+        "latencyMs": 1.8111670000000686,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620275,
+        "latencyMs": 1.815499999999929,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620277,
+        "latencyMs": 2.217834000000039,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620279,
+        "latencyMs": 1.8915420000000722,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620281,
+        "latencyMs": 1.8830419999999322,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620283,
+        "latencyMs": 1.8392080000000988,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620285,
+        "latencyMs": 1.850582999999915,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620286,
+        "latencyMs": 1.8700000000001182,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620288,
+        "latencyMs": 1.8541660000000775,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620290,
+        "latencyMs": 1.7768750000000182,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620292,
+        "latencyMs": 1.84375,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620294,
+        "latencyMs": 1.7607920000000377,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620296,
+        "latencyMs": 1.8497500000000855,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620297,
+        "latencyMs": 1.7486249999999472,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620299,
+        "latencyMs": 1.799541999999974,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620301,
+        "latencyMs": 1.8624160000001666,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620303,
+        "latencyMs": 2.019749999999931,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620305,
+        "latencyMs": 1.8594590000000153,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620307,
+        "latencyMs": 1.8128750000000764,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620308,
+        "latencyMs": 1.7984589999998661,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620310,
+        "latencyMs": 1.827792000000045,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620312,
+        "latencyMs": 1.8817920000001322,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620314,
+        "latencyMs": 1.855291999999963,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620316,
+        "latencyMs": 1.816665999999941,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620318,
+        "latencyMs": 1.8512920000000577,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620320,
+        "latencyMs": 1.8559999999999945,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620321,
+        "latencyMs": 1.8614999999999782,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620323,
+        "latencyMs": 1.860834000000068,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620325,
+        "latencyMs": 1.809624999999869,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620327,
+        "latencyMs": 1.9988749999999982,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620329,
+        "latencyMs": 1.8509999999998854,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620331,
+        "latencyMs": 1.8117500000000746,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620333,
+        "latencyMs": 1.8743750000001,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620334,
+        "latencyMs": 1.783542000000125,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620336,
+        "latencyMs": 1.8762080000001333,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620338,
+        "latencyMs": 1.8770419999998467,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620340,
+        "latencyMs": 1.8207089999998516,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620342,
+        "latencyMs": 1.928124999999909,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620344,
+        "latencyMs": 1.8413750000001983,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620346,
+        "latencyMs": 1.7716669999999795,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620347,
+        "latencyMs": 1.7795830000000024,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620349,
+        "latencyMs": 1.8867499999998927,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620351,
+        "latencyMs": 1.8772080000001097,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620353,
+        "latencyMs": 2.041708000000199,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620355,
+        "latencyMs": 1.8578329999998004,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620357,
+        "latencyMs": 1.8612080000000333,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620359,
+        "latencyMs": 1.8274999999998727,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620361,
+        "latencyMs": 1.878832999999986,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620363,
+        "latencyMs": 1.848790999999892,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620364,
+        "latencyMs": 1.8092090000000098,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620366,
+        "latencyMs": 1.7816669999999704,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620368,
+        "latencyMs": 1.7610829999998714,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620370,
+        "latencyMs": 1.8780409999999392,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620372,
+        "latencyMs": 1.8029160000000957,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620373,
+        "latencyMs": 1.8738749999999982,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620375,
+        "latencyMs": 1.8730419999999413,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620377,
+        "latencyMs": 1.843541999999843,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620379,
+        "latencyMs": 2.084875000000011,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620381,
+        "latencyMs": 1.8506659999998192,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620383,
+        "latencyMs": 1.825083000000177,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620385,
+        "latencyMs": 1.9535829999999805,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620387,
+        "latencyMs": 1.9214170000000195,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620389,
+        "latencyMs": 1.8917919999998958,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620391,
+        "latencyMs": 1.7989999999999782,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620392,
+        "latencyMs": 1.8953750000000582,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620394,
+        "latencyMs": 1.9169170000000122,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620396,
+        "latencyMs": 1.850208000000066,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620398,
+        "latencyMs": 1.817583999999897,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620400,
+        "latencyMs": 1.7908749999999145,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620402,
+        "latencyMs": 1.78975000000014,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620404,
+        "latencyMs": 2.0393750000000637,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620405,
+        "latencyMs": 1.8372920000001614,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620407,
+        "latencyMs": 1.88087500000006,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620409,
+        "latencyMs": 1.7932080000000497,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620411,
+        "latencyMs": 1.890041999999994,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620413,
+        "latencyMs": 1.8922909999998865,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620415,
+        "latencyMs": 1.831124999999929,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620417,
+        "latencyMs": 1.8297910000001139,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620418,
+        "latencyMs": 1.7755829999998696,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620420,
+        "latencyMs": 1.749958000000106,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620422,
+        "latencyMs": 1.7957919999998921,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620424,
+        "latencyMs": 1.8233750000001692,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620426,
+        "latencyMs": 1.805166999999983,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620427,
+        "latencyMs": 1.7705409999998665,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620429,
+        "latencyMs": 1.9677080000001297,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620431,
+        "latencyMs": 1.9429159999999683,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620433,
+        "latencyMs": 1.8414999999999964,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620435,
+        "latencyMs": 1.824333999999908,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620437,
+        "latencyMs": 1.8475419999999758,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620439,
+        "latencyMs": 1.7964999999999236,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620440,
+        "latencyMs": 1.8347499999999854,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620442,
+        "latencyMs": 1.8421670000000177,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620444,
+        "latencyMs": 1.8708750000000691,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620446,
+        "latencyMs": 1.758583999999928,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620448,
+        "latencyMs": 1.8715829999998732,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620450,
+        "latencyMs": 1.921542000000045,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620452,
+        "latencyMs": 1.8571660000000065,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620454,
+        "latencyMs": 1.8915830000000824,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620456,
+        "latencyMs": 2.007917000000134,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620457,
+        "latencyMs": 1.7901659999999993,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620459,
+        "latencyMs": 1.8625839999999698,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620461,
+        "latencyMs": 1.85349999999994,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620463,
+        "latencyMs": 1.9029170000001159,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620465,
+        "latencyMs": 1.7870829999999387,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620467,
+        "latencyMs": 1.8544999999999163,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620468,
+        "latencyMs": 1.849999999999909,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620470,
+        "latencyMs": 1.8014169999999012,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620472,
+        "latencyMs": 1.8625829999998587,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620474,
+        "latencyMs": 1.8126250000000255,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620476,
+        "latencyMs": 1.7713329999999132,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620478,
+        "latencyMs": 1.8215840000000298,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620479,
+        "latencyMs": 1.806666999999834,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620481,
+        "latencyMs": 2.014083000000028,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620483,
+        "latencyMs": 1.9750410000001466,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620485,
+        "latencyMs": 1.8662090000000262,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620487,
+        "latencyMs": 1.841166999999814,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620489,
+        "latencyMs": 1.8134999999999764,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620491,
+        "latencyMs": 1.8645000000001346,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620493,
+        "latencyMs": 1.8453749999998763,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620494,
+        "latencyMs": 1.8176250000001346,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620496,
+        "latencyMs": 1.8055420000000595,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620498,
+        "latencyMs": 1.8196669999999813,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620500,
+        "latencyMs": 2.0560420000001614,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620502,
+        "latencyMs": 1.8687079999999696,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620504,
+        "latencyMs": 1.858417000000145,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620506,
+        "latencyMs": 1.8785419999999249,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620508,
+        "latencyMs": 2.0172500000001037,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620510,
+        "latencyMs": 1.934041999999863,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620512,
+        "latencyMs": 1.8217079999999441,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620513,
+        "latencyMs": 1.8595420000001468,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620515,
+        "latencyMs": 1.8641250000000582,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620517,
+        "latencyMs": 1.8174159999998665,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620519,
+        "latencyMs": 1.8573750000000473,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620521,
+        "latencyMs": 1.8333749999999327,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620523,
+        "latencyMs": 1.8894999999999982,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620524,
+        "latencyMs": 1.8138750000000528,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620526,
+        "latencyMs": 1.8192919999999049,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620528,
+        "latencyMs": 1.8845420000000104,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620530,
+        "latencyMs": 1.880292000000054,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620532,
+        "latencyMs": 1.9279579999999896,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620534,
+        "latencyMs": 1.8356659999999465,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620536,
+        "latencyMs": 1.814542000000074,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620538,
+        "latencyMs": 1.8514999999999873,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620539,
+        "latencyMs": 1.8487500000001091,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620541,
+        "latencyMs": 1.844541000000163,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620543,
+        "latencyMs": 1.8907080000001315,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620545,
+        "latencyMs": 1.7954999999999472,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620547,
+        "latencyMs": 1.8545830000000478,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620549,
+        "latencyMs": 1.8016250000000582,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620550,
+        "latencyMs": 1.8043339999999262,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620552,
+        "latencyMs": 1.8355419999998048,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620554,
+        "latencyMs": 1.7718339999998989,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620556,
+        "latencyMs": 1.794332999999824,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620558,
+        "latencyMs": 2.0644170000000486,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620560,
+        "latencyMs": 1.867665999999872,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620562,
+        "latencyMs": 1.815417000000025,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620563,
+        "latencyMs": 1.8456249999999272,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620565,
+        "latencyMs": 1.8754590000000917,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620567,
+        "latencyMs": 1.8050410000000738,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620569,
+        "latencyMs": 1.7819999999999254,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620571,
+        "latencyMs": 1.8421659999999065,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620573,
+        "latencyMs": 1.8355840000001535,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620575,
+        "latencyMs": 1.9130419999999049,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620576,
+        "latencyMs": 1.8362500000000637,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620578,
+        "latencyMs": 1.909208000000035,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620580,
+        "latencyMs": 1.828416000000061,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620582,
+        "latencyMs": 1.83199999999988,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620584,
+        "latencyMs": 1.9850420000000213,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620586,
+        "latencyMs": 1.8227920000001632,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620588,
+        "latencyMs": 1.7603750000000673,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620589,
+        "latencyMs": 1.8227919999999358,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620591,
+        "latencyMs": 1.7720839999999498,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620593,
+        "latencyMs": 1.8354170000000067,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620595,
+        "latencyMs": 1.7945419999998649,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620597,
+        "latencyMs": 1.8800410000001193,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620598,
+        "latencyMs": 1.8342909999998938,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620600,
+        "latencyMs": 1.8406670000001668,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620602,
+        "latencyMs": 1.8361250000000382,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620604,
+        "latencyMs": 1.7952920000000177,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620606,
+        "latencyMs": 1.8013750000000073,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620608,
+        "latencyMs": 1.829541000000063,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620610,
+        "latencyMs": 1.9720839999999953,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620611,
+        "latencyMs": 1.8862500000000182,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620613,
+        "latencyMs": 1.856708000000026,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620615,
+        "latencyMs": 1.8660409999999956,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620617,
+        "latencyMs": 1.8517919999999322,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620619,
+        "latencyMs": 1.8513330000000678,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620621,
+        "latencyMs": 1.8396249999998417,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620623,
+        "latencyMs": 1.819250000000011,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620624,
+        "latencyMs": 1.781500000000051,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620626,
+        "latencyMs": 1.8117079999999532,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620628,
+        "latencyMs": 1.7981669999999212,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620630,
+        "latencyMs": 1.84699999999998,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620632,
+        "latencyMs": 1.820208999999977,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620633,
+        "latencyMs": 1.7761669999999867,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620636,
+        "latencyMs": 2.130292000000054,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620637,
+        "latencyMs": 1.8812090000001263,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620639,
+        "latencyMs": 1.8674160000000484,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620641,
+        "latencyMs": 1.9637910000001284,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620643,
+        "latencyMs": 1.9078329999999823,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620645,
+        "latencyMs": 1.89712499999996,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620647,
+        "latencyMs": 1.798667000000023,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620649,
+        "latencyMs": 1.8969580000000406,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620651,
+        "latencyMs": 1.7989999999999782,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620652,
+        "latencyMs": 1.8101669999998649,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620654,
+        "latencyMs": 1.8320830000000115,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620656,
+        "latencyMs": 1.8269169999998667,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620658,
+        "latencyMs": 1.8600420000000213,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620660,
+        "latencyMs": 2.0615000000000236,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620662,
+        "latencyMs": 1.879041000000143,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620664,
+        "latencyMs": 1.8724590000001626,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620666,
+        "latencyMs": 1.8830000000000382,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620668,
+        "latencyMs": 2.022416999999905,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620670,
+        "latencyMs": 1.8119999999998981,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620671,
+        "latencyMs": 1.858417000000145,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620673,
+        "latencyMs": 1.877917000000025,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620675,
+        "latencyMs": 1.807790999999952,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620677,
+        "latencyMs": 1.836999999999989,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620679,
+        "latencyMs": 1.85287500000004,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620681,
+        "latencyMs": 1.849083999999948,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620682,
+        "latencyMs": 1.8467500000001564,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620684,
+        "latencyMs": 1.7995410000000902,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620686,
+        "latencyMs": 2.1698750000000473,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620688,
+        "latencyMs": 1.8164590000001226,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620690,
+        "latencyMs": 1.8400420000000395,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620692,
+        "latencyMs": 1.803250000000162,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620694,
+        "latencyMs": 1.8430840000000899,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620696,
+        "latencyMs": 1.8985000000000127,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620697,
+        "latencyMs": 1.773916999999983,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620699,
+        "latencyMs": 1.7949169999999413,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620701,
+        "latencyMs": 1.8383329999999205,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620703,
+        "latencyMs": 1.7916250000000673,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620705,
+        "latencyMs": 1.8757920000000468,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620707,
+        "latencyMs": 1.8264169999999922,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620708,
+        "latencyMs": 1.8586250000000746,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620710,
+        "latencyMs": 1.8740410000000338,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620712,
+        "latencyMs": 1.9946669999999358,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620714,
+        "latencyMs": 2.0310830000000806,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620716,
+        "latencyMs": 1.8129169999999704,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620718,
+        "latencyMs": 1.8238750000000437,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620720,
+        "latencyMs": 1.8409999999998945,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620722,
+        "latencyMs": 1.8206249999998363,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620724,
+        "latencyMs": 1.8689589999999043,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620725,
+        "latencyMs": 1.9207910000000084,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620727,
+        "latencyMs": 1.8683330000001206,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620729,
+        "latencyMs": 1.8789170000000013,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620731,
+        "latencyMs": 1.941332999999986,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620733,
+        "latencyMs": 1.8663329999999405,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620735,
+        "latencyMs": 1.7409999999999854,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620737,
+        "latencyMs": 1.7795000000000982,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620739,
+        "latencyMs": 1.980417000000216,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620740,
+        "latencyMs": 1.8468749999999545,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620742,
+        "latencyMs": 1.8453749999998763,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620744,
+        "latencyMs": 1.8410420000000158,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620746,
+        "latencyMs": 2.059624999999869,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620748,
+        "latencyMs": 1.9017079999998714,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620750,
+        "latencyMs": 1.8315829999999096,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620752,
+        "latencyMs": 1.8565830000000005,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620754,
+        "latencyMs": 1.7590829999999187,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620755,
+        "latencyMs": 1.7979580000001079,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620757,
+        "latencyMs": 1.8220829999997932,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620759,
+        "latencyMs": 1.8292920000001232,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620761,
+        "latencyMs": 1.92775000000006,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620763,
+        "latencyMs": 1.846625000000131,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620765,
+        "latencyMs": 2.0402090000000044,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620767,
+        "latencyMs": 1.808415999999852,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620769,
+        "latencyMs": 1.846125000000029,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620770,
+        "latencyMs": 1.9054579999999532,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620772,
+        "latencyMs": 1.8138749999998254,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620774,
+        "latencyMs": 1.8096250000000964,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620776,
+        "latencyMs": 1.773082999999815,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620778,
+        "latencyMs": 1.817667000000256,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620780,
+        "latencyMs": 1.9372910000001866,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620781,
+        "latencyMs": 1.817167000000154,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620783,
+        "latencyMs": 1.8496249999998327,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620785,
+        "latencyMs": 1.8882920000000922,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620787,
+        "latencyMs": 1.8409999999998945,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620789,
+        "latencyMs": 1.974416999999903,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620791,
+        "latencyMs": 1.8251249999998436,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620793,
+        "latencyMs": 1.8480420000000777,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620795,
+        "latencyMs": 1.8218339999998534,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620796,
+        "latencyMs": 1.8034999999999854,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620798,
+        "latencyMs": 1.8510410000003503,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620800,
+        "latencyMs": 1.844416999999794,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620802,
+        "latencyMs": 1.8479169999995975,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620804,
+        "latencyMs": 1.7797500000001492,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620806,
+        "latencyMs": 1.8429999999998472,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620807,
+        "latencyMs": 1.8719169999999394,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620809,
+        "latencyMs": 1.8068749999997635,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620811,
+        "latencyMs": 1.847707999999784,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620813,
+        "latencyMs": 1.8853750000002947,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620815,
+        "latencyMs": 1.8583330000001297,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620817,
+        "latencyMs": 1.856999999999971,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620819,
+        "latencyMs": 2.130500000000211,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620821,
+        "latencyMs": 1.86725000000024,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620823,
+        "latencyMs": 1.8707079999999223,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620824,
+        "latencyMs": 1.8512909999999465,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620826,
+        "latencyMs": 1.8595000000000255,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620828,
+        "latencyMs": 1.7644170000003214,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620830,
+        "latencyMs": 1.8439590000002681,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620832,
+        "latencyMs": 1.8503749999999854,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620834,
+        "latencyMs": 1.7992910000002666,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620835,
+        "latencyMs": 1.8643750000001091,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620837,
+        "latencyMs": 1.7880409999997937,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620839,
+        "latencyMs": 1.8067080000000715,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620841,
+        "latencyMs": 1.8964169999999285,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620843,
+        "latencyMs": 1.8355830000000424,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620845,
+        "latencyMs": 1.871874999999818,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620846,
+        "latencyMs": 1.7576670000003105,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620848,
+        "latencyMs": 1.8068750000002183,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620850,
+        "latencyMs": 1.831499999999778,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620852,
+        "latencyMs": 1.787083000000166,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620854,
+        "latencyMs": 1.8691659999999501,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620856,
+        "latencyMs": 1.8356669999998303,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620857,
+        "latencyMs": 1.8258749999999964,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620859,
+        "latencyMs": 1.891291999999794,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620861,
+        "latencyMs": 1.8347909999997682,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620863,
+        "latencyMs": 1.8238329999999223,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620865,
+        "latencyMs": 1.7579580000001442,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620867,
+        "latencyMs": 2.042084000000159,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620869,
+        "latencyMs": 1.813916000000063,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620870,
+        "latencyMs": 1.8758749999997235,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620872,
+        "latencyMs": 1.8980830000000424,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620874,
+        "latencyMs": 1.7852499999999054,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620876,
+        "latencyMs": 1.8128750000000764,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620878,
+        "latencyMs": 1.8539580000001479,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620880,
+        "latencyMs": 1.9291250000001128,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620882,
+        "latencyMs": 1.845542000000023,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620883,
+        "latencyMs": 1.7866249999997308,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620885,
+        "latencyMs": 1.8090409999999792,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620887,
+        "latencyMs": 1.8221660000003794,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620889,
+        "latencyMs": 1.7559580000001915,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620891,
+        "latencyMs": 1.816124999999829,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620893,
+        "latencyMs": 2.108416000000034,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620895,
+        "latencyMs": 1.8414999999999964,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620896,
+        "latencyMs": 1.8469170000003032,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620898,
+        "latencyMs": 1.8212919999996302,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620900,
+        "latencyMs": 1.8933329999999842,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620902,
+        "latencyMs": 1.7971659999998337,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620904,
+        "latencyMs": 1.7824999999998,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620905,
+        "latencyMs": 1.76758400000017,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620907,
+        "latencyMs": 1.8076660000001539,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620909,
+        "latencyMs": 1.8363749999998618,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620911,
+        "latencyMs": 1.7606249999998909,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620913,
+        "latencyMs": 1.8260419999996884,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620914,
+        "latencyMs": 1.7967499999999745,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620916,
+        "latencyMs": 1.8345420000000559,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620918,
+        "latencyMs": 2.1140839999998207,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620920,
+        "latencyMs": 1.8771660000002157,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620922,
+        "latencyMs": 1.8319169999999758,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620924,
+        "latencyMs": 1.7717499999998836,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620926,
+        "latencyMs": 1.7977920000002996,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620928,
+        "latencyMs": 1.8714579999996204,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620929,
+        "latencyMs": 1.8126250000000255,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620931,
+        "latencyMs": 1.8017500000000837,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620933,
+        "latencyMs": 1.7969590000002427,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620935,
+        "latencyMs": 1.7532499999997526,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620937,
+        "latencyMs": 1.8652090000000499,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620938,
+        "latencyMs": 1.792000000000371,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620940,
+        "latencyMs": 1.7470410000000811,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620942,
+        "latencyMs": 1.9327499999999418,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620944,
+        "latencyMs": 1.7955830000000788,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620946,
+        "latencyMs": 1.8700000000003456,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620948,
+        "latencyMs": 1.7526669999997466,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620949,
+        "latencyMs": 1.9138330000000678,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620951,
+        "latencyMs": 1.8512919999998303,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620953,
+        "latencyMs": 1.8114580000001297,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620955,
+        "latencyMs": 1.8650410000000193,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620957,
+        "latencyMs": 1.853207999999995,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620959,
+        "latencyMs": 1.8043339999999262,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620960,
+        "latencyMs": 1.790124999999989,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620962,
+        "latencyMs": 1.8099160000001575,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620964,
+        "latencyMs": 1.8050830000001952,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620966,
+        "latencyMs": 1.760707999999795,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620968,
+        "latencyMs": 2.0934579999998277,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620970,
+        "latencyMs": 1.8489169999998012,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620972,
+        "latencyMs": 1.821374999999989,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620973,
+        "latencyMs": 1.8773340000002463,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620975,
+        "latencyMs": 1.7708330000000387,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620977,
+        "latencyMs": 1.77599999999984,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620979,
+        "latencyMs": 1.8491669999998521,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620981,
+        "latencyMs": 1.843499999999949,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620983,
+        "latencyMs": 1.7923749999999927,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620984,
+        "latencyMs": 1.784375000000182,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620986,
+        "latencyMs": 1.8305420000001504,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620988,
+        "latencyMs": 1.7904590000002827,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620990,
+        "latencyMs": 1.8127920000001723,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620992,
+        "latencyMs": 1.846708000000035,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620994,
+        "latencyMs": 2.061999999999898,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620996,
+        "latencyMs": 1.7518340000001444,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620997,
+        "latencyMs": 1.816707999999835,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227620999,
+        "latencyMs": 1.8823339999999007,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621001,
+        "latencyMs": 2.0051250000001346,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621003,
+        "latencyMs": 1.7769169999996848,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621005,
+        "latencyMs": 1.8386669999999867,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621007,
+        "latencyMs": 1.8226250000002437,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621008,
+        "latencyMs": 1.8201250000001892,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621010,
+        "latencyMs": 1.8695830000001479,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621012,
+        "latencyMs": 1.812333000000308,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621014,
+        "latencyMs": 1.774916000000303,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621016,
+        "latencyMs": 1.832209000000148,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621018,
+        "latencyMs": 1.786167000000205,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621020,
+        "latencyMs": 2.0965830000000096,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621022,
+        "latencyMs": 1.8725420000000668,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621023,
+        "latencyMs": 1.8631659999996373,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621025,
+        "latencyMs": 1.7895840000001044,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621027,
+        "latencyMs": 1.8287909999999101,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621029,
+        "latencyMs": 1.9169170000000122,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621031,
+        "latencyMs": 1.7913329999996677,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621033,
+        "latencyMs": 1.8034999999999854,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621034,
+        "latencyMs": 1.81512500000008,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621036,
+        "latencyMs": 1.8121249999999236,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621038,
+        "latencyMs": 1.8751250000000255,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621040,
+        "latencyMs": 1.8027090000000499,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621042,
+        "latencyMs": 1.8451249999998254,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621044,
+        "latencyMs": 1.8494999999998072,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621046,
+        "latencyMs": 1.9519159999999829,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621047,
+        "latencyMs": 1.9020419999997102,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621049,
+        "latencyMs": 1.8028749999998581,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621051,
+        "latencyMs": 1.8191249999999854,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621053,
+        "latencyMs": 1.8422920000002705,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621055,
+        "latencyMs": 1.7979589999999916,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621057,
+        "latencyMs": 1.861917000000176,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621058,
+        "latencyMs": 1.83199999999988,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621060,
+        "latencyMs": 1.8371670000001359,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621062,
+        "latencyMs": 1.8780830000000606,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621064,
+        "latencyMs": 1.83199999999988,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621066,
+        "latencyMs": 1.8374159999998483,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621068,
+        "latencyMs": 1.7627919999999904,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621069,
+        "latencyMs": 1.8065409999999247,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621071,
+        "latencyMs": 1.9211660000000848,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621073,
+        "latencyMs": 1.8027499999998327,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621075,
+        "latencyMs": 1.944416000000274,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621077,
+        "latencyMs": 1.8034579999998641,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621079,
+        "latencyMs": 1.8419999999996435,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621081,
+        "latencyMs": 1.8951250000000073,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621082,
+        "latencyMs": 1.8317080000001624,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621084,
+        "latencyMs": 1.867207999999664,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621086,
+        "latencyMs": 1.7964160000001357,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621088,
+        "latencyMs": 1.8044999999997344,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621090,
+        "latencyMs": 1.814332999999806,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621092,
+        "latencyMs": 1.781916999999794,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621093,
+        "latencyMs": 1.8675410000000738,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621095,
+        "latencyMs": 1.8330000000000837,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621097,
+        "latencyMs": 1.9014170000000377,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621099,
+        "latencyMs": 1.8732089999998607,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621101,
+        "latencyMs": 1.8604169999998703,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621103,
+        "latencyMs": 1.8361669999999322,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621105,
+        "latencyMs": 1.8295829999997295,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621106,
+        "latencyMs": 1.775166999999783,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621108,
+        "latencyMs": 1.7953750000001492,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621110,
+        "latencyMs": 1.846458999999868,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621112,
+        "latencyMs": 1.8861249999999927,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621114,
+        "latencyMs": 1.7908750000001419,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621116,
+        "latencyMs": 1.8535409999999501,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621117,
+        "latencyMs": 1.8341250000003129,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621119,
+        "latencyMs": 1.7981669999999212,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621121,
+        "latencyMs": 1.8042499999996835,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621123,
+        "latencyMs": 2.031290999999783,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621125,
+        "latencyMs": 1.8286670000002232,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621127,
+        "latencyMs": 1.7732089999999516,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621128,
+        "latencyMs": 1.8094999999998436,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621130,
+        "latencyMs": 1.9177500000000691,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621132,
+        "latencyMs": 1.7683750000001055,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621134,
+        "latencyMs": 1.8294580000001588,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621136,
+        "latencyMs": 1.8643750000001091,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621138,
+        "latencyMs": 1.7504159999998592,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621139,
+        "latencyMs": 1.8087499999996908,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621141,
+        "latencyMs": 1.817833999999948,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621143,
+        "latencyMs": 1.7879579999998896,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621145,
+        "latencyMs": 1.8209999999999127,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621147,
+        "latencyMs": 1.74737499999992,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621149,
+        "latencyMs": 2.0605000000000473,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621150,
+        "latencyMs": 1.8316249999998035,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621152,
+        "latencyMs": 1.8056249999999636,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621154,
+        "latencyMs": 1.8661669999996775,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621156,
+        "latencyMs": 1.7765420000000631,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621158,
+        "latencyMs": 1.8228750000002947,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621160,
+        "latencyMs": 1.8507919999997284,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621161,
+        "latencyMs": 1.7736669999999322,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621163,
+        "latencyMs": 1.8382919999999103,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621165,
+        "latencyMs": 1.8403749999997672,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621167,
+        "latencyMs": 1.989542000000256,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621169,
+        "latencyMs": 1.7702500000000327,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621171,
+        "latencyMs": 1.8123329999998532,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621173,
+        "latencyMs": 1.8876250000002983,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621175,
+        "latencyMs": 2.178791999999703,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621177,
+        "latencyMs": 1.83270900000025,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621178,
+        "latencyMs": 1.8743340000000899,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621180,
+        "latencyMs": 1.8269999999997708,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621182,
+        "latencyMs": 1.8287090000003445,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621184,
+        "latencyMs": 1.8050829999997404,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621186,
+        "latencyMs": 1.8890409999999065,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621188,
+        "latencyMs": 1.7409170000000813,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621189,
+        "latencyMs": 1.7932909999999538,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621191,
+        "latencyMs": 1.8036660000002485,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621193,
+        "latencyMs": 1.8223329999996167,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621195,
+        "latencyMs": 1.894709000000148,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621197,
+        "latencyMs": 1.7829160000001139,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621199,
+        "latencyMs": 1.954957999999806,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621200,
+        "latencyMs": 1.8428749999998217,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621202,
+        "latencyMs": 1.7964170000000195,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621204,
+        "latencyMs": 1.8115829999997004,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621206,
+        "latencyMs": 1.8071669999999358,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621208,
+        "latencyMs": 1.7827500000003056,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621210,
+        "latencyMs": 1.871291999999812,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621211,
+        "latencyMs": 1.83987500000012,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621213,
+        "latencyMs": 1.8812910000001466,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621215,
+        "latencyMs": 1.8304160000002412,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621217,
+        "latencyMs": 1.7757910000000265,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621219,
+        "latencyMs": 1.8156660000004194,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621221,
+        "latencyMs": 1.8224159999999756,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621222,
+        "latencyMs": 1.8556249999996908,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621224,
+        "latencyMs": 1.9855000000002292,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621226,
+        "latencyMs": 1.8473340000000462,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621228,
+        "latencyMs": 1.7949170000001686,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621230,
+        "latencyMs": 1.8344170000000304,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621232,
+        "latencyMs": 1.8446250000001783,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621233,
+        "latencyMs": 1.7472500000003492,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621235,
+        "latencyMs": 1.8367090000001554,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621237,
+        "latencyMs": 1.821957999999995,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621239,
+        "latencyMs": 1.7905000000000655,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621241,
+        "latencyMs": 1.8552079999999478,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621243,
+        "latencyMs": 1.8387500000003456,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621244,
+        "latencyMs": 1.8498340000001008,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621246,
+        "latencyMs": 1.8287500000001273,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621248,
+        "latencyMs": 1.8174160000003212,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621250,
+        "latencyMs": 2.054874999999811,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621252,
+        "latencyMs": 1.7480419999997139,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621254,
+        "latencyMs": 1.8001250000002074,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621256,
+        "latencyMs": 1.8159579999996822,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621257,
+        "latencyMs": 1.7726250000000618,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621259,
+        "latencyMs": 1.8832499999998618,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621261,
+        "latencyMs": 1.80529099999967,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621263,
+        "latencyMs": 1.813249999999698,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621265,
+        "latencyMs": 1.82425000000012,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621266,
+        "latencyMs": 1.7831670000000486,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621268,
+        "latencyMs": 1.8096669999999904,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621270,
+        "latencyMs": 1.74804099999983,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621272,
+        "latencyMs": 1.7860420000001795,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621274,
+        "latencyMs": 1.8320410000001175,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621276,
+        "latencyMs": 2.018583000000035,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621278,
+        "latencyMs": 1.8587090000000899,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621279,
+        "latencyMs": 1.8211670000000595,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621281,
+        "latencyMs": 1.8191249999999854,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621283,
+        "latencyMs": 1.8218329999999696,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621285,
+        "latencyMs": 1.8314170000003287,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621287,
+        "latencyMs": 1.8478329999998095,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621288,
+        "latencyMs": 1.745332999999846,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621290,
+        "latencyMs": 1.765374999999949,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621292,
+        "latencyMs": 1.7564159999997173,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621294,
+        "latencyMs": 1.7606250000003456,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621296,
+        "latencyMs": 1.859707999999955,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621297,
+        "latencyMs": 1.7657920000001468,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621299,
+        "latencyMs": 1.8460830000003625,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621301,
+        "latencyMs": 1.9731249999999818,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621303,
+        "latencyMs": 1.7772500000000946,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621305,
+        "latencyMs": 1.9383749999997235,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621307,
+        "latencyMs": 1.8006250000003092,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621309,
+        "latencyMs": 1.839458000000377,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621310,
+        "latencyMs": 1.809125000000222,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621312,
+        "latencyMs": 1.7949589999998352,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621314,
+        "latencyMs": 1.8303750000000036,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621316,
+        "latencyMs": 1.7556250000002365,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621318,
+        "latencyMs": 1.8345829999998386,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621319,
+        "latencyMs": 1.8600409999999101,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621321,
+        "latencyMs": 1.8439170000001468,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621323,
+        "latencyMs": 1.8897080000001552,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621325,
+        "latencyMs": 1.7931250000001455,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621327,
+        "latencyMs": 1.9710829999999078,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621329,
+        "latencyMs": 1.8229160000000775,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621331,
+        "latencyMs": 1.8384169999999358,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621332,
+        "latencyMs": 1.8642079999999623,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621334,
+        "latencyMs": 1.767667000000074,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621336,
+        "latencyMs": 1.8796250000000327,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621338,
+        "latencyMs": 1.839958999999908,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621340,
+        "latencyMs": 1.776375000000371,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621342,
+        "latencyMs": 1.8357500000001892,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621343,
+        "latencyMs": 1.8167499999999563,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621345,
+        "latencyMs": 1.7360830000002352,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621347,
+        "latencyMs": 1.8065419999998085,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621349,
+        "latencyMs": 1.827291999999943,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621351,
+        "latencyMs": 1.8581670000003214,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621353,
+        "latencyMs": 1.900333000000046,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621354,
+        "latencyMs": 1.829541000000063,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621356,
+        "latencyMs": 1.8290000000001783,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621358,
+        "latencyMs": 1.8227920000003905,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621360,
+        "latencyMs": 1.9098329999997077,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621362,
+        "latencyMs": 1.8833749999998872,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621364,
+        "latencyMs": 1.7762500000003456,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621365,
+        "latencyMs": 1.7913330000001224,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621367,
+        "latencyMs": 1.8029579999997623,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621369,
+        "latencyMs": 1.805833000000348,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621371,
+        "latencyMs": 1.796542000000045,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621373,
+        "latencyMs": 1.8452919999999722,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621375,
+        "latencyMs": 1.8517499999998108,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621376,
+        "latencyMs": 1.787499999999909,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621378,
+        "latencyMs": 2.072374999999738,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621380,
+        "latencyMs": 1.8025410000000193,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621382,
+        "latencyMs": 1.8055829999998423,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621384,
+        "latencyMs": 1.7943749999999454,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621386,
+        "latencyMs": 1.7552080000000387,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621387,
+        "latencyMs": 1.8596659999998337,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621389,
+        "latencyMs": 1.7454579999998714,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621391,
+        "latencyMs": 1.8083750000000691,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621393,
+        "latencyMs": 1.8649580000001151,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621395,
+        "latencyMs": 1.797207999999955,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621396,
+        "latencyMs": 1.8547499999999673,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621398,
+        "latencyMs": 1.7369159999998374,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621400,
+        "latencyMs": 1.796458000000257,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621402,
+        "latencyMs": 1.766374999999698,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621404,
+        "latencyMs": 1.9076249999998254,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621406,
+        "latencyMs": 1.8680420000000595,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621407,
+        "latencyMs": 1.7710830000000897,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621409,
+        "latencyMs": 1.8461660000002666,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621411,
+        "latencyMs": 1.88216599999987,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621413,
+        "latencyMs": 1.8697090000000571,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621415,
+        "latencyMs": 1.840375000000222,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621417,
+        "latencyMs": 1.7935419999998885,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621418,
+        "latencyMs": 1.8595829999999296,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621420,
+        "latencyMs": 1.806416999999783,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621422,
+        "latencyMs": 1.8173750000000837,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621424,
+        "latencyMs": 1.812750000000051,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621426,
+        "latencyMs": 1.7519999999999527,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621427,
+        "latencyMs": 1.8236660000002303,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621429,
+        "latencyMs": 1.9517500000001746,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621431,
+        "latencyMs": 1.8410829999997986,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621433,
+        "latencyMs": 1.8530420000001868,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621435,
+        "latencyMs": 1.7940410000001066,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621437,
+        "latencyMs": 1.829917000000023,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621439,
+        "latencyMs": 1.797708000000057,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621440,
+        "latencyMs": 1.797458000000006,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621442,
+        "latencyMs": 1.886667000000216,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621444,
+        "latencyMs": 1.749416999999994,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621446,
+        "latencyMs": 1.7905409999998483,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621448,
+        "latencyMs": 1.8210829999998168,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621449,
+        "latencyMs": 1.8465000000001055,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621451,
+        "latencyMs": 1.8038750000000618,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621453,
+        "latencyMs": 1.7972920000001977,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621455,
+        "latencyMs": 1.9695000000001528,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621457,
+        "latencyMs": 1.7497920000000704,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621459,
+        "latencyMs": 1.8074169999999867,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621461,
+        "latencyMs": 1.8896660000000338,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621462,
+        "latencyMs": 1.8328329999999369,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621464,
+        "latencyMs": 1.8275410000001102,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621466,
+        "latencyMs": 1.8298749999999018,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621468,
+        "latencyMs": 1.7556250000002365,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621470,
+        "latencyMs": 1.8883749999999964,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621471,
+        "latencyMs": 1.7854999999999563,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621473,
+        "latencyMs": 1.8032920000000559,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621475,
+        "latencyMs": 1.7976669999998194,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621477,
+        "latencyMs": 1.749749999999949,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621479,
+        "latencyMs": 1.8452919999999722,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621481,
+        "latencyMs": 2.019333000000188,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621483,
+        "latencyMs": 1.8161659999996118,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621484,
+        "latencyMs": 1.8735420000002705,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621486,
+        "latencyMs": 1.8346670000000813,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621488,
+        "latencyMs": 1.9847090000002936,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621490,
+        "latencyMs": 1.803625000000011,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621492,
+        "latencyMs": 1.7839999999996508,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621494,
+        "latencyMs": 1.8010420000000522,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621495,
+        "latencyMs": 1.8352910000003249,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621497,
+        "latencyMs": 1.8387920000000122,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621499,
+        "latencyMs": 1.7718339999996715,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621501,
+        "latencyMs": 2.018000000000029,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621503,
+        "latencyMs": 1.9472500000001673,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621505,
+        "latencyMs": 2.0495419999997466,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621507,
+        "latencyMs": 1.822708999999577,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621509,
+        "latencyMs": 1.795832999999675,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621511,
+        "latencyMs": 1.8082909999998265,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621512,
+        "latencyMs": 1.8885410000002594,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621514,
+        "latencyMs": 1.800666000000092,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621516,
+        "latencyMs": 1.8583340000000135,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621518,
+        "latencyMs": 1.793749999999818,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621520,
+        "latencyMs": 1.8241669999997612,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621522,
+        "latencyMs": 1.8246250000001965,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621523,
+        "latencyMs": 1.8250419999999394,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621525,
+        "latencyMs": 1.8529579999999441,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621527,
+        "latencyMs": 1.7399999999997817,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621529,
+        "latencyMs": 1.892917000000125,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621531,
+        "latencyMs": 2.14449999999988,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621533,
+        "latencyMs": 1.757959000000028,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621535,
+        "latencyMs": 1.8404169999998885,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621536,
+        "latencyMs": 1.8570420000000922,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621538,
+        "latencyMs": 1.8156249999997272,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621540,
+        "latencyMs": 1.819749999999658,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621542,
+        "latencyMs": 1.7999589999999444,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621544,
+        "latencyMs": 1.8440410000002885,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621546,
+        "latencyMs": 1.771708000000217,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621547,
+        "latencyMs": 1.8149170000001504,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621549,
+        "latencyMs": 1.8788340000000971,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621551,
+        "latencyMs": 1.768500000000131,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621553,
+        "latencyMs": 1.789042000000336,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621555,
+        "latencyMs": 1.7473330000002534,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621557,
+        "latencyMs": 2.090791000000081,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621558,
+        "latencyMs": 1.7689159999999902,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621560,
+        "latencyMs": 1.8678750000003674,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621562,
+        "latencyMs": 1.9390000000003056,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621564,
+        "latencyMs": 1.7692919999999503,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621566,
+        "latencyMs": 1.7868330000001151,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621568,
+        "latencyMs": 1.8035420000001068,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621569,
+        "latencyMs": 1.7782910000000811,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621571,
+        "latencyMs": 1.883291999999983,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621573,
+        "latencyMs": 1.8437079999998787,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621575,
+        "latencyMs": 1.91924999999992,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621577,
+        "latencyMs": 1.784624999999778,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621579,
+        "latencyMs": 1.8647499999997308,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621581,
+        "latencyMs": 1.9269580000000133,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621582,
+        "latencyMs": 1.8868749999996908,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621584,
+        "latencyMs": 1.8226250000002437,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621586,
+        "latencyMs": 1.8099589999997079,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621588,
+        "latencyMs": 1.7470830000002024,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621590,
+        "latencyMs": 1.865708000000268,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621592,
+        "latencyMs": 1.8265830000000278,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621593,
+        "latencyMs": 1.7825830000001588,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621595,
+        "latencyMs": 1.8294999999998254,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621597,
+        "latencyMs": 1.7903329999999187,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621599,
+        "latencyMs": 1.7762499999998909,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621601,
+        "latencyMs": 1.7712080000001151,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621602,
+        "latencyMs": 1.7622919999998885,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621604,
+        "latencyMs": 1.8025420000003578,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621606,
+        "latencyMs": 1.7554999999997563,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621608,
+        "latencyMs": 2.090291999999863,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621610,
+        "latencyMs": 1.8327919999996993,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621612,
+        "latencyMs": 1.8143330000002607,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621613,
+        "latencyMs": 1.8485839999998461,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621615,
+        "latencyMs": 1.8577919999997903,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621617,
+        "latencyMs": 1.8357920000003105,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621619,
+        "latencyMs": 1.7976669999998194,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621621,
+        "latencyMs": 1.7878749999999854,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621623,
+        "latencyMs": 1.8271249999997963,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621624,
+        "latencyMs": 1.8010840000001735,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621626,
+        "latencyMs": 1.86974999999984,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621628,
+        "latencyMs": 1.7960420000003978,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621630,
+        "latencyMs": 1.8620419999997466,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621632,
+        "latencyMs": 1.8675830000001952,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621634,
+        "latencyMs": 2.04037500000004,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621636,
+        "latencyMs": 1.9973329999997986,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621638,
+        "latencyMs": 1.8249590000000353,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621639,
+        "latencyMs": 1.803541000000223,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621641,
+        "latencyMs": 1.7759579999997186,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621643,
+        "latencyMs": 2.0932089999996606,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621645,
+        "latencyMs": 1.9005409999999756,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621647,
+        "latencyMs": 1.80987499999992,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621649,
+        "latencyMs": 1.8378749999997126,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621651,
+        "latencyMs": 1.9197909999998046,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621653,
+        "latencyMs": 1.8432499999998981,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621655,
+        "latencyMs": 2.000750000000153,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621657,
+        "latencyMs": 1.8760409999999865,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621658,
+        "latencyMs": 1.8252919999999904,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621661,
+        "latencyMs": 2.149083000000246,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621662,
+        "latencyMs": 1.8695419999999103,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621664,
+        "latencyMs": 1.8634579999998095,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621666,
+        "latencyMs": 1.8769999999999527,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621668,
+        "latencyMs": 1.9332500000000437,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621670,
+        "latencyMs": 1.8655830000002425,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621672,
+        "latencyMs": 1.861790999999812,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621674,
+        "latencyMs": 1.8852500000002692,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621675,
+        "latencyMs": 1.7502920000001723,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621677,
+        "latencyMs": 1.7909169999998085,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621679,
+        "latencyMs": 1.8137500000002547,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621681,
+        "latencyMs": 1.8134589999999662,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621683,
+        "latencyMs": 1.8574170000001686,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621685,
+        "latencyMs": 1.7686250000001564,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621687,
+        "latencyMs": 2.127124999999978,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621689,
+        "latencyMs": 1.908375000000433,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621690,
+        "latencyMs": 1.8118329999997513,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621692,
+        "latencyMs": 1.854207999999744,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621694,
+        "latencyMs": 1.83337500000016,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621696,
+        "latencyMs": 1.810790999999881,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621698,
+        "latencyMs": 1.7982499999998254,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621700,
+        "latencyMs": 1.8320830000002388,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621701,
+        "latencyMs": 1.8757919999998194,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621703,
+        "latencyMs": 1.7982499999998254,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621705,
+        "latencyMs": 1.7752920000002632,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621707,
+        "latencyMs": 1.8375419999997575,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621709,
+        "latencyMs": 1.8115830000001552,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621710,
+        "latencyMs": 1.8052090000001044,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621712,
+        "latencyMs": 2.0317079999999805,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621714,
+        "latencyMs": 1.7767089999997552,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621716,
+        "latencyMs": 1.7892080000001442,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621718,
+        "latencyMs": 1.830583999999817,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621720,
+        "latencyMs": 1.8784999999998035,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621722,
+        "latencyMs": 1.790291000000252,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621723,
+        "latencyMs": 1.8430839999996351,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621725,
+        "latencyMs": 1.8915829999996276,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621727,
+        "latencyMs": 1.7932909999999538,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621729,
+        "latencyMs": 1.877875000000131,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621731,
+        "latencyMs": 1.8479170000000522,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621733,
+        "latencyMs": 1.805166999999983,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621734,
+        "latencyMs": 1.7644169999998667,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621736,
+        "latencyMs": 1.7798749999997199,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621738,
+        "latencyMs": 2.0204579999999623,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621740,
+        "latencyMs": 1.7902920000001359,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621742,
+        "latencyMs": 1.799290999999812,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621744,
+        "latencyMs": 1.8721669999999904,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621746,
+        "latencyMs": 1.8333749999997053,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621747,
+        "latencyMs": 1.8652500000002874,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621749,
+        "latencyMs": 1.822917000000416,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621751,
+        "latencyMs": 1.7797920000002705,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621753,
+        "latencyMs": 1.7451660000001539,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621755,
+        "latencyMs": 1.7867089999999735,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621756,
+        "latencyMs": 1.815375000000131,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621758,
+        "latencyMs": 1.763249999999971,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621760,
+        "latencyMs": 1.8168749999999818,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621762,
+        "latencyMs": 1.8405000000002474,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621764,
+        "latencyMs": 1.9175000000000182,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621766,
+        "latencyMs": 1.8731250000000728,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621767,
+        "latencyMs": 1.8002089999999953,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621769,
+        "latencyMs": 1.7851670000000013,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621771,
+        "latencyMs": 1.8454169999999976,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621773,
+        "latencyMs": 1.8151659999998628,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621775,
+        "latencyMs": 1.8524590000001808,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621776,
+        "latencyMs": 1.7549159999998665,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621778,
+        "latencyMs": 1.8212919999996302,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621780,
+        "latencyMs": 1.890292000000045,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621782,
+        "latencyMs": 1.8660839999997734,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621784,
+        "latencyMs": 1.8612910000001648,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621786,
+        "latencyMs": 1.8005419999999503,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621787,
+        "latencyMs": 1.7335829999997259,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621789,
+        "latencyMs": 2.030749999999898,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621791,
+        "latencyMs": 1.8087909999999283,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621793,
+        "latencyMs": 1.8350839999998243,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621795,
+        "latencyMs": 1.8288330000000315,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621797,
+        "latencyMs": 1.829917000000023,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621799,
+        "latencyMs": 1.8115410000000338,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621800,
+        "latencyMs": 1.849583000000166,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621802,
+        "latencyMs": 1.8018749999996544,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621804,
+        "latencyMs": 1.735208000000057,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621806,
+        "latencyMs": 1.811750000000302,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621808,
+        "latencyMs": 1.7748329999999441,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621809,
+        "latencyMs": 1.755916999999954,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621811,
+        "latencyMs": 1.8597500000000764,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621813,
+        "latencyMs": 1.8584999999998217,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621815,
+        "latencyMs": 1.8490419999998267,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621817,
+        "latencyMs": 1.7900840000002063,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621819,
+        "latencyMs": 1.8953340000002754,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621821,
+        "latencyMs": 1.8705829999998969,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621822,
+        "latencyMs": 1.8143330000002607,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621824,
+        "latencyMs": 1.803042000000005,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621826,
+        "latencyMs": 1.8391249999999673,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621828,
+        "latencyMs": 1.8476670000000013,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621830,
+        "latencyMs": 1.87237499999992,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      },
+      {
+        "timestamp": 1766227621832,
+        "latencyMs": 1.8132080000000315,
+        "success": false,
+        "errorType": "function err() { [native code] }"
+      }
+    ],
+    "statistics": {
+      "count": 1000,
+      "successRate": 0,
+      "minMs": 0,
+      "maxMs": 0,
+      "avgMs": 0,
+      "medianMs": 0,
+      "stdDevMs": 0,
+      "p50Ms": 0,
+      "p75Ms": 0,
+      "p90Ms": 0,
+      "p95Ms": 0,
+      "p99Ms": 0
+    }
+  },
+  "throughputResults": {
+    "windows": [
+      {
+        "startTime": 1251.938583,
+        "endTime": 2252.719083,
+        "transactions": 537,
+        "successful": 0,
+        "tps": 536.5811983746687
+      },
+      {
+        "startTime": 2252.719083,
+        "endTime": 3105.403083,
+        "transactions": 463,
+        "successful": 0,
+        "tps": 542.9913074480111
+      }
+    ],
+    "statistics": {
+      "totalTransactions": 1000,
+      "successfulTransactions": 0,
+      "failedTransactions": 1000,
+      "durationSeconds": 1.8534645,
+      "avgTps": 539.78625291134,
+      "peakTps": 542.9913074480111,
+      "minTps": 536.5811983746687,
+      "sustainedTps": 0
+    }
+  },
+  "resourceResults": {
+    "computeUnits": {
+      "avg": 0,
+      "min": 0,
+      "max": 0,
+      "total": 0
+    }
+  }
+}

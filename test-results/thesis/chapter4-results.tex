@@ -1,0 +1,138 @@
+\chapter{Results and Analysis}
+\label{chap:results}
+
+\section{Overview}
+
+This chapter presents the performance evaluation results for the GridTokenX blockchain platform across four TPC-style benchmarks.
+
+\section{TPC-C Results}
+
+\subsection{Primary Performance}
+
+\begin{table}[htbp]
+\centering
+\caption{TPC-C Benchmark Results}
+\label{tab:tpc-c-results}
+\begin{tabular}{|l|r|r|}
+\hline
+\textbf{Metric} & \textbf{Value} & \textbf{Unit} \\
+\hline
+tpmC & 21,378 & tx/min \\
+Average Latency & 11.34 & ms \\
+p50 Latency & 11 & ms \\
+p99 Latency & 20 & ms \\
+Success Rate & 99.9 & \% \\
+MVCC Conflict Rate & 1.5 & \% \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Transaction Mix Compliance}
+
+The observed transaction mix closely matches the TPC-C specification:
+
+\begin{itemize}
+  \item CREATE\_ORDER: 45.1\% (target: 45\%)
+  \item TOKEN\_TRANSFER: 43.1\% (target: 43\%)
+  \item GET\_ORDER\_STATUS: 3.9\% (target: 4\%)
+  \item EXECUTE\_TRADE: 3.8\% (target: 4\%)
+  \item CHECK\_BALANCE: 4.1\% (target: 4\%)
+\end{itemize}
+
+\section{Smallbank Results}
+
+\begin{table}[htbp]
+\centering
+\caption{Smallbank Benchmark Results}
+\label{tab:smallbank-results}
+\begin{tabular}{|l|r|r|}
+\hline
+\textbf{Metric} & \textbf{Value} & \textbf{Unit} \\
+\hline
+TPS & 1,741 & tx/sec \\
+Average Latency & 5.72 & ms \\
+p99 Latency & 10 & ms \\
+Conflict Rate & 0.79 & \% \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{TPC-E Results}
+
+\begin{table}[htbp]
+\centering
+\caption{TPC-E Benchmark Results}
+\label{tab:tpc-e-results}
+\begin{tabular}{|l|r|r|}
+\hline
+\textbf{Metric} & \textbf{Value} & \textbf{Unit} \\
+\hline
+tpsE & 307 & trades/sec \\
+Trade Orders/sec & 381 & orders/sec \\
+Average Latency & 7.89 & ms \\
+p99 Latency & 17 & ms \\
+Read/Write Ratio & 0.43 & - \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{TPC-H Results}
+
+\begin{table}[htbp]
+\centering
+\caption{TPC-H Benchmark Results}
+\label{tab:tpc-h-results}
+\begin{tabular}{|l|r|r|}
+\hline
+\textbf{Metric} & \textbf{Value} & \textbf{Unit} \\
+\hline
+QphH & 246,938 & queries/hr \\
+Average Latency & 72.11 & ms \\
+p99 Latency & 147 & ms \\
+Throughput & 137.66 & MB/s \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Comparative Analysis}
+
+\subsection{Platform Comparison}
+
+\begin{table}[htbp]
+\centering
+\caption{Performance Comparison with Literature}
+\label{tab:comparison}
+\begin{tabular}{|l|l|r|r|l|}
+\hline
+\textbf{Platform} & \textbf{Benchmark} & \textbf{TPS} & \textbf{Latency} & \textbf{Source} \\
+\hline
+GridTokenX (PoA) & TPC-C & 356 & 11.34ms & This Study \\
+GridTokenX (PoA) & Smallbank & 1,741 & 5.72ms & This Study \\
+\hline
+Hyperledger Fabric 2.2 & TPC-C & 200 & 350ms & TPCTC 2023 \\
+Hyperledger Fabric 2.0 & Smallbank & 400 & 150ms & Blockbench \\
+\hline
+Ethereum (PoS) & Transfer & 30 & 12,000ms & Etherscan \\
+\hline
+PostgreSQL 15 & TPC-C & 5,000 & 2ms & TPC.org \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Trust Premium Analysis}
+
+\begin{table}[htbp]
+\centering
+\caption{Trust Premium vs Centralized Baseline}
+\label{tab:trust-premium}
+\begin{tabular}{|l|r|r|r|}
+\hline
+\textbf{Platform} & \textbf{Latency} & \textbf{Premium} & \textbf{Interpretation} \\
+\hline
+PostgreSQL (baseline) & 2ms & 1.0x & Centralized \\
+GridTokenX & 11.34ms & 5.67x & Acceptable \\
+Hyperledger Fabric & 350ms & 175x & High \\
+Ethereum & 12,000ms & 6,000x & Very High \\
+\hline
+\end{tabular}
+\end{table}

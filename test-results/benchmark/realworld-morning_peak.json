@@ -1,0 +1,58 @@
+{
+  "scenario": "Morning Peak (7-9 AM)",
+  "totalTransactions": 1764,
+  "successfulTransactions": 0,
+  "durationMs": 30019.4365,
+  "effectiveTPS": 58.76192912548508,
+  "latencyStats": {
+    "min": 0,
+    "max": 0,
+    "avg": 0,
+    "p50": 0,
+    "p95": 0,
+    "p99": 0,
+    "stdDev": 0
+  },
+  "operationBreakdown": {
+    "mint_energy": {
+      "count": 453,
+      "avgLatency": 0,
+      "successRate": 0
+    },
+    "place_buy_order": {
+      "count": 522,
+      "avgLatency": 0,
+      "successRate": 0
+    },
+    "place_sell_order": {
+      "count": 276,
+      "avgLatency": 0,
+      "successRate": 0
+    },
+    "cancel_order": {
+      "count": 82,
+      "avgLatency": 0,
+      "successRate": 0
+    },
+    "match_orders": {
+      "count": 175,
+      "avgLatency": 0,
+      "successRate": 0
+    },
+    "update_oracle": {
+      "count": 79,
+      "avgLatency": 0,
+      "successRate": 0
+    },
+    "register_device": {
+      "count": 37,
+      "avgLatency": 0,
+      "successRate": 0
+    },
+    "query_balance": {
+      "count": 140,
+      "avgLatency": 0,
+      "successRate": 0
+    }
+  }
+}

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GridTokenX Performance Analysis Report</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --primary: #6366f1;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding: 2rem;
+      background: linear-gradient(135deg, var(--bg-card), #2d1f5e);
+      border-radius: 16px;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+    h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(90deg, #818cf8, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .meta { color: var(--text-muted); margin-top: 0.5rem; }
+    .grid { display: grid; gap: 1.5rem; }
+    .grid-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .card {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .card h2 {
+      font-size: 1rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+    .stat {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .stat-label { color: var(--text-muted); font-size: 0.875rem; }
+    .chart-container { height: 300px; position: relative; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    th { color: var(--text-muted); font-weight: 500; }
+    .status-pass { color: var(--success); }
+    .status-fail { color: var(--danger); }
+    .section { margin: 2rem 0; }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-success { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+    .badge-warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🔬 GridTokenX Performance Analysis</h1>
+      <p class="meta">
+        Generated: 2025-12-20T10:54:02.787Z<br>
+        Environment: LiteSVM/Local Validator | solana-cli 3.0.13 (src:f5a29bf6; feat:3604001754, client:Agave)
+      </p>
+    </header>
+
+    <section class="section">
+      <div class="grid grid-4">
+        <div class="card">
+          <h2>Total Tests</h2>
+          <div class="stat">5</div>
+        </div>
+        <div class="card">
+          <h2>Passed</h2>
+          <div class="stat status-pass">5</div>
+        </div>
+        <div class="card">
+          <h2>Failed</h2>
+          <div class="stat ">0</div>
+        </div>
+        <div class="card">
+          <h2>Duration</h2>
+          <div class="stat">426.1s</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="grid grid-2">
+        <div class="card">
+          <h2>Throughput Results</h2>
+          <div class="chart-container">
+            <canvas id="throughputChart"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Latency Distribution</h2>
+          <div class="chart-container">
+            <canvas id="latencyChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="card">
+        <h2>Benchmark Results</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Benchmark</th>
+              <th>Status</th>
+              <th>Duration</th>
+              <th>Avg TPS</th>
+              <th>P99 Latency</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+              <tr>
+                <td>Throughput Benchmark</td>
+                <td><span class="badge badge-success">PASSED</span></td>
+                <td>48.84s</td>
+                <td>-</td>
+                <td>- ms</td>
+              </tr>
+            
+              <tr>
+                <td>Latency Benchmark</td>
+                <td><span class="badge badge-success">PASSED</span></td>
+                <td>36.74s</td>
+                <td>-</td>
+                <td>- ms</td>
+              </tr>
+            
+              <tr>
+                <td>Concurrent Benchmark</td>
+                <td><span class="badge badge-success">PASSED</span></td>
+                <td>230.49s</td>
+                <td>-</td>
+                <td>- ms</td>
+              </tr>
+            
+              <tr>
+                <td>Real-World Benchmark</td>
+                <td><span class="badge badge-success">PASSED</span></td>
+                <td>96.98s</td>
+                <td>-</td>
+                <td>- ms</td>
+              </tr>
+            
+              <tr>
+                <td>Network Simulation</td>
+                <td><span class="badge badge-success">PASSED</span></td>
+                <td>13.04s</td>
+                <td>-</td>
+                <td>- ms</td>
+              </tr>
+            
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="card">
+        <h2>Research Summary</h2>
+        <p style="color: var(--text-muted); margin-bottom: 1rem;">
+          This report provides comprehensive blockchain performance metrics for GridTokenX 
+          energy trading platform running on Solana. Key findings:
+        </p>
+        <ul style="color: var(--text-muted); padding-left: 1.5rem;">
+          <li>Transaction throughput compared to baseline: <strong>0.0%</strong></li>
+          <li>Theoretical Solana utilization: <strong>0.000%</strong></li>
+          <li>All metrics collected under controlled test conditions</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const benchmarks = [{"name":"Throughput Benchmark","timestamp":"2025-12-20T10:47:45.538Z","duration":48843,"metrics":{},"raw":{}},{"name":"Latency Benchmark","timestamp":"2025-12-20T10:48:22.283Z","duration":36744,"metrics":{},"raw":{}},{"name":"Concurrent Benchmark","timestamp":"2025-12-20T10:52:12.774Z","duration":230491,"metrics":{},"raw":{"stdout":"╔════════════════════════════════════════════════════════════╗\n║     GridTokenX Concurrent User Benchmark Suite             ║\n║     For Research Paper Analysis                            ║\n╚════════════════════════════════════════════════════════════╝\n\n\n════════════════════════════════════════════════════════════\n  👥 Concurrent User Test: low_load\n  Low load scenario - typical day operations\n════════════════════════════════════════════════════════════\n\n  Users: 10\n  Transactions/User: 50\n  Ramp-up Time: 100ms\n  Test Duration: 5000ms\n\n🔧 Initializing benchmark environment...\n   Creating 10 test users...\n✓ Benchmark environment ready\n\n🚀 Starting simulation...\n\n   Progress: 10% (1/10 users complete)\n   Progress: 20% (2/10 users complete)\n   Progress: 30% (3/10 users complete)\n   Progress: 40% (4/10 users complete)\n   Progress: 50% (5/10 users complete)\n   Progress: 60% (6/10 users complete)\n   Progress: 70% (7/10 users complete)\n   Progress: 80% (8/10 users complete)\n   Progress: 90% (9/10 users complete)\n   Progress: 100% (10/10 users complete)\n\n────────────────────────────────────────────────────────────\n  RESULTS\n────────────────────────────────────────────────────────────\n\n📊 Overall Metrics:\n   Total Transactions: 500\n   Total Duration: 54.34s\n   Effective TPS: 9.20\n   Success Rate: 2.00%\n\n⏱️  Latency Percentiles:\n   p50: 7.49ms\n   p95: 9.10ms\n   p99: 9.10ms\n   Max: 9.10ms\n\n👤 Per-Behavior Analysis:\n| Behavior  | Users | Avg Latency | Success Rate |\n|-----------|-------|-------------|--------------|\n| trader    |     3 |      6.58ms |         2.0% |\n| producer  |     3 |      7.22ms |         2.0% |\n| consumer  |     2 |      7.26ms |         2.0% |\n| observer  |     2 |      7.99ms |         2.0% |\n\n════════════════════════════════════════════════════════════\n  👥 Concurrent User Test: medium_load\n  Medium load - peak trading hours\n════════════════════════════════════════════════════════════\n\n  Users: 50\n  Transactions/User: 30\n  Ramp-up Time: 500ms\n  Test Duration: 10000ms\n\n🔧 Initializing benchmark environment...\n   Creating 50 test users...\n✓ Benchmark environment ready\n\n🚀 Starting simulation...\n\n   Progress: 10% (5/50 users complete)\n   Progress: 20% (10/50 users complete)\n   Progress: 30% (15/50 users complete)\n   Progress: 40% (20/50 users complete)\n   Progress: 50% (25/50 users complete)\n   Progress: 60% (30/50 users complete)\n   Progress: 70% (35/50 users complete)\n   Progress: 80% (40/50 users complete)\n   Progress: 90% (45/50 users complete)\n   Progress: 100% (50/50 users complete)\n\n────────────────────────────────────────────────────────────\n  RESULTS\n────────────────────────────────────────────────────────────\n\n📊 Overall Metrics:\n   Total Transactions: 1500\n   Total Duration: 77.13s\n   Effective TPS: 19.45\n   Success Rate: 3.33%\n\n⏱️  Latency Percentiles:\n   p50: 6.88ms\n   p95: 8.19ms\n   p99: 8.74ms\n   Max: 8.74ms\n\n👤 Per-Behavior Analysis:\n| Behavior  | Users | Avg Latency | Success Rate |\n|-----------|-------|-------------|--------------|\n| trader    |    13 |      6.71ms |         3.3% |\n| producer  |    13 |      5.97ms |         3.3% |\n| consumer  |    12 |      6.75ms |         3.3% |\n| observer  |    12 |      6.84ms |         3.3% |\n\n════════════════════════════════════════════════════════════\n  👥 Concurrent User Test: high_load\n  High load - promotional event\n════════════════════════════════════════════════════════════\n\n  Users: 100\n  Transactions/User: 20\n  Ramp-up Time: 1000ms\n  Test Duration: 15000ms\n\n🔧 Initializing benchmark environment...\n   Creating 100 test users...\n✓ Benchmark environment ready\n\n🚀 Starting simulation...\n\n   Progress: 10% (10/100 users complete)\n   Progress: 20% (20/100 users complete)\n   Progress: 30% (30/100 users complete)\n   Progress: 40% (40/100 users complete)\n   Progress: 50% (50/100 users complete)\n   Progress: 60% (60/100 users complete)\n   Progress: 70% (70/100 users complete)\n   Progress: 80% (80/100 users complete)\n   Progress: 90% (90/100 users complete)\n   Progress: 100% (100/100 users complete)\n\n────────────────────────────────────────────────────────────\n  RESULTS\n────────────────────────────────────────────────────────────\n\n📊 Overall Metrics:\n   Total Transactions: 2000\n   Total Duration: 56.87s\n   Effective TPS: 35.17\n   Success Rate: 5.00%\n\n⏱️  Latency Percentiles:\n   p50: 5.58ms\n   p95: 7.70ms\n   p99: 8.75ms\n   Max: 8.75ms\n\n👤 Per-Behavior Analysis:\n| Behavior  | Users | Avg Latency | Success Rate |\n|-----------|-------|-------------|--------------|\n| trader    |    25 |      5.67ms |         5.0% |\n| producer  |    25 |      6.06ms |         5.0% |\n| consumer  |    25 |      5.48ms |         5.0% |\n| observer  |    25 |      5.67ms |         5.0% |\n\n════════════════════════════════════════════════════════════\n  👥 Concurrent User Test: stress_test\n  Stress test - maximum capacity test\n════════════════════════════════════════════════════════════\n\n  Users: 200\n  Transactions/User: 15\n  Ramp-up Time: 2000ms\n  Test Duration: 20000ms\n\n🔧 Initializing benchmark environment...\n   Creating 200 test users...\n✓ Benchmark environment ready\n\n🚀 Starting simulation...\n\n   Progress: 10% (20/200 users complete)\n   Progress: 20% (40/200 users complete)\n   Progress: 30% (60/200 users complete)\n   Progress: 40% (80/200 users complete)\n   Progress: 50% (100/200 users complete)\n   Progress: 60% (120/200 users complete)\n   Progress: 70% (140/200 users complete)\n   Progress: 80% (160/200 users complete)\n   Progress: 90% (180/200 users complete)\n   Progress: 100% (200/200 users complete)\n\n────────────────────────────────────────────────────────────\n  RESULTS\n────────────────────────────────────────────────────────────\n\n📊 Overall Metrics:\n   Total Transactions: 3000\n   Total Duration: 21.14s\n   Effective TPS: 141.91\n   Success Rate: 6.67%\n\n⏱️  Latency Percentiles:\n   p50: 2.98ms\n   p95: 3.38ms\n   p99: 3.68ms\n   Max: 6.90ms\n\n👤 Per-Behavior Analysis:\n| Behavior  | Users | Avg Latency | Success Rate |\n|-----------|-------|-------------|--------------|\n| trader    |    50 |      3.03ms |         6.7% |\n| producer  |    50 |      3.05ms |         6.7% |\n| consumer  |    50 |      2.96ms |         6.7% |\n| observer  |    50 |      2.97ms |         6.7% |\n\n════════════════════════════════════════════════════════════\n  👥 Concurrent User Test: burst_load\n  Burst scenario - sudden traffic spike\n════════════════════════════════════════════════════════════\n\n  Users: 150\n  Transactions/User: 10\n  Ramp-up Time: 100ms\n  Test Duration: 5000ms\n\n🔧 Initializing benchmark environment...\n   Creating 150 test users...\n✓ Benchmark environment ready\n\n🚀 Starting simulation...\n\n   Progress: 10% (15/150 users complete)\n   Progress: 20% (30/150 users complete)\n   Progress: 30% (45/150 users complete)\n   Progress: 40% (60/150 users complete)\n   Progress: 50% (75/150 users complete)\n   Progress: 60% (90/150 users complete)\n   Progress: 70% (105/150 users complete)\n   Progress: 80% (120/150 users complete)\n   Progress: 90% (135/150 users complete)\n   Progress: 100% (150/150 users complete)\n\n────────────────────────────────────────────────────────────\n  RESULTS\n────────────────────────────────────────────────────────────\n\n📊 Overall Metrics:\n   Total Transactions: 1500\n   Total Duration: 6.92s\n   Effective TPS: 216.85\n   Success Rate: 10.00%\n\n⏱️  Latency Percentiles:\n   p50: 2.56ms\n   p95: 2.78ms\n   p99: 2.85ms\n   Max: 2.86ms\n\n👤 Per-Behavior Analysis:\n| Behavior  | Users | Avg Latency | Success Rate |\n|-----------|-------|-------------|--------------|\n| trader    |    38 |      2.55ms |        10.0% |\n| producer  |    38 |      2.55ms |        10.0% |\n| consumer  |    37 |      2.55ms |        10.0% |\n| observer  |    37 |      2.57ms |        10.0% |\n\n════════════════════════════════════════════════════════════\n  📈 SCALABILITY ANALYSIS\n════════════════════════════════════════════════════════════\n\n\n🧪 Testing with 5 users...\n🔧 Initializing benchmark environment...\n   Creating 5 test users...\n✓ Benchmark environment ready\n\n   Users: 5, TPS: 527, Avg: 2.25ms, p99: 2.36ms\n\n🧪 Testing with 10 users...\n🔧 Initializing benchmark environment...\n   Creating 10 test users...\n✓ Benchmark environment ready\n\n   Users: 10, TPS: 543, Avg: 1.89ms, p99: 1.99ms\n\n🧪 Testing with 25 users...\n🔧 Initializing benchmark environment...\n   Creating 25 test users...\n✓ Benchmark environment ready\n\n   Users: 25, TPS: 519, Avg: 1.82ms, p99: 1.93ms\n\n🧪 Testing with 50 users...\n🔧 Initializing benchmark environment...\n   Creating 50 test users...\n✓ Benchmark environment ready\n\n   Users: 50, TPS: 541, Avg: 1.85ms, p99: 2.10ms\n\n🧪 Testing with 75 users...\n🔧 Initializing benchmark environment...\n   Creating 75 test users...\n✓ Benchmark environment ready\n\n   Users: 75, TPS: 543, Avg: 1.84ms, p99: 2.10ms\n\n🧪 Testing with 100 users...\n🔧 Initializing benchmark environment...\n   Creating 100 test users...\n✓ Benchmark environment ready\n\n   Users: 100, TPS: 544, Avg: 1.84ms, p99: 2.12ms\n\n🧪 Testing with 150 users...\n🔧 Initializing benchmark environment...\n   Creating 150 test users...\n✓ Benchmark environment ready\n\n   Users: 150, TPS: 544, Avg: 1.83ms, p99: 2.12ms\n\n🧪 Testing with 200 users...\n🔧 Initializing benchmark environment...\n   Creating 200 test users...\n✓ Benchmark environment ready\n\n   Users: 200, TPS: 545, Avg: 1.83ms, p99: 2.13ms\n\n──────────────────────────────────────────────────────────────────────\n  SCALABILITY RESULTS\n──────────────────────────────────────────────────────────────────────\n\n| Users | Throughput (TPS) | Avg Latency (ms) | p99 Latency (ms) | Efficiency |\n|-------|------------------|------------------|------------------|------------|\n|     5 |              527 |             2.25 |             2.36 |       100% |\n|    10 |              543 |             1.89 |             1.99 |       103% |\n|    25 |              519 |             1.82 |             1.93 |        98% |\n|    50 |              541 |             1.85 |             2.10 |       103% |\n|    75 |              543 |             1.84 |             2.10 |       103% |\n|   100 |              544 |             1.84 |             2.12 |       103% |\n|   150 |              544 |             1.83 |             2.12 |       103% |\n|   200 |              545 |             1.83 |             2.13 |       103% |\n\n📁 Results saved to: test-results/benchmark/scalability-analysis.{json,csv}\n\n════════════════════════════════════════════════════════════════════════════════\n  CONCURRENT SIMULATION SUMMARY\n════════════════════════════════════════════════════════════════════════════════\n\n| Scenario    | Users | Transactions | Duration | TPS    | p95 Latency | Success |\n|-------------|-------|--------------|----------|--------|-------------|---------|\n| low_load    |    10 |          500 |   54.3s |      9 |      9.10ms |    2.0% |\n| medium_load |    50 |         1500 |   77.1s |     19 |      8.19ms |    3.3% |\n| high_load   |   100 |         2000 |   56.9s |     35 |      7.70ms |    5.0% |\n| stress_test |   200 |         3000 |   21.1s |    142 |      3.38ms |    6.7% |\n| burst_load  |   150 |         1500 |    6.9s |    217 |      2.78ms |   10.0% |\n\n════════════════════════════════════════════════════════════\n  ✅ ALL CONCURRENT BENCHMARKS COMPLETE\n════════════════════════════════════════════════════════════\n\n📁 Results saved to: test-results/benchmark/\n","stderr":""}},{"name":"Real-World Benchmark","timestamp":"2025-12-20T10:53:49.751Z","duration":96976,"metrics":{},"raw":{}},{"name":"Network Simulation","timestamp":"2025-12-20T10:54:02.787Z","duration":13036,"metrics":{},"raw":{}}];
+    
+    // Throughput Chart
+    new Chart(document.getElementById('throughputChart'), {
+      type: 'bar',
+      data: {
+        labels: benchmarks.map(b => b.name.replace(' Benchmark', '')),
+        datasets: [{
+          label: 'Avg TPS',
+          data: benchmarks.map(b => b.metrics.throughput?.avgTps || 0),
+          backgroundColor: 'rgba(99, 102, 241, 0.7)',
+          borderColor: 'rgb(99, 102, 241)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#94a3b8' } } },
+        scales: {
+          y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+          x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+        }
+      }
+    });
+
+    // Latency Chart
+    new Chart(document.getElementById('latencyChart'), {
+      type: 'line',
+      data: {
+        labels: ['P50', 'P75', 'P90', 'P95', 'P99'],
+        datasets: benchmarks.filter(b => b.metrics.latency).map((b, i) => ({
+          label: b.name.replace(' Benchmark', ''),
+          data: [
+            b.metrics.latency?.p50Ms,
+            b.metrics.latency?.p75Ms,
+            b.metrics.latency?.p90Ms,
+            b.metrics.latency?.p95Ms,
+            b.metrics.latency?.p99Ms
+          ],
+          borderColor: ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'][i % 5],
+          tension: 0.3,
+          fill: false
+        }))
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#94a3b8' } } },
+        scales: {
+          y: { 
+            title: { display: true, text: 'Latency (ms)', color: '#94a3b8' },
+            ticks: { color: '#94a3b8' }, 
+            grid: { color: 'rgba(255,255,255,0.1)' } 
+          },
+          x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

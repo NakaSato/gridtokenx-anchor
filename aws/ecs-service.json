@@ -1,0 +1,40 @@
+{
+    "serviceName": "gridtokenx-solana-service",
+    "cluster": "gridtokenx-cluster",
+    "taskDefinition": "gridtokenx-solana",
+    "desiredCount": 1,
+    "launchType": "FARGATE",
+    "platformVersion": "LATEST",
+    "deploymentConfiguration": {
+        "maximumPercent": 200,
+        "minimumHealthyPercent": 100,
+        "deploymentCircuitBreaker": {
+            "enable": true,
+            "rollback": true
+        }
+    },
+    "networkConfiguration": {
+        "awsvpcConfiguration": {
+            "subnets": [
+                "${SUBNET_1}",
+                "${SUBNET_2}"
+            ],
+            "securityGroups": [
+                "${SECURITY_GROUP_ID}"
+            ],
+            "assignPublicIp": "ENABLED"
+        }
+    },
+    "healthCheckGracePeriodSeconds": 120,
+    "enableExecuteCommand": true,
+    "tags": [
+        {
+            "key": "Project",
+            "value": "GridTokenX"
+        },
+        {
+            "key": "Environment",
+            "value": "Research"
+        }
+    ]
+}
