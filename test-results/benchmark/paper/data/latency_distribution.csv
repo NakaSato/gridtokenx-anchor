@@ -1,4 +1,0 @@
-scenario,min_ms,avg_ms,p50_ms,p95_ms,p99_ms,max_ms,std_dev_ms
-evening_peak,2.09,3.48,2.84,5.49,8.60,122.06,3.68
-flash_sale,2.06,2.66,2.50,3.32,4.56,60.61,1.49
-market_volatility,1.94,2.80,2.51,4.22,5.72,42.46,1.65

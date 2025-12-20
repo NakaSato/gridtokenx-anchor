@@ -1,4 +1,0 @@
-scenario,target_tps,achieved_tps,efficiency_pct,success_rate_pct,total_transactions,duration_sec
-evening_peak,75,90.3,120.4,98.4,2712,30.02
-flash_sale,150,207.6,138.4,92.6,3116,15.01
-market_volatility,100,134.3,134.3,98.0,2687,20.01

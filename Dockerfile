@@ -1,25 +1,79 @@
-# syntax=docker/dockerfile:1
-FROM --platform=$BUILDPLATFORM solanafoundation/anchor:v0.32.1
+# ============================================
+# GridTokenX Anchor - Solana Validator Dockerfile
+# ============================================
+# Builds and deploys Anchor programs to a local validator
+
+FROM rust:1.75-slim-bookworm AS builder
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@10.23.0
-
-# Copy package files
-COPY package.json pnpm-lock.yaml ./
-
 # Install dependencies
-RUN pnpm install --no-frozen-lockfile
+RUN apt-get update && apt-get install -y \
+    curl \
+    pkg-config \
+    libssl-dev \
+    libudev-dev \
+    clang \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy source code
-COPY . .
+# Install Solana CLI
+RUN sh -c "$(curl -sSfL https://release.solana.com/v1.18.4/install)" && \
+    export PATH="/root/.local/share/solana/install/active_release/bin:$PATH"
 
-# Fix Solana toolchain corruption
-RUN cargo-build-sbf --version || cargo-build-sbf --force-tools-install || true
+ENV PATH="/root/.local/share/solana/install/active_release/bin:$PATH"
 
-# Expose ports for Solana test validator
-EXPOSE 8899 8900
+# Install Anchor
+RUN cargo install --git https://github.com/coral-xyz/anchor avm --locked --force && \
+    avm install 0.30.0 && \
+    avm use 0.30.0
 
-# Keep container running (use docker exec to run tests)
-CMD ["tail", "-f", "/dev/null"]
+ENV PATH="/root/.avm/bin:$PATH"
+
+# Copy Anchor project
+COPY Anchor.toml Cargo.toml Cargo.lock ./
+COPY programs ./programs
+COPY tests ./tests
+COPY scripts ./scripts 2>/dev/null || true
+
+# Build programs
+RUN anchor build
+
+# ============================================
+# Runtime image with validator
+# ============================================
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Solana CLI
+RUN sh -c "$(curl -sSfL https://release.solana.com/v1.18.4/install)"
+ENV PATH="/root/.local/share/solana/install/active_release/bin:$PATH"
+
+# Copy built programs
+COPY --from=builder /app/target/deploy/*.so /app/programs/
+COPY --from=builder /app/target/idl/*.json /app/idl/
+
+# Copy startup script
+COPY docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Create ledger directory
+RUN mkdir -p /data/ledger
+
+# Expose ports
+EXPOSE 8899 8900 9900
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD solana cluster-version --url http://localhost:8899 || exit 1
+
+# Data volume
+VOLUME /data/ledger
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

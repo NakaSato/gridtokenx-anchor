@@ -1,0 +1,35 @@
+# GridTokenX Anchor - Standalone Docker Compose
+# Run: docker-compose up -d
+services:
+  solana:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gridtokenx-solana
+    restart: unless-stopped
+    ports:
+      - "8899:8899" # JSON-RPC
+      - "8900:8900" # RPC PubSub
+      - "9900:9900" # Faucet
+    environment:
+      - RUST_LOG=solana_runtime::message_processor=info
+      - LEDGER_DIR=/data/ledger
+      - RPC_PORT=8899
+    volumes:
+      - solana_ledger:/data/ledger
+    healthcheck:
+      test: [ "CMD", "solana", "cluster-version", "--url", "http://localhost:8899" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - gridtokenx-network
+
+volumes:
+  solana_ledger:
+
+
+networks:
+  gridtokenx-network:
+    driver: bridge
