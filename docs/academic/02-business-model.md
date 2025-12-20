@@ -258,6 +258,55 @@ Total: 3,200 GRID      Total: 16,000 GRID     Total: 65,000 GRID
 Growth Rate: -          Growth Rate: 400%       Growth Rate: 306%
 ```
 
+### 4.4 Compute Economics (Private Network)
+
+Since GridTokenX operates on a **private/permissioned Solana network (PoA)**, compute costs differ significantly from public mainnet:
+
+**Compute Unit (CU) Breakdown per Instruction:**
+
+| Instruction | Estimated CU | Public SOL Cost | Private Cost |
+|-------------|--------------|-----------------|--------------|
+| `create_sell_order` | ~50,000 | $0.025 | ~$0.001 |
+| `create_buy_order` | ~45,000 | $0.023 | ~$0.001 |
+| `match_orders` | ~80,000 | $0.040 | ~$0.002 |
+| `submit_reading` | ~30,000 | $0.015 | ~$0.0005 |
+| `mint_tokens` | ~60,000 | $0.030 | ~$0.001 |
+
+**Private Network Cost Advantage:**
+- No validator fees → **95%+ cost reduction** vs public Solana
+- Operational cost = Infrastructure only (~$500/month for 10,000 TPS capacity)
+- Break-even: ~50,000 transactions/month at 0.1% fee
+
+### 4.5 Hybrid Revenue Strategy
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                    HYBRID REVENUE MODEL                        │
+└────────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+│   TIER 1: FREE  │   │  TIER 2: PRO    │   │ TIER 3: ENTER-  │
+│                 │   │                 │   │    PRISE        │
+├─────────────────┤   ├─────────────────┤   ├─────────────────┤
+│ • 0.5% per trade│   │ • 50 GRID/month │   │ • Custom pricing│
+│ • 10 trades/day │   │ • 0.15% per     │   │ • Unlimited     │
+│ • Basic UI      │   │   trade         │   │   volume        │
+│ • No API access │   │ • Unlimited     │   │ • White-label   │
+│                 │   │ • API access    │   │ • SLA guarantee │
+└─────────────────┘   └─────────────────┘   └─────────────────┘
+        │                     │                     │
+        ▼                     ▼                     ▼
+  Consumer Target       Prosumer Target       Operator Target
+```
+
+**Staking Discounts (Optional):**
+
+| GRID Staked | Fee Discount | Lock Period |
+|-------------|--------------|-------------|
+| 100 GRID | 10% | 30 days |
+| 500 GRID | 25% | 90 days |
+| 1,000 GRID | 50% | 180 days |
+
 ---
 
 ## 5. Market Analysis
@@ -347,7 +396,7 @@ Legend: ★ = Feature Rating (1-5)
 
 | Factor | GridTokenX | Competitors | Advantage |
 |--------|------------|-------------|-----------|
-| Blockchain | Solana (fast, cheap) | Ethereum (slow, expensive) | 400ms vs 15s finality |
+| Blockchain | Solana (fast, cheap) | Ethereum (slow, expensive) | 11ms vs 15s finality |
 | Cost | 0.25% fee | 1-3% typical | 4-12x cheaper |
 | Settlement | Real-time | Daily/Weekly | Instant liquidity |
 | Certificates | On-chain ERC | PDF documents | Immutable proof |

@@ -1,0 +1,395 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{times}
+\usepackage{geometry}
+\geometry{margin=1in}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{fancyhdr}
+
+% Colors
+\definecolor{solana}{RGB}{20,241,149}
+\definecolor{darkblue}{RGB}{0,51,102}
+
+% Header/Footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{GridTokenX White Paper}}
+\fancyhead[R]{\textit{December 2025}}
+\fancyfoot[C]{\thepage}
+
+% Hyperlinks
+\hypersetup{
+    colorlinks=true,
+    linkcolor=darkblue,
+    urlcolor=darkblue,
+    citecolor=darkblue
+}
+
+\begin{document}
+
+% Title Page
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+
+{\Huge\bfseries GridTokenX}\\[0.5cm]
+{\LARGE Blockchain-Based Peer-to-Peer Solar Energy Trading Platform}\\[0.3cm]
+{\large White Paper v2.0}\\[2cm]
+
+{\Large\textit{Development of Peer-to-Peer Solar Energy Trading\\Simulation System using Solana Smart Contract\\(Anchor Framework Permissioned Environments)}}\\[2cm]
+
+{\large Mr. Chanthawat Kiriyadee}\\[0.3cm]
+{\normalsize Faculty of Engineering\\Computer Engineering and Artificial Intelligence\\The University of the Thai Chamber of Commerce\\Bangkok, Thailand}\\[0.3cm]
+{\small 2410717302003@live4.utcc.ac.th}\\[3cm]
+
+{\large December 2025}\\[1cm]
+
+\vfill
+{\small \textbf{CONFIDENTIAL} -- Private Network (PoA) Design Document}
+\end{titlepage}
+
+% Table of Contents
+\tableofcontents
+\newpage
+
+% Abstract
+\section*{Abstract}
+\addcontentsline{toc}{section}{Abstract}
+
+This white paper presents GridTokenX, a conceptual design for a decentralized Peer-to-Peer (P2P) solar energy trading simulation platform operating on a private Solana network. The platform enables prosumers to tokenize surplus solar energy production into GRID tokens (1 kWh = 1 GRID) and trade directly with consumers through an automated order book mechanism.
+
+Our implementation leverages the Anchor framework to deploy five interconnected smart contracts: Registry (user/meter management), Oracle (data validation), Energy Token (SPL-compliant minting), Trading (order book settlement), and Governance (configuration). Performance benchmarks demonstrate 21,378 tpmC (356 TPS) with 11ms average latency and a ``Trust Premium'' of 5.67x compared to centralized databases.
+
+The objectives of this research are: (1) to study and present the architecture of a P2P energy trading simulation using Solana in a Permissioned (PoA) environment; (2) to develop a Proof-of-Concept capable of simulating GRID Token exchange with an AMI Simulator; and (3) to evaluate the performance in terms of Throughput and Latency.
+
+\textbf{Keywords:} Blockchain, Solana, P2P Energy Trading, Smart Contracts, Tokenization, TPC-C
+
+\newpage
+
+% Chapter 1: Executive Summary
+\section{Executive Summary}
+
+\subsection{Problem Statement}
+
+The traditional energy market faces fundamental challenges limiting distributed renewable energy adoption:
+
+\begin{itemize}
+    \item \textbf{Centralized Intermediaries}: Energy flows through utilities with high fees and limited transparency
+    \item \textbf{Lack of Direct Trading}: Prosumers cannot sell directly to neighbors
+    \item \textbf{Settlement Inefficiencies}: Monthly billing cycles and delayed payments
+    \item \textbf{Trust and Verification}: Reliance on utility meters with limited audit capabilities
+\end{itemize}
+
+\subsection{Proposed Solution}
+
+GridTokenX addresses these challenges through a blockchain-based P2P energy trading simulation platform designed for private/permissioned Solana networks:
+
+\begin{itemize}
+    \item \textbf{Tokenization}: 1 kWh = 1 GRID token (SPL-compliant, 9 decimals)
+    \item \textbf{Direct P2P Trading}: Order book matching without intermediaries
+    \item \textbf{Real-time Settlement}: Atomic trade execution with instant finality
+    \item \textbf{Verified Green Energy}: On-chain ERC certificates
+\end{itemize}
+
+\subsection{Technical Innovation}
+
+\begin{table}[htbp]
+\caption{Platform Comparison}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Criterion} & \textbf{Solana (Private)} & \textbf{Ethereum} & \textbf{Polygon} \\
+\midrule
+Transaction Speed & 11ms & 12-15s & 2s \\
+Cost per TX & \$0.00025 & \$1-50 & \$0.01 \\
+TPS Capacity & 356+ (tested) & 15-30 & 7,000 \\
+Finality & Deterministic & 6 blocks & 256 blocks \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\newpage
+
+% Chapter 2: Business Model
+\section{Business Model}
+
+\subsection{Revenue Streams}
+
+The platform generates revenue through three primary channels:
+
+\begin{enumerate}
+    \item \textbf{Transaction Fees (60\% of revenue)}
+    \begin{itemize}
+        \item Trade fee: 0.25\% (split between buyer/seller)
+        \item Settlement fee: 0.1\% (seller)
+    \end{itemize}
+    
+    \item \textbf{Certificate Fees (25\% of revenue)}
+    \begin{itemize}
+        \item ERC Issuance: 5 GRID per certificate
+        \item ERC Validation: 2 GRID per approval
+    \end{itemize}
+    
+    \item \textbf{Premium Services (15\% of revenue)}
+    \begin{itemize}
+        \item API Access: 100 GRID/month
+        \item Premium Analytics: 50 GRID/month
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Compute Economics (Private Network)}
+
+Since GridTokenX operates on a private/permissioned Solana network, compute costs differ significantly from public mainnet:
+
+\begin{table}[htbp]
+\caption{Compute Unit Cost Breakdown}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Instruction} & \textbf{Est. CU} & \textbf{Public Cost} & \textbf{Private Cost} \\
+\midrule
+\texttt{create\_sell\_order} & 50,000 & \$0.025 & \$0.001 \\
+\texttt{create\_buy\_order} & 45,000 & \$0.023 & \$0.001 \\
+\texttt{match\_orders} & 80,000 & \$0.040 & \$0.002 \\
+\texttt{submit\_reading} & 30,000 & \$0.015 & \$0.0005 \\
+\texttt{mint\_tokens} & 60,000 & \$0.030 & \$0.001 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Private Network Advantage:} No validator fees results in 95\%+ cost reduction vs public Solana.
+
+\newpage
+
+% Chapter 3: System Architecture
+\section{System Architecture}
+
+\subsection{Four-Layer Model}
+
+The platform architecture consists of four distinct layers:
+
+\begin{enumerate}
+    \item \textbf{Presentation Layer}: Web/Mobile clients, user interface
+    \item \textbf{Application Layer}: API Gateway, WebSocket server, event processors
+    \item \textbf{Data Layer}: PostgreSQL (off-chain), Redis (cache), Solana RPC
+    \item \textbf{Blockchain Layer}: Anchor programs, SPL Token, System Program
+\end{enumerate}
+
+\subsection{Smart Contract Programs}
+
+Five interconnected Anchor programs form the blockchain layer:
+
+\begin{table}[htbp]
+\caption{Program Architecture}
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Program} & \textbf{Purpose} & \textbf{Key Functions} \\
+\midrule
+Registry & User/Meter Management & \texttt{register\_user}, \texttt{register\_meter} \\
+Oracle & Data Validation & \texttt{update\_price}, \texttt{submit\_reading} \\
+Energy Token & Token Operations & \texttt{mint\_from\_production}, \texttt{burn} \\
+Trading & Marketplace & \texttt{create\_sell\_order}, \texttt{match\_orders} \\
+Governance & Configuration & \texttt{issue\_erc}, \texttt{validate\_erc} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Program Relationships}
+
+Programs interact through Cross-Program Invocation (CPI):
+\begin{itemize}
+    \item Registry $\rightarrow$ Energy Token: Mint tokens from settled production
+    \item Trading $\rightarrow$ SPL Token: Escrow and settlement transfers
+    \item Oracle $\rightarrow$ Registry: Submit verified meter readings
+\end{itemize}
+
+\newpage
+
+% Chapter 4: Token Economics
+\section{Token Economics}
+
+\subsection{GRID Token Specification}
+
+\begin{itemize}
+    \item \textbf{Standard}: SPL Token (Solana Program Library)
+    \item \textbf{Decimals}: 9 (divisible to nano-tokens)
+    \item \textbf{Backing}: 1 GRID = 1 kWh verified energy production
+    \item \textbf{Supply}: Elastic (minted on production, burned on consumption)
+\end{itemize}
+
+\subsection{Token Conservation Invariant}
+
+The system enforces strict conservation of energy. Tokens can only be minted when physically generated energy is mathematically settled:
+
+\begin{equation}
+\Delta Supply_{GRID} = \max(0, (E_{produced} - E_{consumed}) - E_{settled})
+\end{equation}
+
+This prevents double-spending by tracking the $E_{settled}$ accumulator per meter.
+
+\subsection{VWAP Pricing Mechanism}
+
+The clearing price is calculated using Volume-Weighted Average Price:
+
+\begin{equation}
+P_{base} = \frac{P_{bid} + P_{ask}}{2}
+\end{equation}
+
+\begin{equation}
+P_{clearing} = P_{base} + \left( P_{base} \times \min\left(\frac{V_{trade}}{V_{total}}, 1.0\right) \times 0.10 \right)
+\end{equation}
+
+\newpage
+
+% Chapter 5: Performance Evaluation
+\section{Performance Evaluation}
+
+\subsection{Benchmark Methodology}
+
+We adapt the TPC-C benchmark for energy trading workloads:
+
+\begin{table}[htbp]
+\caption{TPC-C to Energy Trading Mapping}
+\centering
+\begin{tabular}{lcp{4cm}}
+\toprule
+\textbf{TPC-C Transaction} & \textbf{Mix} & \textbf{GridTokenX Function} \\
+\midrule
+New Order & 45\% & \texttt{create\_sell\_order} / \texttt{create\_buy\_order} \\
+Payment & 43\% & \texttt{transfer\_tokens} \\
+Order Status & 4\% & \texttt{get\_order\_status} \\
+Delivery & 4\% & \texttt{match\_orders} \\
+Stock Level & 4\% & \texttt{get\_balance} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Results}
+
+\begin{table}[htbp]
+\caption{Performance Benchmark Results (Local Validator)}
+\centering
+\begin{tabular}{lr}
+\toprule
+\textbf{Metric} & \textbf{Observed Value} \\
+\midrule
+tpmC (Transactions/min) & 21,101 \\
+TPS Equivalent & 352 \\
+Total Transactions & 23,848 \\
+Successful Transactions & 23,817 \\
+Average Latency & 11.30 ms \\
+p50 Latency & 11.00 ms \\
+p95 Latency & 18.00 ms \\
+p99 Latency & 20.00 ms \\
+Transaction Success Rate & 99.9\% \\
+MVCC Conflict Rate & 1.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Trust Premium}
+
+\begin{equation}
+Trust\ Premium = \frac{Latency_{Blockchain}}{Latency_{Baseline}} = \frac{11.34ms}{2.00ms} \approx 5.67x
+\end{equation}
+
+This overhead is negligible for energy trading where traditional settlement takes days.
+
+\newpage
+
+% Chapter 6: Security Analysis
+\section{Security Analysis}
+
+\subsection{Threat Model}
+
+\begin{itemize}
+    \item \textbf{Meter Spoofing}: Mitigated by Ed25519 signature validation
+    \item \textbf{Double Spending}: Prevented by atomic settlement and PDA ownership
+    \item \textbf{Front Running}: Reduced by 11ms finality window
+    \item \textbf{Oracle Manipulation}: Anomaly detection at 10x threshold
+\end{itemize}
+
+\subsection{Access Control}
+
+Program Derived Addresses (PDAs) enforce ownership:
+
+\begin{verbatim}
+seeds = [b"order", authority.key(), market.active_orders.to_le_bytes()]
+\end{verbatim}
+
+Only the original authority can modify or cancel their orders.
+
+\newpage
+
+% Chapter 7: Comparative Analysis
+\section{Comparative Analysis}
+
+\begin{table}[htbp]
+\caption{Platform Comparison}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Platform} & \textbf{Avg Latency} & \textbf{Finality} & \textbf{Notes} \\
+\midrule
+GridTokenX & 11ms & <1s & Solana PoA \\
+Power Ledger & 3-5s & 10s & Custom chain \\
+Energy Web & 5s & 5s & PoA chain \\
+WePower & 15s & 15s & Ethereum \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\newpage
+
+% Chapter 8: Future Roadmap
+\section{Future Roadmap}
+
+\subsection{Development Phases}
+
+\begin{enumerate}
+    \item \textbf{Phase 1 (Q1 2025)}: Pilot launch with 100 prosumers
+    \item \textbf{Phase 2 (Q2-Q4 2025)}: Scale to 10,000 users
+    \item \textbf{Phase 3 (2026)}: Southeast Asia expansion
+    \item \textbf{Phase 4 (2027+)}: Cross-chain integration, AI optimization
+\end{enumerate}
+
+\subsection{Performance Targets}
+
+\begin{table}[htbp]
+\caption{Performance Roadmap}
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Metric} & \textbf{v1.0} & \textbf{v2.0} & \textbf{v3.0} & \textbf{v4.0} \\
+\midrule
+TPS & 50 & 200 & 1,000 & 10,000+ \\
+Latency (p99) & 20ms & 15ms & 10ms & 5ms \\
+Users & 10K & 100K & 1M & 10M \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\newpage
+
+% References
+\section*{References}
+\addcontentsline{toc}{section}{References}
+
+\begin{enumerate}
+\item Transaction Processing Performance Council (TPC), ``TPC Benchmark C Standard Specification, Revision 5.11,'' 2010.
+\item E. Mengelkamp et al., ``Designing microgrid energy markets: A case study: The Brooklyn Microgrid,'' \textit{Applied Energy}, vol. 210, pp. 870--880, 2018.
+\item A. Yakovenko, ``Solana: A new architecture for a high performance blockchain v0.8.13,'' Solana Labs Whitepaper, 2018.
+\item T. T. A. Dinh et al., ``Blockbench: A framework for analyzing private blockchains,'' \textit{ACM SIGMOD}, pp. 1085--1100, 2017.
+\item M. Andoni et al., ``Blockchain technology in the energy sector: A systematic review,'' \textit{Renewable and Sustainable Energy Reviews}, vol. 100, pp. 143--174, 2019.
+\item Z. Li et al., ``Consortium blockchain for secure energy trading in IIoT,'' \textit{IEEE Trans. Industrial Informatics}, vol. 14, no. 8, pp. 3690--3700, 2018.
+\item Anchor Framework Documentation, ``Building Secure Solana Programs,'' Coral, 2023.
+\end{enumerate}
+
+\end{document}

@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { expect } from "chai";
-import { SecurityTestFramework } from "./security-test-framework.js";
-import { TestUtils } from "../utils/index.js";
+import { SecurityTestFramework } from "./security-test-framework.ts";
+import { TestUtils } from "../utils/index.ts";
 
 /**
  * Input Validation Security Tests

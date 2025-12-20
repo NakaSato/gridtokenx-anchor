@@ -198,7 +198,7 @@ TRANSACTION SPEED (Lower is Better)
 
 Platform        │ Avg Latency    │ Finality       │ Notes
 ────────────────┼────────────────┼────────────────┼────────────────────────────
-GridTokenX      │ ~400ms         │ <1s            │ Solana native speed
+GridTokenX      │ ~11ms (avg)    │ <1s            │ Solana PoA speed
 Power Ledger    │ ~3-5s          │ ~10s           │ Custom chain
 Energy Web      │ ~5s            │ ~5s            │ PoA chain
 WePower         │ ~15s           │ ~15s           │ Ethereum (pre-merge)
@@ -206,7 +206,7 @@ SunContract     │ ~12s           │ ~12s           │ Ethereum
 Traditional     │ <100ms         │ N/A            │ Centralized, no consensus
 
                     ◄────── FASTER        SLOWER ──────►
-GridTokenX      ████████░░░░░░░░░░░░  (~400ms)
+GridTokenX      ██░░░░░░░░░░░░░░░░░░  (~11ms)
 Power Ledger    ████████████████░░░░  (~4s)
 Energy Web      █████████████████░░░  (~5s)
 WePower         ████████████████████  (~15s)

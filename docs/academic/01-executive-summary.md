@@ -2,7 +2,7 @@
 
 ## GridTokenX: Blockchain-Based P2P Energy Trading Platform
 
-> *December 2025 Edition*
+> *December 2025 Edition - Private Network (PoA) Design*
 
 ---
 
@@ -100,7 +100,7 @@ Economic Barriers                    Technical Barriers
 
 ### 2.1 GridTokenX Platform Overview
 
-GridTokenX addresses these challenges through a blockchain-based P2P energy trading platform:
+GridTokenX addresses these challenges through a blockchain-based P2P energy trading simulation platform designed for private/permissioned Solana networks:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -287,12 +287,12 @@ Energy Production                          Token Representation
 
 **Solana Blockchain Advantages:**
 
-| Criterion | Solana | Ethereum | Polygon |
-|-----------|--------|----------|---------|
-| Transaction Speed | 400ms | 12-15s | 2s |
+| Criterion | Solana (Private) | Ethereum | Polygon |
+|-----------|------------------|----------|---------|
+| Transaction Speed | 11ms | 12-15s | 2s |
 | Cost per TX | $0.00025 | $1-50 | $0.01 |
-| TPS Capacity | 65,000 | 15-30 | 7,000 |
-| Finality | Instant | 6 blocks | 256 blocks |
+| TPS Capacity | 356+ (tested) | 15-30 | 7,000 |
+| Finality | Deterministic | 6 blocks | 256 blocks |
 | Energy Usage | Low | High | Medium |
 
 **Selection Justification:**
@@ -338,8 +338,9 @@ Energy Production                          Token Representation
 │  Program ID: GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk   │
 ├─────────────────────────────────────────────────────────────┤
 │  Functions:                                                  │
-│  ├─ create_order()       → List energy for sale             │
-│  ├─ match_order()        → Execute P2P trade                │
+│  ├─ create_sell_order()  → List energy for sale             │
+│  ├─ create_buy_order()   → Place buy order                  │
+│  ├─ match_orders()       → Execute P2P trade                │
 │  └─ cancel_order()       → Refund escrowed tokens           │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -435,6 +436,6 @@ Chapter 6: Conclusion
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: November 2024  
+**Document Version**: 2.0  
+**Last Updated**: December 2025  
 **Status**: Complete

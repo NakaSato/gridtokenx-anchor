@@ -1,0 +1,60 @@
+\chapter{Conclusion}
+\label{chap:conclusion}
+
+\section{Summary of Contributions}
+
+This thesis makes the following contributions to the field of blockchain-based energy trading:
+
+\begin{enumerate}
+  \item \textbf{Performance Evaluation Framework}: We adapted TPC benchmarks (TPC-C, TPC-E, TPC-H) for blockchain evaluation, providing a rigorous methodology for assessing distributed ledger performance in energy trading applications.
+  
+  \item \textbf{GridTokenX Platform}: We developed and evaluated a Solana-based blockchain platform for P2P energy trading using Proof of Authority consensus, demonstrating production-level performance characteristics.
+  
+  \item \textbf{Quantified Trust Premium}: We introduced and measured the Trust Premium metric, quantifying the performance overhead of decentralization at 5.65x compared to centralized databases.
+  
+  \item \textbf{Scalability Analysis}: We demonstrated linear scalability up to 200 concurrent users with maintained sub-20ms latency, validating the platform's suitability for microgrid deployments.
+\end{enumerate}
+
+\section{Key Findings}
+
+\subsection{Performance Achievement}
+
+GridTokenX achieves 21,101 tpmC on TPC-C style workloads, demonstrating OLTP capability sufficient for real-time energy trading. The sub-20ms p99 latency meets the requirements for automated demand response and real-time pricing applications.
+
+\subsection{Comparative Advantage}
+
+Compared to existing blockchain platforms:
+\begin{itemize}
+  \item 10x lower latency than Hyperledger Fabric
+  \item 600x lower latency than Ethereum
+  \item Acceptable 5.65x overhead versus centralized solutions
+\end{itemize}
+
+\section{Limitations}
+
+This research has the following limitations:
+
+\begin{enumerate}
+  \item Benchmarks conducted on simulated network conditions
+  \item Single-validator PoA configuration, not full production network
+  \item Limited geographic distribution testing
+  \item Energy trading operations simulated, not integrated with real smart meters
+\end{enumerate}
+
+\section{Future Work}
+
+Several directions for future research emerge from this work:
+
+\begin{enumerate}
+  \item \textbf{Multi-Validator Network}: Deploy and evaluate a geographically distributed PoA validator network
+  \item \textbf{Smart Meter Integration}: Connect to real IoT smart meter infrastructure
+  \item \textbf{Cross-Chain Interoperability}: Evaluate bridges to other blockchain networks
+  \item \textbf{Privacy Extensions}: Implement zero-knowledge proofs for transaction privacy
+  \item \textbf{Regulatory Compliance}: Integrate energy market regulatory requirements
+\end{enumerate}
+
+\section{Final Remarks}
+
+This thesis demonstrates that blockchain technology has matured to the point where it can provide viable performance for real-time P2P energy trading applications. The GridTokenX platform, with its Proof of Authority consensus mechanism, offers a pragmatic balance between decentralization and performance suitable for enterprise microgrid deployments.
+
+As renewable energy adoption accelerates and prosumer participation increases, platforms like GridTokenX will play a crucial role in enabling efficient, transparent, and automated energy trading in smart grid environments.

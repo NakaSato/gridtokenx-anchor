@@ -30,10 +30,10 @@ class SecurityTestRunner {
 
   async runAllTests(): Promise<void> {
     console.log("🔒 GridTokenX Security Test Suite");
-    console.log("=" .repeat(50));
-    
+    console.log("=".repeat(50));
+
     this.startTime = Date.now();
-    
+
     const testSuites = [
       {
         name: "Authorization Tests",
@@ -41,13 +41,13 @@ class SecurityTestRunner {
         file: "tests/security/authorization.test.ts"
       },
       {
-        name: "Input Validation Tests", 
+        name: "Input Validation Tests",
         script: "test:security:input-validation",
         file: "tests/security/input-validation.test.ts"
       },
       {
         name: "Replay Attack Tests",
-        script: "test:security:replay-attacks", 
+        script: "test:security:replay-attacks",
         file: "tests/security/replay-attacks.test.ts"
       }
     ];
@@ -58,7 +58,7 @@ class SecurityTestRunner {
       console.log(`📋 Running ${suite.name}...`);
       const result = await this.runTestSuite(suite);
       this.results.push(result);
-      
+
       console.log(`✅ ${suite.name} completed:`);
       console.log(`   Passed: ${result.passed}`);
       console.log(`   Failed: ${result.failed}`);
@@ -71,11 +71,11 @@ class SecurityTestRunner {
 
   private async runTestSuite(suite: { name: string; script: string; file: string }): Promise<SecurityTestResult> {
     const startTime = Date.now();
-    
+
     try {
       const result = await this.runNpmScript(suite.script);
       const duration = Date.now() - startTime;
-      
+
       return {
         suite: suite.name,
         passed: result.passed,
@@ -85,7 +85,7 @@ class SecurityTestRunner {
       };
     } catch (error: any) {
       const duration = Date.now() - startTime;
-      
+
       return {
         suite: suite.name,
         passed: 0,
@@ -113,7 +113,7 @@ class SecurityTestRunner {
       child.stdout?.on('data', (data) => {
         const output = data.toString();
         stdout += output;
-        
+
         // Parse Mocha output
         const lines = output.split('\n');
         for (const line of lines) {
@@ -137,7 +137,7 @@ class SecurityTestRunner {
         if (code !== 0 && failed === 0) {
           failed = 1; // At least one test failed if process exited with non-zero code
         }
-        
+
         resolve({ passed, failed, errors });
       });
 
@@ -168,7 +168,7 @@ class SecurityTestRunner {
 
     // Display summary
     console.log("📊 Security Test Summary");
-    console.log("=" .repeat(50));
+    console.log("=".repeat(50));
     console.log(`Total Tests Run: ${totalPassed + totalFailed}`);
     console.log(`✅ Passed: ${totalPassed}`);
     console.log(`❌ Failed: ${totalFailed}`);
@@ -194,7 +194,7 @@ class SecurityTestRunner {
 
   private generateRecommendations(): string[] {
     const recommendations: string[] = [];
-    
+
     this.results.forEach(suite => {
       if (suite.failed > 0) {
         switch (suite.suite) {
@@ -224,7 +224,7 @@ class SecurityTestRunner {
 
   private async saveReport(report: SecurityReport): Promise<void> {
     const reportsDir = path.join(process.cwd(), 'test-results', 'security');
-    
+
     // Ensure directory exists
     if (!fs.existsSync(reportsDir)) {
       fs.mkdirSync(reportsDir, { recursive: true });
@@ -232,7 +232,7 @@ class SecurityTestRunner {
 
     const filename = `security-report-${Date.now()}.json`;
     const filepath = path.join(reportsDir, filename);
-    
+
     fs.writeFileSync(filepath, JSON.stringify(report, null, 2));
   }
 }
@@ -240,7 +240,7 @@ class SecurityTestRunner {
 // Main execution
 async function main() {
   const runner = new SecurityTestRunner();
-  
+
   try {
     await runner.runAllTests();
     process.exit(0);
@@ -250,9 +250,7 @@ async function main() {
   }
 }
 
-// Run if called directly
-if (require.main === module) {
-  main();
-}
+// Run directly (ES module)
+main();
 
 export { SecurityTestRunner, SecurityTestResult, SecurityReport };

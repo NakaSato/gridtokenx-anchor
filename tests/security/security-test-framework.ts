@@ -1,6 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
 import { expect } from "chai";
-import { TestUtils } from "../utils/index.js";
 
 /**
  * Security Testing Framework
@@ -75,7 +74,7 @@ export class SecurityTestFramework {
   ): Promise<SecurityTestResult> {
     const startTime = Date.now();
     const session = this.sessions.get(sessionId);
-    
+
     if (!session) {
       throw new Error(`Session ${sessionId} not found`);
     }
@@ -85,7 +84,7 @@ export class SecurityTestFramework {
     try {
       await testFunction();
       const duration = Date.now() - startTime;
-      
+
       // If we expected a vulnerability but test passed, that's a potential issue
       if (expectedVulnerability) {
         const result: SecurityTestResult = {
@@ -158,7 +157,7 @@ export class SecurityTestFramework {
           // Expected to fail
           if (error.message.includes('Unauthorized') || error.message.includes('permission')) {
             console.log(`✓ Unauthorized access correctly blocked for ${userRole}`);
-            
+
             // Now test authorized access
             try {
               await authorizedAction();
@@ -194,7 +193,7 @@ export class SecurityTestFramework {
         async () => {
           try {
             await inputFunction(maliciousInput.payload);
-            
+
             if (maliciousInput.expectedBehavior === 'reject') {
               throw new Error(`Malicious input was accepted: ${maliciousInput.type}`);
             } else if (maliciousInput.expectedBehavior === 'sanitize') {
@@ -211,7 +210,7 @@ export class SecurityTestFramework {
         `Input Validation Vulnerability - ${maliciousInput.type}`,
         this.getSeverityForInputType(maliciousInput.type)
       );
-      
+
       results.push(result);
     }
 
@@ -224,7 +223,7 @@ export class SecurityTestFramework {
   async testReplayAttack(
     sessionId: string,
     testName: string,
-    transactionFunction: () => Promise<{signature: string}>,
+    transactionFunction: () => Promise<{ signature: string }>,
     replayFunction: (signature: string) => Promise<any>
   ): Promise<SecurityTestResult> {
     return this.executeSecurityTest(
@@ -240,9 +239,9 @@ export class SecurityTestFramework {
           await replayFunction(originalTx.signature);
           throw new Error(`Replay attack succeeded - transaction was replayed`);
         } catch (error: any) {
-          if (error.message.includes('duplicate') || 
-              error.message.includes('replay') || 
-              error.message.includes('already processed')) {
+          if (error.message.includes('duplicate') ||
+            error.message.includes('replay') ||
+            error.message.includes('already processed')) {
             console.log(`✓ Replay attack correctly blocked`);
           } else {
             throw new Error(`Unexpected error during replay: ${error.message}`);
@@ -369,27 +368,27 @@ export class SecurityTestFramework {
    */
   private generateRecommendation(error: any): string {
     const errorStr = error.message.toLowerCase();
-    
+
     if (errorStr.includes('unauthorized') || errorStr.includes('permission')) {
       return 'Implement proper access controls and validate user permissions';
     }
-    
+
     if (errorStr.includes('buffer') || errorStr.includes('overflow')) {
       return 'Add input validation and buffer size limits';
     }
-    
+
     if (errorStr.includes('sql') || errorStr.includes('injection')) {
       return 'Use parameterized queries and input sanitization';
     }
-    
+
     if (errorStr.includes('xss') || errorStr.includes('script')) {
       return 'Implement output encoding and Content Security Policy';
     }
-    
+
     if (errorStr.includes('replay') || errorStr.includes('duplicate')) {
       return 'Implement nonce or timestamp-based replay protection';
     }
-    
+
     return 'Review security implementation and add proper validation';
   }
 
@@ -405,7 +404,7 @@ export class SecurityTestFramework {
     console.log(`🔒 Security testing session completed: ${sessionId}`);
     console.log(`📊 Tests run: ${session.results.length}`);
     console.log(`⚠️  Vulnerabilities found: ${session.vulnerabilities.length}`);
-    
+
     return session;
   }
 
@@ -427,7 +426,7 @@ export class SecurityTestFramework {
     }
 
     const vulnerabilities = session.vulnerabilities;
-    
+
     return {
       totalTests: session.results.length,
       passedTests: session.results.filter(r => r.success).length,
@@ -460,10 +459,10 @@ export class SecurityTestFramework {
     const fs = require('fs').promises;
     const path = require('path');
     const reportPath = path.join(process.cwd(), 'test-results', 'security', `security-report-${sessionId}-${Date.now()}.json`);
-    
+
     await fs.mkdir(path.dirname(reportPath), { recursive: true });
     await fs.writeFile(reportPath, JSON.stringify(results, null, 2));
-    
+
     console.log(`📁 Security report saved to: ${reportPath}`);
   }
 }

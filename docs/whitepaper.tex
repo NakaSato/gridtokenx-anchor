@@ -16,18 +16,10 @@
 \usepackage{hyperref}
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
-\usepackage{tabularx}
 \usepackage{longtable}
-\usepackage{enumitem}
 \usepackage{fancyhdr}
-\usepackage{titlesec}
-\usepackage{tcolorbox}
-\usepackage{tikz}
-\usepackage{pgfplots}
 \usepackage{float}
 \usepackage{listings}
-\usepackage{algorithm}
-\usepackage{algpseudocode}
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{multirow}
@@ -67,7 +59,7 @@
     filecolor=magenta,
     urlcolor=gridgreen,
     pdftitle={GridTokenX White Paper},
-    pdfauthor={GridTokenX Team},
+    pdfauthor={Mr. Chanthawat Kiriyadee},
     pdfsubject={Blockchain-Based P2P Energy Trading Platform},
     pdfkeywords={blockchain, energy, trading, Solana, P2P, renewable energy}
 }
@@ -82,55 +74,6 @@
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0.4pt}
-
-% ============================================================================
-% SECTION FORMATTING
-% ============================================================================
-\titleformat{\section}
-    {\normalfont\Large\bfseries\color{griddark}}
-    {\thesection}{1em}{}[\titlerule]
-\titleformat{\subsection}
-    {\normalfont\large\bfseries\color{gridblue}}
-    {\thesubsection}{1em}{}
-\titleformat{\subsubsection}
-    {\normalfont\normalsize\bfseries\color{gridgreen}}
-    {\thesubsubsection}{1em}{}
-
-% ============================================================================
-% CUSTOM ENVIRONMENTS
-% ============================================================================
-\newtcolorbox{highlightbox}{
-    colback=gridlight,
-    colframe=gridgreen,
-    boxrule=1pt,
-    arc=3mm,
-    left=5mm,
-    right=5mm,
-    top=3mm,
-    bottom=3mm
-}
-
-\newtcolorbox{warningbox}{
-    colback=yellow!10,
-    colframe=orange,
-    boxrule=1pt,
-    arc=3mm,
-    left=5mm,
-    right=5mm,
-    top=3mm,
-    bottom=3mm
-}
-
-\newtcolorbox{infobox}{
-    colback=blue!5,
-    colframe=gridblue,
-    boxrule=1pt,
-    arc=3mm,
-    left=5mm,
-    right=5mm,
-    top=3mm,
-    bottom=3mm
-}
 
 % ============================================================================
 % LISTING SETUP
@@ -158,8 +101,7 @@
 % ============================================================================
 % TIKZ SETUP
 % ============================================================================
-\usetikzlibrary{shapes,arrows,positioning,calc,fit,backgrounds}
-\pgfplotsset{compat=1.18}
+% TikZ setup removed
 
 % ============================================================================
 % DOCUMENT START
@@ -174,11 +116,9 @@
     \vspace*{2cm}
     
     % Logo placeholder
-    \begin{tikzpicture}
-        \node[circle, draw=gridgreen, line width=3pt, minimum size=4cm, fill=gridlight] (logo) {};
-        \node[above=0.3cm of logo.center, font=\Huge\bfseries, text=gridgreen] {GRID};
-        \node[below=0.3cm of logo.center, font=\large, text=griddark] {TokenX};
-    \end{tikzpicture}
+    \begin{center}
+        \fbox{\parbox{4cm}{\centering\vspace{1cm}\textbf{\Huge GRID}\\[0.5cm]\large TokenX\vspace{1cm}}}
+    \end{center}
     
     \vspace{2cm}
     
@@ -194,10 +134,9 @@
     
     \vspace{2cm}
     
-    \begin{highlightbox}
-        \centering
-        \textbf{1 GRID Token = 1 kWh of Verified Renewable Energy}
-    \end{highlightbox}
+    \begin{center}
+        \fbox{\parbox{0.8\textwidth}{\centering\textbf{1 GRID Token = 1 kWh of Verified Renewable Energy}}}
+    \end{center}
     
     \vspace{2cm}
     
@@ -233,9 +172,9 @@ The global energy landscape is undergoing a paradigm shift from centralized foss
 
 \textbf{GridTokenX} introduces a decentralized, peer-to-peer (P2P) energy trading platform built on the \textbf{Solana blockchain}. By tokenizing energy generation into \textbf{GRID tokens} (1 GRID = 1 kWh) and leveraging high-performance smart contracts, GridTokenX enables prosumers to trade excess energy directly with neighbors, ensuring fair pricing, instant settlement, and transparent provenance.
 
-\begin{infobox}
-\textbf{Key Innovation:} GridTokenX creates a trustless, automated marketplace where every kilowatt-hour of renewable energy is cryptographically verified, tokenized, and tradeable in real-time.
-\end{infobox}
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{\textbf{Key Innovation:} GridTokenX creates a trustless, automated marketplace where every kilowatt-hour of renewable energy is cryptographically verified, tokenized, and tradeable in real-time.}}
+\end{center}
 
 This paper outlines the technical architecture, economic model, security framework, and governance structure of the GridTokenX ecosystem.
 
@@ -257,7 +196,7 @@ Current energy markets suffer from several fundamental challenges:
 \begin{table}[H]
 \centering
 \caption{Traditional Energy Market Problems}
-\begin{tabularx}{\textwidth}{lX}
+\begin{tabular}{lp{10cm}}
 \toprule
 \textbf{Problem} & \textbf{Description} \\
 \midrule
@@ -271,7 +210,7 @@ Data Silos & Smart meter data is locked within utility databases, preventing inn
 \addlinespace
 Limited Price Discovery & No mechanism exists for true P2P price discovery in retail energy markets. \\
 \bottomrule
-\end{tabularx}
+\end{tabular}
 \end{table}
 
 \subsection{Impact on Renewable Energy Adoption}
@@ -293,14 +232,16 @@ GridTokenX addresses these challenges through a comprehensive blockchain-based P
 
 \subsection{Key Value Propositions}
 
-\begin{highlightbox}
-\begin{enumerate}[label=\textbf{\arabic*.}]
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{
+\begin{enumerate}
     \item \textbf{Direct P2P Trading:} Prosumers sell excess energy directly to consumers at mutually agreed prices, eliminating intermediary markups.
     \item \textbf{Real-Time Settlement:} Blockchain transactions settle in seconds, not months.
     \item \textbf{Proof of Origin:} Every GRID token is cryptographically tied to a specific generation event, guaranteeing green energy provenance.
     \item \textbf{Automated Compliance:} Smart contracts enforce grid constraints and regulatory rules automatically.
 \end{enumerate}
-\end{highlightbox}
+}}
+\end{center}
 
 \subsection{Platform Overview}
 
@@ -319,25 +260,7 @@ To satisfy both physical grid physics and financial markets, GridTokenX employs 
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[
-    layer/.style={rectangle, draw, minimum width=10cm, minimum height=1.5cm, align=center},
-    arrow/.style={->, thick, >=stealth}
-]
-    % Physical Layer
-    \node[layer, fill=blue!10] (physical) at (0,2) {
-        \textbf{Physical Layer}\\
-        Electrons flow according to physics (Kirchhoff's laws)
-    };
-    
-    % Financial Layer
-    \node[layer, fill=green!10] (financial) at (0,0) {
-        \textbf{Financial Layer}\\
-        GRID tokens represent the right to claim economic value
-    };
-    
-    % Arrows
-    \draw[arrow, <->] (physical.south) -- (financial.north) node[midway, right] {Synchronized};
-\end{tikzpicture}
+\fbox{Diagram: Dual-Tracker Model (Physical vs Financial Layer)}
 \caption{GridTokenX Dual-Tracker Model}
 \end{figure}
 
@@ -501,44 +424,7 @@ Enables decentralized decision-making through stake-weighted voting.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[
-    block/.style={rectangle, draw, minimum width=2.5cm, minimum height=1cm, align=center, rounded corners},
-    arrow/.style={->, thick, >=stealth}
-]
-    % User Layer
-    \node[block, fill=blue!20] (users) at (0,6) {End Users\\(Prosumers \& Consumers)};
-    
-    % Frontend Layer
-    \node[block, fill=cyan!20] (web) at (-2,4.5) {Web Client};
-    \node[block, fill=cyan!20] (mobile) at (2,4.5) {Mobile App};
-    
-    % API Layer
-    \node[block, fill=yellow!20, minimum width=6cm] (api) at (0,3) {API Gateway Layer\\REST / WebSocket / GraphQL};
-    
-    % Backend Layer
-    \node[block, fill=orange!20] (backend) at (0,1.5) {Backend Services};
-    
-    % Blockchain Layer
-    \node[block, fill=purple!20, minimum width=8cm] (solana) at (0,-0.5) {Solana Blockchain};
-    
-    % Programs
-    \node[block, fill=green!20, minimum width=1.5cm, font=\small] (registry) at (-3,-2) {Registry};
-    \node[block, fill=green!20, minimum width=1.5cm, font=\small] (token) at (-1,-2) {Token};
-    \node[block, fill=green!20, minimum width=1.5cm, font=\small] (oracle) at (1,-2) {Oracle};
-    \node[block, fill=green!20, minimum width=1.5cm, font=\small] (trading) at (3,-2) {Trading};
-    
-    % Arrows
-    \draw[arrow] (users) -- (web);
-    \draw[arrow] (users) -- (mobile);
-    \draw[arrow] (web) -- (api);
-    \draw[arrow] (mobile) -- (api);
-    \draw[arrow] (api) -- (backend);
-    \draw[arrow] (backend) -- (solana);
-    \draw[arrow] (solana) -- (registry);
-    \draw[arrow] (solana) -- (token);
-    \draw[arrow] (solana) -- (oracle);
-    \draw[arrow] (solana) -- (trading);
-\end{tikzpicture}
+\fbox{Diagram: GridTokenX System Architecture Overview}
 \caption{GridTokenX System Architecture}
 \end{figure}
 
@@ -586,25 +472,7 @@ The GRID token derives value from three key components:
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[
-    process/.style={rectangle, draw, minimum width=3cm, minimum height=1.2cm, align=center},
-    arrow/.style={->, thick, >=stealth}
-]
-    % Production side
-    \node[process, fill=green!20] (produce) at (-4,0) {Energy\\Production};
-    \node[process, fill=blue!20] (mint) at (0,0) {MINT\\1 kWh $\rightarrow$ 1 GRID};
-    \node[process, fill=yellow!20] (supply) at (4,0) {Token\\Supply};
-    
-    % Consumption side
-    \node[process, fill=orange!20] (consume) at (-4,-2) {Energy\\Consumption};
-    \node[process, fill=red!20] (burn) at (0,-2) {BURN\\(Optional)};
-    
-    % Arrows
-    \draw[arrow] (produce) -- (mint);
-    \draw[arrow] (mint) -- (supply);
-    \draw[arrow] (consume) -- (burn);
-    \draw[arrow, dashed] (burn) -- (supply);
-\end{tikzpicture}
+\fbox{Diagram: Elastic Supply Mechanism (Mint/Burn Flow)}
 \caption{Elastic Supply Mechanism}
 \end{figure}
 
@@ -670,7 +538,7 @@ GridTokenX implements a defense-in-depth security strategy based on:
 \begin{table}[H]
 \centering
 \caption{STRIDE Threat Analysis}
-\begin{tabularx}{\textwidth}{lXl}
+\begin{tabular}{lp{10cm}l}
 \toprule
 \textbf{Threat} & \textbf{Description} & \textbf{Mitigation} \\
 \midrule
@@ -681,12 +549,13 @@ Info Disclosure & Exposing sensitive data & Encryption, access controls \\
 Denial of Service & Service unavailability & Rate limiting, redundancy \\
 Elevation of Privilege & Unauthorized access & Role-based access control \\
 \bottomrule
-\end{tabularx}
+\end{tabular}
 \end{table}
 
 \subsection{Smart Contract Security}
 
-\begin{warningbox}
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{
 \textbf{Security Measures Implemented:}
 \begin{itemize}
     \item All programs undergo third-party security audits before mainnet deployment
@@ -695,7 +564,8 @@ Elevation of Privilege & Unauthorized access & Role-based access control \\
     \item Access control through PDA-based authority patterns
     \item Comprehensive test coverage ($>$95\%) including fuzz testing
 \end{itemize}
-\end{warningbox}
+}}
+\end{center}
 
 \subsection{Oracle Security}
 
@@ -753,7 +623,67 @@ The following parameters can be modified through governance:
 \end{enumerate}
 
 % ============================================================================
-% SECTION 7: COMPARATIVE ANALYSIS
+% SECTION 7: PERFORMANCE BENCHMARKS
+% ============================================================================
+\section{Performance Benchmarks}
+
+GridTokenX has been rigorously tested using industry-standard TPC benchmarks adapted for blockchain platforms.
+
+\subsection{Benchmark Results}
+
+\begin{table}[H]
+\centering
+\caption{TPC-C Performance Results (Local Validator)}
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+tpmC (Transactions/min) & 21,101 \\
+TPS Equivalent & 352 \\
+Average Latency & 11.30 ms \\
+p50 Latency & 11.00 ms \\
+p95 Latency & 18.00 ms \\
+p99 Latency & 20.00 ms \\
+Transaction Success Rate & 99.9\% \\
+MVCC Conflict Rate & 1.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Trust Premium Analysis}
+
+The \textit{Trust Premium} quantifies the performance cost of blockchain decentralization compared to centralized alternatives:
+
+\begin{equation}
+\text{Trust Premium} = \frac{\text{Blockchain Latency}}{\text{Centralized Baseline}} = \frac{11.30\text{ms}}{2\text{ms}} = 5.65\times
+\end{equation}
+
+This 5.65x overhead is negligible for energy trading applications where settlement traditionally takes days or weeks.
+
+\subsection{Transaction Mix}
+
+\begin{table}[H]
+\centering
+\caption{Benchmark Transaction Distribution}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Operation} & \textbf{Count} & \textbf{Percentage} \\
+\midrule
+Create Order & 10,558 & 44.3\% \\
+Token Transfer & 10,353 & 43.5\% \\
+Execute Trade & 973 & 4.1\% \\
+Balance Check & 976 & 4.1\% \\
+Order Status & 957 & 4.0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{\textbf{Key Finding:} With 352 TPS capacity and 11ms latency, GridTokenX can support 10,000+ prosumer households with a 32x safety margin.}}
+\end{center}
+
+% ============================================================================
+% SECTION 8: COMPARATIVE ANALYSIS
 % ============================================================================
 \section{Comparative Analysis}
 
@@ -781,7 +711,8 @@ Green Certification & On-chain & On-chain & On-chain & On-chain & Manual \\
 
 \subsection{Key Differentiators}
 
-\begin{highlightbox}
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{
 \textbf{GridTokenX Unique Advantages:}
 \begin{enumerate}
     \item \textbf{Highest Throughput:} Solana enables true micro-transaction economics
@@ -789,7 +720,8 @@ Green Certification & On-chain & On-chain & On-chain & On-chain & Manual \\
     \item \textbf{Native Smart Meter Integration:} Purpose-built oracle system for energy data
     \item \textbf{Southeast Asia Focus:} Optimized for Thai/ASEAN regulatory environment
 \end{enumerate}
-\end{highlightbox}
+}}
+\end{center}
 
 % ============================================================================
 % SECTION 8: ROADMAP
@@ -800,25 +732,7 @@ Green Certification & On-chain & On-chain & On-chain & On-chain & Manual \\
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[
-    phase/.style={rectangle, draw, minimum width=2.5cm, minimum height=1.5cm, align=center, rounded corners},
-    arrow/.style={->, thick, >=stealth}
-]
-    % Timeline
-    \draw[thick, ->] (0,0) -- (14,0) node[right] {Time};
-    
-    % Phase markers
-    \foreach \x/\year in {1/2024, 3.5/2025, 6.5/2026, 9.5/2027, 12.5/2028} {
-        \draw (\x,-0.2) -- (\x,0.2);
-        \node[below] at (\x,-0.3) {\year};
-    }
-    
-    % Phases
-    \node[phase, fill=blue!20] at (2.25,1.5) {Phase 1\\Research\\Prototype};
-    \node[phase, fill=green!20] at (5,1.5) {Phase 2\\Pilot\\500 Users};
-    \node[phase, fill=yellow!20] at (8,1.5) {Phase 3\\Regional\\Expansion};
-    \node[phase, fill=orange!20] at (11,1.5) {Phase 4\\Multi-Region\\10,000+ Users};
-\end{tikzpicture}
+\fbox{Diagram: Development Roadmap Timeline (2024-2028)}
 \caption{GridTokenX Development Roadmap}
 \end{figure}
 
@@ -859,7 +773,8 @@ Q4 2026 & 3 & Full DAO Governance Launch \\
 
 GridTokenX represents a critical infrastructure layer for the future of energy. By combining the immutable trust of blockchain technology with the efficiency of peer-to-peer markets, we are building an energy grid that is not only cleaner and more reliable but also economically empowering for every participant.
 
-\begin{highlightbox}
+\begin{center}
+\fbox{\parbox{0.9\textwidth}{
 \textbf{Summary of Key Innovations:}
 \begin{itemize}
     \item \textbf{Tokenized Energy:} 1 GRID = 1 kWh, backed by verified renewable production
@@ -868,7 +783,8 @@ GridTokenX represents a critical infrastructure layer for the future of energy. 
     \item \textbf{Decentralized Governance:} Community-driven protocol evolution
     \item \textbf{Economic Alignment:} All stakeholders benefit from platform growth
 \end{itemize}
-\end{highlightbox}
+}}
+\end{center}
 
 The transition to renewable energy is inevitable. GridTokenX ensures this transition is also equitable, transparent, and efficient.
 
@@ -878,7 +794,7 @@ The transition to renewable energy is inevitable. GridTokenX ensures this transi
 \section*{References}
 \addcontentsline{toc}{section}{References}
 
-\begin{enumerate}[label={[\arabic*]}]
+\begin{enumerate}
     \item International Energy Agency (IEA), ``World Energy Outlook 2024,'' IEA Publications, 2024.
     \item Solana Foundation, ``Solana: A new architecture for a high performance blockchain,'' Solana Whitepaper, 2020.
     \item Nakamoto, S., ``Bitcoin: A Peer-to-Peer Electronic Cash System,'' 2008.

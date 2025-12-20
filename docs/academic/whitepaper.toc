@@ -1,0 +1,28 @@
+\contentsline {section}{Abstract}{2}{section*.2}%
+\contentsline {section}{\numberline {1}Executive Summary}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Problem Statement}{3}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Proposed Solution}{3}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Technical Innovation}{3}{subsection.1.3}%
+\contentsline {section}{\numberline {2}Business Model}{4}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Revenue Streams}{4}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Compute Economics (Private Network)}{4}{subsection.2.2}%
+\contentsline {section}{\numberline {3}System Architecture}{5}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Four-Layer Model}{5}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Smart Contract Programs}{5}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Program Relationships}{5}{subsection.3.3}%
+\contentsline {section}{\numberline {4}Token Economics}{6}{section.4}%
+\contentsline {subsection}{\numberline {4.1}GRID Token Specification}{6}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Token Conservation Invariant}{6}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}VWAP Pricing Mechanism}{6}{subsection.4.3}%
+\contentsline {section}{\numberline {5}Performance Evaluation}{7}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Benchmark Methodology}{7}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Results}{7}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Trust Premium}{7}{subsection.5.3}%
+\contentsline {section}{\numberline {6}Security Analysis}{8}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Threat Model}{8}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Access Control}{8}{subsection.6.2}%
+\contentsline {section}{\numberline {7}Comparative Analysis}{9}{section.7}%
+\contentsline {section}{\numberline {8}Future Roadmap}{10}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Development Phases}{10}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}Performance Targets}{10}{subsection.8.2}%
+\contentsline {section}{References}{11}{section*.3}%

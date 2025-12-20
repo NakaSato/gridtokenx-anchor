@@ -233,7 +233,7 @@ Legend:
 |---------|----|---------|--------------------|
 | Registry | `2XPQm...W8a7` | User/Meter Management | register_user, register_meter, submit_reading, settle_balance |
 | Energy Token | `94G1r...yEur` | Token Operations | initialize, mint_from_production, burn |
-| Trading | `GZnqN...ctk` | Marketplace | create_order, match_order, cancel_order |
+| Trading | `GZnqN...ctk` | Marketplace | create_sell_order, create_buy_order, match_orders, cancel_order |
 | Governance | `4DY97...vXe` | ERC/Voting | issue_erc, validate_erc, retire_erc |
 | Oracle | `DvdtU...AoE` | External Data | update_price, get_price |
 
@@ -749,7 +749,7 @@ Production (Cloud)
 |-----------|--------|--------|---------|
 | API Response | P95 Latency | < 200ms | ~150ms |
 | Database Query | P95 Latency | < 50ms | ~30ms |
-| Blockchain TX | Confirmation | < 1s | ~400ms |
+| Blockchain TX | Confirmation | < 1s | ~20ms (p99) |
 | Order Match | E2E Latency | < 2s | ~800ms |
 | Meter Reading | Processing | < 5s | ~2s |
 

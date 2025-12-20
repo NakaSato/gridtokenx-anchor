@@ -250,7 +250,7 @@ Attack Flow:
 GridTokenX Mitigation:
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
-│  1. Solana's fast finality (~400ms) reduces window                     │
+│  1. Solana's fast finality (~11ms avg) reduces window                     │
 │                                                                         │
 │  2. Order book design with price-time priority                         │
 │     └─ First come, first served at same price                          │
@@ -559,7 +559,7 @@ settle_balance      │ • Meter is active
                     │ • Unsettled balance > 0
                     │ • Meter owner matches caller
 ────────────────────┼──────────────────────────────────────────────────────────────
-create_order        │ • User is registered
+create_sell_order   │ • User is registered
                     │ • Amount > 0
                     │ • Price > 0
                     │ • Seller has sufficient token balance

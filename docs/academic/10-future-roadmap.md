@@ -276,7 +276,7 @@ v4.0 (Q1 2028)   │ Cross-chain messaging, ZK proofs
 | Metric | v1.0 | v2.0 | v3.0 | v4.0 |
 |--------|------|------|------|------|
 | TPS | 50 | 200 | 1,000 | 10,000+ |
-| Latency (p99) | 400ms | 200ms | 100ms | 50ms |
+| Latency (p99) | 20ms | 15ms | 10ms | 5ms |
 | Concurrent Users | 10K | 100K | 1M | 10M |
 | Order Book Depth | 100 | 1,000 | 10,000 | 100,000 |
 
