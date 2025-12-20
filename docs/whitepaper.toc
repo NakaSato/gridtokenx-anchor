@@ -1,0 +1,48 @@
+\contentsline {section}{Abstract}{2}{section*.2}%
+\contentsline {section}{\numberline {1}Introduction}{2}{section.1}%
+\contentsline {subsection}{\numberline {1.1}The Energy Transition}{2}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Market Inefficiencies}{2}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Impact on Renewable Energy Adoption}{3}{subsection.1.3}%
+\contentsline {section}{\numberline {2}The GridTokenX Solution}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Key Value Propositions}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Platform Overview}{3}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}The Dual-Tracker Model}{3}{subsection.2.3}%
+\contentsline {section}{\numberline {3}Technical Architecture}{4}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Blockchain Selection: Solana}{4}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Core Smart Contract Programs}{4}{subsection.3.2}%
+\contentsline {subsubsection}{\numberline {3.2.1}Registry Program}{4}{subsubsection.3.2.1}%
+\contentsline {subsubsection}{\numberline {3.2.2}Energy Token Program}{5}{subsubsection.3.2.2}%
+\contentsline {subsubsection}{\numberline {3.2.3}Oracle Program}{5}{subsubsection.3.2.3}%
+\contentsline {subsubsection}{\numberline {3.2.4}Trading Program}{5}{subsubsection.3.2.4}%
+\contentsline {subsubsection}{\numberline {3.2.5}Governance Program}{6}{subsubsection.3.2.5}%
+\contentsline {subsection}{\numberline {3.3}System Architecture Diagram}{7}{subsection.3.3}%
+\contentsline {section}{\numberline {4}Token Economics}{7}{section.4}%
+\contentsline {subsection}{\numberline {4.1}GRID Token Specification}{7}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Token Value Components}{7}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Elastic Supply Mechanism}{8}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Token Lifecycle}{8}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}Supply Growth Projection}{8}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}Economic Incentives}{8}{subsection.4.6}%
+\contentsline {section}{\numberline {5}Security Framework}{8}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Security Design Principles}{8}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Threat Model (STRIDE Analysis)}{9}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Smart Contract Security}{9}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}Oracle Security}{9}{subsection.5.4}%
+\contentsline {section}{\numberline {6}Governance and DAO}{9}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Governance Phases}{10}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Voting Mechanism}{10}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Governable Parameters}{10}{subsection.6.3}%
+\contentsline {section}{\numberline {7}Comparative Analysis}{10}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Platform Comparison}{10}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Key Differentiators}{10}{subsection.7.2}%
+\contentsline {section}{\numberline {8}Roadmap}{11}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Development Timeline}{11}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}Milestone Details}{11}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}Strategic Goals by 2028}{11}{subsection.8.3}%
+\contentsline {section}{\numberline {9}Conclusion}{11}{section.9}%
+\contentsline {section}{References}{12}{section*.16}%
+\contentsline {section}{\numberline {A}Technical Specifications}{12}{appendix.A}%
+\contentsline {subsection}{\numberline {A.1}Program Addresses (Devnet)}{12}{subsection.A.1}%
+\contentsline {subsection}{\numberline {A.2}API Endpoints}{13}{subsection.A.2}%
+\contentsline {section}{\numberline {B}Glossary}{13}{appendix.B}%
+\contentsline {section}{Legal Disclaimer}{13}{section*.18}%

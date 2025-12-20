@@ -2,6 +2,8 @@
 
 ## GridTokenX Technical Architecture Documentation
 
+> *December 2025 Edition*
+
 ---
 
 ## 1. High-Level Architecture

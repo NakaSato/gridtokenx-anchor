@@ -2,6 +2,8 @@
 
 ## GridTokenX End-to-End Process Documentation
 
+> *December 2025 Edition*
+
 ---
 
 ## 1. Process Overview

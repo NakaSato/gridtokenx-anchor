@@ -2,6 +2,8 @@
 
 ## GridTokenX Security Architecture Documentation
 
+> *December 2025 Edition*
+
 ---
 
 ## 1. Security Overview

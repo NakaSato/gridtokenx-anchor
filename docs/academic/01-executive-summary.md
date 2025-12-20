@@ -2,6 +2,8 @@
 
 ## GridTokenX: Blockchain-Based P2P Energy Trading Platform
 
+> *December 2025 Edition*
+
 ---
 
 ## 1. Problem Statement

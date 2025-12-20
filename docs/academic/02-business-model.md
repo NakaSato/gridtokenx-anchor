@@ -2,6 +2,8 @@
 
 ## GridTokenX Platform Business Model Analysis
 
+> *December 2025 Edition*
+
 ---
 
 ## 1. Business Model Canvas

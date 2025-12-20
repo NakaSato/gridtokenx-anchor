@@ -2,6 +2,8 @@
 
 ## GridTokenX Academic Research Framework
 
+> *December 2025 Edition*
+
 ---
 
 ## 1. Research Design

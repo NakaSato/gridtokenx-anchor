@@ -2,6 +2,8 @@
 
 ## GridTokenX Complete Data Flow Documentation
 
+> *December 2025 Edition*
+
 ---
 
 ## 1. Level 0: Context Diagram

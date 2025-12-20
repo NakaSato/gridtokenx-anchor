@@ -2,6 +2,8 @@
 
 ## GridTokenX Token Economics Analysis
 
+> *December 2025 Edition*
+
 ---
 
 ## 1. Token Overview

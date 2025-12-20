@@ -2,6 +2,8 @@
 
 ## GridTokenX vs Existing Energy Trading Platforms
 
+> *December 2025 Edition*
+
 ---
 
 ## 1. Platform Comparison Overview
