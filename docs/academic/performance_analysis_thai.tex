@@ -8,7 +8,6 @@
 \usepackage{hyperref}
 \usepackage{booktabs}
 \usepackage{listings}
-\usepackage{microtype}
 
 % For Thai language support with XeLaTeX
 \usepackage{fontspec}
@@ -16,13 +15,16 @@
 \setdefaultlanguage{thai}
 \setotherlanguage{english}
 
-% Thai fonts - use system fonts
-\newfontfamily\thaifont[Script=Thai]{TH Sarabun New}
-\setmainfont{TH Sarabun New}
-
-% Fallback if TH Sarabun not available, use Noto Sans Thai
-% \newfontfamily\thaifont[Script=Thai]{Noto Sans Thai}
-% \setmainfont{Noto Sans Thai}
+% Use TH Sarabun New font (installed in user fonts)
+\defaultfontfeatures{Mapping=tex-text}
+\setmainfont{THSarabunNew}[
+    Path = /Users/chanthawat/Library/Fonts/,
+    Extension = .ttf,
+    UprightFont = THSarabunNew,
+    BoldFont = THSarabunNew Bold,
+    ItalicFont = THSarabunNew Italic,
+    BoldItalicFont = THSarabunNew BoldItalic
+]
 
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
