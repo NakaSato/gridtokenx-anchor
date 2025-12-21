@@ -78,6 +78,13 @@
     "benchmark:tpc-e": "npx tsx tests/performance/benchmarks/tpc-e-workload.ts",
     "benchmark:tpc-h": "npx tsx tests/performance/benchmarks/tpc-h-workload.ts",
     
+    "blockbench": "npx tsx tests/performance/benchmarks/run-blockbench.ts",
+    "blockbench:ycsb": "npx tsx tests/performance/benchmarks/ycsb-workload.ts",
+    "blockbench:ycsb:a": "npx tsx tests/performance/benchmarks/ycsb-workload.ts a",
+    "blockbench:ycsb:b": "npx tsx tests/performance/benchmarks/ycsb-workload.ts b",
+    "blockbench:ycsb:c": "npx tsx tests/performance/benchmarks/ycsb-workload.ts c",
+    "blockbench:report": "npx tsx tests/performance/benchmarks/blockbench-report.ts",
+    
     "poa:setup": "bash scripts/setup-poa-cluster.sh",
     "poa:start": "bash poa-cluster/start-cluster.sh",
     "poa:stop": "bash poa-cluster/stop-cluster.sh",

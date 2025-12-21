@@ -13,6 +13,7 @@ oracle = "69e8LaTfPnFycbD1kAhStfkyJxe1LnN323k3NQAMYBHr"
 registry = "9wvMT6f2Y7A37LB8y5LEQRSJxbnwLYqw1Bqq1RBtD3oM"
 trading = "e7rS5sykWMXtciUEgUZ6xByqo6VqwNRNeAmQQn3Sbj2"
 tpc_benchmark = "HEqH8sdd7KRxhwQYVpJrbb7kzW3P22PYkber756zs5vS"
+blockbench = "BLKbnchMrk1111111111111111111111111111111111"
 
 [registry]
 url = "https://api.apr.dev"
