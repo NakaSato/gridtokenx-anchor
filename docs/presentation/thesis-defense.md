@@ -34,15 +34,14 @@ color: #eee
 
 # Methodology
 
-## TPC Benchmark Adaptation
+## BLOCKBENCH + TPC Benchmark Suite
 
-| TPC-C Transaction | Energy Trading Operation |
-|-------------------|--------------------------|
-| New Order (45%) | Create Energy Order |
-| Payment (43%) | Token Transfer |
-| Order Status (4%) | Query Order |
-| Delivery (4%) | Execute Trade |
-| Stock Level (4%) | Balance Check |
+| Layer | Benchmark | Purpose |
+|-------|-----------|---------|
+| Consensus | DoNothing | Measure pure consensus overhead |
+| Execution | CPUHeavy | Smart contract computation |
+| Data Model | IOHeavy | State read/write operations |
+| Application | TPC-C/E/H, Smallbank, YCSB | Real workloads |
 
 ---
 
@@ -53,33 +52,47 @@ color: #eee
 - **Blockchain**: Solana-based
 - **Consensus**: Proof of Authority (PoA)
 - **Framework**: Anchor 0.32.1
-- **Smart Contracts**: 5 programs (Energy Token, Trading, Oracle, Registry, Governance)
+- **Smart Contracts**: 5 programs + BLOCKBENCH
+- **Testing**: LiteSVM in-process simulator
 
 ---
 
-# Benchmark Results
+# BLOCKBENCH Micro-benchmark Results
 
-## TPC-C Performance
+## Layer-by-Layer Analysis
 
-| Metric | Value |
-|--------|-------|
-| **tpmC** | 21,378 tx/min |
-| **Avg Latency** | 11.34 ms |
-| **p99 Latency** | 20 ms |
-| **Success Rate** | 99.9% |
+| Layer | Benchmark | TPS | Latency |
+|-------|-----------|-----|---------|
+| Consensus | DoNothing | 225 | 2.5ms |
+| Execution | CPUHeavy | 231 | 2.5ms |
+| Data Model | IOHeavy-Write | 192 | 3.0ms |
+| Data Model | IOHeavy-Mixed | 192 | 3.0ms |
 
 ---
 
-# Benchmark Results
+# YCSB Workload Results
 
-## All Benchmarks Summary
+## Application Layer Performance
 
-| Benchmark | Primary Metric | p99 Latency |
-|-----------|---------------|-------------|
-| TPC-C | 21,378 tpmC | 20ms |
-| Smallbank | 1,741 TPS | 10ms |
-| TPC-E | 307 tpsE | 17ms |
-| TPC-H | 246,938 QphH | 147ms |
+| Workload | Profile | ops/s | Latency |
+|----------|---------|-------|---------|
+| YCSB-A | 50% read, 50% update | 290 | 2.7ms |
+| YCSB-B | 95% read, 5% update | 442 | 1.8ms |
+| YCSB-C | 100% read | 391 | 2.1ms |
+
+**Smallbank OLTP**: 1,714 TPS @ 5.8ms
+
+---
+
+# TPC Benchmark Results
+
+## Industry-Standard Performance Metrics
+
+| Benchmark | Primary Metric | Latency | p99 |
+|-----------|---------------|---------|-----|
+| **TPC-C** | 2,111 tpmC | 117ms | 216ms |
+| **TPC-E** | 306 tpsE | 7.9ms | 17ms |
+| **TPC-H** | 250,486 QphH | 71ms | 147ms |
 
 ---
 
@@ -87,12 +100,12 @@ color: #eee
 
 ## Platform Comparison
 
-| Platform | TPS | Latency | Trust Premium |
-|----------|-----|---------|---------------|
-| **GridTokenX** | 356 | 11ms | 5.67x |
-| Hyperledger Fabric | 200 | 350ms | 175x |
+| Platform | Smallbank TPS | Latency | Trust Premium |
+|----------|---------------|---------|---------------|
+| **GridTokenX** | 1,714 | 5.8ms | 58x |
+| Hyperledger Fabric | 400 | 150ms | 175x |
 | Ethereum | 30 | 12,000ms | 6,000x |
-| PostgreSQL (baseline) | 5,000 | 2ms | 1x |
+| PostgreSQL | 5,000 | 2ms | 1x |
 
 ---
 
@@ -100,37 +113,39 @@ color: #eee
 
 > **Trust Premium** = Blockchain Latency / Centralized Baseline Latency
 
-- GridTokenX: **5.67x** (acceptable for decentralization benefits)
+- GridTokenX TPC-C: **58.28x** (117ms vs 2ms baseline)
 - Hyperledger Fabric: 175x
 - Ethereum: 6,000x
 
-**GridTokenX achieves lowest Trust Premium among blockchain platforms**
+**GridTokenX achieves ~3x better Trust Premium than Hyperledger**
 
 ---
 
-# Scalability
+# Scalability Results
 
-## Linear Scaling Demonstrated
+## Concurrency & Duration Tests
 
-- Tested: 5 to 200 concurrent users
-- TPS maintained at ~545 TPS
-- Latency stable at ~1.8ms average
-- **Efficiency**: 103% at 200 users
+| Test | Result | Stability |
+|------|--------|-----------|
+| Peak TPS (1 thread) | 443 TPS | 100% |
+| 32 concurrent threads | 398 TPS | 90% retained |
+| 60-second sustained | 416 TPS | Stable |
+| 1,000 accounts | 220 TPS | Linear degradation |
 
 ---
 
 # Key Contributions
 
-1. **TPC Benchmark Adaptation** for blockchain
-2. **Trust Premium Metric** quantification  
-3. **Production-level Performance** demonstration
-4. **Scalability Validation** to 200 users
+1. **BLOCKBENCH Layer Analysis** for Solana/Anchor
+2. **TPC-C/E/H Adaptation** for blockchain
+3. **Trust Premium Quantification**: 58x vs 175x (Fabric)
+4. **Scalability Validation**: Stable under load
 
 ---
 
 # Limitations
 
-- Simulated network conditions
+- LiteSVM simulation (not network)
 - Single-validator PoA configuration
 - No real smart meter integration
 - Limited geographic distribution
@@ -139,19 +154,19 @@ color: #eee
 
 # Future Work
 
-- Multi-validator PoA network deployment
+- Multi-validator PoA cluster deployment
+- Real network latency measurements
 - Smart meter IoT integration
-- Cross-chain interoperability
 - Zero-knowledge privacy extensions
 
 ---
 
 # Conclusion
 
-- GridTokenX achieves **21,378 tpmC** (production-level)
-- **Sub-20ms latency** meets real-time requirements
-- **Trust Premium of 5.67x** is acceptable trade-off
-- **PoA consensus** provides speed + security balance
+- GridTokenX achieves **2,111 tpmC** TPC-C
+- **1,714 TPS** Smallbank throughput
+- **Trust Premium of 58x** vs PostgreSQL baseline
+- **Stable performance** under concurrency
 
 **Blockchain is viable for P2P energy trading**
 
@@ -161,10 +176,8 @@ color: #eee
 
 ## Questions?
 
-📊 All data available at:
-`test-results/csv/`
-
-📄 LaTeX chapters at:
-`test-results/thesis/`
+📊 Benchmark Data: `test-results/`
+📈 Charts: `test-results/charts/`
+📄 Full Results: `docs/thesis/chapter4-results.tex`
 
 ---

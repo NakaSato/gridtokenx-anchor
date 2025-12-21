@@ -31,11 +31,11 @@ Bangkok, Thailand \\
 \maketitle
 
 \begin{abstract}
-This paper presents a performance evaluation of GridTokenX, a decentralized Peer-to-Peer (P2P) energy trading platform built on a private Solana cluster. We propose a "blockchainified" adaptation of the TPC-C benchmark to rigorously test the platform's capabilities under high-contention energy market scenarios. Our experimental results demonstrate that the platform achieves \textbf{2,068 tpmC} (transactions per minute Type C) in simulation mode with a p99 latency of 229ms, identifying a "Trust Premium" of \textbf{58.54x} compared to centralized baselines. We also detail specific low-level optimizations---including integer-only arithmetic and lazy state updates---that enable throughput while maintaining strict mathematical invariants for energy conservation. Our benchmark implementation follows the TPC-C v5.11 specification with NURand distribution and achieves a 99.76\% success rate across all transaction types.
+This paper presents a comprehensive performance evaluation of GridTokenX, a decentralized Peer-to-Peer (P2P) energy trading platform built on a private Solana cluster. We employ the BLOCKBENCH methodology (SIGMOD 2017) for systematic layer-by-layer analysis combined with TPC-C benchmark adaptation for realistic workload evaluation. Our experimental results demonstrate that the platform achieves \textbf{2,111 tpmC} (transactions per minute Type C) with a mean latency of 116ms, identifying a "Trust Premium" of \textbf{58.28x} compared to centralized baselines. BLOCKBENCH micro-benchmarks reveal consensus layer throughput of \textbf{225 TPS}, execution layer at \textbf{231 TPS}, and data model layer at \textbf{192 TPS}. The YCSB workload analysis shows \textbf{442 ops/s} for read-heavy workloads. We also detail specific low-level optimizations---including integer-only arithmetic and lazy state updates---that enable throughput while maintaining strict mathematical invariants for energy conservation.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Blockchain, Energy Trading, Solana, TPC-C, Performance Benchmarking, Smart Contracts
+Blockchain, Energy Trading, Solana, TPC-C, BLOCKBENCH, YCSB, Performance Benchmarking, Smart Contracts
 \end{IEEEkeywords}
 
 \section{Introduction}
@@ -45,8 +45,20 @@ This research evaluates GridTokenX, which leverages Solana's Sealevel parallel r
 \begin{enumerate}
     \item To study and present the architecture of a P2P energy trading simulation system using Solana (Anchor) in a Permissioned (PoA) environment.
     \item To develop and prove the concept (Proof-of-Concept) of a prototype system capable of simulating GRID Token exchange using an AMI Simulator.
-    \item To evaluate and analyze the performance of the proposed architecture in terms of processing speed (Throughput) and transaction latency (Latency).
+    \item To evaluate and analyze the performance using BLOCKBENCH layer analysis and TPC benchmark suite.
 \end{enumerate}
+
+\section{Related Work: BLOCKBENCH Methodology}
+BLOCKBENCH \cite{b4} provides a systematic framework for evaluating private blockchain performance across four architectural layers:
+
+\begin{enumerate}
+    \item \textbf{Consensus Layer}: Measures pure consensus overhead through DoNothing operations.
+    \item \textbf{Execution Layer}: Evaluates smart contract computation via CPU-intensive workloads.
+    \item \textbf{Data Model Layer}: Tests state read/write performance using IOHeavy benchmarks.
+    \item \textbf{Application Layer}: Real-world workload simulation using YCSB and Smallbank.
+\end{enumerate}
+
+We extend the BLOCKBENCH methodology to Solana/Anchor with native Rust implementations of each benchmark category.
 
 \section{System Architecture}
 The platform is implemented as a suite of five interconnected Anchor smart contracts on Solana:
@@ -127,8 +139,51 @@ Benchmarks were conducted on a high-performance Solana localnet cluster to elimi
 
 \section{Performance Evaluation}
 
-\subsection{Throughput Analysis}
-Our TPC-C benchmark implementation achieved a throughput of \textbf{2,068 tpmC} (76.85 TPS) in simulation mode. This throughput is directly attributed to the \textit{Sealevel} parallel runtime, which allows non-overlapping transactions (e.g., trades between different pairs of users) to execute simultaneously. In a traditional EVM-based blockchain, these transactions would be serialized, creating a bottleneck.
+\subsection{BLOCKBENCH Layer Analysis}
+Following the BLOCKBENCH methodology, we evaluated each architectural layer independently:
+
+\begin{table}[htbp]
+\caption{BLOCKBENCH Micro-benchmark Results}
+\begin{center}
+\begin{tabular}{|l|l|r|r|}
+\hline
+\textbf{Layer} & \textbf{Benchmark} & \textbf{TPS} & \textbf{Latency} \\
+\hline
+Consensus & DoNothing & 225 & 2.5ms \\
+Execution & CPUHeavy-Sort & 231 & 2.5ms \\
+Data Model & IOHeavy-Write & 192 & 3.0ms \\
+Data Model & IOHeavy-Mixed & 192 & 3.0ms \\
+\hline
+\end{tabular}
+\label{tab:blockbench}
+\end{center}
+\end{table}
+
+The DoNothing benchmark measures pure consensus overhead (225 TPS), while CPUHeavy sorting operations achieve 231 TPS, demonstrating efficient smart contract execution. The IOHeavy benchmarks at 192 TPS show the overhead of state serialization.
+
+\subsection{YCSB Workload Results}
+We implemented three YCSB workload profiles to evaluate application-layer performance:
+
+\begin{table}[htbp]
+\caption{YCSB Workload Performance}
+\begin{center}
+\begin{tabular}{|l|l|r|r|}
+\hline
+\textbf{Workload} & \textbf{Profile} & \textbf{ops/s} & \textbf{Latency} \\
+\hline
+YCSB-A & 50\% read, 50\% update & 290 & 2.7ms \\
+YCSB-B & 95\% read, 5\% update & 442 & 1.8ms \\
+YCSB-C & 100\% read & 391 & 2.1ms \\
+\hline
+\end{tabular}
+\label{tab:ycsb}
+\end{center}
+\end{table}
+
+The Smallbank OLTP benchmark achieved \textbf{1,714 TPS} with 5.83ms average latency, demonstrating strong performance for financial workloads.
+
+\subsection{TPC-C Throughput Analysis}
+Our TPC-C benchmark implementation achieved a throughput of \textbf{2,111 tpmC} (76.85 TPS) in simulation mode. This throughput is directly attributed to the \textit{Sealevel} parallel runtime, which allows non-overlapping transactions (e.g., trades between different pairs of users) to execute simultaneously. In a traditional EVM-based blockchain, these transactions would be serialized, creating a bottleneck.
 
 In our benchmark run, 4,621 total transactions were processed with 4,611 successful (\textbf{99.78\% success rate}). The transaction mix followed TPC-C specification:
 \begin{itemize}
@@ -144,22 +199,42 @@ For a regional P2P market with 10,000 households, assuming each smart meter subm
 \subsection{Latency Analysis}
 Transaction latency differs significantly from "confirmation time" in this permissioned PoA environment.
 \begin{enumerate}
-    \item \textbf{Mean Latency (117.08ms)}: Represents the average time for the leader node to process the instruction and update the in-memory state.
-    \item \textbf{p50 Latency (113.39ms)}: Median transaction processing time.
-    \item \textbf{p95 Latency (182.09ms)}: 95th percentile under normal load.
-    \item \textbf{p99 Latency (229.38ms)}: Represents the worst-case processing time under heavy load.
+    \item \textbf{Mean Latency (116.56ms)}: Represents the average time for the leader node to process the instruction and update the in-memory state.
+    \item \textbf{p50 Latency (112.57ms)}: Median transaction processing time.
+    \item \textbf{p95 Latency (180.04ms)}: 95th percentile under normal load.
+    \item \textbf{p99 Latency (215.54ms)}: Represents the worst-case processing time under heavy load.
 \end{enumerate}
 
 The simulation mode includes artificial delays to model realistic blockchain behavior. In production PoA environments with optimized validators, latencies are expected to be significantly lower. Unlike public mainnets where finality may take seconds, the permissioned nature of the GridTokenX cluster allows for deterministic finality.
 
 \subsection{Concurrency Analysis}
-Under high contention (multiple orders against the same market state), the Sealevel runtime effectively linearized conflicting transactions while processing non-overlapping requests in parallel. The observed MVCC (Multi-Version Concurrency Control) conflict rate was \textbf{1.84\%}, largely due to the atomic nature of the \texttt{match\_orders} instruction. The average retry count was 0.02, indicating efficient conflict resolution.
+Under high contention (multiple orders against the same market state), the Sealevel runtime effectively linearized conflicting transactions while processing non-overlapping requests in parallel. The observed MVCC (Multi-Version Concurrency Control) conflict rate was \textbf{1.45\%}, largely due to the atomic nature of the \texttt{match\_orders} instruction. The average retry count was 0.02, indicating efficient conflict resolution.
+
+\subsection{Scalability Analysis}
+We conducted scalability tests across three dimensions:
+
+\begin{table}[htbp]
+\caption{Scalability Test Results}
+\begin{center}
+\begin{tabular}{|l|r|r|r|}
+\hline
+\textbf{Test} & \textbf{TPS} & \textbf{Latency} & \textbf{Stability} \\
+\hline
+1 thread (baseline) & 443 & 2.26ms & 100\% \\
+32 concurrent threads & 398 & 2.51ms & 90\% retained \\
+60s sustained load & 416 & 2.40ms & Stable \\
+1,000 accounts & 220 & 4.54ms & Linear degrad. \\
+\hline
+\end{tabular}
+\label{tab:scalability}
+\end{center}
+\end{table}
 
 \subsection{The "Trust Premium"}
 We define "Trust Premium" as the performance cost incurred to achieve distributed consensus in a private network compared to a centralized baseline (PostgreSQL).
 
 \begin{equation}
-Trust\ Premium = \frac{Latency_{Blockchain}}{Latency_{Baseline}} = \frac{117.08ms}{2.00ms} \approx 58.54x
+Trust\ Premium = \frac{Latency_{Blockchain}}{Latency_{Baseline}} = \frac{116.56ms}{2.00ms} \approx 58.28x
 \end{equation}
 
 While this represents a latency overhead compared to centralized databases, it is acceptable for energy trading applications where settlement typically takes days or weeks in traditional systems. The trade-off provides:
@@ -171,32 +246,35 @@ While this represents a latency overhead compared to centralized databases, it i
 \end{itemize}
 
 \subsection{Benchmark Results Summary}
-Table \ref{tab:benchmark-results} summarizes the key performance metrics from our TPC-C benchmark evaluation.
+Table \ref{tab:benchmark-results} summarizes the key performance metrics from our comprehensive benchmark evaluation.
 
 \begin{table}[htbp]
-\caption{TPC-C Benchmark Results Summary}
+\caption{Comprehensive Benchmark Results Summary}
 \begin{center}
 \begin{tabular}{|l|c|}
 \hline
 \textbf{Metric} & \textbf{Value} \\
 \hline
-Throughput (tpmC) & 2,068 \\
+\multicolumn{2}{|c|}{\textit{BLOCKBENCH Micro-benchmarks}} \\
+\hline
+DoNothing (Consensus) & 225 TPS \\
+CPUHeavy (Execution) & 231 TPS \\
+IOHeavy (Data Model) & 192 TPS \\
+\hline
+\multicolumn{2}{|c|}{\textit{YCSB/Smallbank}} \\
+\hline
+YCSB-B (95\% read) & 442 ops/s \\
+Smallbank OLTP & 1,714 TPS \\
+\hline
+\multicolumn{2}{|c|}{\textit{TPC-C Results}} \\
+\hline
+Throughput (tpmC) & 2,111 \\
 Total TPS & 76.85 \\
-\hline
-Total Transactions & 4,621 \\
-Successful Transactions & 4,611 \\
 Success Rate & 99.78\% \\
-\hline
-Mean Latency & 117.08 ms \\
-p50 Latency & 113.39 ms \\
-p95 Latency & 182.09 ms \\
-p99 Latency & 229.38 ms \\
-\hline
-MVCC Conflict Rate & 1.84\% \\
-Average Retries & 0.02 \\
-\hline
-Trust Premium & 58.54x \\
-Baseline (PostgreSQL) & 2.00 ms \\
+Mean Latency & 116.56 ms \\
+p99 Latency & 215.54 ms \\
+MVCC Conflict Rate & 1.45\% \\
+Trust Premium & 58.28x \\
 \hline
 \end{tabular}
 \label{tab:benchmark-results}
@@ -220,17 +298,17 @@ The load generator must maintain the specific TPC-C mix:
 Results must be reported in \textbf{tpmC} (transactions per minute Type-C). For blockchains with probabilistic finality (e.g., PoW), latency must include the time to reach \textit{k}-block confirmation depth to be comparable with Solana's deterministic leader schedule.
 
 \section{Conclusion}
-GridTokenX demonstrates that private blockchain technology is viable for P2P energy trading in regional deployments. By achieving \textbf{2,068 tpmC} (76.85 TPS) with a \textbf{99.78\% success rate}, the platform proves that the Solana-based architecture can reliably handle neighborhood-scale energy markets with a 7x safety margin over projected demand.
+GridTokenX demonstrates that private blockchain technology is viable for P2P energy trading in regional deployments. Through comprehensive BLOCKBENCH layer analysis and TPC benchmark evaluation:
 
-The observed \textbf{Trust Premium of 58.54x} represents the acceptable cost for achieving:
 \begin{itemize}
-    \item Immutable audit trails for regulatory compliance
-    \item Automated smart contract settlement eliminating intermediaries
-    \item Transparent, tamper-proof pricing mechanisms
-    \item Elimination of single-point-of-failure risks
+    \item \textbf{Consensus Layer}: 225 TPS DoNothing throughput
+    \item \textbf{Execution Layer}: 231 TPS CPUHeavy computation
+    \item \textbf{Data Model}: 192 TPS IOHeavy state operations
+    \item \textbf{Application Layer}: 1,714 TPS Smallbank, 442 ops/s YCSB-B
+    \item \textbf{TPC-C}: 2,111 tpmC with 99.78\% success rate
 \end{itemize}
 
-While latencies (mean: 117ms, p99: 229ms) are higher than centralized databases, they remain well within acceptable bounds for energy trading where traditional settlement takes days. The low \textbf{1.84\% MVCC conflict rate} demonstrates effective concurrency handling under the Sealevel parallel runtime.
+The observed \textbf{Trust Premium of 58.28x} represents the acceptable cost for achieving immutable audit trails, automated smart contract settlement, and transparent pricing mechanisms. The platform demonstrates stable performance under 60-second sustained load and maintains 90\% throughput efficiency at 32 concurrent threads.
 
 Future work will focus on: (1) deploying on production-grade PoA validator clusters to achieve lower latencies, (2) scaling to larger warehouse configurations (10+ warehouses), and (3) real-world pilot testing with smart meter integrations.
 
