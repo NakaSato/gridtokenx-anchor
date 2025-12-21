@@ -47,33 +47,33 @@
 \contentsline {section}{\numberline {4.3}Smallbank Results}{18}{section.4.3}%
 \contentsline {section}{\numberline {4.4}TPC-E Results}{18}{section.4.4}%
 \contentsline {section}{\numberline {4.5}TPC-H Results}{18}{section.4.5}%
-\contentsline {section}{\numberline {4.6}Comparative Analysis}{18}{section.4.6}%
-\contentsline {subsection}{\numberline {4.6.1}Platform Comparison}{18}{subsection.4.6.1}%
-\contentsline {subsection}{\numberline {4.6.2}Trust Premium Analysis}{18}{subsection.4.6.2}%
+\contentsline {section}{\numberline {4.6}Comparative Analysis}{19}{section.4.6}%
+\contentsline {subsection}{\numberline {4.6.1}Platform Comparison}{19}{subsection.4.6.1}%
+\contentsline {subsection}{\numberline {4.6.2}Trust Premium Analysis}{19}{subsection.4.6.2}%
 \contentsline {chapter}{\numberline {5}Discussion}{20}{chapter.5}%
 \contentsline {section}{\numberline {5.1}Key Findings}{20}{section.5.1}%
 \contentsline {subsection}{\numberline {5.1.1}Performance Achievement}{20}{subsection.5.1.1}%
 \contentsline {subsection}{\numberline {5.1.2}Trust Premium}{20}{subsection.5.1.2}%
-\contentsline {section}{\numberline {5.2}Implications for Energy Trading}{20}{section.5.2}%
-\contentsline {subsection}{\numberline {5.2.1}Practical Applicability}{20}{subsection.5.2.1}%
+\contentsline {section}{\numberline {5.2}Implications for Energy Trading}{21}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}Practical Applicability}{21}{subsection.5.2.1}%
 \contentsline {subsection}{\numberline {5.2.2}Scalability Considerations}{21}{subsection.5.2.2}%
 \contentsline {section}{\numberline {5.3}Limitations}{21}{section.5.3}%
 \contentsline {section}{\numberline {5.4}Future Work}{21}{section.5.4}%
-\contentsline {section}{\numberline {5.5}Conclusion}{21}{section.5.5}%
-\contentsline {chapter}{\numberline {6}Conclusion}{22}{chapter.6}%
-\contentsline {section}{\numberline {6.1}Summary of Contributions}{22}{section.6.1}%
-\contentsline {section}{\numberline {6.2}Key Findings}{22}{section.6.2}%
-\contentsline {subsection}{\numberline {6.2.1}Performance Achievement}{22}{subsection.6.2.1}%
-\contentsline {subsection}{\numberline {6.2.2}Comparative Advantage}{23}{subsection.6.2.2}%
-\contentsline {section}{\numberline {6.3}Limitations}{23}{section.6.3}%
-\contentsline {section}{\numberline {6.4}Future Work}{23}{section.6.4}%
-\contentsline {section}{\numberline {6.5}Final Remarks}{24}{section.6.5}%
-\contentsline {chapter}{\numberline {A}Benchmark Results}{25}{appendix.A}%
-\contentsline {chapter}{\numberline {B}Methodology}{26}{appendix.B}%
-\contentsline {section}{\numberline {B.1}Benchmark Methodology}{26}{section.B.1}%
-\contentsline {subsection}{\numberline {B.1.1}Test Environment}{26}{subsection.B.1.1}%
-\contentsline {subsection}{\numberline {B.1.2}TPC-C Adaptation}{26}{subsection.B.1.2}%
-\contentsline {subsection}{\numberline {B.1.3}Statistical Analysis}{26}{subsection.B.1.3}%
-\contentsline {subsection}{\numberline {B.1.4}Trust Premium Calculation}{27}{subsection.B.1.4}%
-\contentsline {chapter}{\numberline {C}Raw Data}{28}{appendix.C}%
-\contentsline {chapter}{\numberline {D}Reproducibility}{29}{appendix.D}%
+\contentsline {section}{\numberline {5.5}Conclusion}{22}{section.5.5}%
+\contentsline {chapter}{\numberline {6}Conclusion}{23}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Summary of Contributions}{23}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Key Findings}{23}{section.6.2}%
+\contentsline {subsection}{\numberline {6.2.1}Performance Achievement}{23}{subsection.6.2.1}%
+\contentsline {subsection}{\numberline {6.2.2}Comparative Advantage}{24}{subsection.6.2.2}%
+\contentsline {section}{\numberline {6.3}Limitations}{24}{section.6.3}%
+\contentsline {section}{\numberline {6.4}Future Work}{24}{section.6.4}%
+\contentsline {section}{\numberline {6.5}Final Remarks}{25}{section.6.5}%
+\contentsline {chapter}{\numberline {A}Benchmark Results}{26}{appendix.A}%
+\contentsline {chapter}{\numberline {B}Methodology}{27}{appendix.B}%
+\contentsline {section}{\numberline {B.1}Benchmark Methodology}{27}{section.B.1}%
+\contentsline {subsection}{\numberline {B.1.1}Test Environment}{27}{subsection.B.1.1}%
+\contentsline {subsection}{\numberline {B.1.2}TPC-C Adaptation}{27}{subsection.B.1.2}%
+\contentsline {subsection}{\numberline {B.1.3}Statistical Analysis}{27}{subsection.B.1.3}%
+\contentsline {subsection}{\numberline {B.1.4}Trust Premium Calculation}{28}{subsection.B.1.4}%
+\contentsline {chapter}{\numberline {C}Raw Data}{29}{appendix.C}%
+\contentsline {chapter}{\numberline {D}Reproducibility}{30}{appendix.D}%

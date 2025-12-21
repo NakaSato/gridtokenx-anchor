@@ -88,7 +88,7 @@ pub fn stock_level(
         }
     }
     
-    let result = StockLevelResult {
+    let _result = StockLevelResult {
         w_id,
         d_id,
         threshold,

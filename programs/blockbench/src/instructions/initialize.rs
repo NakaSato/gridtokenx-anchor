@@ -2,7 +2,6 @@
 
 use anchor_lang::prelude::*;
 use crate::state::*;
-use crate::error::BlockbenchError;
 
 /// Initialize the BLOCKBENCH suite
 pub fn initialize_benchmark(

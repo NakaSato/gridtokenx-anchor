@@ -265,7 +265,7 @@ fn validate_meter_reading(
     Ok(())
 }
 
-fn update_quality_score(oracle_data: &mut OracleData, is_valid: bool) -> Result<()> {
+fn update_quality_score(oracle_data: &mut OracleData, _is_valid: bool) -> Result<()> {
     let metrics = &mut oracle_data.quality_metrics;
     let total_readings = metrics.total_valid_readings + metrics.total_rejected_readings;
 

@@ -5,7 +5,6 @@
 
 use anchor_lang::prelude::*;
 use crate::error::BlockbenchError;
-use crate::state::*;
 
 /// Simple SHA256-like hash function for benchmarking
 /// Uses a simpler approach that doesn't require external hash imports

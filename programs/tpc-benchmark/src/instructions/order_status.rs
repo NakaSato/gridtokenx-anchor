@@ -15,7 +15,6 @@
 
 use anchor_lang::prelude::*;
 use crate::state::*;
-use crate::error::TpcError;
 
 /// Order-Status Transaction Context
 #[derive(Accounts)]

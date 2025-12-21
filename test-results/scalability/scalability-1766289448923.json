@@ -1,0 +1,229 @@
+[
+  {
+    "timestamp": "2025-12-21T03:55:12.225Z",
+    "testType": "concurrency_scaling",
+    "results": [
+      {
+        "parameter": "concurrency",
+        "value": 1,
+        "throughput": 443.2624113475178,
+        "avgLatency": 2.254,
+        "p99Latency": 3,
+        "successRate": 100
+      },
+      {
+        "parameter": "concurrency",
+        "value": 2,
+        "throughput": 388.04811796662784,
+        "avgLatency": 5.154,
+        "p99Latency": 10,
+        "successRate": 100
+      },
+      {
+        "parameter": "concurrency",
+        "value": 4,
+        "throughput": 394.9447077409163,
+        "avgLatency": 10.128,
+        "p99Latency": 12,
+        "successRate": 100
+      },
+      {
+        "parameter": "concurrency",
+        "value": 8,
+        "throughput": 399.68025579536373,
+        "avgLatency": 20.016,
+        "p99Latency": 22,
+        "successRate": 100
+      },
+      {
+        "parameter": "concurrency",
+        "value": 16,
+        "throughput": 407.1661237785016,
+        "avgLatency": 38.98412698412698,
+        "p99Latency": 42,
+        "successRate": 100
+      },
+      {
+        "parameter": "concurrency",
+        "value": 32,
+        "throughput": 395.1007506914263,
+        "avgLatency": 79.09375,
+        "p99Latency": 94,
+        "successRate": 100
+      },
+      {
+        "parameter": "concurrency",
+        "value": 64,
+        "throughput": 402.90088638195,
+        "avgLatency": 155.125,
+        "p99Latency": 176,
+        "successRate": 100
+      }
+    ],
+    "summary": {
+      "bestThroughput": {
+        "parameter": "concurrency",
+        "value": 1,
+        "throughput": 443.2624113475178,
+        "avgLatency": 2.254,
+        "p99Latency": 3,
+        "successRate": 100
+      },
+      "bestLatency": {
+        "parameter": "concurrency",
+        "value": 1,
+        "throughput": 443.2624113475178,
+        "avgLatency": 2.254,
+        "p99Latency": 3,
+        "successRate": 100
+      },
+      "scalabilityFactor": 1
+    }
+  },
+  {
+    "timestamp": "2025-12-21T03:55:28.910Z",
+    "testType": "data_size_scaling",
+    "results": [
+      {
+        "parameter": "data_size",
+        "value": 32,
+        "throughput": 183.15018315018315,
+        "avgLatency": 5.46,
+        "p99Latency": 12,
+        "successRate": 100
+      },
+      {
+        "parameter": "data_size",
+        "value": 64,
+        "throughput": 205.9308072487644,
+        "avgLatency": 4.856,
+        "p99Latency": 6,
+        "successRate": 100
+      },
+      {
+        "parameter": "data_size",
+        "value": 128,
+        "throughput": 215.1462994836489,
+        "avgLatency": 4.648,
+        "p99Latency": 5,
+        "successRate": 100
+      },
+      {
+        "parameter": "data_size",
+        "value": 256,
+        "throughput": 217.7700348432056,
+        "avgLatency": 4.592,
+        "p99Latency": 5,
+        "successRate": 100
+      },
+      {
+        "parameter": "data_size",
+        "value": 512,
+        "throughput": 213.0379207498935,
+        "avgLatency": 4.694,
+        "p99Latency": 6,
+        "successRate": 100
+      },
+      {
+        "parameter": "data_size",
+        "value": 1024,
+        "throughput": 218.62702229995628,
+        "avgLatency": 4.574,
+        "p99Latency": 5,
+        "successRate": 100
+      },
+      {
+        "parameter": "data_size",
+        "value": 2048,
+        "throughput": 220.16732716864817,
+        "avgLatency": 4.542,
+        "p99Latency": 5,
+        "successRate": 100
+      }
+    ],
+    "summary": {
+      "bestThroughput": {
+        "parameter": "data_size",
+        "value": 2048,
+        "throughput": 220.16732716864817,
+        "avgLatency": 4.542,
+        "p99Latency": 5,
+        "successRate": 100
+      },
+      "bestLatency": {
+        "parameter": "data_size",
+        "value": 2048,
+        "throughput": 220.16732716864817,
+        "avgLatency": 4.542,
+        "p99Latency": 5,
+        "successRate": 100
+      },
+      "scalabilityFactor": 0.8318681318681319
+    }
+  },
+  {
+    "timestamp": "2025-12-21T03:57:28.923Z",
+    "testType": "load_duration",
+    "results": [
+      {
+        "parameter": "duration",
+        "value": 5,
+        "throughput": 400.119976004799,
+        "avgLatency": 2.498750624687656,
+        "p99Latency": 4,
+        "successRate": 100
+      },
+      {
+        "parameter": "duration",
+        "value": 10,
+        "throughput": 411.9588041195881,
+        "avgLatency": 2.4274271844660196,
+        "p99Latency": 3,
+        "successRate": 100
+      },
+      {
+        "parameter": "duration",
+        "value": 15,
+        "throughput": 416.3333333333333,
+        "avgLatency": 2.4016012810248197,
+        "p99Latency": 3,
+        "successRate": 100
+      },
+      {
+        "parameter": "duration",
+        "value": 30,
+        "throughput": 357.36426357364263,
+        "avgLatency": 2.7981719828390226,
+        "p99Latency": 6,
+        "successRate": 100
+      },
+      {
+        "parameter": "duration",
+        "value": 60,
+        "throughput": 361.30462317922735,
+        "avgLatency": 2.7676092070667466,
+        "p99Latency": 6,
+        "successRate": 100
+      }
+    ],
+    "summary": {
+      "bestThroughput": {
+        "parameter": "duration",
+        "value": 15,
+        "throughput": 416.3333333333333,
+        "avgLatency": 2.4016012810248197,
+        "p99Latency": 3,
+        "successRate": 100
+      },
+      "bestLatency": {
+        "parameter": "duration",
+        "value": 15,
+        "throughput": 416.3333333333333,
+        "avgLatency": 2.4016012810248197,
+        "p99Latency": 3,
+        "successRate": 100
+      },
+      "scalabilityFactor": 0.902990714902207
+    }
+  }
+]
