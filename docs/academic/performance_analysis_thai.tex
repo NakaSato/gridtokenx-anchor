@@ -25,15 +25,21 @@
     BoldFont = THSarabunNew Bold,
     ItalicFont = THSarabunNew Italic,
     BoldItalicFont = THSarabunNew BoldItalic,
-    Scale = 1.2
+    Scale = 1.2,
+    WordSpace = 1.2,
+    PunctuationSpace = 1.0
 ]
 
 % Adjust line spacing for Thai text readability
-\linespread{1.15}
+\linespread{1.1}
 
-% Fix spacing around punctuation
+% Fix spacing around punctuation and Thai line breaking
 \XeTeXlinebreaklocale "th"
-\XeTeXlinebreakskip = 0pt plus 1pt
+\XeTeXlinebreakskip = 0pt plus 2pt minus 1pt
+\XeTeXlinebreakpenalty = 0
+
+% Add space between Thai and English
+\newcommand{\thaispacing}{\hspace{0.15em}}
 
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
