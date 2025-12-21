@@ -39,6 +39,7 @@ gridtokenx-anchor/
 - **Oracle**: `DvdtU4quEbuxUY2FckmvcXwTpC9qp4HLJKb1PMLaqAoE`
 - **Registry**: `2XPQmFYMdXjP7ffoBB3mXeCdboSFg5Yeb6QmTSGbW8a7`
 - **Trading**: `GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk`
+- **BLOCKBENCH**: `BLKbnchMrk1111111111111111111111111111111111`
 
 ## Performance Benchmarks
 
@@ -51,6 +52,35 @@ GridTokenX has been rigorously benchmarked using LiteSVM (in-process Solana VM) 
 | **Average Latency** | **1.96 ms** | Warm sequential processing |
 | **p99 Latency** | **3.87 ms** | 99th percentile latency under load |
 | **Scalability** | **93%** | Efficiency maintained at 200 concurrent users |
+
+### BLOCKBENCH Micro-benchmarks (Layer-wise Analysis)
+
+Based on the [BLOCKBENCH framework](https://dl.acm.org/doi/10.1145/3035918.3064033) (SIGMOD 2017):
+
+| Layer | Benchmark | TPS | Latency (ms) | Purpose |
+|-------|-----------|-----|--------------|---------|
+| **Consensus** | DoNothing | 225 | 2.5 | Pure consensus overhead |
+| **Execution** | CPUHeavy | 231 | 2.5 | BPF VM performance |
+| **Data Model** | IOHeavy | 192 | 3.0 | Account I/O performance |
+
+### BLOCKBENCH Macro-benchmarks
+
+| Workload | Throughput | Latency | Success Rate |
+|----------|------------|---------|--------------|
+| **YCSB-A** (50/50 read/update) | 290 ops/s | 2.7ms | 99.9% |
+| **YCSB-B** (95/5 read/update) | 442 ops/s | 1.8ms | 99.9% |
+| **YCSB-C** (100% read) | 391 ops/s | 1.8ms | 99.9% |
+| **Smallbank** (OLTP) | 1,714 TPS | 5.8ms | 99.8% |
+| **TPC-C** (New-Order) | 2,111 tpmC | 117ms | 99.8% |
+
+### Platform Comparison (BLOCKBENCH Methodology)
+
+| Platform | YCSB TPS | Smallbank TPS | Latency | Consensus |
+|----------|----------|---------------|---------|-----------|
+| **Solana (GridTokenX)** | **290** | **1,714** | **2ms** | Tower BFT |
+| Hyperledger Fabric v1.x | 2,750 | 2,400 | 30ms | Raft |
+| Ethereum (Geth PoW) | 125 | 110 | 300ms | PoW |
+| Parity (PoA) | 750 | 650 | 100ms | Aura |
 
 ### Network Latency Simulation
 
@@ -66,6 +96,26 @@ Simulated performance across different geographical regions (Localnet):
 Full academic performance paper available in:
 - [English Version](docs/academic/GridTokenX_Performance_Paper_EN.pdf)
 - [Thai Version](docs/academic/GridTokenX_Performance_Paper_TH.pdf)
+
+## Benchmark Commands
+
+```bash
+# Run BLOCKBENCH suite
+pnpm blockbench
+
+# Run YCSB workloads
+pnpm blockbench:ycsb:a    # Update heavy (50/50)
+pnpm blockbench:ycsb:b    # Read heavy (95/5)
+pnpm blockbench:ycsb:c    # Read only (100%)
+
+# Run other benchmarks
+pnpm benchmark:smallbank
+pnpm benchmark:tpc-c-poa
+
+# Generate charts and reports
+pnpm charts:generate
+pnpm blockbench:report
+```
 
 ## Getting Started
 

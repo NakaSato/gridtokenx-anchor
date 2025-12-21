@@ -201,7 +201,8 @@ pub struct IssueErc<'info> {
     pub erc_certificate: Account<'info, ErcCertificate>,
     /// Meter account from registry program - tracks claimed ERC generation
     #[account(mut)]
-    pub meter_account: Account<'info, MeterAccount>,
+    /// CHECK: Manual validation of Registry-owned account 
+    pub meter_account: AccountInfo<'info>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,

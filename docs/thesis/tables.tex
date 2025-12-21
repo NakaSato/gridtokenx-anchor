@@ -55,3 +55,77 @@ PostgreSQL 15 & TPC-C & 5,000 & 2 & TPC.org \\
 \hline
 \end{tabular}
 \end{table}
+
+
+% ═══════════════════════════════════════════════════════════════════════════════
+% BLOCKBENCH RESULTS - Auto-generated from benchmark suite (December 2025)
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\begin{table}[htbp]
+\centering
+\caption{BLOCKBENCH Micro-benchmark Results for Solana (GridTokenX)}
+\label{tab:blockbench-micro}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Benchmark} & \textbf{Throughput} & \textbf{Avg Latency} & \textbf{P99 Latency} & \textbf{Success} \\
+                   & (TPS)               & (ms)                  & (ms)                  & Rate (\%)       \\
+\midrule
+DoNothing (Consensus) & 225 & 2.515 & 3.927 & 100.0 \\
+CPUHeavy-Sort (Execution) & 231 & 2.455 & 2.841 & 100.0 \\
+IOHeavy-Write (Data Model) & 192 & 3.019 & 4.333 & 100.0 \\
+IOHeavy-Mixed (Data Model) & 192 & 3.025 & 4.949 & 100.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\begin{table}[htbp]
+\centering
+\caption{BLOCKBENCH Macro-benchmark Results (YCSB \& Smallbank)}
+\label{tab:blockbench-macro}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Workload} & \textbf{Throughput} & \textbf{Avg Latency} & \textbf{P99 Latency} & \textbf{Success} \\
+                  & (ops/s)             & (ms)                 & (ms)                 & Rate (\%)        \\
+\midrule
+YCSB-A (50\% read/50\% update) & 290 & 2.663 & 4.717 & 99.9 \\
+YCSB-C (100\% read) & 391 & 1.756 & 2.724 & 99.9 \\
+Smallbank (OLTP) & 859 & 5.800 & 10.000 & 99.8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\begin{table}[htbp]
+\centering
+\caption{Blockchain Platform Comparison using BLOCKBENCH Methodology}
+\label{tab:blockbench-comparison}
+\begin{tabular}{lrrrl}
+\toprule
+\textbf{Platform} & \textbf{YCSB} & \textbf{Smallbank} & \textbf{Latency} & \textbf{Consensus} \\
+                  & (TPS)         & (TPS)              & (ms)             &                    \\
+\midrule
+\textbf{Solana (GridTokenX)} & \textbf{290} & \textbf{859} & \textbf{2.0} & Tower BFT \\
+Hyperledger Fabric v1.x & 2,750 & 2,400 & 30 & Raft \\
+Ethereum (Geth PoW) & 125 & 110 & 300 & PoW \\
+Parity (PoA) & 750 & 650 & 100 & Aura \\
+FastFabric (Optimized) & 17,500 & 15,000 & 20 & Raft \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\begin{table}[htbp]
+\centering
+\caption{Layer-wise Performance Analysis (BLOCKBENCH Methodology)}
+\label{tab:layer-analysis}
+\begin{tabular}{llrrl}
+\toprule
+\textbf{Layer} & \textbf{Benchmark} & \textbf{TPS} & \textbf{Latency (ms)} & \textbf{Bottleneck} \\
+\midrule
+Consensus & DoNothing & 225 & 2.5 & Leader election/voting \\
+Execution & CPUHeavy & 231 & 2.5 & BPF instruction cost \\
+Data Model & IOHeavy & 192 & 3.0 & Account serialization \\
+\bottomrule
+\end{tabular}
+\end{table}

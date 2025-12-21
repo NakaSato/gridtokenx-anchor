@@ -14,7 +14,8 @@ pub fn issue(
 ) -> Result<()> {
     let poa_config = &mut ctx.accounts.poa_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
-    let meter = &mut ctx.accounts.meter_account;
+    let mut meter_data = ctx.accounts.meter_account.try_borrow_mut_data().map_err(|_| error!(GovernanceError::InvalidErcStatus))?;
+    let mut meter: MeterAccount = MeterAccount::try_from_slice(&meter_data[8..]).map_err(|_| error!(GovernanceError::InvalidErcStatus))?;
     let clock = Clock::get()?;
 
     // Comprehensive validation
@@ -123,6 +124,7 @@ pub fn issue(
         poa_config.total_ercs_issued,
         poa_config.total_energy_certified
     );
+    meter.serialize(&mut &mut meter_data[8..])?;
     Ok(())
 }
 
