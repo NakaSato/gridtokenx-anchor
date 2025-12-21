@@ -3,7 +3,7 @@
 use anchor_lang::prelude::*;
 use base64::{engine::general_purpose, Engine as _};
 
-declare_id!("9wvMT6f2Y7A37LB8y5LEQRSJxbnwLYqw1Bqq1RBtD3oM");
+declare_id!("DiJi39HDJQwEYGxSwL6qtLUtWzbAP5irv1S4Tube9ouH");
 
 #[program]
 pub mod registry {
@@ -164,12 +164,10 @@ pub mod registry {
         let meter_account = &mut ctx.accounts.meter_account;
         
         // Validate oracle authority
+        // Validate oracle authority
+        let auth_key = registry.oracle_authority.ok_or(ErrorCode::OracleNotConfigured)?;
         require!(
-            registry.oracle_authority.is_some(),
-            ErrorCode::OracleNotConfigured
-        );
-        require!(
-            ctx.accounts.oracle_authority.key() == registry.oracle_authority.unwrap(),
+            ctx.accounts.oracle_authority.key() == auth_key,
             ErrorCode::UnauthorizedOracle
         );
         

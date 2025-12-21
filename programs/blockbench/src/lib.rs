@@ -35,7 +35,7 @@ pub use error::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("BLKbnchMrk1111111111111111111111111111111111");
+declare_id!("BfJ7ahTPRahUBTFXQdw1tS59DWcW5gADRJxzdhr7kQhJ");
 
 /// BLOCKBENCH workload type constants
 pub mod blockbench_constants {

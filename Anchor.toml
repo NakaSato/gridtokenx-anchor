@@ -7,13 +7,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-energy_token = "AZBstnPmUeRJnwv55128awdfi2tmCFzcK4W6NPXbTkWA"
-governance = "2GprryNp7j7yxGuPNNjpJLHELfCdXH8UPfKSxXCvisjL"
-oracle = "69e8LaTfPnFycbD1kAhStfkyJxe1LnN323k3NQAMYBHr"
-registry = "9wvMT6f2Y7A37LB8y5LEQRSJxbnwLYqw1Bqq1RBtD3oM"
-trading = "e7rS5sykWMXtciUEgUZ6xByqo6VqwNRNeAmQQn3Sbj2"
+energy_token = "5FVExLSAC94gSWH6TJa1TmBDWXuqFe5obZaC5DkqJihU"
+governance = "HZdnWsQc5vsMXScEn8u3GezFtqPmcKM6Ex3XEUXCgSBT"
+oracle = "TjYDEtQoFP9LRuVhmcGPZ52zBnQmtM5ixvE1T1SoCya"
+registry = "DiJi39HDJQwEYGxSwL6qtLUtWzbAP5irv1S4Tube9ouH"
+trading = "CdxzGUNHPcgkhnaH6V4jAcvMGRsUhPKFK6R71UCQhJ8H"
 tpc_benchmark = "HEqH8sdd7KRxhwQYVpJrbb7kzW3P22PYkber756zs5vS"
-blockbench = "BLKbnchMrk1111111111111111111111111111111111"
+blockbench = "BfJ7ahTPRahUBTFXQdw1tS59DWcW5gADRJxzdhr7kQhJ"
 
 [registry]
 url = "https://api.apr.dev"
