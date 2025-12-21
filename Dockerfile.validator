@@ -1,0 +1,30 @@
+# GridTokenX PoA Validator Node
+# Optimized for permissioned cluster operation
+# Uses platform emulation for Apple Silicon compatibility
+FROM --platform=linux/amd64 solanalabs/solana:v1.18.26
+
+# Install additional tools
+RUN apt-get update && apt-get install -y \
+    curl \
+    jq \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create directories
+RUN mkdir -p /data/ledger /keys /scripts
+
+# Copy entrypoint script
+COPY scripts/validator-entrypoint.sh /scripts/
+RUN chmod +x /scripts/validator-entrypoint.sh
+
+# Expose ports
+# 8001: Gossip
+# 8899: JSON-RPC
+# 8900: WebSocket
+EXPOSE 8001/udp 8899 8900
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD solana cluster-version -u http://localhost:8899 || exit 1
+
+ENTRYPOINT ["/scripts/validator-entrypoint.sh"]

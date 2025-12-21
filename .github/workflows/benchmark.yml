@@ -1,0 +1,177 @@
+name: TPC-C Benchmark CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'programs/**'
+      - 'tests/performance/**'
+      - '.github/workflows/benchmark.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      warehouses:
+        description: 'Number of TPC-C warehouses'
+        required: false
+        default: '1'
+      duration:
+        description: 'Benchmark duration (seconds)'
+        required: false
+        default: '60'
+
+env:
+  SOLANA_VERSION: '1.18.26'
+  ANCHOR_VERSION: '0.32.1'
+  NODE_VERSION: '20'
+
+jobs:
+  benchmark:
+    name: TPC-C Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Cache Solana
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/solana
+            ~/.cache/solana
+          key: solana-${{ env.SOLANA_VERSION }}-${{ runner.os }}
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Cache Anchor
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/anchor
+          key: anchor-${{ env.ANCHOR_VERSION }}-${{ runner.os }}
+
+      - name: Install Anchor CLI
+        run: |
+          if ! command -v anchor &> /dev/null; then
+            cargo install --git https://github.com/coral-xyz/anchor --tag v${{ env.ANCHOR_VERSION }} anchor-cli --locked
+          fi
+
+      - name: Verify installations
+        run: |
+          solana --version
+          anchor --version
+          node --version
+
+      - name: Generate keypair
+        run: |
+          solana-keygen new --no-bip39-passphrase -o ~/.config/solana/id.json --force
+          solana config set --url localhost
+
+      - name: Build Anchor programs
+        run: anchor build
+
+      - name: Start test validator
+        run: |
+          solana-test-validator --reset -q &
+          sleep 10
+          solana cluster-version
+
+      - name: Deploy programs
+        run: anchor deploy
+
+      - name: Run TPC-C Benchmark
+        id: benchmark
+        run: |
+          npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts 2>&1 | tee benchmark-output.txt
+          
+          # Extract metrics for summary
+          TPMC=$(grep "New-Order/min:" benchmark-output.txt | awk '{print $2}' | tr -d ',')
+          TPS=$(grep "Overall TPS:" benchmark-output.txt | awk '{print $3}')
+          SUCCESS_RATE=$(grep "Successful:" benchmark-output.txt | head -1 | grep -oP '\d+')
+          P99=$(grep "p99:" benchmark-output.txt | head -1 | awk '{print $2}' | tr -d ',')
+          
+          echo "tpmc=$TPMC" >> $GITHUB_OUTPUT
+          echo "tps=$TPS" >> $GITHUB_OUTPUT
+          echo "p99=$P99" >> $GITHUB_OUTPUT
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-output.txt
+          retention-days: 30
+
+      - name: Post benchmark summary
+        run: |
+          echo "## 📊 TPC-C Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **tpmC** | ${{ steps.benchmark.outputs.tpmc }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **TPS** | ${{ steps.benchmark.outputs.tps }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **p99 Latency** | ${{ steps.benchmark.outputs.p99 }} μs |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Benchmark completed successfully" >> $GITHUB_STEP_SUMMARY
+
+  poa-cluster:
+    name: PoA Cluster Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build PoA cluster images
+        run: |
+          docker-compose -f docker-compose.poa.yml build
+
+      - name: Start PoA cluster
+        run: |
+          docker-compose -f docker-compose.poa.yml up -d
+          sleep 60
+          docker-compose -f docker-compose.poa.yml ps
+
+      - name: Verify cluster health
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:8899 -X POST -H "Content-Type: application/json" \
+               -d '{"jsonrpc":"2.0","id":1,"method":"getVersion"}' | jq -e '.result'; then
+              echo "Cluster is healthy"
+              exit 0
+            fi
+            echo "Waiting for cluster... ($i/30)"
+            sleep 5
+          done
+          echo "Cluster failed to start"
+          docker-compose -f docker-compose.poa.yml logs
+          exit 1
+
+      - name: Run benchmark against PoA cluster
+        run: |
+          export ANCHOR_PROVIDER_URL=http://localhost:8899
+          npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts
+
+      - name: Cleanup
+        if: always()
+        run: docker-compose -f docker-compose.poa.yml down -v

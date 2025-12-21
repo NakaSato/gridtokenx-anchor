@@ -1,0 +1,23 @@
+[package]
+name = "tpc-benchmark"
+version = "0.1.0"
+description = "TPC-C/TPC-E Benchmark Implementation for Solana Anchor - PoA Environment"
+edition = "2021"
+license = "MIT"
+authors = ["GridTokenX Research Team"]
+repository = "https://github.com/NakaSato/gridtokenx-anchor"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "tpc_benchmark"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "0.32.1"

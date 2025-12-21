@@ -12,6 +12,7 @@ governance = "2GprryNp7j7yxGuPNNjpJLHELfCdXH8UPfKSxXCvisjL"
 oracle = "69e8LaTfPnFycbD1kAhStfkyJxe1LnN323k3NQAMYBHr"
 registry = "9wvMT6f2Y7A37LB8y5LEQRSJxbnwLYqw1Bqq1RBtD3oM"
 trading = "e7rS5sykWMXtciUEgUZ6xByqo6VqwNRNeAmQQn3Sbj2"
+tpc_benchmark = "HEqH8sdd7KRxhwQYVpJrbb7kzW3P22PYkber756zs5vS"
 
 [registry]
 url = "https://api.apr.dev"
@@ -24,6 +25,8 @@ wallet = "../keypairs/dev-wallet.json"
 bootstrap = "npx ts-node scripts/bootstrap.ts"
 init-market = "npx ts-node scripts/init_market.ts"
 test = "pnpm ts-mocha -p ./tsconfig.json -t 1000000 tests/integration/p2p-trading-scenario.test.ts"
+benchmark-tpcc = "npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts"
+setup-poa = "bash scripts/setup-poa-cluster.sh"
 
 [test]
 startup_wait = 5000

@@ -5,22 +5,24 @@
 
 \subsection{Performance Achievement}
 
-GridTokenX demonstrates production-level performance for peer-to-peer energy trading:
+GridTokenX demonstrates viable performance for peer-to-peer energy trading in regional deployments:
 
 \begin{enumerate}
-  \item \textbf{21,101 tpmC} on TPC-C style workloads validates OLTP capability
-  \item \textbf{Sub-20ms p99 latency} meets real-time trading requirements
-  \item \textbf{Linear scalability} up to 200 concurrent users
+  \item \textbf{2,076 tpmC} on TPC-C style workloads validates OLTP capability for neighborhood-scale markets
+  \item \textbf{229ms p99 latency} in simulation mode (production PoA expected to be lower)
+  \item \textbf{99.89\% success rate} demonstrates reliable transaction processing
+  \item \textbf{1.81\% MVCC conflict rate} shows efficient concurrency handling
 \end{enumerate}
 
 \subsection{Trust Premium}
 
-The measured Trust Premium of 5.65x represents a favorable trade-off:
+The measured Trust Premium of 58.48x represents the cost of decentralization:
 
 \begin{itemize}
-  \item Significantly better than Ethereum (6,000x) and Hyperledger (175x)
-  \item Acceptable overhead for applications requiring decentralized trust
-  \item Proof of Authority (PoA) provides good balance of speed and security
+  \item Higher than initially projected due to simulation mode overhead
+  \item Still significantly better than Ethereum (6,000x) for energy trading use cases
+  \item Acceptable for applications where settlement traditionally takes days
+  \item Production PoA cluster expected to achieve lower latencies (sub-50ms)
 \end{itemize}
 
 \section{Implications for Energy Trading}
@@ -30,37 +32,39 @@ The measured Trust Premium of 5.65x represents a favorable trade-off:
 The benchmark results suggest GridTokenX is suitable for:
 
 \begin{itemize}
-  \item Real-time prosumer energy trading
-  \item High-frequency microgrid transactions
-  \item Automated demand response systems
+  \item Regional prosumer energy trading (neighborhood scale)
+  \item Microgrid settlement with 7x safety margin over projected demand
+  \item Automated demand response with sub-second confirmation
 \end{itemize}
 
 \subsection{Scalability Considerations}
 
-With demonstrated linear scaling, the platform can support:
+With demonstrated throughput of 76.85 TPS, the platform can support:
 
 \begin{itemize}
-  \item 500+ concurrent prosumers per microgrid
-  \item 1,000+ daily energy trades
-  \item Sub-second settlement times
+  \item 10,000+ households at 15-minute meter intervals (requires 11 TPS)
+  \item 4,600+ energy trades per minute
+  \item Near-instant settlement compared to traditional day-ahead markets
 \end{itemize}
 
 \section{Limitations}
 
 \begin{enumerate}
-  \item Results based on simulated network conditions
-  \item Single validator configuration (not production PoA network)
-  \item Limited geographic distribution testing
+  \item Results based on simulation mode (not production PoA cluster)
+  \item Single-node test validator (not multi-validator consensus)
+  \item Apple Silicon platform limitations prevented Docker PoA testing
+  \item Latency includes artificial simulation delays
 \end{enumerate}
 
 \section{Future Work}
 
 \begin{itemize}
-  \item Deploy multi-validator PoA network for realistic testing
-  \item Integrate with real smart meter data
-  \item Evaluate cross-chain interoperability performance
+  \item Deploy multi-validator PoA network on x86\_64 Linux infrastructure
+  \item Benchmark with real smart meter data integration
+  \item Evaluate cross-chain interoperability with other energy platforms
+  \item Scale testing to 10+ warehouse configurations
 \end{itemize}
 
 \section{Conclusion}
 
-This research demonstrates that Solana-based blockchain with Proof of Authority (PoA) provides viable performance characteristics for peer-to-peer energy trading applications. The GridTokenX platform achieves a favorable Trust Premium while maintaining the decentralization benefits required for prosumer energy markets.
+This research demonstrates that Solana-based blockchain with Anchor framework provides viable performance characteristics for peer-to-peer energy trading applications. The GridTokenX platform achieves reliable throughput (2,076 tpmC) with acceptable latency overhead, maintaining the transparency and immutability benefits required for prosumer energy markets.

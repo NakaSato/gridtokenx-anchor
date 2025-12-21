@@ -7,51 +7,48 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "clean": "./scripts/clean.sh",
+    
     "test": "anchor test",
     "test:grx": "anchor test --skip-local-validator tests/grx-token.test.ts",
     "test:working": "ts-node test-transactions/working/run-working-test.ts",
     "test:solana": "ts-node test-transactions/solana-only/run-solana-test.ts",
+    
     "test:performance": "ts-node tests/performance/architecture/run-performance-tests.ts",
     "test:performance-energy": "ts-node tests/performance/architecture/run-performance-tests.ts --test-suite=energy-trading",
     "test:performance-architecture": "ts-node tests/performance/architecture/run-performance-tests.ts --test-suite=architecture",
-    "test:performance-benchmark": "ts-node tests/performance/architecture/run-performance-tests.ts --benchmark-only --save-{",
+    "test:performance-benchmark": "ts-node tests/performance/architecture/run-performance-tests.ts --benchmark-only",
+    
     "test:latency": "node --loader ts-node/esm tests/latency/run-latency-tests.ts",
     "test:latency:demo": "node tests/latency/demo-runner.js",
-    "test:latency:energy-token": "node tests/latency/demo-runner.js",
-    "test:latency:governance": "node tests/latency/demo-runner.js",
-    "test:latency:oracle": "node tests/latency/demo-runner.js",
-    "test:latency:registry": "node tests/latency/demo-runner.js",
-    "test:latency:trading": "node tests/latency/demo-runner.js",
+    
     "test:integration": "ts-node tests/integration/run-integration-tests.ts",
     "test:integration:simple": "npx tsx tests/integration/simple-integration-test.ts",
     "test:integration:direct": "npx tsx tests/integration/direct-integration-test.ts",
+    
     "test:load": "ts-node tests/load/run-load-tests.ts",
     "test:load:high-volume": "npx mocha --timeout 600000 --require ts-node/register tests/load/high-volume-trading.test.ts",
     "test:load:concurrent": "npx mocha --timeout 600000 --require ts-node/register tests/load/concurrent-users.test.ts",
     "test:load:network": "npx mocha --timeout 600000 --require ts-node/register tests/load/network-conditions.test.ts",
     "test:load:all": "npm run test:load:high-volume && npm run test:load:concurrent && npm run test:load:network",
+    
     "test:security": "ts-node tests/security/run-security-tests.ts",
     "test:security:authorization": "npx mocha --timeout 600000 --require ts-node/register tests/security/authorization.test.ts",
     "test:security:input-validation": "npx mocha --timeout 600000 --require ts-node/register tests/security/input-validation.test.ts",
     "test:security:replay-attacks": "npx mocha --timeout 600000 --require ts-node/register tests/security/replay-attacks.test.ts",
     "test:security:all": "npm run test:security:authorization && npm run test:security:input-validation && npm run test:security:replay-attacks",
+    
     "test:edge-cases": "ts-node tests/edge-cases/run-edge-case-tests.ts",
     "test:edge-cases:network-failures": "node tests/edge-cases/network-failures.test.cjs",
     "test:edge-cases:data-consistency": "node tests/edge-cases/data-consistency.test.cjs",
     "test:edge-cases:boundary-values": "node tests/edge-cases/boundary-values.test.cjs",
     "test:edge-cases:all": "npm run test:edge-cases:network-failures && npm run test:edge-cases:data-consistency && npm run test:edge-cases:boundary-values",
+    
     "test:resource": "node tests/resource/run-resource-tests.cjs",
     "test:resource:memory-leaks": "ts-node tests/resource/memory-leak-detection.test.ts",
     "test:resource:cu-optimization": "ts-node tests/resource/compute-unit-optimization.test.ts",
     "test:resource:all": "npm run test:resource:memory-leaks && npm run test:resource:cu-optimization",
-    "test:all-comprehensive": "npm run test && npm run test:integration && npm run test:load && npm run test:security && npm run test:edge-cases && npm run test:resource",
-    "performance:quick-check": "ts-node scripts/performance/quick-check.ts",
-    "monitoring:setup": "ts-node monitoring/dashboard-setup.ts",
-    "monitoring:alerts": "ts-node monitoring/alert-system.ts",
-    "wallet:setup": "ts-node scripts/wallet-setup/setup-all-wallets.ts",
-    "setup:loop-test": "ts-node scripts/10-setup-loop-test-standalone.ts",
-    "clean": "./scripts/clean.sh",
-    "update-sdk": "ts-node scripts/update-client-sdk.ts",
+    
     "test:transactions": "npx tsx tests/transactions/run-transaction-tests.ts --full",
     "test:transactions:registry": "npx tsx tests/transactions/run-transaction-tests.ts --program=registry",
     "test:transactions:energy-token": "npx tsx tests/transactions/run-transaction-tests.ts --program=energy-token",
@@ -59,32 +56,55 @@
     "test:transactions:oracle": "npx tsx tests/transactions/run-transaction-tests.ts --program=oracle",
     "test:transactions:trading": "npx tsx tests/transactions/run-transaction-tests.ts --program=trading",
     "test:transactions:cross-program": "npx tsx tests/transactions/run-transaction-tests.ts --cross-program",
+    
     "test:litesvm": "npx tsx tests/litesvm/run-tests.ts",
-    "test:litesvm:basic": "npx tsx tests/litesvm/run-tests.ts",
-    "test:litesvm:trading": "npx tsx tests/litesvm/run-tests.ts",
+    
+    "test:all-comprehensive": "npm run test && npm run test:integration && npm run test:load && npm run test:security && npm run test:edge-cases && npm run test:resource",
+    
     "benchmark:throughput": "npx tsx tests/performance/benchmarks/throughput-benchmark.ts",
     "benchmark:latency": "npx tsx tests/performance/benchmarks/latency-benchmark.ts",
     "benchmark:concurrent": "npx tsx tests/performance/benchmarks/concurrent-benchmark.ts",
     "benchmark:realworld": "npx tsx tests/performance/benchmarks/real-world-benchmark.ts",
     "benchmark:aggregate": "npx tsx tests/performance/benchmarks/results-aggregator.ts",
     "benchmark:all": "pnpm benchmark:throughput && pnpm benchmark:latency && pnpm benchmark:concurrent && pnpm benchmark:realworld && pnpm benchmark:aggregate",
-    "performance:analysis": "npx tsx scripts/performance/run-analysis.ts",
+    
     "benchmark:tpc-c": "npx tsx tests/performance/benchmarks/tpc-c-workload.ts",
+    "benchmark:tpc-c-anchor": "npx tsx tests/performance/benchmarks/tpc-c-anchor.ts",
+    "benchmark:tpc-c-poa": "npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts",
+    "benchmark:tpc-c-poa:real": "npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts --real",
+    "benchmark:tpc-c-poa:json": "npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts --json",
     "benchmark:smallbank": "npx tsx tests/performance/benchmarks/smallbank-workload.ts",
+    "benchmark:smallbank-anchor": "npx tsx tests/performance/benchmarks/smallbank-anchor.ts",
     "benchmark:tpc-e": "npx tsx tests/performance/benchmarks/tpc-e-workload.ts",
     "benchmark:tpc-h": "npx tsx tests/performance/benchmarks/tpc-h-workload.ts",
-    "charts:generate": "npx tsx scripts/performance/generate-charts.ts",
-    "export:csv": "npx tsx scripts/performance/export-csv.ts",
-    "generate:appendix": "npx tsx scripts/performance/thesis-appendix.ts",
-    "benchmark:tpc-c-anchor": "npx tsx tests/performance/benchmarks/tpc-c-anchor.ts",
-    "benchmark:smallbank-anchor": "npx tsx tests/performance/benchmarks/smallbank-anchor.ts",
+    
+    "poa:setup": "bash scripts/setup-poa-cluster.sh",
+    "poa:start": "bash poa-cluster/start-cluster.sh",
+    "poa:stop": "bash poa-cluster/stop-cluster.sh",
+    "poa:status": "bash poa-cluster/cluster-status.sh",
+    
+    "performance:quick-check": "ts-node scripts/performance/quick-check.ts",
+    "performance:analysis": "npx tsx scripts/performance/run-analysis.ts",
     "performance:research": "pnpm benchmark:tpc-c && pnpm benchmark:smallbank && pnpm benchmark:tpc-e && pnpm benchmark:tpc-h && pnpm charts:generate && pnpm export:csv",
     "performance:anchor": "pnpm benchmark:tpc-c-anchor && pnpm benchmark:smallbank-anchor",
+    
+    "charts:generate": "npx tsx scripts/performance/generate-charts.ts",
+    "export:csv": "npx tsx scripts/performance/export-csv.ts",
+    
+    "generate:appendix": "npx tsx scripts/performance/thesis-appendix.ts",
     "generate:chapters": "npx tsx scripts/performance/thesis-chapters.ts",
     "generate:abstract": "npx tsx scripts/performance/thesis-abstract.ts",
     "generate:slides": "npx tsx scripts/performance/presentation-slides.ts",
     "generate:refs": "npx tsx scripts/performance/academic-references.ts",
-    "thesis:all": "pnpm performance:research && pnpm generate:appendix && pnpm generate:chapters && pnpm generate:abstract && pnpm generate:slides"
+    
+    "thesis:all": "pnpm performance:research && pnpm generate:appendix && pnpm generate:chapters && pnpm generate:abstract && pnpm generate:slides",
+    
+    "monitoring:setup": "ts-node monitoring/dashboard-setup.ts",
+    "monitoring:alerts": "ts-node monitoring/alert-system.ts",
+    
+    "wallet:setup": "ts-node scripts/wallet-setup/setup-all-wallets.ts",
+    "setup:loop-test": "ts-node scripts/10-setup-loop-test-standalone.ts",
+    "update-sdk": "ts-node scripts/update-client-sdk.ts"
   },
   "dependencies": {
     "@codama/nodes-from-anchor": "^1.3.0",

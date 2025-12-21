@@ -49,11 +49,12 @@ Stock Level & 4\% & Balance Check \\
 \hline
 \textbf{Component} & \textbf{Specification} \\
 \hline
-Blockchain Platform & Solana-based with Proof of Authority (PoA) \\
+Blockchain Platform & Solana-based with Local Test Validator \\
 Framework & Anchor 0.32.1 \\
-Runtime & Agave 3.0.13 \\
-Instance Type & AWS ECS t3.large (2 vCPU, 8GB RAM) \\
-Test Framework & LiteSVM / Local Validator \\
+Runtime & Solana 1.18.x \\
+Test Machine & Apple Silicon (M-series), 8GB+ RAM \\
+Benchmark Runner & TypeScript with tsx \\
+Mode & Simulation (with artificial delays) \\
 \hline
 \end{tabular}
 \end{table}
@@ -110,8 +111,10 @@ Following TPC-C Specification v5.11, Section 5:
 All experiments can be reproduced using the following commands:
 
 \begin{verbatim}
-git clone <repository>
+git clone https://github.com/NakaSato/gridtokenx-anchor
+cd gridtokenx-anchor
 pnpm install
 anchor build
-pnpm performance:research
+solana-test-validator --reset -q &
+npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts
 \end{verbatim}

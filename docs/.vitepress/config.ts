@@ -17,17 +17,19 @@ export default defineConfig({
         siteTitle: 'GridTokenX Research',
 
         nav: [
+            { text: 'Home', link: 'https://www.gridtokenx.com' },
             { text: 'Guide', link: '/guide/getting-started' },
-            { text: 'Academic', link: '/academic/01-executive-summary' },
+            { text: 'Whitepaper', link: '/whitepaper.pdf', target: '_blank' },
+            { text: 'Thesis', link: '/thesis.pdf', target: '_blank' },
+            { text: 'IEEE Paper', link: '/performance_analysis.pdf', target: '_blank' },
             { text: 'API', link: '/api/programs' },
-            { text: 'Benchmarks', link: '/benchmarks/results' },
-            { text: 'GitHub', link: 'https://github.com/chanthawat/gridtokenx-anchor' }
+            { text: 'Benchmarks', link: '/benchmarks/results' }
         ],
 
         sidebar: {
             '/guide/': [
                 {
-                    text: '🚀 Introduction',
+                    text: 'Introduction',
                     items: [
                         { text: 'Getting Started', link: '/guide/getting-started' },
                         { text: 'Architecture', link: '/guide/architecture' },
@@ -35,7 +37,7 @@ export default defineConfig({
                     ]
                 },
                 {
-                    text: '📦 Programs',
+                    text: 'Programs',
                     items: [
                         { text: 'Energy Token', link: '/guide/energy-token' },
                         { text: 'Trading', link: '/guide/trading' },
@@ -47,7 +49,7 @@ export default defineConfig({
             ],
             '/api/': [
                 {
-                    text: '📚 API Reference',
+                    text: 'API Reference',
                     items: [
                         { text: 'Programs', link: '/api/programs' },
                         { text: 'Instructions', link: '/api/instructions' },
@@ -57,7 +59,7 @@ export default defineConfig({
             ],
             '/benchmarks/': [
                 {
-                    text: '📊 Performance',
+                    text: 'Performance',
                     items: [
                         { text: 'Methodology', link: '/benchmarks/methodology' },
                         { text: 'Results', link: '/benchmarks/results' },
@@ -67,7 +69,7 @@ export default defineConfig({
             ],
             '/academic/': [
                 {
-                    text: '📖 Thesis',
+                    text: 'Thesis',
                     items: [
                         { text: '01. Executive Summary', link: '/academic/01-executive-summary' },
                         { text: '02. Business Model', link: '/academic/02-business-model' },
@@ -83,7 +85,7 @@ export default defineConfig({
                     ]
                 },
                 {
-                    text: '📋 Programs',
+                    text: 'Programs',
                     items: [
                         { text: 'Overview', link: '/academic/programs/README' },
                         { text: 'Registry', link: '/academic/programs/registry' },
@@ -97,7 +99,7 @@ export default defineConfig({
         },
 
         socialLinks: [
-            { icon: 'github', link: 'https://github.com/your-repo/gridtokenx' },
+            { icon: 'github', link: 'https://github.com/chanthawat/gridtokenx-anchor' },
             { icon: 'twitter', link: 'https://twitter.com/gridtokenx' },
             { icon: 'discord', link: 'https://discord.gg/gridtokenx' }
         ],

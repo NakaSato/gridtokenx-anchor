@@ -17,12 +17,15 @@ This chapter presents the performance evaluation results for the GridTokenX bloc
 \hline
 \textbf{Metric} & \textbf{Value} & \textbf{Unit} \\
 \hline
-tpmC & 21,378 & tx/min \\
-Average Latency & 11.34 & ms \\
-p50 Latency & 11 & ms \\
-p99 Latency & 20 & ms \\
-Success Rate & 99.9 & \% \\
-MVCC Conflict Rate & 1.5 & \% \\
+tpmC & 2,068 & tx/min \\
+Total TPS & 76.85 & tx/sec \\
+Mean Latency & 117.08 & ms \\
+p50 Latency & 113.39 & ms \\
+p95 Latency & 182.09 & ms \\
+p99 Latency & 229.38 & ms \\
+Success Rate & 99.78 & \% \\
+MVCC Conflict Rate & 1.84 & \% \\
+Trust Premium & 58.54x & - \\
 \hline
 \end{tabular}
 \end{table}
@@ -32,12 +35,14 @@ MVCC Conflict Rate & 1.5 & \% \\
 The observed transaction mix closely matches the TPC-C specification:
 
 \begin{itemize}
-  \item CREATE\_ORDER: 45.1\% (target: 45\%)
-  \item TOKEN\_TRANSFER: 43.1\% (target: 43\%)
-  \item GET\_ORDER\_STATUS: 3.9\% (target: 4\%)
-  \item EXECUTE\_TRADE: 3.8\% (target: 4\%)
-  \item CHECK\_BALANCE: 4.1\% (target: 4\%)
+  \item New-Order: 44.9\% (target: 45\%) -- 2,074 tx, 99.71\% success
+  \item Payment: 43.4\% (target: 43\%) -- 2,004 tx, 99.80\% success
+  \item Order-Status: 4.3\% (target: 4\%) -- 197 tx, 100\% success
+  \item Delivery: 3.8\% (target: 4\%) -- 175 tx, 100\% success
+  \item Stock-Level: 3.7\% (target: 4\%) -- 171 tx, 100\% success
 \end{itemize}
+
+Total transactions: 4,621 with 4,611 successful (99.78\% overall success rate).
 
 \section{Smallbank Results}
 
@@ -106,7 +111,7 @@ Throughput & 137.66 & MB/s \\
 \hline
 \textbf{Platform} & \textbf{Benchmark} & \textbf{TPS} & \textbf{Latency} & \textbf{Source} \\
 \hline
-GridTokenX (PoA) & TPC-C & 356 & 11.34ms & This Study \\
+GridTokenX (PoA) & TPC-C & 76.85 & 117.08ms & This Study \\
 GridTokenX (PoA) & Smallbank & 1,741 & 5.72ms & This Study \\
 \hline
 Hyperledger Fabric 2.2 & TPC-C & 200 & 350ms & TPCTC 2023 \\
@@ -130,7 +135,7 @@ PostgreSQL 15 & TPC-C & 5,000 & 2ms & TPC.org \\
 \textbf{Platform} & \textbf{Latency} & \textbf{Premium} & \textbf{Interpretation} \\
 \hline
 PostgreSQL (baseline) & 2ms & 1.0x & Centralized \\
-GridTokenX & 11.34ms & 5.67x & Acceptable \\
+GridTokenX & 117.08ms & 58.54x & Acceptable (simulation) \\
 Hyperledger Fabric & 350ms & 175x & High \\
 Ethereum & 12,000ms & 6,000x & Very High \\
 \hline
