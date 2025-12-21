@@ -5,6 +5,30 @@
 
 This chapter describes the methodology used to evaluate the performance of the GridTokenX blockchain platform for peer-to-peer energy trading. The evaluation follows established database benchmarking standards adapted for distributed ledger technology.
 
+\section{Research Framework}
+
+This research adopts a pragmatic paradigm, combining Design Science Research (DSR) with Case Study Research.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    box/.style={rectangle, draw, rounded corners, minimum width=5cm, minimum height=2cm, align=center, fill=gray!10},
+    arrow/.style={->, >=stealth, thick}
+]
+
+\node[box] (dsr) {\textbf{Design Science Research}\\(Technical Artifacts)\\Focus: Performance \& Security};
+\node[box, right=of dsr] (case) {\textbf{Case Study Research}\\(Real-World Context)\\Focus: Economics \& Usability};
+\node[box, below=of dsr, xshift=3.25cm] (outcome) {\textbf{GridTokenX Platform}\\(Validated Solution)};
+
+\draw[arrow] (dsr) -- (outcome);
+\draw[arrow] (case) -- (outcome);
+
+\end{tikzpicture}
+\caption{Pragmatic Research Framework}
+\label{fig:research-framework}
+\end{figure}
+
 \section{Benchmark Selection}
 
 \subsection{TPC Benchmark Adaptation}
@@ -24,16 +48,16 @@ Following the "blockchainification" methodology established at TPC Technology Co
 \centering
 \caption{TPC-C to Energy Trading Transaction Mapping}
 \label{tab:tpc-c-mapping}
-\begin{tabular}{|l|c|l|}
-\hline
+\begin{tabular}{lcl}
+\toprule
 \textbf{TPC-C Transaction} & \textbf{Frequency} & \textbf{GridTokenX Operation} \\
-\hline
+\midrule
 New Order & 45\% & Create Energy Order \\
 Payment & 43\% & Token Transfer \\
 Order Status & 4\% & Query Order \\
 Delivery & 4\% & Execute Trade \\
 Stock Level & 4\% & Balance Check \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -45,17 +69,17 @@ Stock Level & 4\% & Balance Check \\
 \centering
 \caption{Test Environment Specifications}
 \label{tab:test-env}
-\begin{tabular}{|l|l|}
-\hline
+\begin{tabular}{ll}
+\toprule
 \textbf{Component} & \textbf{Specification} \\
-\hline
+\midrule
 Blockchain Platform & Solana-based with Local Test Validator \\
 Framework & Anchor 0.32.1 \\
 Runtime & Solana 1.18.x \\
 Test Machine & Apple Silicon (M-series), 8GB+ RAM \\
 Benchmark Runner & TypeScript with tsx \\
 Mode & Simulation (with artificial delays) \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 

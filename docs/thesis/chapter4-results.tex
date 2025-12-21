@@ -13,15 +13,15 @@ Following the BLOCKBENCH methodology (SIGMOD 2017), we evaluated performance at 
 \centering
 \caption{BLOCKBENCH Layer Analysis Results}
 \label{tab:blockbench-layers}
-\begin{tabular}{|l|l|r|r|r|}
-\hline
+\begin{tabular}{llrrr}
+\toprule
 \textbf{Layer} & \textbf{Benchmark} & \textbf{TPS} & \textbf{Latency (ms)} & \textbf{Success} \\
-\hline
+\midrule
 Consensus & DoNothing & 225 & 2.5 & 100\% \\
 Execution & CPUHeavy-Sort & 231 & 2.5 & 100\% \\
 Data Model & IOHeavy-Write & 192 & 3.0 & 100\% \\
 Data Model & IOHeavy-Mixed & 192 & 3.0 & 100\% \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -31,14 +31,14 @@ Data Model & IOHeavy-Mixed & 192 & 3.0 & 100\% \\
 \centering
 \caption{YCSB Workload Performance}
 \label{tab:ycsb-results}
-\begin{tabular}{|l|l|r|r|r|}
-\hline
+\begin{tabular}{llrrr}
+\toprule
 \textbf{Workload} & \textbf{Profile} & \textbf{ops/s} & \textbf{Latency (ms)} & \textbf{Success} \\
-\hline
+\midrule
 YCSB-A & 50\% read, 50\% update & 290 & 2.7 & 100\% \\
 YCSB-B & 95\% read, 5\% update & 442 & 1.8 & 100\% \\
 YCSB-C & 100\% read & 391 & 2.1 & 100\% \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -50,10 +50,10 @@ YCSB-C & 100\% read & 391 & 2.1 & 100\% \\
 \centering
 \caption{TPC-C Benchmark Results}
 \label{tab:tpc-c-results}
-\begin{tabular}{|l|r|r|}
-\hline
+\begin{tabular}{lrr}
+\toprule
 \textbf{Metric} & \textbf{Value} & \textbf{Unit} \\
-\hline
+\midrule
 tpmC & 2,111 & tx/min \\
 Total TPS & 76.85 & tx/sec \\
 Mean Latency & 116.56 & ms \\
@@ -63,7 +63,7 @@ p99 Latency & 215.54 & ms \\
 Success Rate & 99.78 & \% \\
 MVCC Conflict Rate & 1.45 & \% \\
 Trust Premium & 58.28x & - \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -87,15 +87,15 @@ Total transactions: 4,621 with 4,611 successful (99.78\% overall success rate).
 \centering
 \caption{Smallbank Benchmark Results}
 \label{tab:smallbank-results}
-\begin{tabular}{|l|r|r|}
-\hline
+\begin{tabular}{lrr}
+\toprule
 \textbf{Metric} & \textbf{Value} & \textbf{Unit} \\
-\hline
+\midrule
 TPS & 1,714 & tx/sec \\
 Average Latency & 5.83 & ms \\
 p99 Latency & 10 & ms \\
 Conflict Rate & 0.79 & \% \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
