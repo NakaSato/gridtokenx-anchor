@@ -4,8 +4,8 @@
     "requiresCompatibilities": [
         "FARGATE"
     ],
-    "cpu": "2048",
-    "memory": "8192",
+    "cpu": "4096",
+    "memory": "32768",
     "executionRoleArn": "${EXECUTION_ROLE_ARN}",
     "taskRoleArn": "${TASK_ROLE_ARN}",
     "containerDefinitions": [

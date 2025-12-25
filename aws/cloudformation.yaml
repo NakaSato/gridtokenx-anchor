@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   GridTokenX Solana Blockchain - AWS ECS Infrastructure
   FOR RESEARCH USE ONLY - Master's Degree Paper Testing
-  Instance: t3.large equivalent (2 vCPU, 8GB RAM)
+  Instance: r7a.xlarge equivalent (4 vCPU, 32GB RAM)
   NOT FOR PRODUCTION USE
 
 Parameters:
@@ -24,13 +24,13 @@ Parameters:
 
   ContainerCpu:
     Type: Number
-    Default: 2048
-    Description: CPU units for Fargate task (1024 = 1 vCPU)
+    Default: 4096
+    Description: CPU units for Fargate task (1024 = 1 vCPU, 4096 = 4 vCPU for r7a.xlarge)
 
   ContainerMemory:
     Type: Number
-    Default: 8192
-    Description: Memory in MB for Fargate task (8GB for t3.large)
+    Default: 32768
+    Description: Memory in MB for Fargate task (32GB for r7a.xlarge)
 
 Resources:
   # ============================================
