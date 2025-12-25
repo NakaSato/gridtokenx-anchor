@@ -15,6 +15,7 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+localnet = ["compute-debug/localnet"]
 
 [dependencies]
 anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
@@ -22,3 +23,4 @@ anchor-spl = { version = "0.32.1", features = ["metadata"] }
 spl-token = "9.0.0"
 mpl-token-metadata = "5.0.0"
 base64 = "0.21"
+compute-debug = { path = "../../shared/compute-debug", optional = true }

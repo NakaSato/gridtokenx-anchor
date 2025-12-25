@@ -1,0 +1,16 @@
+[package]
+name = "compute-debug"
+version = "0.1.0"
+description = "Compute unit debugging macro for Anchor programs (localnet only)"
+edition = "2021"
+
+[lib]
+name = "compute_debug"
+
+[features]
+default = []
+localnet = []
+idl-build = []
+
+[dependencies]
+anchor-lang = "0.32.1"
