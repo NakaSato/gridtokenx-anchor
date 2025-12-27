@@ -35,7 +35,7 @@ pub use error::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("BfJ7ahTPRahUBTFXQdw1tS59DWcW5gADRJxzdhr7kQhJ");
+declare_id!("HmbwQP67sLNVW7aD8VmwDvrAh6DZbomY6ZWqqKStTcVX");
 
 /// BLOCKBENCH workload type constants
 pub mod blockbench_constants {
@@ -101,7 +101,7 @@ pub mod blockbench {
     }
 
     /// DoNothing with nonce - prevents transaction deduplication
-    pub fn do_nothing_nonce(ctx: Context<DoNothingNonce>, nonce: u64) -> Result<()> {
+    pub fn do_nothing_nonce(ctx: Context<DoNothingNonce>, nonce: u32) -> Result<()> {
         instructions::do_nothing_nonce(ctx, nonce)
     }
 

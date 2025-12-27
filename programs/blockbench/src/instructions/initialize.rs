@@ -23,8 +23,6 @@ pub fn initialize_benchmark(
     state.metrics.min_latency_us = u64::MAX;
     state.metrics.min_compute_units = u64::MAX;
     
-    msg!("BLOCKBENCH initialized with workload: {:?}", state.config.workload_type);
-    
     Ok(())
 }
 

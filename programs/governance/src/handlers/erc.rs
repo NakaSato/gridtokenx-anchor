@@ -3,7 +3,6 @@ use crate::events::*;
 use crate::state::*;
 use crate::{IssueErc, ValidateErc};
 use anchor_lang::prelude::*;
-use base64::{engine::general_purpose, Engine as _};
 
 pub fn issue(
     ctx: Context<IssueErc>,
@@ -97,33 +96,7 @@ pub fn issue(
         timestamp: clock.unix_timestamp,
     });
 
-    // Encode certificate data as base64 for external systems
-    let cert_data = format!(
-        "{}:{}:{}",
-        erc_certificate.certificate_id,
-        erc_certificate.energy_amount,
-        erc_certificate.renewable_source
-    );
-    let encoded_data = general_purpose::STANDARD.encode(cert_data.as_bytes());
-    msg!("Certificate data (base64): {}", encoded_data);
-
-    msg!(
-        "ERC issued by REC: {} kWh from {} (ID: {})",
-        energy_amount,
-        erc_certificate.renewable_source,
-        erc_certificate.certificate_id
-    );
-    msg!(
-        "Meter tracking - Total generation: {} | Claimed for ERCs: {} | Available: {}",
-        meter.total_generation,
-        meter.claimed_erc_generation,
-        unclaimed_generation.saturating_sub(energy_amount)
-    );
-    msg!(
-        "Total ERCs: {} | Total energy certified: {} kWh",
-        poa_config.total_ercs_issued,
-        poa_config.total_energy_certified
-    );
+    // Logging disabled to save CU - use events instead
     meter.serialize(&mut &mut meter_data[8..])?;
     Ok(())
 }
@@ -166,15 +139,7 @@ pub fn validate_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
         timestamp: clock.unix_timestamp,
     });
 
-    msg!(
-        "ERC validated for trading by REC (ID: {})",
-        erc_certificate.certificate_id
-    );
-    msg!(
-        "Validation rate: {}/{} ERCs validated",
-        poa_config.total_ercs_validated,
-        poa_config.total_ercs_issued
-    );
+    // Logging disabled to save CU - use events instead
     Ok(())
 }
 
@@ -199,11 +164,9 @@ pub fn revoke(ctx: Context<crate::RevokeErc>, reason: String) -> Result<()> {
     
     // Store certificate data before revocation
     let energy_amount = erc_certificate.energy_amount;
-    let certificate_id = erc_certificate.certificate_id.clone();
     
     // Revoke the certificate
     erc_certificate.status = ErcStatus::Revoked;
-    erc_certificate.revocation_reason = Some(reason.clone());
     erc_certificate.revoked_at = Some(clock.unix_timestamp);
     erc_certificate.validated_for_trading = false;
     
@@ -212,30 +175,24 @@ pub fn revoke(ctx: Context<crate::RevokeErc>, reason: String) -> Result<()> {
     poa_config.last_updated = clock.unix_timestamp;
     
     emit!(ErcRevoked {
-        certificate_id: certificate_id.clone(),
+        certificate_id: erc_certificate.certificate_id.clone(),
         authority: ctx.accounts.authority.key(),
-        reason,
+        reason: reason.clone(),
         energy_amount,
         timestamp: clock.unix_timestamp,
     });
     
-    msg!(
-        "ERC revoked: {} ({} kWh)",
-        certificate_id,
-        energy_amount
-    );
-    msg!(
-        "Revocation stats: {}/{} ERCs revoked",
-        poa_config.total_ercs_revoked,
-        poa_config.total_ercs_issued
-    );
+    // Move reason after event emission
+    erc_certificate.revocation_reason = Some(reason);
     
+    // Logging disabled to save CU - use events instead
+
     Ok(())
 }
 
-/// Transfer an ERC certificate to a new owner
+/// Transfer ERC ownership
 pub fn transfer(ctx: Context<crate::TransferErc>) -> Result<()> {
-    let poa_config = &ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.poa_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let clock = Clock::get()?;
     
@@ -272,7 +229,6 @@ pub fn transfer(ctx: Context<crate::TransferErc>) -> Result<()> {
     let from_owner = erc_certificate.owner;
     let to_owner = ctx.accounts.new_owner.key();
     let energy_amount = erc_certificate.energy_amount;
-    let certificate_id = erc_certificate.certificate_id.clone();
     
     // Transfer ownership
     erc_certificate.owner = to_owner;
@@ -280,24 +236,12 @@ pub fn transfer(ctx: Context<crate::TransferErc>) -> Result<()> {
     erc_certificate.last_transferred_at = Some(clock.unix_timestamp);
     
     emit!(ErcTransferred {
-        certificate_id: certificate_id.clone(),
+        certificate_id: erc_certificate.certificate_id.clone(),
         from_owner,
         to_owner,
         energy_amount,
         timestamp: clock.unix_timestamp,
     });
-    
-    msg!(
-        "ERC transferred: {} ({} kWh) from {} to {}",
-        certificate_id,
-        energy_amount,
-        from_owner,
-        to_owner
-    );
-    msg!(
-        "Transfer count: {}",
-        erc_certificate.transfer_count
-    );
     
     Ok(())
 }

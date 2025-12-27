@@ -164,7 +164,6 @@ pub fn initialize_district(
     district.next_o_id = 3001; // Starting order ID (3000 initial orders per TPC-C)
     district.bump = ctx.bumps.district;
     
-    msg!("District {}-{} initialized, next_o_id = {}", w_id, d_id, district.next_o_id);
     Ok(())
 }
 

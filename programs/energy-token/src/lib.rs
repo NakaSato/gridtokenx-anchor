@@ -26,7 +26,7 @@ macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
 
-declare_id!("5FVExLSAC94gSWH6TJa1TmBDWXuqFe5obZaC5DkqJihU");
+declare_id!("HaT3koMseafcCB9aUQUCrSLMDfN1km7Xik9UhZSG9UV6");
 
 #[program]
 pub mod energy_token {
@@ -47,7 +47,7 @@ pub mod energy_token {
         uri: String,
     ) -> Result<()> {
         compute_fn!("create_token_mint" => {
-            msg!("Creating GRX token mint: {} ({})", name, symbol);
+            // Logging disabled to save CU
 
             // Check if Metaplex program is available (for localnet testing)
             if ctx.accounts.metadata_program.executable {
@@ -88,7 +88,7 @@ pub mod energy_token {
                 ctx.accounts.token_info.authority == ctx.accounts.authority.key(),
                 ErrorCode::UnauthorizedAuthority
             );
-            msg!("Minting {} GRX tokens to wallet", amount);
+            // Logging disabled to save CU
 
             let cpi_accounts = token_interface::MintTo {
                 mint: ctx.accounts.mint.to_account_info(),
@@ -107,7 +107,7 @@ pub mod energy_token {
             token_interface::mint_to(cpi_ctx, amount)?;
             compute_checkpoint!("after_mint_cpi");
 
-            msg!("Successfully minted {} tokens to wallet", amount);
+            // Logging disabled to save CU
 
             emit!(TokensMinted {
                 recipient: ctx.accounts.destination.key(),
@@ -121,13 +121,12 @@ pub mod energy_token {
     /// Initialize the energy token program
     pub fn initialize_token(ctx: Context<InitializeToken>) -> Result<()> {
         compute_fn!("initialize_token" => {
+            let clock = Clock::get()?;
             let token_info = &mut ctx.accounts.token_info;
             token_info.authority = ctx.accounts.authority.key();
             token_info.mint = ctx.accounts.mint.key();
             token_info.total_supply = 0;
-            token_info.created_at = Clock::get()?.unix_timestamp;
-
-            msg!("Token initialized with authority: {}", token_info.authority);
+            token_info.created_at = clock.unix_timestamp;
         });
         Ok(())
     }
@@ -145,8 +144,6 @@ pub mod energy_token {
                 ctx.accounts.authority.key() == token_info.authority,
                 ErrorCode::UnauthorizedAuthority
             );
-
-            msg!("Adding REC validator: {}", validator_pubkey);
         });
         Ok(())
     }
@@ -167,7 +164,7 @@ pub mod energy_token {
             token::transfer(cpi_ctx, amount)?;
             compute_checkpoint!("after_transfer_cpi");
 
-            msg!("Transferred {} tokens", amount);
+            // Logging disabled to save CU
         });
         Ok(())
     }
@@ -191,7 +188,7 @@ pub mod energy_token {
             let token_info = &mut ctx.accounts.token_info;
             token_info.total_supply = token_info.total_supply.saturating_sub(amount);
 
-            msg!("Burned {} tokens", amount);
+            // Logging disabled to save CU
         });
         Ok(())
     }
@@ -205,7 +202,7 @@ pub mod energy_token {
                 ErrorCode::UnauthorizedAuthority
             );
 
-            msg!("Authority minting {} tokens to user", amount);
+            // Logging disabled to save CU
 
             // Mint tokens using token_info PDA as authority
             let seeds = &[b"token_info".as_ref(), &[ctx.bumps.token_info]];
@@ -228,7 +225,7 @@ pub mod energy_token {
             let token_info = &mut ctx.accounts.token_info;
             token_info.total_supply = token_info.total_supply.saturating_add(amount);
 
-            msg!("Successfully minted {} tokens", amount);
+            // Logging disabled to save CU
 
             emit!(TokensMintedDirect {
                 recipient: ctx.accounts.user_token_account.key(),

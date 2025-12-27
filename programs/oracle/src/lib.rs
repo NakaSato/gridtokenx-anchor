@@ -1,50 +1,43 @@
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
-use base64::{engine::general_purpose, Engine as _};
 
-declare_id!("TjYDEtQoFP9LRuVhmcGPZ52zBnQmtM5ixvE1T1SoCya");
+declare_id!("3hSEt5vVzbiMCegFnhdMpFGkXEDY8BinrPb8egJoS7C7");
 
 #[program]
 pub mod oracle {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>, api_gateway: Pubkey) -> Result<()> {
-        let oracle_data = &mut ctx.accounts.oracle_data;
+        let mut oracle_data = ctx.accounts.oracle_data.load_init()?;
         oracle_data.authority = ctx.accounts.authority.key();
         oracle_data.api_gateway = api_gateway;
         oracle_data.total_readings = 0;
+        oracle_data.last_reading_timestamp = 0;
         oracle_data.last_clearing = 0;
-        oracle_data.active = true;
+        oracle_data.active = 1; // Use u8: 1 for true, 0 for false
         oracle_data.created_at = Clock::get()?.unix_timestamp;
 
         // Initialize validation config with defaults
-        oracle_data.validation_config = ValidationConfig {
-            min_energy_value: 0,
-            max_energy_value: 1000000, // 1M kWh max reading
-            anomaly_detection_enabled: true,
-            max_reading_deviation_percent: 50, // 50% max deviation
-            require_consensus: false,
-        };
+        oracle_data.min_energy_value = 0;
+        oracle_data.max_energy_value = 1000000; // 1M kWh max reading
+        oracle_data.anomaly_detection_enabled = 1;
+        oracle_data.max_reading_deviation_percent = 50; // 50% max deviation
+        oracle_data.require_consensus = 0;
 
         // Initialize quality metrics
-        oracle_data.quality_metrics = QualityMetrics {
-            total_valid_readings: 0,
-            total_rejected_readings: 0,
-            average_reading_interval: 300, // 5 minutes default
-            last_quality_score: 100,
-            quality_score_updated_at: Clock::get()?.unix_timestamp,
-        };
+        oracle_data.total_valid_readings = 0;
+        oracle_data.total_rejected_readings = 0;
+        oracle_data.average_reading_interval = 300; // 5 minutes default
+        oracle_data.last_quality_score = 100;
+        oracle_data.quality_score_updated_at = Clock::get()?.unix_timestamp;
 
         // Initialize redundancy settings
-        oracle_data.backup_oracles = Vec::new();
+        oracle_data.backup_oracles_count = 0;
         oracle_data.consensus_threshold = 2;
         oracle_data.last_consensus_timestamp = 0;
 
-        msg!(
-            "Oracle program initialized with API Gateway: {}",
-            api_gateway
-        );
+        // Logging disabled to save CU - Oracle initialized with API Gateway
         Ok(())
     }
 
@@ -56,9 +49,9 @@ pub mod oracle {
         energy_consumed: u64,
         reading_timestamp: i64,
     ) -> Result<()> {
-        let oracle_data = &mut ctx.accounts.oracle_data;
+        let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
 
-        require!(oracle_data.active, ErrorCode::OracleInactive);
+        require!(oracle_data.active == 1, ErrorCode::OracleInactive);
 
         // Only API Gateway can submit meter readings
         require!(
@@ -70,23 +63,15 @@ pub mod oracle {
         validate_meter_reading(
             energy_produced,
             energy_consumed,
-            &oracle_data.validation_config,
+            &oracle_data,
         )?;
 
         oracle_data.total_readings += 1;
         oracle_data.last_reading_timestamp = reading_timestamp;
 
         // Update quality metrics
-        oracle_data.quality_metrics.total_valid_readings += 1;
-        update_quality_score(oracle_data, true)?;
-
-        // Encode meter reading data as base64 for external systems
-        let reading_data = format!(
-            "{}:{}:{}:{}",
-            meter_id, energy_produced, energy_consumed, reading_timestamp
-        );
-        let encoded_data = general_purpose::STANDARD.encode(reading_data.as_bytes());
-        msg!("Meter reading data (base64): {}", encoded_data);
+        oracle_data.total_valid_readings += 1;
+        update_quality_score(&mut oracle_data, true)?;
 
         emit!(MeterReadingSubmitted {
             meter_id: meter_id.clone(),
@@ -96,20 +81,15 @@ pub mod oracle {
             submitter: ctx.accounts.authority.key(),
         });
 
-        msg!(
-            "Meter reading submitted via API Gateway - Meter: {}, Produced: {}, Consumed: {}",
-            meter_id,
-            energy_produced,
-            energy_consumed
-        );
+        // Logging disabled to save CU - use events instead
         Ok(())
     }
 
     /// Trigger market clearing process (only via API Gateway)
     pub fn trigger_market_clearing(ctx: Context<TriggerMarketClearing>) -> Result<()> {
-        let oracle_data = &mut ctx.accounts.oracle_data;
+        let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
 
-        require!(oracle_data.active, ErrorCode::OracleInactive);
+        require!(oracle_data.active == 1, ErrorCode::OracleInactive);
 
         // Only API Gateway can trigger market clearing
         require!(
@@ -125,23 +105,20 @@ pub mod oracle {
             timestamp: current_time,
         });
 
-        msg!(
-            "Market clearing triggered via API Gateway at timestamp: {}",
-            current_time
-        );
+        // Logging disabled to save CU - use events instead
         Ok(())
     }
 
     /// Update oracle status (admin only)
     pub fn update_oracle_status(ctx: Context<UpdateOracleStatus>, active: bool) -> Result<()> {
-        let oracle_data = &mut ctx.accounts.oracle_data;
+        let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
 
         require!(
             ctx.accounts.authority.key() == oracle_data.authority,
             ErrorCode::UnauthorizedAuthority
         );
 
-        oracle_data.active = active;
+        oracle_data.active = if active { 1 } else { 0 };
 
         emit!(OracleStatusUpdated {
             authority: ctx.accounts.authority.key(),
@@ -149,7 +126,6 @@ pub mod oracle {
             timestamp: Clock::get()?.unix_timestamp,
         });
 
-        msg!("Oracle status updated to: {}", active);
         Ok(())
     }
 
@@ -158,7 +134,7 @@ pub mod oracle {
         ctx: Context<UpdateApiGateway>,
         new_api_gateway: Pubkey,
     ) -> Result<()> {
-        let oracle_data = &mut ctx.accounts.oracle_data;
+        let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
 
         require!(
             ctx.accounts.authority.key() == oracle_data.authority,
@@ -175,40 +151,44 @@ pub mod oracle {
             timestamp: Clock::get()?.unix_timestamp,
         });
 
-        msg!(
-            "API Gateway updated from {} to {}",
-            old_gateway,
-            new_api_gateway
-        );
+        // Logging disabled to save CU - use events instead
         Ok(())
     }
 
     /// Update validation configuration (admin only)
     pub fn update_validation_config(
         ctx: Context<UpdateValidationConfig>,
-        config: ValidationConfig,
+        min_energy_value: u64,
+        max_energy_value: u64,
+        anomaly_detection_enabled: bool,
+        max_reading_deviation_percent: u16,
+        require_consensus: bool,
     ) -> Result<()> {
-        let oracle_data = &mut ctx.accounts.oracle_data;
+        let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
 
         require!(
             ctx.accounts.authority.key() == oracle_data.authority,
             ErrorCode::UnauthorizedAuthority
         );
 
-        oracle_data.validation_config = config;
+        oracle_data.min_energy_value = min_energy_value;
+        oracle_data.max_energy_value = max_energy_value;
+        oracle_data.anomaly_detection_enabled = if anomaly_detection_enabled { 1 } else { 0 };
+        oracle_data.max_reading_deviation_percent = max_reading_deviation_percent;
+        oracle_data.require_consensus = if require_consensus { 1 } else { 0 };
 
         emit!(ValidationConfigUpdated {
             authority: ctx.accounts.authority.key(),
             timestamp: Clock::get()?.unix_timestamp,
         });
 
-        msg!("Validation configuration updated");
+        // Logging disabled to save CU - use events instead
         Ok(())
     }
 
     /// Add backup oracle (admin only)
     pub fn add_backup_oracle(ctx: Context<AddBackupOracle>, backup_oracle: Pubkey) -> Result<()> {
-        let oracle_data = &mut ctx.accounts.oracle_data;
+        let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
 
         require!(
             ctx.accounts.authority.key() == oracle_data.authority,
@@ -216,19 +196,19 @@ pub mod oracle {
         );
 
         require!(
-            oracle_data.backup_oracles.len() < 10,
+            oracle_data.backup_oracles_count < 10,
             ErrorCode::MaxBackupOraclesReached
         );
 
-        oracle_data.backup_oracles.push(backup_oracle);
+        let index = oracle_data.backup_oracles_count as usize;
+        oracle_data.backup_oracles[index] = backup_oracle;
+        oracle_data.backup_oracles_count += 1;
 
         emit!(BackupOracleAdded {
             authority: ctx.accounts.authority.key(),
             backup_oracle,
             timestamp: Clock::get()?.unix_timestamp,
         });
-
-        msg!("Backup oracle added: {}", backup_oracle);
         Ok(())
     }
 }
@@ -237,21 +217,21 @@ pub mod oracle {
 fn validate_meter_reading(
     energy_produced: u64,
     energy_consumed: u64,
-    config: &ValidationConfig,
+    oracle_data: &OracleData,
 ) -> Result<()> {
     // Range validation
     require!(
-        energy_produced >= config.min_energy_value && energy_produced <= config.max_energy_value,
+        energy_produced >= oracle_data.min_energy_value && energy_produced <= oracle_data.max_energy_value,
         ErrorCode::EnergyValueOutOfRange
     );
 
     require!(
-        energy_consumed >= config.min_energy_value && energy_consumed <= config.max_energy_value,
+        energy_consumed >= oracle_data.min_energy_value && energy_consumed <= oracle_data.max_energy_value,
         ErrorCode::EnergyValueOutOfRange
     );
 
     // Basic sanity check - production shouldn't be wildly different from consumption
-    if config.anomaly_detection_enabled {
+    if oracle_data.anomaly_detection_enabled == 1 {
         let ratio = if energy_consumed > 0 {
             (energy_produced as f64 / energy_consumed as f64) * 100.0
         } else {
@@ -266,13 +246,12 @@ fn validate_meter_reading(
 }
 
 fn update_quality_score(oracle_data: &mut OracleData, _is_valid: bool) -> Result<()> {
-    let metrics = &mut oracle_data.quality_metrics;
-    let total_readings = metrics.total_valid_readings + metrics.total_rejected_readings;
+    let total_readings = oracle_data.total_valid_readings + oracle_data.total_rejected_readings;
 
     if total_readings > 0 {
-        let success_rate = (metrics.total_valid_readings as f64 / total_readings as f64) * 100.0;
-        metrics.last_quality_score = success_rate as u8;
-        metrics.quality_score_updated_at = Clock::get()?.unix_timestamp;
+        let success_rate = (oracle_data.total_valid_readings as f64 / total_readings as f64) * 100.0;
+        oracle_data.last_quality_score = success_rate as u8;
+        oracle_data.quality_score_updated_at = Clock::get()?.unix_timestamp;
     }
 
     Ok(())
@@ -284,11 +263,11 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + OracleData::INIT_SPACE,
+        space = 8 + std::mem::size_of::<OracleData>(),
         seeds = [b"oracle_data"],
         bump
     )]
-    pub oracle_data: Account<'info, OracleData>,
+    pub oracle_data: AccountLoader<'info, OracleData>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -299,7 +278,7 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 pub struct SubmitMeterReading<'info> {
     #[account(mut)]
-    pub oracle_data: Account<'info, OracleData>,
+    pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
 }
@@ -307,102 +286,85 @@ pub struct SubmitMeterReading<'info> {
 #[derive(Accounts)]
 pub struct TriggerMarketClearing<'info> {
     #[account(mut)]
-    pub oracle_data: Account<'info, OracleData>,
+    pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct UpdateOracleStatus<'info> {
-    #[account(mut, has_one = authority @ ErrorCode::UnauthorizedAuthority)]
-    pub oracle_data: Account<'info, OracleData>,
+    #[account(mut)]
+    pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct UpdateApiGateway<'info> {
-    #[account(mut, has_one = authority @ ErrorCode::UnauthorizedAuthority)]
-    pub oracle_data: Account<'info, OracleData>,
+    #[account(mut)]
+    pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct UpdateValidationConfig<'info> {
-    #[account(mut, has_one = authority @ ErrorCode::UnauthorizedAuthority)]
-    pub oracle_data: Account<'info, OracleData>,
+    #[account(mut)]
+    pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct AddBackupOracle<'info> {
-    #[account(mut, has_one = authority @ ErrorCode::UnauthorizedAuthority)]
-    pub oracle_data: Account<'info, OracleData>,
+    #[account(mut)]
+    pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
 }
 
 // Data structs
-#[account]
-#[derive(InitSpace)]
+/// OracleData account with zero_copy for efficient data access
+/// Direct memory access avoids deserialization overhead
+/// All fields explicitly defined including padding to satisfy bytemuck's Pod trait
+#[account(zero_copy)]
+#[repr(C)]
 pub struct OracleData {
-    pub authority: Pubkey,
-    pub api_gateway: Pubkey, // Only API Gateway can call oracle functions
-    pub total_readings: u64,
-    pub last_reading_timestamp: i64,
-    pub last_clearing: i64,
-    pub active: bool,
-    pub created_at: i64,
-
-    // === DATA VALIDATION & QUALITY ===
-    pub validation_config: ValidationConfig,
-    pub quality_metrics: QualityMetrics,
-
-    // === REDUNDANCY & CONSENSUS ===
-    #[max_len(10)]
-    pub backup_oracles: Vec<Pubkey>, // Backup oracle authorities
-    pub consensus_threshold: u8, // Minimum oracles required for consensus
-    pub last_consensus_timestamp: i64,
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct ValidationConfig {
-    pub min_energy_value: u64, // Minimum valid energy reading
-    pub max_energy_value: u64, // Maximum valid energy reading
-    pub anomaly_detection_enabled: bool,
-    pub max_reading_deviation_percent: u16, // Max deviation from historical average
-    pub require_consensus: bool,            // Whether to require multiple oracle consensus
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct QualityMetrics {
-    pub total_valid_readings: u64,
-    pub total_rejected_readings: u64,
-    pub average_reading_interval: u32, // Average seconds between readings
-    pub last_quality_score: u8,        // 0-100 quality score
-    pub quality_score_updated_at: i64,
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct ReadingHistory {
-    #[max_len(50)]
-    pub meter_id: String, // max 50 chars
-    #[max_len(10)]
-    pub readings: Vec<HistoricalReading>, // Last 10 readings for trend analysis
-    pub last_updated: i64,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
-pub struct HistoricalReading {
-    pub energy_produced: u64,
-    pub energy_consumed: u64,
-    pub timestamp: i64,
-    pub quality_score: u8,
+    // === 32-byte aligned fields (Pubkeys) ===
+    pub authority: Pubkey,                      // 32 bytes
+    pub api_gateway: Pubkey,                    // 32 bytes
+    pub backup_oracles: [Pubkey; 10],           // 320 bytes (32 * 10)
+    
+    // === 8-byte aligned fields (u64, i64) ===
+    pub total_readings: u64,                    // 8 bytes
+    pub last_reading_timestamp: i64,            // 8 bytes
+    pub last_clearing: i64,                     // 8 bytes
+    pub created_at: i64,                        // 8 bytes
+    pub min_energy_value: u64,                  // 8 bytes
+    pub max_energy_value: u64,                  // 8 bytes
+    pub total_valid_readings: u64,              // 8 bytes
+    pub total_rejected_readings: u64,           // 8 bytes
+    pub quality_score_updated_at: i64,          // 8 bytes
+    pub last_consensus_timestamp: i64,          // 8 bytes
+    
+    // === 4-byte aligned field ===
+    pub average_reading_interval: u32,          // 4 bytes
+    
+    // === 2-byte aligned field ===
+    pub max_reading_deviation_percent: u16,     // 2 bytes
+    
+    // === 1-byte fields ===
+    pub active: u8,                             // 1 byte (1 = active, 0 = inactive)
+    pub anomaly_detection_enabled: u8,          // 1 byte (1 = enabled, 0 = disabled)  
+    pub require_consensus: u8,                  // 1 byte (1 = required, 0 = not required)
+    pub last_quality_score: u8,                 // 1 byte (0-100 quality score)
+    pub backup_oracles_count: u8,               // 1 byte
+    pub consensus_threshold: u8,                // 1 byte
+    
+    // Explicit padding to reach 8-byte alignment
+    // u32(4) + u16(2) + u8*6(6) = 12 bytes
+    // To align to 8 bytes: need 4 more bytes (12 + 4 = 16, which is divisible by 8)
+    pub _padding: [u8; 4],                      // 4 bytes explicit padding
 }
 
 // Events

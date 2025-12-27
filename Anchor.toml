@@ -7,13 +7,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-energy_token = "5FVExLSAC94gSWH6TJa1TmBDWXuqFe5obZaC5DkqJihU"
-governance = "HZdnWsQc5vsMXScEn8u3GezFtqPmcKM6Ex3XEUXCgSBT"
-oracle = "TjYDEtQoFP9LRuVhmcGPZ52zBnQmtM5ixvE1T1SoCya"
-registry = "DiJi39HDJQwEYGxSwL6qtLUtWzbAP5irv1S4Tube9ouH"
-trading = "CdxzGUNHPcgkhnaH6V4jAcvMGRsUhPKFK6R71UCQhJ8H"
-tpc_benchmark = "HEqH8sdd7KRxhwQYVpJrbb7kzW3P22PYkber756zs5vS"
-blockbench = "BfJ7ahTPRahUBTFXQdw1tS59DWcW5gADRJxzdhr7kQhJ"
+blockbench = "HmbwQP67sLNVW7aD8VmwDvrAh6DZbomY6ZWqqKStTcVX"
+energy_token = "HaT3koMseafcCB9aUQUCrSLMDfN1km7Xik9UhZSG9UV6"
+governance = "GAZQm4bHUyNhSYrAq5noBohXcTaf6dKZNDKju8499e6w"
+oracle = "3hSEt5vVzbiMCegFnhdMpFGkXEDY8BinrPb8egJoS7C7"
+registry = "CVS6pz2qdEmjusHCmiwe2R21KVrSoGubdEy5d766KooN"
+tpc_benchmark = "6ZsDjYHNJMcory5jFnkqKSJURztirzqknLWAg1WAKvEE"
+trading = "8gHn9oeYcUQgNrMi8fNYGyMCKJTMwM6K413f41AANFt4"
 
 [registry]
 url = "https://api.apr.dev"
@@ -23,11 +23,11 @@ cluster = "localnet"
 wallet = "../keypairs/dev-wallet.json"
 
 [scripts]
+benchmark-tpcc = "npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts"
 bootstrap = "npx ts-node scripts/bootstrap.ts"
 init-market = "npx ts-node scripts/init_market.ts"
-test = "pnpm ts-mocha -p ./tsconfig.json -t 1000000 tests/integration/p2p-trading-scenario.test.ts"
-benchmark-tpcc = "npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts"
 setup-poa = "bash scripts/setup-poa-cluster.sh"
+test = "pnpm ts-mocha -p ./tsconfig.json -t 1000000 tests/integration/p2p-trading-scenario.test.ts"
 
 [test]
 startup_wait = 5000

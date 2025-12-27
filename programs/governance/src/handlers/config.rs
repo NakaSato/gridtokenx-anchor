@@ -21,7 +21,6 @@ pub fn update_governance_config(
         timestamp: clock.unix_timestamp,
     });
     
-    msg!("Governance configuration updated - ERC validation: {}", erc_validation_enabled);
     Ok(())
 }
 
@@ -41,7 +40,6 @@ pub fn set_maintenance_mode(
         timestamp: clock.unix_timestamp,
     });
     
-    msg!("Maintenance mode {}", if maintenance_enabled { "enabled" } else { "disabled" });
     Ok(())
 }
 
@@ -78,8 +76,7 @@ pub fn update_erc_limits(
         timestamp: clock.unix_timestamp,
     });
     
-    msg!("ERC limits updated - Min: {} kWh, Max: {} kWh, Validity: {} seconds", 
-         min_energy_amount, max_erc_amount, erc_validity_period);
+
     Ok(())
 }
 
@@ -92,8 +89,7 @@ pub fn update_authority_info(
     
     require!(contact_info.len() <= 128, GovernanceError::ContactInfoTooLong);
     
-    let old_contact = poa_config.contact_info.clone();
-    poa_config.contact_info = contact_info.clone();
+    let old_contact = std::mem::replace(&mut poa_config.contact_info, contact_info.clone());
     poa_config.last_updated = clock.unix_timestamp;
     
     emit!(AuthorityInfoUpdated {
@@ -103,6 +99,5 @@ pub fn update_authority_info(
         timestamp: clock.unix_timestamp,
     });
     
-    msg!("Authority contact information updated");
     Ok(())
 }

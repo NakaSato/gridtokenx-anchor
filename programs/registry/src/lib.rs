@@ -3,7 +3,7 @@
 use anchor_lang::prelude::*;
 use base64::{engine::general_purpose, Engine as _};
 
-declare_id!("DiJi39HDJQwEYGxSwL6qtLUtWzbAP5irv1S4Tube9ouH");
+declare_id!("CVS6pz2qdEmjusHCmiwe2R21KVrSoGubdEy5d766KooN");
 
 #[program]
 pub mod registry {
@@ -59,15 +59,16 @@ pub mod registry {
     ) -> Result<()> {
         let user_account = &mut ctx.accounts.user_account;
         let registry = &mut ctx.accounts.registry;
+        let clock = Clock::get()?;
 
         // Set user account data
         user_account.authority = ctx.accounts.user_authority.key();
         user_account.user_type = user_type;
         user_account.location = location.clone();
         user_account.status = UserStatus::Active;
-        user_account.registered_at = Clock::get()?.unix_timestamp;
+        user_account.registered_at = clock.unix_timestamp;
         user_account.meter_count = 0;
-        user_account.created_at = Clock::get()?.unix_timestamp; // For backward compatibility
+        user_account.created_at = clock.unix_timestamp; // For backward compatibility
 
         // Update registry counters
         registry.user_count += 1;
@@ -76,7 +77,7 @@ pub mod registry {
             user: ctx.accounts.user_authority.key(),
             user_type,
             location,
-            timestamp: Clock::get()?.unix_timestamp,
+            timestamp: clock.unix_timestamp,
         });
 
         Ok(())
@@ -340,7 +341,6 @@ pub mod registry {
             meter.meter_id, meter.owner, new_tokens_to_mint, current_net_gen
         );
         let encoded_data = general_purpose::STANDARD.encode(settlement_data.as_bytes());
-        msg!("Settlement data (base64): {}", encoded_data);
 
         emit!(MeterBalanceSettled {
             meter_id: meter.meter_id.clone(),
@@ -597,6 +597,7 @@ pub struct SettleAndMintTokens<'info> {
 }
 
 // Data structs
+/// Registry account for metadata storage
 #[account]
 #[derive(InitSpace)]
 pub struct Registry {
@@ -608,6 +609,7 @@ pub struct Registry {
     pub created_at: i64,
 }
 
+/// User account for frequent lookups
 #[account]
 #[derive(InitSpace)]
 pub struct UserAccount {
@@ -620,7 +622,7 @@ pub struct UserAccount {
     pub meter_count: u32,    // Number of meters owned
     pub created_at: i64,     // Backward compatibility field
 }
-
+/// Meter account for reading updates
 #[account]
 #[derive(InitSpace)]
 pub struct MeterAccount {

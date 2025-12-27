@@ -65,27 +65,26 @@ pub fn cpu_heavy_sort(
     require!(array_size <= MAX_SORT_SIZE, BlockbenchError::ArrayTooLarge);
     
     // Generate pseudo-random array using LCG
-    let mut arr: Vec<u64> = Vec::with_capacity(array_size as usize);
+    // Use u32 instead of u64 to reduce memory and CPU overhead
+    let mut arr: Vec<u32> = Vec::with_capacity(array_size as usize);
     let mut rng_state = seed;
     
     for _ in 0..array_size {
         rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1);
-        arr.push(rng_state);
+        arr.push(rng_state as u32);
     }
     
     // Perform quicksort
     quicksort(&mut arr, 0, (array_size as i32) - 1);
     
     // Return checksum for verification
-    let checksum = arr.iter().fold(0u64, |acc, &x| acc.wrapping_add(x));
-    
-    msg!("CPUHeavy Sort: size={}, checksum={}", array_size, checksum);
+    let checksum = arr.iter().fold(0u64, |acc, &x| acc.wrapping_add(x as u64));
     
     Ok(checksum)
 }
 
 /// In-place quicksort implementation
-fn quicksort(arr: &mut [u64], low: i32, high: i32) {
+fn quicksort(arr: &mut [u32], low: i32, high: i32) {
     if low < high {
         let pivot = partition(arr, low, high);
         quicksort(arr, low, pivot - 1);
@@ -93,7 +92,7 @@ fn quicksort(arr: &mut [u64], low: i32, high: i32) {
     }
 }
 
-fn partition(arr: &mut [u64], low: i32, high: i32) -> i32 {
+fn partition(arr: &mut [u32], low: i32, high: i32) -> i32 {
     let pivot = arr[high as usize];
     let mut i = low - 1;
     
@@ -125,8 +124,6 @@ pub fn cpu_heavy_loop(
         result = result.wrapping_add(1);
     }
     
-    msg!("CPUHeavy Loop: iterations={}, result={}", iterations, result);
-    
     Ok(result)
 }
 
@@ -152,8 +149,6 @@ pub fn cpu_heavy_hash(
         current_hash = compute_hash(&current_hash);
     }
     
-    msg!("CPUHeavy Hash: iterations={}, data_size={}", iterations, data_size);
-    
     Ok(current_hash)
 }
 
@@ -167,14 +162,15 @@ pub fn cpu_heavy_matrix(
     let n = matrix_size as usize;
     
     // Initialize matrices with deterministic values
-    let mut a: Vec<u64> = vec![0; n * n];
-    let mut b: Vec<u64> = vec![0; n * n];
+    // Use u8 instead of u64 since values are only 0-99 (matrix_size <= 100)
+    let mut a: Vec<u8> = vec![0; n * n];
+    let mut b: Vec<u8> = vec![0; n * n];
     let mut c: Vec<u64> = vec![0; n * n];
     
     for i in 0..n {
         for j in 0..n {
-            a[i * n + j] = ((i + j + 1) % 100) as u64;
-            b[i * n + j] = ((i * j + 1) % 100) as u64;
+            a[i * n + j] = ((i + j + 1) % 100) as u8;
+            b[i * n + j] = ((i * j + 1) % 100) as u8;
         }
     }
     
@@ -183,7 +179,7 @@ pub fn cpu_heavy_matrix(
         for j in 0..n {
             let mut sum: u64 = 0;
             for k in 0..n {
-                sum = sum.wrapping_add(a[i * n + k].wrapping_mul(b[k * n + j]));
+                sum = sum.wrapping_add((a[i * n + k] as u64).wrapping_mul(b[k * n + j] as u64));
             }
             c[i * n + j] = sum;
         }
@@ -191,8 +187,6 @@ pub fn cpu_heavy_matrix(
     
     // Return checksum
     let checksum: u64 = c.iter().sum();
-    
-    msg!("CPUHeavy Matrix: size={}x{}, checksum={}", n, n, checksum);
     
     Ok(checksum)
 }

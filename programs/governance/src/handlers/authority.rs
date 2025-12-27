@@ -41,17 +41,13 @@ pub fn propose_authority_change(
         timestamp: clock.unix_timestamp,
     });
     
-    msg!(
-        "Authority change proposed: {} -> {} (expires in 48h)",
-        poa_config.authority,
-        new_authority
-    );
-    
+    // Logging disabled to save CU - use events instead
+
     Ok(())
 }
 
-/// Approve authority change (step 2 of 2-step transfer)
-/// Must be called by the NEW authority to accept
+/// Approve pending authority change (step 2 of 2-step transfer)
+/// Must be called by the pending authority
 pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<()> {
     let poa_config = &mut ctx.accounts.poa_config;
     let clock = Clock::get()?;
@@ -90,13 +86,9 @@ pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<
         new_authority: pending,
         timestamp: clock.unix_timestamp,
     });
-    
-    msg!(
-        "Authority change approved and completed: {} -> {}",
-        old_authority,
-        pending
-    );
-    
+
+    // Logging disabled to save CU - use events instead
+
     Ok(())
 }
 
@@ -123,8 +115,7 @@ pub fn cancel_authority_change(ctx: Context<CancelAuthorityChange>) -> Result<()
         timestamp: clock.unix_timestamp,
     });
     
-    msg!("Authority change cancelled: {} (proposed)", pending);
-    
+
     Ok(())
 }
 
@@ -157,12 +148,6 @@ pub fn set_oracle_authority(
         timestamp: clock.unix_timestamp,
     });
     
-    msg!(
-        "Oracle authority set: {} (min confidence: {}%, required: {})",
-        oracle_authority,
-        min_confidence,
-        require_validation
-    );
-    
+
     Ok(())
 }

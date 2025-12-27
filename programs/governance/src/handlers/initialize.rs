@@ -57,11 +57,5 @@ pub fn handler(ctx: Context<InitializePoa>) -> Result<()> {
         timestamp: clock.unix_timestamp,
     });
     
-    msg!("PoA governance initialized - REC as ERC certifying authority");
-    msg!("Energy limits: {} - {} kWh | Validity: {} days | Oracle validation: {}", 
-         poa_config.min_energy_amount, 
-         poa_config.max_erc_amount,
-         poa_config.erc_validity_period / 86400,
-         poa_config.require_oracle_validation);
     Ok(())
 }

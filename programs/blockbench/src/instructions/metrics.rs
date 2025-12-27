@@ -78,8 +78,6 @@ pub fn reset_metrics(ctx: Context<ResetMetrics>) -> Result<()> {
     state.is_running = false;
     state.run_id += 1;
     
-    msg!("Benchmark metrics reset. New run_id: {}", state.run_id);
-    
     Ok(())
 }
 

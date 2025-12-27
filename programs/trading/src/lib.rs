@@ -1,10 +1,9 @@
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
-use base64::{engine::general_purpose, Engine as _};
 use governance::{ErcCertificate, ErcStatus};
 
-declare_id!("CdxzGUNHPcgkhnaH6V4jAcvMGRsUhPKFK6R71UCQhJ8H");
+declare_id!("8gHn9oeYcUQgNrMi8fNYGyMCKJTMwM6K413f41AANFt4");
 
 #[program]
 pub mod trading {
@@ -93,14 +92,9 @@ pub mod trading {
                 ErrorCode::ExceedsErcAmount
             );
 
-            msg!(
-                "ERC validation passed - Certificate ID: {}, Available: {} kWh, Requested: {} kWh",
-                erc_certificate.certificate_id,
-                erc_certificate.energy_amount,
-                energy_amount
-            );
+            // ERC validation passed - logging disabled to save CU
         } else {
-            msg!("Warning: No ERC certificate provided - order allowed but may fail validation");
+            // Warning: No ERC certificate provided
         }
 
         let market = &mut ctx.accounts.market;
@@ -124,16 +118,6 @@ pub mod trading {
         // Update market depth for sell side
         update_market_depth(market, order, true)?;
 
-        // Encode sell order data as base64 for external systems
-        let order_data = format!(
-            "SELL:{}:{}:{}",
-            energy_amount,
-            price_per_kwh,
-            ctx.accounts.authority.key()
-        );
-        let encoded_data = general_purpose::STANDARD.encode(order_data.as_bytes());
-        msg!("Sell order data (base64): {}", encoded_data);
-
         emit!(SellOrderCreated {
             seller: ctx.accounts.authority.key(),
             order_id: order.key(),
@@ -142,12 +126,7 @@ pub mod trading {
             timestamp: clock.unix_timestamp,
         });
 
-        msg!(
-            "Sell order created - ID: {}, Amount: {} kWh, Price: {} tokens/kWh",
-            order.key(),
-            energy_amount,
-            price_per_kwh
-        );
+        // Logging disabled to save CU - use events instead
 
         Ok(())
     }
@@ -182,16 +161,6 @@ pub mod trading {
         // Update market depth for buy side
         update_market_depth(market, order, false)?;
 
-        // Encode buy order data as base64 for external systems
-        let order_data = format!(
-            "BUY:{}:{}:{}",
-            energy_amount,
-            max_price_per_kwh,
-            ctx.accounts.authority.key()
-        );
-        let encoded_data = general_purpose::STANDARD.encode(order_data.as_bytes());
-        msg!("Buy order data (base64): {}", encoded_data);
-
         emit!(BuyOrderCreated {
             buyer: ctx.accounts.authority.key(),
             order_id: order.key(),
@@ -200,12 +169,7 @@ pub mod trading {
             timestamp: clock.unix_timestamp,
         });
 
-        msg!(
-            "Buy order created - ID: {}, Amount: {} kWh, Max Price: {} tokens/kWh",
-            order.key(),
-            energy_amount,
-            max_price_per_kwh
-        );
+        // Logging disabled to save CU - use events instead
 
         Ok(())
     }
@@ -304,13 +268,7 @@ pub mod trading {
             timestamp: clock.unix_timestamp,
         });
 
-        msg!(
-            "Orders matched - Amount: {} kWh, Price: {}, Buyer: {}, Seller: {}",
-            actual_match_amount,
-            clearing_price,
-            buy_order.buyer,
-            sell_order.seller
-        );
+        // Logging disabled to save CU - use events instead
 
         Ok(())
     }
@@ -352,8 +310,6 @@ pub mod trading {
             user: ctx.accounts.authority.key(),
             timestamp: clock.unix_timestamp,
         });
-
-        msg!("Order cancelled - ID: {}", order.key());
 
         Ok(())
     }
@@ -399,7 +355,8 @@ pub mod trading {
             ErrorCode::BatchSizeExceeded
         );
 
-        let batch_id = Clock::get()?.unix_timestamp;
+        let clock = Clock::get()?;
+        let batch_id = clock.unix_timestamp;
         let mut total_volume = 0u64;
         let mut matched_count = 0u32;
 
@@ -414,15 +371,15 @@ pub mod trading {
 
         // Single aggregated update to market state (reduces MVCC conflicts)
         market.total_volume = market.total_volume.saturating_add(total_volume);
-        market.total_trades = market.total_trades.saturating_add(matched_count as u64);
+        market.total_trades = market.total_trades.saturating_add(matched_count);
 
         // Create batch record
         let batch_info = BatchInfo {
             batch_id: batch_id as u64,
             order_count: matched_count,
             total_volume,
-            created_at: Clock::get()?.unix_timestamp,
-            expires_at: Clock::get()?.unix_timestamp
+            created_at: clock.unix_timestamp,
+            expires_at: clock.unix_timestamp
                 + market.batch_config.batch_timeout_seconds as i64,
             order_ids: order_ids.clone(),
         };
@@ -434,15 +391,10 @@ pub mod trading {
             batch_id: batch_id as u64,
             order_count: matched_count,
             total_volume,
-            timestamp: Clock::get()?.unix_timestamp,
+            timestamp: clock.unix_timestamp,
         });
 
-        msg!(
-            "Batch executed - ID: {}, Orders: {}, Volume: {}",
-            batch_id,
-            matched_count,
-            total_volume
-        );
+        // Logging disabled to save CU - use events instead
 
         Ok(())
     }
@@ -699,13 +651,14 @@ pub struct ExecuteBatch<'info> {
 }
 
 // Data structs
+/// Market account for order and trade management
 #[account]
 #[derive(InitSpace)]
 pub struct Market {
     pub authority: Pubkey,
-    pub active_orders: u64,
-    pub total_volume: u64,
-    pub total_trades: u64,
+    pub active_orders: u32,              // Changed from u64 - max ~4B orders is sufficient
+    pub total_volume: u64,               // Keeps u64 for total energy volume
+    pub total_trades: u32,               // Changed from u64 - trade count fits in u32
     pub created_at: i64,
     pub clearing_enabled: bool,
     pub market_fee_bps: u16,
@@ -727,6 +680,7 @@ pub struct Market {
     pub volume_weighted_price: u64,
 }
 
+/// Batch configuration for batch processing
 #[account]
 #[derive(InitSpace)]
 pub struct BatchConfig {
@@ -753,7 +707,7 @@ pub struct BatchInfo {
 pub struct PriceLevel {
     pub price: u64,
     pub total_amount: u64,
-    pub order_count: u32,
+    pub order_count: u16,               // Changed from u32 - max 65k orders per level sufficient
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
@@ -766,13 +720,14 @@ pub struct PricePoint {
 /// Sharded market statistics for reduced contention
 /// Each shard tracks independent volume/order counts that can be aggregated
 /// This allows parallel writes without MVCC conflicts on the main Market account
+/// Sharded market statistics for high-frequency updates
 #[account]
 #[derive(InitSpace)]
 pub struct MarketShard {
     pub shard_id: u8,                    // 0-255 shard identifier
     pub market: Pubkey,                  // Parent market
     pub volume_accumulated: u64,         // Volume in this shard
-    pub order_count: u64,                // Orders processed in this shard
+    pub order_count: u32,                // Changed from u64 - order count fits in u32
     pub last_update: i64,                // Last update timestamp
 }
 
@@ -782,7 +737,7 @@ pub fn get_shard_id(authority: &Pubkey, num_shards: u8) -> u8 {
     // Use first byte of pubkey for simple sharding
     authority.to_bytes()[0] % num_shards
 }
-
+/// Order account for trading
 #[account]
 #[derive(InitSpace)]
 pub struct Order {

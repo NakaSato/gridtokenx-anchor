@@ -14,9 +14,9 @@ pub fn do_nothing(_ctx: Context<DoNothing>) -> Result<()> {
 }
 
 /// DoNothing with nonce to prevent deduplication
-pub fn do_nothing_nonce(_ctx: Context<DoNothingNonce>, nonce: u64) -> Result<()> {
+pub fn do_nothing_nonce(_ctx: Context<DoNothingNonce>, nonce: u32) -> Result<()> {
     // Nonce prevents transaction caching/deduplication
-    msg!("DoNothing: nonce={}", nonce);
+    // Use u32 instead of u64 to reduce serialization overhead
     Ok(())
 }
 
@@ -27,7 +27,7 @@ pub struct DoNothing<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(nonce: u64)]
+#[instruction(nonce: u32)]
 pub struct DoNothingNonce<'info> {
     /// The payer for the transaction
     pub payer: Signer<'info>,
