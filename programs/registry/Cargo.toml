@@ -17,9 +17,9 @@ no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
-anchor-lang = "0.32.1"
-anchor-spl = "0.32.1"
-base64 = "0.21"
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true }
+base64 = { workspace = true }
 bytemuck = { version = "1.20.0", features = ["derive"] }
 
 # Add energy-token program for CPI
