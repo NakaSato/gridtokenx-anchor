@@ -1,12 +1,13 @@
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Burn, MintTo, Transfer};
+
 use anchor_spl::{
     associated_token::AssociatedToken,
     token_interface::{
-        self as token_interface, Mint as MintInterface, TokenAccount as TokenAccountInterface,
-        TokenInterface,
+        self as token_interface, Burn as BurnInterface, Mint as MintInterface,
+        MintTo as MintToInterface, TokenAccount as TokenAccountInterface, TokenInterface,
+        TransferChecked as TransferCheckedInterface,
     },
 };
 use mpl_token_metadata::instructions::CreateV1CpiBuilder;
@@ -26,7 +27,7 @@ macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
 
-declare_id!("HaT3koMseafcCB9aUQUCrSLMDfN1km7Xik9UhZSG9UV6");
+declare_id!("MwAdshY2978VqcpJzWSKmPfDtKfweD7YLMCQSBcR4wP");
 
 #[program]
 pub mod energy_token {
@@ -98,7 +99,7 @@ pub mod energy_token {
 
             let cpi_program = ctx.accounts.token_program.to_account_info();
 
-            let seeds = &[b"token_info".as_ref(), &[ctx.bumps.token_info]];
+            let seeds = &[b"token_info_2022".as_ref(), &[ctx.bumps.token_info]];
             let signer = &[&seeds[..]];
 
             let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
@@ -134,7 +135,7 @@ pub mod energy_token {
     /// Add a REC validator to the system
     pub fn add_rec_validator(
         ctx: Context<AddRecValidator>,
-        validator_pubkey: Pubkey,
+        _validator_pubkey: Pubkey,
         _authority_name: String,
     ) -> Result<()> {
         compute_fn!("add_rec_validator" => {
@@ -151,8 +152,9 @@ pub mod energy_token {
     /// Transfer energy tokens between accounts
     pub fn transfer_tokens(ctx: Context<TransferTokens>, amount: u64) -> Result<()> {
         compute_fn!("transfer_tokens" => {
-            let cpi_accounts = Transfer {
+            let cpi_accounts = TransferCheckedInterface {
                 from: ctx.accounts.from_token_account.to_account_info(),
+                mint: ctx.accounts.mint.to_account_info(),
                 to: ctx.accounts.to_token_account.to_account_info(),
                 authority: ctx.accounts.from_authority.to_account_info(),
             };
@@ -161,7 +163,7 @@ pub mod energy_token {
             let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
 
             compute_checkpoint!("before_transfer_cpi");
-            token::transfer(cpi_ctx, amount)?;
+            token_interface::transfer_checked(cpi_ctx, amount, 9)?;
             compute_checkpoint!("after_transfer_cpi");
 
             // Logging disabled to save CU
@@ -172,7 +174,7 @@ pub mod energy_token {
     /// Burn energy tokens (for energy consumption)
     pub fn burn_tokens(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
         compute_fn!("burn_tokens" => {
-            let cpi_accounts = Burn {
+            let cpi_accounts = BurnInterface {
                 mint: ctx.accounts.mint.to_account_info(),
                 from: ctx.accounts.token_account.to_account_info(),
                 authority: ctx.accounts.authority.to_account_info(),
@@ -182,7 +184,7 @@ pub mod energy_token {
             let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
 
             compute_checkpoint!("before_burn_cpi");
-            token::burn(cpi_ctx, amount)?;
+            token_interface::burn(cpi_ctx, amount)?;
             compute_checkpoint!("after_burn_cpi");
 
             let token_info = &mut ctx.accounts.token_info;
@@ -205,10 +207,10 @@ pub mod energy_token {
             // Logging disabled to save CU
 
             // Mint tokens using token_info PDA as authority
-            let seeds = &[b"token_info".as_ref(), &[ctx.bumps.token_info]];
+            let seeds = &[b"token_info_2022".as_ref(), &[ctx.bumps.token_info]];
             let signer_seeds = &[&seeds[..]];
 
-            let cpi_accounts = MintTo {
+            let cpi_accounts = MintToInterface {
                 mint: ctx.accounts.mint.to_account_info(),
                 to: ctx.accounts.user_token_account.to_account_info(),
                 authority: ctx.accounts.token_info.to_account_info(),
@@ -218,7 +220,7 @@ pub mod energy_token {
             let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
 
             compute_checkpoint!("before_mint_direct_cpi");
-            token::mint_to(cpi_ctx, amount)?;
+            token_interface::mint_to(cpi_ctx, amount)?;
             compute_checkpoint!("after_mint_direct_cpi");
 
             // Update total supply
@@ -278,7 +280,7 @@ pub struct MintToWallet<'info> {
     pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(
-        seeds = [b"token_info"],
+        seeds = [b"token_info_2022"],
         bump,
         constraint = token_info.authority == authority.key() @ ErrorCode::UnauthorizedAuthority,
     )]
@@ -311,7 +313,7 @@ pub struct InitializeToken<'info> {
         init,
         payer = authority,
         space = 8 + TokenInfo::INIT_SPACE,
-        seeds = [b"token_info"],
+        seeds = [b"token_info_2022"],
         bump
     )]
     pub token_info: Account<'info, TokenInfo>,
@@ -319,7 +321,7 @@ pub struct InitializeToken<'info> {
     #[account(
         init,
         payer = authority,
-        seeds = [b"mint"],
+        seeds = [b"mint_2022"],
         bump,
         mint::decimals = 9,
         mint::authority = token_info,
@@ -351,6 +353,8 @@ pub struct TransferTokens<'info> {
     #[account(mut)]
     pub to_token_account: InterfaceAccount<'info, TokenAccountInterface>,
 
+    pub mint: InterfaceAccount<'info, MintInterface>,
+
     pub from_authority: Signer<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
@@ -376,7 +380,7 @@ pub struct BurnTokens<'info> {
 pub struct MintTokensDirect<'info> {
     #[account(
         mut,
-        seeds = [b"token_info"],
+        seeds = [b"token_info_2022"],
         bump
     )]
     pub token_info: Account<'info, TokenInfo>,

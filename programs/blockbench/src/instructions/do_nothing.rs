@@ -14,7 +14,7 @@ pub fn do_nothing(_ctx: Context<DoNothing>) -> Result<()> {
 }
 
 /// DoNothing with nonce to prevent deduplication
-pub fn do_nothing_nonce(_ctx: Context<DoNothingNonce>, nonce: u32) -> Result<()> {
+pub fn do_nothing_nonce(_ctx: Context<DoNothingNonce>, _nonce: u32) -> Result<()> {
     // Nonce prevents transaction caching/deduplication
     // Use u32 instead of u64 to reduce serialization overhead
     Ok(())

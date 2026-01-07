@@ -47,7 +47,7 @@ pub use error::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("6ZsDjYHNJMcory5jFnkqKSJURztirzqknLWAg1WAKvEE");
+declare_id!("7C37ZPyfpSVnDNZumxvx7Wsggzqu3yeU5rwJNY39hDai");
 
 /// TPC-C Transaction Mix Constants (per TPC-C Specification v5.11)
 pub mod tpc_constants {

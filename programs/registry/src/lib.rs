@@ -3,7 +3,7 @@
 use anchor_lang::prelude::*;
 use base64::{engine::general_purpose, Engine as _};
 
-declare_id!("CVS6pz2qdEmjusHCmiwe2R21KVrSoGubdEy5d766KooN");
+declare_id!("8tWRwmu8Lfb3JtwgD5wV1F8FiemxmWQmETStSKy5Fxfi");
 
 #[program]
 pub mod registry {
@@ -321,6 +321,12 @@ pub mod registry {
             ErrorCode::InvalidMeterStatus
         );
 
+        // Verify meter owner
+        require!(
+            ctx.accounts.meter_owner.key() == meter.owner,
+            ErrorCode::UnauthorizedUser
+        );
+
         // Calculate current net generation (total produced - total consumed)
         let current_net_gen = meter
             .total_generation
@@ -340,7 +346,7 @@ pub mod registry {
             "{}:{}:{}:{}",
             meter.meter_id, meter.owner, new_tokens_to_mint, current_net_gen
         );
-        let encoded_data = general_purpose::STANDARD.encode(settlement_data.as_bytes());
+        let _encoded_data = general_purpose::STANDARD.encode(settlement_data.as_bytes());
 
         emit!(MeterBalanceSettled {
             meter_id: meter.meter_id.clone(),

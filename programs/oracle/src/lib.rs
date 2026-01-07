@@ -2,7 +2,7 @@
 
 use anchor_lang::prelude::*;
 
-declare_id!("3hSEt5vVzbiMCegFnhdMpFGkXEDY8BinrPb8egJoS7C7");
+declare_id!("FpKNR5SybwgLH5MUj6mp3V9kbHmaqcRb4sCKJsUfa5x");
 
 #[program]
 pub mod oracle {

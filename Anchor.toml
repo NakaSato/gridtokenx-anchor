@@ -7,13 +7,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-blockbench = "HmbwQP67sLNVW7aD8VmwDvrAh6DZbomY6ZWqqKStTcVX"
-energy_token = "HaT3koMseafcCB9aUQUCrSLMDfN1km7Xik9UhZSG9UV6"
-governance = "GAZQm4bHUyNhSYrAq5noBohXcTaf6dKZNDKju8499e6w"
-oracle = "3hSEt5vVzbiMCegFnhdMpFGkXEDY8BinrPb8egJoS7C7"
-registry = "CVS6pz2qdEmjusHCmiwe2R21KVrSoGubdEy5d766KooN"
-tpc_benchmark = "6ZsDjYHNJMcory5jFnkqKSJURztirzqknLWAg1WAKvEE"
-trading = "8gHn9oeYcUQgNrMi8fNYGyMCKJTMwM6K413f41AANFt4"
+blockbench = "CxRS3x417BDSDXtxg1M3nbwttca5VeDYih4DP2QPFgsY"
+energy_token = "MwAdshY2978VqcpJzWSKmPfDtKfweD7YLMCQSBcR4wP"
+governance = "2u2yvp6cBqegv7ApcLfvaFXd9WBrrCy6o3bhxtWgxpC5"
+oracle = "FpKNR5SybwgLH5MUj6mp3V9kbHmaqcRb4sCKJsUfa5x"
+registry = "8tWRwmu8Lfb3JtwgD5wV1F8FiemxmWQmETStSKy5Fxfi"
+tpc_benchmark = "7C37ZPyfpSVnDNZumxvx7Wsggzqu3yeU5rwJNY39hDai"
+trading = "FjNbXVFeRy2n4kJwFcrQDvXZs67AbKRg4uEQ1NpFk5Wu"
 
 [registry]
 url = "https://api.apr.dev"
@@ -27,7 +27,7 @@ benchmark-tpcc = "npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts"
 bootstrap = "npx ts-node scripts/bootstrap.ts"
 init-market = "npx ts-node scripts/init_market.ts"
 setup-poa = "bash scripts/setup-poa-cluster.sh"
-test = "pnpm ts-mocha -p ./tsconfig.json -t 1000000 tests/integration/p2p-trading-scenario.test.ts"
+test = "npx tsx tests/transactions/run-transaction-tests.ts --full"
 
 [test]
 startup_wait = 5000
@@ -35,21 +35,21 @@ shutdown_wait = 2000
 upgradeable = false
 
 [[test.genesis]]
-address = "9sAB52aZ71ciGhaVwuCg6ohTeWu8H6fDb2B29ohxsFVp"
+address = "MwAdshY2978VqcpJzWSKmPfDtKfweD7YLMCQSBcR4wP"
 program = "target/deploy/energy_token.so"
 
 [[test.genesis]]
-address = "4D9Mydr4f3BEiDoKxE2V8yMZBj53X6nxMjMWaNPAQKrN"
+address = "2u2yvp6cBqegv7ApcLfvaFXd9WBrrCy6o3bhxtWgxpC5"
 program = "target/deploy/governance.so"
 
 [[test.genesis]]
-address = "HtV8jTeaCVXKZVCQQVWjXcAvmiF6id9QSLVGP5MT5osX"
+address = "FpKNR5SybwgLH5MUj6mp3V9kbHmaqcRb4sCKJsUfa5x"
 program = "target/deploy/oracle.so"
 
 [[test.genesis]]
-address = "FQYhgNRRWDCvy9WPeZPo5oZw63iHpJZToi1uUp25jE4a"
+address = "8tWRwmu8Lfb3JtwgD5wV1F8FiemxmWQmETStSKy5Fxfi"
 program = "target/deploy/registry.so"
 
 [[test.genesis]]
-address = "9t3s8sCgVUG9kAgVPsozj8mDpJp9cy6SF5HwRK5nvAHb"
+address = "FjNbXVFeRy2n4kJwFcrQDvXZs67AbKRg4uEQ1NpFk5Wu"
 program = "target/deploy/trading.so"

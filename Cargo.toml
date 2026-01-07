@@ -1,5 +1,25 @@
-# This directory's workspace is now managed at the root level
-# See ../Cargo.toml for workspace configuration
-# 
-# Legacy Anchor-specific profile settings (preserved for anchor build compatibility)
-# Note: Release profile is inherited from root workspace
+[workspace]
+members = ["programs/*"]
+resolver = "2"
+
+[workspace.dependencies]
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
+anchor-spl = { version = "0.32.1", features = ["metadata"] }
+solana-program = "2.3.0"
+spl-token = "8.0.0"
+spl-associated-token-account = "7.0.0"
+mpl-token-metadata = "5.0.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+base64 = "0.21"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2.0"
+winnow = "=0.6.13"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+strip = true
+panic = "abort"

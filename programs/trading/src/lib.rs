@@ -3,7 +3,7 @@
 use anchor_lang::prelude::*;
 use governance::{ErcCertificate, ErcStatus};
 
-declare_id!("8gHn9oeYcUQgNrMi8fNYGyMCKJTMwM6K413f41AANFt4");
+declare_id!("FjNbXVFeRy2n4kJwFcrQDvXZs67AbKRg4uEQ1NpFk5Wu");
 
 #[program]
 pub mod trading {

@@ -1,5 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { BN } from "bn.js";
+import { Keypair } from "@solana/web3.js";
+import * as fs from "fs";
 import { TestEnvironment } from "../tests/setup.ts";
 
 async function main() {
@@ -30,6 +32,26 @@ async function main() {
                 .signers([env.authority])
                 .rpc();
             console.log("   ✅ Registry initialized successfully");
+        }
+
+        // 1.1 Set Oracle Authority
+        console.log("\n📡 Setting Oracle Authority...");
+        try {
+            const oracleAuthorityKp = Keypair.fromSecretKey(
+                Uint8Array.from(JSON.parse(fs.readFileSync("./keypairs/oracle-authority.json", "utf8")))
+            );
+
+            await env.registryProgram.methods
+                .setOracleAuthority(oracleAuthorityKp.publicKey)
+                .accounts({
+                    registry: registryPda,
+                    authority: env.authority.publicKey,
+                })
+                .signers([env.authority])
+                .rpc();
+            console.log(`   ✅ Oracle Authority set to: ${oracleAuthorityKp.publicKey.toBase58()}`);
+        } catch (e) {
+            console.error("   ❌ Failed to set oracle authority:", e);
         }
 
         // 2. Initialize Market (Trading)

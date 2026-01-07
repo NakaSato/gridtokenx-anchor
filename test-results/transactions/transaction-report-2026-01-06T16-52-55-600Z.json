@@ -1,0 +1,291 @@
+{
+  "testSuiteName": "GridTokenX Transaction Tests",
+  "startTime": 1767718369176,
+  "endTime": 1767718375600,
+  "totalDuration": 6424,
+  "scenarios": [
+    {
+      "scenarioName": "Multi-User Registration",
+      "program": "Registry",
+      "totalTransactions": 5,
+      "successfulTransactions": 0,
+      "failedTransactions": 5,
+      "totalDuration": 51,
+      "averageDuration": 10.2,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 21,
+          "timestamp": 1767718375489,
+          "error": "AnchorError caused by account: registry. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 11,
+          "timestamp": 1767718375510,
+          "error": "AnchorError caused by account: registry. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1767718375521,
+          "error": "AnchorError caused by account: registry. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-1",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1767718375527,
+          "error": "AnchorError caused by account: registry. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-2",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1767718375533,
+          "error": "AnchorError caused by account: registry. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Multi-Meter Registration",
+      "program": "Registry",
+      "totalTransactions": 4,
+      "successfulTransactions": 0,
+      "failedTransactions": 4,
+      "totalDuration": 28,
+      "averageDuration": 7,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1767718375541,
+          "error": "AnchorError caused by account: registry. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1767718375548,
+          "error": "AnchorError caused by account: registry. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1767718375554,
+          "error": "AnchorError caused by account: registry. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 8,
+          "timestamp": 1767718375561,
+          "error": "AnchorError caused by account: registry. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Concurrent Meter Updates",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 0,
+      "failedTransactions": 3,
+      "totalDuration": 1,
+      "averageDuration": 0.3333333333333333,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-1",
+          "success": false,
+          "duration": 0,
+          "timestamp": 1767718375569,
+          "error": "anchor.BN is not a constructor"
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-2",
+          "success": false,
+          "duration": 1,
+          "timestamp": 1767718375569,
+          "error": "anchor.BN is not a constructor"
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-3",
+          "success": false,
+          "duration": 0,
+          "timestamp": 1767718375570,
+          "error": "anchor.BN is not a constructor"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Balance Settlement Flow",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 0,
+      "failedTransactions": 3,
+      "totalDuration": 16,
+      "averageDuration": 5.333333333333333,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1767718375570,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1767718375575,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1767718375580,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Authorization Checks",
+      "program": "Registry",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 5,
+      "averageDuration": 5,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "unauthorizedSettlement",
+          "keypair": "producer-2->producer-1",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1767718375586,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalScenarios": 5,
+    "totalTransactions": 16,
+    "successfulTransactions": 0,
+    "failedTransactions": 16,
+    "successRate": 0,
+    "averageTransactionDuration": 6.3125,
+    "throughput": 2.4906600249066004,
+    "programStats": {
+      "Registry": {
+        "program": "Registry",
+        "totalTransactions": 16,
+        "successfulTransactions": 0,
+        "failedTransactions": 16,
+        "averageDuration": 6.3125,
+        "totalComputeUnits": 0
+      }
+    },
+    "keypairStats": {
+      "producer-1": {
+        "keypair": "producer-1",
+        "totalTransactions": 4,
+        "successfulTransactions": 0,
+        "failedTransactions": 4,
+        "averageDuration": 9.75
+      },
+      "producer-2": {
+        "keypair": "producer-2",
+        "totalTransactions": 3,
+        "successfulTransactions": 0,
+        "failedTransactions": 3,
+        "averageDuration": 7.666666666666667
+      },
+      "producer-3": {
+        "keypair": "producer-3",
+        "totalTransactions": 3,
+        "successfulTransactions": 0,
+        "failedTransactions": 3,
+        "averageDuration": 6.666666666666667
+      },
+      "consumer-1": {
+        "keypair": "consumer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 6
+      },
+      "consumer-2": {
+        "keypair": "consumer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 7
+      },
+      "oracle->producer-1": {
+        "keypair": "oracle->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 0
+      },
+      "oracle->producer-2": {
+        "keypair": "oracle->producer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 1
+      },
+      "oracle->producer-3": {
+        "keypair": "oracle->producer-3",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 0
+      },
+      "producer-2->producer-1": {
+        "keypair": "producer-2->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 5
+      }
+    }
+  }
+}

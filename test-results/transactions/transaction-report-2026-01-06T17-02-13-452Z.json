@@ -1,0 +1,291 @@
+{
+  "testSuiteName": "GridTokenX Transaction Tests",
+  "startTime": 1767718930367,
+  "endTime": 1767718933451,
+  "totalDuration": 3084,
+  "scenarios": [
+    {
+      "scenarioName": "Multi-User Registration",
+      "program": "Registry",
+      "totalTransactions": 5,
+      "successfulTransactions": 5,
+      "failedTransactions": 0,
+      "totalDuration": 70,
+      "averageDuration": 14,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-1",
+          "success": true,
+          "duration": 30,
+          "timestamp": 1767718930562,
+          "error": "Already registered (expected)"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-2",
+          "success": true,
+          "duration": 11,
+          "timestamp": 1767718930592,
+          "error": "Already registered (expected)"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-3",
+          "success": true,
+          "duration": 8,
+          "timestamp": 1767718930603,
+          "error": "Already registered (expected)"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-1",
+          "success": true,
+          "duration": 9,
+          "timestamp": 1767718930611,
+          "error": "Already registered (expected)"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-2",
+          "success": true,
+          "duration": 12,
+          "timestamp": 1767718930620,
+          "error": "Already registered (expected)"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Multi-Meter Registration",
+      "program": "Registry",
+      "totalTransactions": 4,
+      "successfulTransactions": 4,
+      "failedTransactions": 0,
+      "totalDuration": 36,
+      "averageDuration": 9,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "success": true,
+          "duration": 13,
+          "timestamp": 1767718930632,
+          "error": "Already registered (expected)"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "success": true,
+          "duration": 9,
+          "timestamp": 1767718930645,
+          "error": "Already registered (expected)"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-2",
+          "success": true,
+          "duration": 7,
+          "timestamp": 1767718930654,
+          "error": "Already registered (expected)"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-3",
+          "success": true,
+          "duration": 7,
+          "timestamp": 1767718930661,
+          "error": "Already registered (expected)"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Concurrent Meter Updates",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 3,
+      "failedTransactions": 0,
+      "totalDuration": 1421,
+      "averageDuration": 473.6666666666667,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-1",
+          "signature": "3Fy1r7UX3pZ5iSxEwS3Js3XETvaDtmaPnBk9i4tWCnH9ZX8p9As7iJz2UXMm8PBZsrCsSPeMjg9CtZFAEpgeXreT",
+          "success": true,
+          "duration": 440,
+          "timestamp": 1767718930669
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-2",
+          "signature": "3CbugyRAJgfB4djt5qECGS9qZ7kx8UUQL2enX5ipNfkFBESfD9V3QEb93rtKyF2QnfeMrkLH6HA7KGM8abkzAXkt",
+          "success": true,
+          "duration": 461,
+          "timestamp": 1767718931109
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-3",
+          "signature": "3qo1ED3hpN14i5qRbT68KiBn5BAcd4FHuykPkADW3ee3xM4QvkMFQpxEabtwHFX8AF15rv6u6yDRfMkUq1UxZjba",
+          "success": true,
+          "duration": 520,
+          "timestamp": 1767718931571
+        }
+      ]
+    },
+    {
+      "scenarioName": "Balance Settlement Flow",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 3,
+      "failedTransactions": 0,
+      "totalDuration": 1346,
+      "averageDuration": 448.6666666666667,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-1",
+          "signature": "4tKXojXUxCXrvTC7KmG1j4qbdfWEkxkMmSCgiCARABE9qXT8gcttg3obD5UBV8SCjZWgp9vJoNdKtZzxAU4J5nyw",
+          "success": true,
+          "duration": 516,
+          "timestamp": 1767718932091
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-2",
+          "signature": "3PPYtc7Fuqxj2jC9ZemzsFf1PeLaKkxABz6iAPe6f82ZTUXN9qmj6Ez2VPwYeBANf8mFqQzYAyzABN9gjxwxcLNv",
+          "success": true,
+          "duration": 367,
+          "timestamp": 1767718932609
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-3",
+          "signature": "36RizYHnG9TbHM4TL4vKWXMzQLVF2L4RBxyvefB5LrPtyyYDhQkMxMckr1Ap9agzrTDcF8hgZ4YEb4Fow4dc4vfJ",
+          "success": true,
+          "duration": 463,
+          "timestamp": 1767718932977
+        }
+      ]
+    },
+    {
+      "scenarioName": "Authorization Checks",
+      "program": "Registry",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 6,
+      "averageDuration": 6,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "unauthorizedSettlement",
+          "keypair": "producer-2->producer-1",
+          "success": true,
+          "duration": 6,
+          "timestamp": 1767718933441,
+          "error": "Properly rejected (expected)"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalScenarios": 5,
+    "totalTransactions": 16,
+    "successfulTransactions": 16,
+    "failedTransactions": 0,
+    "successRate": 100,
+    "averageTransactionDuration": 179.9375,
+    "throughput": 5.188067444876784,
+    "programStats": {
+      "Registry": {
+        "program": "Registry",
+        "totalTransactions": 16,
+        "successfulTransactions": 16,
+        "failedTransactions": 0,
+        "averageDuration": 179.9375,
+        "totalComputeUnits": 0
+      }
+    },
+    "keypairStats": {
+      "producer-1": {
+        "keypair": "producer-1",
+        "totalTransactions": 4,
+        "successfulTransactions": 4,
+        "failedTransactions": 0,
+        "averageDuration": 142
+      },
+      "producer-2": {
+        "keypair": "producer-2",
+        "totalTransactions": 3,
+        "successfulTransactions": 3,
+        "failedTransactions": 0,
+        "averageDuration": 128.33333333333334
+      },
+      "producer-3": {
+        "keypair": "producer-3",
+        "totalTransactions": 3,
+        "successfulTransactions": 3,
+        "failedTransactions": 0,
+        "averageDuration": 159.33333333333334
+      },
+      "consumer-1": {
+        "keypair": "consumer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 9
+      },
+      "consumer-2": {
+        "keypair": "consumer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 12
+      },
+      "oracle->producer-1": {
+        "keypair": "oracle->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 440
+      },
+      "oracle->producer-2": {
+        "keypair": "oracle->producer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 461
+      },
+      "oracle->producer-3": {
+        "keypair": "oracle->producer-3",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 520
+      },
+      "producer-2->producer-1": {
+        "keypair": "producer-2->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 6
+      }
+    }
+  }
+}
