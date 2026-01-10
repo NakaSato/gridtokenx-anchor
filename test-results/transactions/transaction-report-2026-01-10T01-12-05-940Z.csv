@@ -1,0 +1,55 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Registry Initialization","Registry","initializeRegistry","dev-wallet","true","492","2026-01-10T01:12:01.775Z","78zfxeC1NVuXDrYtxQVfLD7TiZKanz8x9BvsSTB1pDRYR1Tjnq33cP5M8WakZYpKrEVi1TYGwqL9fG9W8fnuApq",""
+"Registry Initialization","Registry","setOracleAuthority","dev-wallet","true","392","2026-01-10T01:12:02.267Z","2h9LBZhJVwDuz2kDnwLW8m3mAMbjLd4GMU7ysCXPRnFaMkwCTpYR1tFdtxRuoaeVfu2UkEHsbhPGHVAyaJtAPAAY",""
+"Multi-User Registration","Registry","registerUser","producer-1","false","1","2026-01-10T01:12:02.659Z","","Account `userAccount` not provided."
+"Multi-User Registration","Registry","registerUser","producer-2","false","1","2026-01-10T01:12:02.660Z","","Account `userAccount` not provided."
+"Multi-User Registration","Registry","registerUser","producer-3","false","0","2026-01-10T01:12:02.661Z","","Account `userAccount` not provided."
+"Multi-User Registration","Registry","registerUser","consumer-1","false","1","2026-01-10T01:12:02.661Z","","Account `userAccount` not provided."
+"Multi-User Registration","Registry","registerUser","consumer-2","false","0","2026-01-10T01:12:02.662Z","","Account `userAccount` not provided."
+"Multi-Meter Registration","Registry","registerMeter","producer-1","false","4","2026-01-10T01:12:02.662Z","","unknown signer: 96ZYQ2dGRXRF7Wo1hVfqezbMk3WjpUkgL9Aedka9Zutd"
+"Multi-Meter Registration","Registry","registerMeter","producer-1","false","3","2026-01-10T01:12:02.666Z","","unknown signer: 96ZYQ2dGRXRF7Wo1hVfqezbMk3WjpUkgL9Aedka9Zutd"
+"Multi-Meter Registration","Registry","registerMeter","producer-2","false","2","2026-01-10T01:12:02.669Z","","unknown signer: 9JfJuLU4WZHNyLycKaKxQk8SJzTP6yTiFaQCNmh61HtP"
+"Multi-Meter Registration","Registry","registerMeter","producer-3","false","1","2026-01-10T01:12:02.671Z","","unknown signer: GMd1aPB4b4XWedEghLFXiF9X1BBf9pqqugUSgynSvfUV"
+"Concurrent Meter Updates","Registry","updateMeterReading","oracle->producer-1","false","7","2026-01-10T01:12:02.673Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: 6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu"
+"Concurrent Meter Updates","Registry","updateMeterReading","oracle->producer-2","false","8","2026-01-10T01:12:02.680Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: 6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu"
+"Concurrent Meter Updates","Registry","updateMeterReading","oracle->producer-3","false","6","2026-01-10T01:12:02.688Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: 6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu"
+"Balance Settlement Flow","Registry","settleMeterBalance","producer-1","false","6","2026-01-10T01:12:02.694Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: 6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu"
+"Balance Settlement Flow","Registry","settleMeterBalance","producer-2","false","6","2026-01-10T01:12:02.700Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: 6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu"
+"Balance Settlement Flow","Registry","settleMeterBalance","producer-3","false","5","2026-01-10T01:12:02.706Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: 6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu"
+"Authorization Checks","Registry","unauthorizedSettlement","producer-2->producer-1","false","6","2026-01-10T01:12:02.711Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: 6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu"
+"PoA Initialization","Governance","initializePoa","governance-authority","true","478","2026-01-10T01:12:02.721Z","2Z85wD9dRCxJhGxnpyqT8BpoMcEd8vfkfTUVc7ns91jadzD5K2kdQfKBJ1e1LjPtqRBo8f3MSGsUunFi4Bm66sZi",""
+"Emergency Pause","Governance","emergencyPause","governance-authority","true","401","2026-01-10T01:12:03.199Z","5sRQ3Vo78JkFzFUMJuayErNrNwN777n3BzoxAn4wihp3pkTyRQvNL2pU495tBArCdbnHwm7PmuyKbyRdksGYEckB",""
+"Emergency Unpause","Governance","emergencyUnpause","governance-authority","true","467","2026-01-10T01:12:03.600Z","56FqpZUaQEWUn4uZpStEereZ3phVtEQ8qwxggK35hSySi419hXCwJTbhYXqhhGPr7nm295ts3FLjFnEE1hY1URYH",""
+"Oracle Initialization","Oracle","initializeOracle","oracle-authority","true","470","2026-01-10T01:12:04.070Z","3RpujUpo3cHojshJazmwQFAYDwaaeGTseWYZwghhDA6W4iLSCfSieiBgoP6Q9KCrsBFnStF1y5XMLT8az2B3aneJ",""
+"Update Oracle Status","Oracle","updateOracleStatus","oracle-authority","true","518","2026-01-10T01:12:04.541Z","yiiLCfbiBv3ixFyAireycnnsDqUYt3A4xqt91eD59pbUPXrm1oTDy2cyiUBSS51nDvvijirGUX6Bbaqnw7UTGBn",""
+"Update Validation Config","Oracle","updateValidationConfig","oracle-authority","false","0","2026-01-10T01:12:05.059Z","","anchor.BN is not a constructor"
+"Market Initialization","Trading","initializeMarket","dev-wallet","true","404","2026-01-10T01:12:05.063Z","3Qz2tHVwZ8DXChYdpT3KMxrL9vFvTAvyMU67ZCu4AG4EiKg51NCpw5aT6K38kU5Ed5rvQXvP74be5c5NBsSJRTsc",""
+"Update Market Params","Trading","updateMarketParams","dev-wallet","true","470","2026-01-10T01:12:05.467Z","SFg529VH7vWoNeHRvmhwm1eqpjyjrhU9Ti3cwCTc3Js5hog4X3L8oMpELEESWhhQjMDNiAGy2UF48aQgpZ1thrG",""

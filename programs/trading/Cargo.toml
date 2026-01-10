@@ -18,10 +18,13 @@ custom-heap = []
 no-idl = []
 no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+localnet = ["compute-debug/localnet"]
 
 [dependencies]
-anchor-lang = { workspace = true }
+anchor-lang = { workspace = true, features = ["init-if-needed"] }
 anchor-spl = { workspace = true }
 spl-token = { workspace = true }
 base64 = { workspace = true }
+bytemuck = { version = "1.16", features = ["derive"] }
+compute-debug = { path = "../../shared/compute-debug", optional = true }
 governance = { path = "../governance", features = ["cpi"] }

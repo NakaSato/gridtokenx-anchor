@@ -10,6 +10,7 @@ name = "oracle"
 
 [features]
 default = []
+localnet = ["compute-debug/localnet"]
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 anchor-debug = []
@@ -25,3 +26,4 @@ anchor-spl = { workspace = true }
 spl-token = { workspace = true }
 base64 = { workspace = true }
 bytemuck = { version = "1.20.0", features = ["derive"] }
+compute-debug = { path = "../../shared/compute-debug", optional = true }

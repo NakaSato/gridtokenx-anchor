@@ -3,7 +3,37 @@
 use anchor_lang::prelude::*;
 use base64::{engine::general_purpose, Engine as _};
 
-declare_id!("8tWRwmu8Lfb3JtwgD5wV1F8FiemxmWQmETStSKy5Fxfi");
+declare_id!("6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu");
+
+#[cfg(feature = "localnet")]
+use compute_debug::{compute_fn, compute_checkpoint};
+
+#[cfg(not(feature = "localnet"))]
+macro_rules! compute_fn {
+    ($name:expr => $block:block) => { $block };
+}
+#[cfg(not(feature = "localnet"))]
+macro_rules! compute_checkpoint {
+    ($name:expr) => {};
+}
+
+/// Helper to convert fixed [u8; 32] to String (trimming nulls)
+fn bytes32_to_string(bytes: &[u8; 32]) -> String {
+    let mut len = 0;
+    while len < 32 && bytes[len] != 0 {
+        len += 1;
+    }
+    String::from_utf8_lossy(&bytes[..len]).to_string()
+}
+
+/// Helper to convert String to fixed [u8; 32]
+fn string_to_bytes32(s: &str) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    let bytes_source = s.as_bytes();
+    let len = bytes_source.len().min(32);
+    bytes[..len].copy_from_slice(&bytes_source[..len]);
+    bytes
+}
 
 #[program]
 pub mod registry {
@@ -11,19 +41,17 @@ pub mod registry {
 
     /// Initialize the registry with REC authority
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        let registry = &mut ctx.accounts.registry;
-        registry.authority = ctx.accounts.authority.key();
-        registry.oracle_authority = None;  // Set later via set_oracle_authority
-        registry.user_count = 0;
-        registry.meter_count = 0;
-        registry.active_meter_count = 0;
-        registry.created_at = Clock::get()?.unix_timestamp;
+        compute_fn!("initialize" => {
+            let mut registry = ctx.accounts.registry.load_init()?;
+            registry.authority = ctx.accounts.authority.key();
+            registry.has_oracle_authority = 0;
+            registry.user_count = 0;
+            registry.meter_count = 0;
+            registry.active_meter_count = 0;
+            registry.created_at = Clock::get()?.unix_timestamp;
 
-        emit!(RegistryInitialized {
-            authority: ctx.accounts.authority.key(),
-            timestamp: Clock::get()?.unix_timestamp,
+            msg!("Registry initialized with authority: {}", registry.authority);
         });
-
         Ok(())
     }
 
@@ -32,22 +60,31 @@ pub mod registry {
         ctx: Context<SetOracleAuthority>,
         oracle: Pubkey,
     ) -> Result<()> {
-        let registry = &mut ctx.accounts.registry;
-        
-        require!(
-            ctx.accounts.authority.key() == registry.authority,
-            ErrorCode::UnauthorizedAuthority
-        );
-        
-        let old_oracle = registry.oracle_authority;
-        registry.oracle_authority = Some(oracle);
-        
-        emit!(OracleAuthoritySet {
-            old_oracle,
-            new_oracle: oracle,
-            timestamp: Clock::get()?.unix_timestamp,
+        compute_fn!("set_oracle_authority" => {
+            let mut registry = ctx.accounts.registry.load_mut()?;
+            require_keys_eq!(
+                registry.authority,
+                ctx.accounts.authority.key(),
+                ErrorCode::UnauthorizedAuthority
+            );
+
+            let old_oracle = if registry.has_oracle_authority == 1 {
+                Some(registry.oracle_authority)
+            } else {
+                None
+            };
+            
+            registry.oracle_authority = oracle;
+            registry.has_oracle_authority = 1;
+
+            emit!(OracleAuthoritySet {
+                old_oracle,
+                new_oracle: oracle,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
+
+            msg!("Oracle authority set to: {}", oracle);
         });
-        
         Ok(())
     }
 
@@ -55,31 +92,40 @@ pub mod registry {
     pub fn register_user(
         ctx: Context<RegisterUser>,
         user_type: UserType,
-        location: String,
+        lat: f64,
+        long: f64,
     ) -> Result<()> {
-        let user_account = &mut ctx.accounts.user_account;
-        let registry = &mut ctx.accounts.registry;
-        let clock = Clock::get()?;
+        compute_fn!("register_user" => {
+            let user_authority = ctx.accounts.authority.key();
+            let mut user_account = ctx.accounts.user_account.load_init()?;
+            let mut registry = ctx.accounts.registry.load_mut()?;
 
-        // Set user account data
-        user_account.authority = ctx.accounts.user_authority.key();
-        user_account.user_type = user_type;
-        user_account.location = location.clone();
-        user_account.status = UserStatus::Active;
-        user_account.registered_at = clock.unix_timestamp;
-        user_account.meter_count = 0;
-        user_account.created_at = clock.unix_timestamp; // For backward compatibility
+            user_account.authority = user_authority;
+            user_account.user_type = user_type;
+            user_account.lat = lat;
+            user_account.long = long;
+            user_account.status = UserStatus::Active;
+            user_account.registered_at = Clock::get()?.unix_timestamp;
+            user_account.created_at = user_account.registered_at;
+            user_account.meter_count = 0;
 
-        // Update registry counters
-        registry.user_count += 1;
+            registry.user_count += 1;
 
-        emit!(UserRegistered {
-            user: ctx.accounts.user_authority.key(),
-            user_type,
-            location,
-            timestamp: clock.unix_timestamp,
+            emit!(UserRegistered {
+                user: user_authority,
+                user_type,
+                lat,
+                long,
+                timestamp: user_account.registered_at,
+            });
+
+            msg!(
+                "User registered: {}. Type: {:?}. Count: {}",
+                user_authority,
+                user_type,
+                registry.user_count
+            );
         });
-
         Ok(())
     }
 
@@ -89,40 +135,48 @@ pub mod registry {
         meter_id: String,
         meter_type: MeterType,
     ) -> Result<()> {
-        let meter_account = &mut ctx.accounts.meter_account;
-        let user_account = &mut ctx.accounts.user_account;
-        let registry = &mut ctx.accounts.registry;
+        compute_fn!("register_meter" => {
+            let owner = ctx.accounts.owner.key();
+            let mut meter_account = ctx.accounts.meter_account.load_init()?;
+            let mut user_account = ctx.accounts.user_account.load_mut()?;
+            let mut registry = ctx.accounts.registry.load_mut()?;
 
-        // Verify user owns this operation
-        require!(
-            ctx.accounts.user_authority.key() == user_account.authority,
-            ErrorCode::UnauthorizedUser
-        );
+            // Basic owner-user validation (though PDA seeds also protect this)
+            require_keys_eq!(
+                owner,
+                user_account.authority,
+                ErrorCode::UnauthorizedUser
+            );
 
-        // Set meter account data
-        meter_account.meter_id = meter_id.clone();
-        meter_account.owner = ctx.accounts.user_authority.key();
-        meter_account.meter_type = meter_type;
-        meter_account.status = MeterStatus::Active;
-        meter_account.registered_at = Clock::get()?.unix_timestamp;
-        meter_account.last_reading_at = 0;
-        meter_account.total_generation = 0;
-        meter_account.total_consumption = 0;
-        meter_account.settled_net_generation = 0; // Initialize GRID token tracker
-        meter_account.claimed_erc_generation = 0; // Initialize ERC certificate tracker
+            meter_account.meter_id = string_to_bytes32(&meter_id);
+            meter_account.owner = owner;
+            meter_account.meter_type = meter_type;
+            meter_account.status = MeterStatus::Active;
+            meter_account.registered_at = Clock::get()?.unix_timestamp;
+            meter_account.last_reading_at = 0;
+            meter_account.total_generation = 0;
+            meter_account.total_consumption = 0;
+            meter_account.settled_net_generation = 0;
+            meter_account.claimed_erc_generation = 0;
 
-        // Update counters
-        user_account.meter_count += 1;
-        registry.meter_count += 1;
-        registry.active_meter_count += 1;
+            user_account.meter_count += 1;
+            registry.meter_count += 1;
+            registry.active_meter_count += 1;
 
-        emit!(MeterRegistered {
-            meter_id: meter_id.clone(),
-            owner: ctx.accounts.user_authority.key(),
-            meter_type,
-            timestamp: Clock::get()?.unix_timestamp,
+            emit!(MeterRegistered {
+                meter_id: meter_id.clone(),
+                owner,
+                meter_type,
+                timestamp: meter_account.registered_at,
+            });
+
+            msg!(
+                "Meter registered: {}. Type: {:?}. Total Registry Meters: {}",
+                meter_id,
+                meter_type,
+                registry.meter_count
+            );
         });
-
         Ok(())
     }
 
@@ -131,25 +185,26 @@ pub mod registry {
         ctx: Context<UpdateUserStatus>,
         new_status: UserStatus,
     ) -> Result<()> {
-        let user_account = &mut ctx.accounts.user_account;
-        let registry = &ctx.accounts.registry;
+        compute_fn!("update_user_status" => {
+            let mut user_account = ctx.accounts.user_account.load_mut()?;
+            let registry = ctx.accounts.registry.load()?;
 
-        // Only registry authority can update user status
-        require!(
-            ctx.accounts.authority.key() == registry.authority,
-            ErrorCode::UnauthorizedAuthority
-        );
+            require_keys_eq!(
+                ctx.accounts.authority.key(),
+                registry.authority,
+                ErrorCode::UnauthorizedAuthority
+            );
 
-        let old_status = user_account.status;
-        user_account.status = new_status;
+            let old_status = user_account.status;
+            user_account.status = new_status;
 
-        emit!(UserStatusUpdated {
-            user: user_account.authority,
-            old_status,
-            new_status,
-            timestamp: Clock::get()?.unix_timestamp,
+            emit!(UserStatusUpdated {
+                user: user_account.authority,
+                old_status,
+                new_status,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
         });
-
         Ok(())
     }
 
@@ -161,53 +216,49 @@ pub mod registry {
         energy_consumed: u64,
         reading_timestamp: i64,
     ) -> Result<()> {
-        let registry = &ctx.accounts.registry;
-        let meter_account = &mut ctx.accounts.meter_account;
-        
-        // Validate oracle authority
-        // Validate oracle authority
-        let auth_key = registry.oracle_authority.ok_or(ErrorCode::OracleNotConfigured)?;
-        require!(
-            ctx.accounts.oracle_authority.key() == auth_key,
-            ErrorCode::UnauthorizedOracle
-        );
-        
-        // Validate meter is active
-        require!(
-            meter_account.status == MeterStatus::Active,
-            ErrorCode::InvalidMeterStatus
-        );
-        
-        // Validate timestamp (must be newer than last reading)
-        require!(
-            reading_timestamp > meter_account.last_reading_at,
-            ErrorCode::StaleReading
-        );
-        
-        // Validate reading deltas (max 1 GWh per reading as safety limit)
-        const MAX_READING_DELTA: u64 = 1_000_000_000_000; // 1 GWh in Wh
-        require!(
-            energy_generated <= MAX_READING_DELTA,
-            ErrorCode::ReadingTooHigh
-        );
-        require!(
-            energy_consumed <= MAX_READING_DELTA,
-            ErrorCode::ReadingTooHigh
-        );
+        compute_fn!("update_meter_reading" => {
+            let registry = ctx.accounts.registry.load()?;
+            let mut meter_account = ctx.accounts.meter_account.load_mut()?;
+            
+            require!(registry.has_oracle_authority == 1, ErrorCode::OracleNotConfigured);
+            require_keys_eq!(
+                ctx.accounts.oracle_authority.key(),
+                registry.oracle_authority,
+                ErrorCode::UnauthorizedOracle
+            );
+            
+            require!(
+                meter_account.status == MeterStatus::Active,
+                ErrorCode::InvalidMeterStatus
+            );
+            
+            require!(
+                reading_timestamp > meter_account.last_reading_at,
+                ErrorCode::StaleReading
+            );
+            
+            const MAX_READING_DELTA: u64 = 1_000_000_000_000;
+            require!(
+                energy_generated <= MAX_READING_DELTA,
+                ErrorCode::ReadingTooHigh
+            );
+            require!(
+                energy_consumed <= MAX_READING_DELTA,
+                ErrorCode::ReadingTooHigh
+            );
 
-        // Update meter data
-        meter_account.last_reading_at = reading_timestamp;
-        meter_account.total_generation += energy_generated;
-        meter_account.total_consumption += energy_consumed;
+            meter_account.last_reading_at = reading_timestamp;
+            meter_account.total_generation += energy_generated;
+            meter_account.total_consumption += energy_consumed;
 
-        emit!(MeterReadingUpdated {
-            meter_id: meter_account.meter_id.clone(),
-            owner: meter_account.owner,
-            energy_generated,
-            energy_consumed,
-            timestamp: reading_timestamp,
+            emit!(MeterReadingUpdated {
+                meter_id: bytes32_to_string(&meter_account.meter_id),
+                owner: meter_account.owner,
+                energy_generated,
+                energy_consumed,
+                timestamp: reading_timestamp,
+            });
         });
-
         Ok(())
     }
 
@@ -216,87 +267,87 @@ pub mod registry {
         ctx: Context<SetMeterStatus>,
         new_status: MeterStatus,
     ) -> Result<()> {
-        let meter = &mut ctx.accounts.meter_account;
-        let registry = &mut ctx.accounts.registry;
-        
-        // Only owner or registry authority can change status
-        let is_owner = ctx.accounts.authority.key() == meter.owner;
-        let is_admin = ctx.accounts.authority.key() == registry.authority;
-        require!(is_owner || is_admin, ErrorCode::UnauthorizedUser);
-        
-        let old_status = meter.status;
-        
-        // Update active meter count
-        if old_status == MeterStatus::Active && new_status != MeterStatus::Active {
-            registry.active_meter_count = registry.active_meter_count.saturating_sub(1);
-        } else if old_status != MeterStatus::Active && new_status == MeterStatus::Active {
-            registry.active_meter_count += 1;
-        }
-        
-        meter.status = new_status;
-        
-        emit!(MeterStatusUpdated {
-            meter_id: meter.meter_id.clone(),
-            owner: meter.owner,
-            old_status,
-            new_status,
-            timestamp: Clock::get()?.unix_timestamp,
+        compute_fn!("set_meter_status" => {
+            let mut meter = ctx.accounts.meter_account.load_mut()?;
+            let mut registry = ctx.accounts.registry.load_mut()?;
+            
+            let is_owner = ctx.accounts.authority.key() == meter.owner;
+            let is_admin = ctx.accounts.authority.key() == registry.authority;
+            require!(is_owner || is_admin, ErrorCode::UnauthorizedUser);
+            
+            let old_status = meter.status;
+            
+            if old_status == MeterStatus::Active && new_status != MeterStatus::Active {
+                registry.active_meter_count = registry.active_meter_count.saturating_sub(1);
+            } else if old_status != MeterStatus::Active && new_status == MeterStatus::Active {
+                registry.active_meter_count += 1;
+            }
+            
+            meter.status = new_status;
+            
+            emit!(MeterStatusUpdated {
+                meter_id: bytes32_to_string(&meter.meter_id),
+                owner: meter.owner,
+                old_status,
+                new_status,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
         });
-        
         Ok(())
     }
 
     /// Deactivate a meter permanently (owner only)
     pub fn deactivate_meter(ctx: Context<DeactivateMeter>) -> Result<()> {
-        let meter = &mut ctx.accounts.meter_account;
-        let user = &mut ctx.accounts.user_account;
-        let registry = &mut ctx.accounts.registry;
-        
-        require!(
-            ctx.accounts.owner.key() == meter.owner,
-            ErrorCode::UnauthorizedUser
-        );
-        
-        require!(
-            meter.status != MeterStatus::Inactive,
-            ErrorCode::AlreadyInactive
-        );
-        
-        // Update counters if was active
-        if meter.status == MeterStatus::Active {
-            registry.active_meter_count = registry.active_meter_count.saturating_sub(1);
-        }
-        
-        meter.status = MeterStatus::Inactive;
-        user.meter_count = user.meter_count.saturating_sub(1);
-        
-        emit!(MeterDeactivated {
-            meter_id: meter.meter_id.clone(),
-            owner: meter.owner,
-            final_generation: meter.total_generation,
-            final_consumption: meter.total_consumption,
-            timestamp: Clock::get()?.unix_timestamp,
+        compute_fn!("deactivate_meter" => {
+            let mut meter = ctx.accounts.meter_account.load_mut()?;
+            let mut user = ctx.accounts.user_account.load_mut()?;
+            let mut registry = ctx.accounts.registry.load_mut()?;
+            
+            require_keys_eq!(
+                ctx.accounts.owner.key(),
+                meter.owner,
+                ErrorCode::UnauthorizedUser
+            );
+            
+            require!(
+                meter.status != MeterStatus::Inactive,
+                ErrorCode::AlreadyInactive
+            );
+            
+            if meter.status == MeterStatus::Active {
+                registry.active_meter_count = registry.active_meter_count.saturating_sub(1);
+            }
+            
+            meter.status = MeterStatus::Inactive;
+            user.meter_count = user.meter_count.saturating_sub(1);
+            
+            emit!(MeterDeactivated {
+                meter_id: bytes32_to_string(&meter.meter_id),
+                owner: meter.owner,
+                final_generation: meter.total_generation,
+                final_consumption: meter.total_consumption,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
         });
-        
         Ok(())
     }
 
     /// Verify if a user is valid and active
     pub fn is_valid_user(ctx: Context<IsValidUser>) -> Result<bool> {
-        let user_account = &ctx.accounts.user_account;
+        let user_account = ctx.accounts.user_account.load()?;
         Ok(user_account.status == UserStatus::Active)
     }
 
     /// Verify if a meter is valid and active
     pub fn is_valid_meter(ctx: Context<IsValidMeter>) -> Result<bool> {
-        let meter_account = &ctx.accounts.meter_account;
+        let meter_account = ctx.accounts.meter_account.load()?;
         Ok(meter_account.status == MeterStatus::Active)
     }
 
     /// Calculate unsettled net generation ready for tokenization
     /// This is a view function that returns how much energy can be minted as GRID tokens
     pub fn get_unsettled_balance(ctx: Context<GetUnsettledBalance>) -> Result<u64> {
-        let meter = &ctx.accounts.meter_account;
+        let meter = ctx.accounts.meter_account.load()?;
 
         // Calculate current net generation (total produced - total consumed)
         let current_net_gen = meter
@@ -313,120 +364,91 @@ pub mod registry {
     /// This updates the settled_net_generation tracker to prevent double-minting
     /// The actual token minting should be called by the energy_token program
     pub fn settle_meter_balance(ctx: Context<SettleMeterBalance>) -> Result<u64> {
-        let meter = &mut ctx.accounts.meter_account;
+        let res = compute_fn!("settle_meter_balance" => {
+            let mut meter = ctx.accounts.meter_account.load_mut()?;
 
-        // Verify meter is active
-        require!(
-            meter.status == MeterStatus::Active,
-            ErrorCode::InvalidMeterStatus
-        );
+            require!(
+                meter.status == MeterStatus::Active,
+                ErrorCode::InvalidMeterStatus
+            );
 
-        // Verify meter owner
-        require!(
-            ctx.accounts.meter_owner.key() == meter.owner,
-            ErrorCode::UnauthorizedUser
-        );
+            require_keys_eq!(
+                ctx.accounts.meter_owner.key(),
+                meter.owner,
+                ErrorCode::UnauthorizedUser
+            );
 
-        // Calculate current net generation (total produced - total consumed)
-        let current_net_gen = meter
-            .total_generation
-            .saturating_sub(meter.total_consumption);
+            let current_net_gen = meter
+                .total_generation
+                .saturating_sub(meter.total_consumption);
 
-        // Calculate new tokens to mint (what hasn't been settled yet)
-        let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
+            let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
 
-        // Only proceed if there's something new to settle
-        require!(new_tokens_to_mint > 0, ErrorCode::NoUnsettledBalance);
+            require!(new_tokens_to_mint > 0, ErrorCode::NoUnsettledBalance);
 
-        // Update the settled tracker to prevent double-minting
-        meter.settled_net_generation = current_net_gen;
+            meter.settled_net_generation = current_net_gen;
 
-        // Encode settlement data as base64 for external systems
-        let settlement_data = format!(
-            "{}:{}:{}:{}",
-            meter.meter_id, meter.owner, new_tokens_to_mint, current_net_gen
-        );
-        let _encoded_data = general_purpose::STANDARD.encode(settlement_data.as_bytes());
+            emit!(MeterBalanceSettled {
+                meter_id: bytes32_to_string(&meter.meter_id),
+                owner: meter.owner,
+                tokens_to_mint: new_tokens_to_mint,
+                total_settled: current_net_gen,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
 
-        emit!(MeterBalanceSettled {
-            meter_id: meter.meter_id.clone(),
-            owner: meter.owner,
-            tokens_to_mint: new_tokens_to_mint,
-            total_settled: current_net_gen,
-            timestamp: Clock::get()?.unix_timestamp,
+            new_tokens_to_mint
         });
 
-        // Return the amount to mint so the energy_token program can use it
-        Ok(new_tokens_to_mint)
+        Ok(res)
     }
 
     /// Settle meter balance and automatically mint GRID tokens via CPI
     /// This is a convenience function that combines settlement + minting in one transaction
     pub fn settle_and_mint_tokens(ctx: Context<SettleAndMintTokens>) -> Result<()> {
-        let meter = &mut ctx.accounts.meter_account;
+        compute_fn!("settle_and_mint_tokens" => {
+            let mut meter = ctx.accounts.meter_account.load_mut()?;
 
-        // Verify meter is active
-        require!(
-            meter.status == MeterStatus::Active,
-            ErrorCode::InvalidMeterStatus
-        );
+            require!(
+                meter.status == MeterStatus::Active,
+                ErrorCode::InvalidMeterStatus
+            );
 
-        // Verify meter owner
-        require!(
-            ctx.accounts.meter_owner.key() == meter.owner,
-            ErrorCode::UnauthorizedUser
-        );
+            require_keys_eq!(
+                ctx.accounts.meter_owner.key(),
+                meter.owner,
+                ErrorCode::UnauthorizedUser
+            );
 
-        // Calculate current net generation (total produced - total consumed)
-        let current_net_gen = meter
-            .total_generation
-            .saturating_sub(meter.total_consumption);
+            let current_net_gen = meter
+                .total_generation
+                .saturating_sub(meter.total_consumption);
 
-        // Calculate new tokens to mint (what hasn't been settled yet)
-        let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
+            let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
 
-        // Only proceed if there's something new to settle
-        require!(new_tokens_to_mint > 0, ErrorCode::NoUnsettledBalance);
+            require!(new_tokens_to_mint > 0, ErrorCode::NoUnsettledBalance);
 
-        // Update the settled tracker to prevent double-minting
-        meter.settled_net_generation = current_net_gen;
+            meter.settled_net_generation = current_net_gen;
 
-        msg!(
-            "Settlement complete: {} Wh ready to mint for meter {}",
-            new_tokens_to_mint,
-            meter.meter_id
-        );
+            emit!(MeterBalanceSettled {
+                meter_id: bytes32_to_string(&meter.meter_id),
+                owner: meter.owner,
+                tokens_to_mint: new_tokens_to_mint,
+                total_settled: current_net_gen,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
 
-        emit!(MeterBalanceSettled {
-            meter_id: meter.meter_id.clone(),
-            owner: meter.owner,
-            tokens_to_mint: new_tokens_to_mint,
-            total_settled: current_net_gen,
-            timestamp: Clock::get()?.unix_timestamp,
+            let cpi_program = ctx.accounts.energy_token_program.to_account_info();
+            let cpi_accounts = energy_token::cpi::accounts::MintTokensDirect {
+                token_info: ctx.accounts.token_info.to_account_info(),
+                mint: ctx.accounts.mint.to_account_info(),
+                user_token_account: ctx.accounts.user_token_account.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
+                token_program: ctx.accounts.token_program.to_account_info(),
+            };
+
+            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            energy_token::cpi::mint_tokens_direct(cpi_ctx, new_tokens_to_mint)?;
         });
-
-        // CPI to energy_token program to mint tokens
-        msg!(
-            "Calling energy_token program to mint {} tokens",
-            new_tokens_to_mint
-        );
-
-        let cpi_program = ctx.accounts.energy_token_program.to_account_info();
-        let cpi_accounts = energy_token::cpi::accounts::MintTokensDirect {
-            token_info: ctx.accounts.token_info.to_account_info(),
-            mint: ctx.accounts.mint.to_account_info(),
-            user_token_account: ctx.accounts.user_token_account.to_account_info(),
-            authority: ctx.accounts.authority.to_account_info(),
-            token_program: ctx.accounts.token_program.to_account_info(),
-        };
-
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        energy_token::cpi::mint_tokens_direct(cpi_ctx, new_tokens_to_mint)?;
-
-        msg!(
-            "Successfully minted {} GRID tokens via CPI",
-            new_tokens_to_mint
-        );
 
         Ok(())
     }
@@ -435,14 +457,15 @@ pub mod registry {
 // Account structs
 #[derive(Accounts)]
 pub struct Initialize<'info> {
+    // Shared registry account for authorities and global state
     #[account(
         init,
         payer = authority,
-        space = 8 + Registry::INIT_SPACE,
+        space = 8 + std::mem::size_of::<Registry>(),
         seeds = [b"registry"],
         bump
     )]
-    pub registry: Account<'info, Registry>,
+    pub registry: AccountLoader<'info, Registry>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -451,22 +474,22 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(user_type: UserType, location: String)]
+#[instruction(user_type: UserType, lat: f64, long: f64)]
 pub struct RegisterUser<'info> {
-    #[account(mut)]
-    pub registry: Account<'info, Registry>,
-
     #[account(
         init,
-        payer = user_authority,
-        space = 8 + UserAccount::INIT_SPACE,
-        seeds = [b"user", user_authority.key().as_ref()],
+        payer = authority,
+        space = 8 + std::mem::size_of::<UserAccount>(),
+        seeds = [b"user", authority.key().as_ref()],
         bump
     )]
-    pub user_account: Account<'info, UserAccount>,
+    pub user_account: AccountLoader<'info, UserAccount>,
 
     #[account(mut)]
-    pub user_authority: Signer<'info>,
+    pub registry: AccountLoader<'info, Registry>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -474,44 +497,48 @@ pub struct RegisterUser<'info> {
 #[derive(Accounts)]
 #[instruction(meter_id: String)]
 pub struct RegisterMeter<'info> {
-    #[account(mut)]
-    pub registry: Account<'info, Registry>,
-
-    #[account(mut)]
-    pub user_account: Account<'info, UserAccount>,
-
     #[account(
         init,
-        payer = user_authority,
-        space = 8 + MeterAccount::INIT_SPACE,
-        seeds = [b"meter", meter_id.as_bytes()],
+        payer = owner,
+        space = 8 + std::mem::size_of::<MeterAccount>(),
+        seeds = [b"meter", owner.key().as_ref(), meter_id.as_bytes()],
         bump
     )]
-    pub meter_account: Account<'info, MeterAccount>,
+    pub meter_account: AccountLoader<'info, MeterAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"user", owner.key().as_ref()],
+        bump
+    )]
+    pub user_account: AccountLoader<'info, UserAccount>,
 
     #[account(mut)]
-    pub user_authority: Signer<'info>,
+    pub registry: AccountLoader<'info, Registry>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
 pub struct UpdateUserStatus<'info> {
-    #[account(has_one = authority @ ErrorCode::UnauthorizedAuthority)]
-    pub registry: Account<'info, Registry>,
+    #[account(mut)]
+    pub registry: AccountLoader<'info, Registry>,
 
     #[account(mut)]
-    pub user_account: Account<'info, UserAccount>,
+    pub user_account: AccountLoader<'info, UserAccount>,
 
     pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct UpdateMeterReading<'info> {
-    pub registry: Account<'info, Registry>,
+    pub registry: AccountLoader<'info, Registry>,
     
     #[account(mut)]
-    pub meter_account: Account<'info, MeterAccount>,
+    pub meter_account: AccountLoader<'info, MeterAccount>,
 
     pub oracle_authority: Signer<'info>,
 }
@@ -519,7 +546,7 @@ pub struct UpdateMeterReading<'info> {
 #[derive(Accounts)]
 pub struct SetOracleAuthority<'info> {
     #[account(mut)]
-    pub registry: Account<'info, Registry>,
+    pub registry: AccountLoader<'info, Registry>,
     
     pub authority: Signer<'info>,
 }
@@ -527,10 +554,10 @@ pub struct SetOracleAuthority<'info> {
 #[derive(Accounts)]
 pub struct SetMeterStatus<'info> {
     #[account(mut)]
-    pub registry: Account<'info, Registry>,
+    pub registry: AccountLoader<'info, Registry>,
     
     #[account(mut)]
-    pub meter_account: Account<'info, MeterAccount>,
+    pub meter_account: AccountLoader<'info, MeterAccount>,
     
     pub authority: Signer<'info>,
 }
@@ -538,36 +565,36 @@ pub struct SetMeterStatus<'info> {
 #[derive(Accounts)]
 pub struct DeactivateMeter<'info> {
     #[account(mut)]
-    pub registry: Account<'info, Registry>,
+    pub meter_account: AccountLoader<'info, MeterAccount>,
+
+    #[account(mut)]
+    pub user_account: AccountLoader<'info, UserAccount>,
     
     #[account(mut)]
-    pub user_account: Account<'info, UserAccount>,
-    
-    #[account(mut)]
-    pub meter_account: Account<'info, MeterAccount>,
+    pub registry: AccountLoader<'info, Registry>,
     
     pub owner: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct IsValidUser<'info> {
-    pub user_account: Account<'info, UserAccount>,
+    pub user_account: AccountLoader<'info, UserAccount>,
 }
 
 #[derive(Accounts)]
 pub struct IsValidMeter<'info> {
-    pub meter_account: Account<'info, MeterAccount>,
+    pub meter_account: AccountLoader<'info, MeterAccount>,
 }
 
 #[derive(Accounts)]
 pub struct GetUnsettledBalance<'info> {
-    pub meter_account: Account<'info, MeterAccount>,
+    pub meter_account: AccountLoader<'info, MeterAccount>,
 }
 
 #[derive(Accounts)]
 pub struct SettleMeterBalance<'info> {
     #[account(mut)]
-    pub meter_account: Account<'info, MeterAccount>,
+    pub meter_account: AccountLoader<'info, MeterAccount>,
 
     pub meter_owner: Signer<'info>,
 }
@@ -575,7 +602,7 @@ pub struct SettleMeterBalance<'info> {
 #[derive(Accounts)]
 pub struct SettleAndMintTokens<'info> {
     #[account(mut)]
-    pub meter_account: Account<'info, MeterAccount>,
+    pub meter_account: AccountLoader<'info, MeterAccount>,
 
     pub meter_owner: Signer<'info>,
 
@@ -604,71 +631,79 @@ pub struct SettleAndMintTokens<'info> {
 
 // Data structs
 /// Registry account for metadata storage
-#[account]
-#[derive(InitSpace)]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct Registry {
     pub authority: Pubkey,
-    pub oracle_authority: Option<Pubkey>,  // Authorized oracle for meter readings
+    pub oracle_authority: Pubkey,  // Authorized oracle (Option -> Pubkey for ZeroCopy)
+    pub has_oracle_authority: u8,   // Track if oracle_authority is valid (u8 for Pod)
+    pub _padding: [u8; 7],          // Alignment
     pub user_count: u64,
     pub meter_count: u64,
-    pub active_meter_count: u64,           // Track active meters separately
+    pub active_meter_count: u64,    // Track active meters separately
     pub created_at: i64,
 }
 
 /// User account for frequent lookups
-#[account]
-#[derive(InitSpace)]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct UserAccount {
     pub authority: Pubkey,   // Wallet address that owns this account
     pub user_type: UserType, // Prosumer or Consumer
-    #[max_len(100)]
-    pub location: String, // User's location (max 100 chars)
+    pub _padding1: [u8; 7],
+    pub lat: f64,            // Latitude coordinate
+    pub long: f64,           // Longitude coordinate
     pub status: UserStatus,  // Active, Suspended, or Inactive
+    pub _padding2: [u8; 7],
     pub registered_at: i64,  // Unix timestamp of registration
     pub meter_count: u32,    // Number of meters owned
+    pub _padding3: [u8; 4],
     pub created_at: i64,     // Backward compatibility field
 }
+
 /// Meter account for reading updates
-#[account]
-#[derive(InitSpace)]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct MeterAccount {
-    #[max_len(50)]
-    pub meter_id: String, // Unique meter identifier (max 50 chars)
+    pub meter_id: [u8; 32],     // Unique meter identifier (fixed size for ZeroCopy)
     pub owner: Pubkey,          // User who owns this meter
     pub meter_type: MeterType,  // Solar, Wind, Battery, or Grid
     pub status: MeterStatus,    // Active, Inactive, or Maintenance
+    pub _padding: [u8; 6],      // Alignment
     pub registered_at: i64,     // When meter was registered
     pub last_reading_at: i64,   // Last time reading was updated
     pub total_generation: u64,  // Cumulative energy generated (in smallest units)
     pub total_consumption: u64, // Cumulative energy consumed (in smallest units)
 
     // --- TOKENIZATION TRACKING ---
-    // FIELD 1: Tracks the "net generation" that has already been
-    // settled and minted into GRID tokens (the tradable commodity).
-    // This prevents double-minting of GRID tokens.
     pub settled_net_generation: u64,
-
-    // FIELD 2: Tracks the "total generation" that has already been
-    // claimed and converted into ERCs (the green certificates).
-    // This prevents double-claiming of renewable certificates.
     pub claimed_erc_generation: u64,
 }
 
 // Enums
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
+#[repr(u8)]
 pub enum UserType {
     Prosumer,
     Consumer,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
+unsafe impl bytemuck::Zeroable for UserType {}
+unsafe impl bytemuck::Pod for UserType {}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
+#[repr(u8)]
 pub enum UserStatus {
     Active,
     Suspended,
     Inactive,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
+unsafe impl bytemuck::Zeroable for UserStatus {}
+unsafe impl bytemuck::Pod for UserStatus {}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
+#[repr(u8)]
 pub enum MeterType {
     Solar,
     Wind,
@@ -676,12 +711,19 @@ pub enum MeterType {
     Grid,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace)]
+unsafe impl bytemuck::Zeroable for MeterType {}
+unsafe impl bytemuck::Pod for MeterType {}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
+#[repr(u8)]
 pub enum MeterStatus {
     Active,
     Inactive,
     Maintenance,
 }
+
+unsafe impl bytemuck::Zeroable for MeterStatus {}
+unsafe impl bytemuck::Pod for MeterStatus {}
 
 // Events
 #[event]
@@ -694,7 +736,8 @@ pub struct RegistryInitialized {
 pub struct UserRegistered {
     pub user: Pubkey,
     pub user_type: UserType,
-    pub location: String,
+    pub lat: f64,
+    pub long: f64,
     pub timestamp: i64,
 }
 

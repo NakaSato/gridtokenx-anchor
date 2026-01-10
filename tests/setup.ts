@@ -10,11 +10,11 @@ import type {
 import * as fs from "fs";
 
 export const PROGRAM_IDS = {
-  energy_token: "MwAdshY2978VqcpJzWSKmPfDtKfweD7YLMCQSBcR4wP",
-  governance: "2u2yvp6cBqegv7ApcLfvaFXd9WBrrCy6o3bhxtWgxpC5",
-  oracle: "FpKNR5SybwgLH5MUj6mp3V9kbHmaqcRb4sCKJsUfa5x",
-  registry: "8tWRwmu8Lfb3JtwgD5wV1F8FiemxmWQmETStSKy5Fxfi",
-  trading: "FjNbXVFeRy2n4kJwFcrQDvXZs67AbKRg4uEQ1NpFk5Wu",
+  energy_token: "4vCgSNVMCEhgaFebnoGizvaCJu2SXCiXh8bu1YpMocMk",
+  governance: "opUKK54PxUHNgzkPAaJioCSWxx8P7p3tYeotyixE84W",
+  oracle: "HTTcpqf79kGh83xfe7me4LvJcqqQfxBoB5MuUk8N4Qee",
+  registry: "6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu",
+  trading: "B3FHDFGqMazfbMNXc4RWJ4hpZM98ZGRdicYAC3pYF2az",
 } as const;
 
 export class TestEnvironment {

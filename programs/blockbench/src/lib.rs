@@ -35,7 +35,19 @@ pub use error::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("CxRS3x417BDSDXtxg1M3nbwttca5VeDYih4DP2QPFgsY");
+declare_id!("9HqyYuqADh6K88gnvFav1J2mKQMgDyQjiJEa5u54Ad9v");
+
+#[cfg(feature = "localnet")]
+use compute_debug::{compute_fn, compute_checkpoint};
+
+#[cfg(not(feature = "localnet"))]
+macro_rules! compute_fn {
+    ($name:expr => $block:block) => { $block };
+}
+#[cfg(not(feature = "localnet"))]
+macro_rules! compute_checkpoint {
+    ($name:expr) => {};
+}
 
 /// BLOCKBENCH workload type constants
 pub mod blockbench_constants {
@@ -75,205 +87,154 @@ pub mod blockbench {
     // BENCHMARK INITIALIZATION
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// Initialize the BLOCKBENCH suite configuration
     pub fn initialize_benchmark(
         ctx: Context<InitializeBenchmark>,
         config: BlockbenchConfig,
     ) -> Result<()> {
-        instructions::initialize_benchmark(ctx, config)
+        compute_fn!("initialize_benchmark" => {
+            instructions::initialize_benchmark(ctx, config)
+        })
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // MICRO-BENCHMARK: DoNothing (Consensus Layer Stress Test)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// DoNothing benchmark - measures pure consensus overhead
-    /// 
-    /// This instruction performs no state changes and minimal computation.
-    /// It isolates the cost of:
-    /// - Transaction signature verification
-    /// - Account loading
-    /// - Consensus and block inclusion
-    /// 
-    /// Use this to establish the baseline latency floor of the network.
     pub fn do_nothing(ctx: Context<DoNothing>) -> Result<()> {
-        instructions::do_nothing(ctx)
+        compute_fn!("do_nothing" => {
+            instructions::do_nothing(ctx)
+        })
     }
 
-    /// DoNothing with nonce - prevents transaction deduplication
     pub fn do_nothing_nonce(ctx: Context<DoNothingNonce>, nonce: u32) -> Result<()> {
-        instructions::do_nothing_nonce(ctx, nonce)
+        compute_fn!("do_nothing_nonce" => {
+            instructions::do_nothing_nonce(ctx, nonce)
+        })
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // MICRO-BENCHMARK: CPUHeavy (Execution Layer Stress Test)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// CPUHeavy: Quicksort benchmark
-    /// 
-    /// Performs in-memory quicksort on an array of the specified size.
-    /// Tests the computational efficiency of the BPF/SBF VM.
-    /// 
-    /// ## Compute Unit Analysis
-    /// - Small (64 elements): ~5,000 CU
-    /// - Medium (256 elements): ~25,000 CU  
-    /// - Large (1024 elements): ~150,000 CU
     pub fn cpu_heavy_sort(ctx: Context<CpuHeavy>, array_size: u16, seed: u64) -> Result<u64> {
-        instructions::cpu_heavy_sort(ctx, array_size, seed)
+        let res = compute_fn!("cpu_heavy_sort" => {
+            instructions::cpu_heavy_sort(ctx, array_size, seed)
+        })?;
+        Ok(res)
     }
 
-    /// CPUHeavy: Loop benchmark
-    /// 
-    /// Executes a tight loop with mathematical operations.
-    /// Useful for measuring raw instruction throughput.
     pub fn cpu_heavy_loop(ctx: Context<CpuHeavy>, iterations: u32) -> Result<u64> {
-        instructions::cpu_heavy_loop(ctx, iterations)
+        let res = compute_fn!("cpu_heavy_loop" => {
+            instructions::cpu_heavy_loop(ctx, iterations)
+        })?;
+        Ok(res)
     }
 
-    /// CPUHeavy: Hash computation benchmark
-    /// 
-    /// Performs repeated SHA-256 hashing operations.
-    /// Tests cryptographic primitive performance in BPF.
     pub fn cpu_heavy_hash(ctx: Context<CpuHeavy>, iterations: u16, data_size: u16) -> Result<[u8; 32]> {
-        instructions::cpu_heavy_hash(ctx, iterations, data_size)
+        let res = compute_fn!("cpu_heavy_hash" => {
+            instructions::cpu_heavy_hash(ctx, iterations, data_size)
+        })?;
+        Ok(res)
     }
 
-    /// CPUHeavy: Matrix multiplication benchmark
-    /// 
-    /// Multiplies two NxN matrices.
-    /// Measures O(n³) computational scaling.
     pub fn cpu_heavy_matrix(ctx: Context<CpuHeavy>, matrix_size: u8) -> Result<u64> {
-        instructions::cpu_heavy_matrix(ctx, matrix_size)
+        let res = compute_fn!("cpu_heavy_matrix" => {
+            instructions::cpu_heavy_matrix(ctx, matrix_size)
+        })?;
+        Ok(res)
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // MICRO-BENCHMARK: IOHeavy (Data Model Layer Stress Test)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// IOHeavy: Sequential writes benchmark
-    /// 
-    /// Performs multiple sequential writes to the state storage.
-    /// Measures write amplification and storage throughput.
     pub fn io_heavy_write(
         ctx: Context<IoHeavyWrite>,
         key_prefix: [u8; 16],
         value_size: u16,
         num_writes: u8,
     ) -> Result<()> {
-        instructions::io_heavy_write(ctx, key_prefix, value_size, num_writes)
+        compute_fn!("io_heavy_write" => {
+            instructions::io_heavy_write(ctx, key_prefix, value_size, num_writes)
+        })
     }
 
-    /// IOHeavy: Random reads benchmark
-    /// 
-    /// Reads multiple accounts in random order.
-    /// Tests account loading efficiency and caching.
     pub fn io_heavy_read<'info>(
         ctx: Context<'_, '_, 'info, 'info, IoHeavyRead<'info>>,
         num_reads: u8,
     ) -> Result<u64> {
-        instructions::io_heavy_read(ctx, num_reads)
+        let res = compute_fn!("io_heavy_read" => {
+            instructions::io_heavy_read(ctx, num_reads)
+        })?;
+        Ok(res)
     }
 
-    /// IOHeavy: Mixed read-write benchmark
-    /// 
-    /// Performs interleaved read and write operations.
-    /// Simulates realistic workload patterns.
     pub fn io_heavy_mixed<'info>(
         ctx: Context<'_, '_, 'info, 'info, IoHeavyMixed<'info>>,
         read_ratio: u8,
         total_ops: u8,
     ) -> Result<()> {
-        instructions::io_heavy_mixed(ctx, read_ratio, total_ops)
+        compute_fn!("io_heavy_mixed" => {
+            instructions::io_heavy_mixed(ctx, read_ratio, total_ops)
+        })
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // MICRO-BENCHMARK: Analytics (Query Layer Stress Test)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Analytics: Aggregation query
-    /// 
-    /// Computes aggregate statistics across multiple accounts.
-    /// Tests OLAP-style query performance.
     pub fn analytics_aggregate<'info>(
         ctx: Context<'_, '_, 'info, 'info, AnalyticsAggregate<'info>>,
         aggregation_type: AggregationType,
     ) -> Result<AnalyticsResult> {
-        instructions::analytics_aggregate(ctx, aggregation_type)
+        let res = compute_fn!("analytics_aggregate" => {
+            instructions::analytics_aggregate(ctx, aggregation_type)
+        })?;
+        Ok(res)
     }
 
-    /// Analytics: Scan and filter
-    /// 
-    /// Scans accounts and filters by predicate.
-    /// Measures scan throughput with selective filtering.
     pub fn analytics_scan<'info>(
         ctx: Context<'_, '_, 'info, 'info, AnalyticsScan<'info>>,
         filter_threshold: u64,
     ) -> Result<u32> {
-        instructions::analytics_scan(ctx, filter_threshold)
+        let res = compute_fn!("analytics_scan" => {
+            instructions::analytics_scan(ctx, filter_threshold)
+        })?;
+        Ok(res)
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // YCSB KEY-VALUE STORE OPERATIONS
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// YCSB: Initialize key-value store
     pub fn ycsb_init_store(ctx: Context<YcsbInitStore>) -> Result<()> {
-        instructions::ycsb_init_store(ctx)
+        compute_fn!("ycsb_init_store" => {
+            instructions::ycsb_init_store(ctx)
+        })
     }
 
-    /// YCSB: Insert operation
-    /// 
-    /// Creates a new key-value record.
-    /// Used for initial data loading phase.
     pub fn ycsb_insert(
         ctx: Context<YcsbInsert>,
         key: [u8; 32],
         value: Vec<u8>,
     ) -> Result<()> {
-        instructions::ycsb_insert(ctx, key, value)
+        compute_fn!("ycsb_insert" => {
+            instructions::ycsb_insert(ctx, key, value)
+        })
     }
 
-    /// YCSB: Read operation
-    /// 
-    /// Retrieves a value by key.
-    /// Tests point query performance.
     pub fn ycsb_read(ctx: Context<YcsbRead>, key: [u8; 32]) -> Result<Vec<u8>> {
-        instructions::ycsb_read(ctx, key)
+        let res = compute_fn!("ycsb_read" => {
+            instructions::ycsb_read(ctx, key)
+        })?;
+        Ok(res)
     }
 
-    /// YCSB: Update operation
-    /// 
-    /// Modifies an existing value.
-    /// Tests read-modify-write performance.
     pub fn ycsb_update(
         ctx: Context<YcsbUpdate>,
         key: [u8; 32],
         value: Vec<u8>,
     ) -> Result<()> {
-        instructions::ycsb_update(ctx, key, value)
+        compute_fn!("ycsb_update" => {
+            instructions::ycsb_update(ctx, key, value)
+        })
     }
 
-    /// YCSB: Delete operation
-    /// 
-    /// Removes a key-value record.
-    /// Tests account close operation.
     pub fn ycsb_delete(ctx: Context<YcsbDelete>, key: [u8; 32]) -> Result<()> {
-        instructions::ycsb_delete(ctx, key)
+        compute_fn!("ycsb_delete" => {
+            instructions::ycsb_delete(ctx, key)
+        })
     }
 
-    /// YCSB: Batch insert for efficient loading
     pub fn ycsb_batch_insert(
         ctx: Context<YcsbBatchInsert>,
         records: Vec<YcsbRecord>,
     ) -> Result<()> {
-        instructions::ycsb_batch_insert(ctx, records)
+        compute_fn!("ycsb_batch_insert" => {
+            instructions::ycsb_batch_insert(ctx, records)
+        })
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // BENCHMARK METRICS AND REPORTING
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// Record a benchmark metric on-chain
     pub fn record_metric(
         ctx: Context<RecordMetric>,
         benchmark_type: BenchmarkType,
@@ -281,16 +242,21 @@ pub mod blockbench {
         compute_units: u64,
         success: bool,
     ) -> Result<()> {
-        instructions::record_metric(ctx, benchmark_type, latency_us, compute_units, success)
+        compute_fn!("record_metric" => {
+            instructions::record_metric(ctx, benchmark_type, latency_us, compute_units, success)
+        })
     }
 
-    /// Reset benchmark statistics
     pub fn reset_metrics(ctx: Context<ResetMetrics>) -> Result<()> {
-        instructions::reset_metrics(ctx)
+        compute_fn!("reset_metrics" => {
+            instructions::reset_metrics(ctx)
+        })
     }
 
-    /// Finalize benchmark run and compute summary statistics
     pub fn finalize_benchmark(ctx: Context<FinalizeBenchmark>) -> Result<BenchmarkSummary> {
-        instructions::finalize_benchmark(ctx)
+        let res = compute_fn!("finalize_benchmark" => {
+            instructions::finalize_benchmark(ctx)
+        })?;
+        Ok(res)
     }
 }

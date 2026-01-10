@@ -1,0 +1,525 @@
+{
+  "testSuiteName": "GridTokenX Transaction Tests",
+  "startTime": 1767983180812,
+  "endTime": 1767983191123,
+  "totalDuration": 10311,
+  "scenarios": [
+    {
+      "scenarioName": "Registry Initialization",
+      "program": "Registry",
+      "totalTransactions": 2,
+      "successfulTransactions": 2,
+      "failedTransactions": 0,
+      "totalDuration": 910,
+      "averageDuration": 455,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "initializeRegistry",
+          "keypair": "dev-wallet",
+          "signature": "28JFRbS8BKX5TiRtY7f4PmHsxFKf345dZNLQNWWosWhaXbrAPukaeyUkY3VJhFd8rvVYoudTNY79RnqxWXQnZzNH",
+          "success": true,
+          "duration": 449,
+          "timestamp": 1767983186878
+        },
+        {
+          "program": "Registry",
+          "operation": "setOracleAuthority",
+          "keypair": "dev-wallet",
+          "signature": "2qgihSzYL4nupoCTDJ2gecyntio7h4P2eax9NWmfdkFjL1a2BtBXfcrDBR5KT7haEM6N6eH99hth3BvQPe7HspW6",
+          "success": true,
+          "duration": 461,
+          "timestamp": 1767983187327
+        }
+      ]
+    },
+    {
+      "scenarioName": "Multi-User Registration",
+      "program": "Registry",
+      "totalTransactions": 5,
+      "successfulTransactions": 0,
+      "failedTransactions": 5,
+      "totalDuration": 3,
+      "averageDuration": 0.6,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 1,
+          "timestamp": 1767983187788,
+          "error": "Account `registry` not provided."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 1,
+          "timestamp": 1767983187789,
+          "error": "Account `registry` not provided."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 0,
+          "timestamp": 1767983187790,
+          "error": "Account `registry` not provided."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-1",
+          "success": false,
+          "duration": 1,
+          "timestamp": 1767983187790,
+          "error": "Account `registry` not provided."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-2",
+          "success": false,
+          "duration": 0,
+          "timestamp": 1767983187791,
+          "error": "Account `registry` not provided."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Multi-Meter Registration",
+      "program": "Registry",
+      "totalTransactions": 4,
+      "successfulTransactions": 0,
+      "failedTransactions": 4,
+      "totalDuration": 29,
+      "averageDuration": 7.25,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 9,
+          "timestamp": 1767983187791,
+          "error": "AnchorError caused by account: user_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1767983187800,
+          "error": "AnchorError caused by account: user_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1767983187807,
+          "error": "AnchorError caused by account: user_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1767983187814,
+          "error": "AnchorError caused by account: user_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Concurrent Meter Updates",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 0,
+      "failedTransactions": 3,
+      "totalDuration": 16,
+      "averageDuration": 5.333333333333333,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-1",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1767983187820,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-2",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1767983187826,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-3",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1767983187832,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Balance Settlement Flow",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 0,
+      "failedTransactions": 3,
+      "totalDuration": 15,
+      "averageDuration": 5,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1767983187837,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 4,
+          "timestamp": 1767983187843,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1767983187847,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Authorization Checks",
+      "program": "Registry",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 5,
+      "averageDuration": 5,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "unauthorizedSettlement",
+          "keypair": "producer-2->producer-1",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1767983187852,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountNotInitialized. Error Number: 3012. Error Message: The program expected this account to be already initialized."
+        }
+      ]
+    },
+    {
+      "scenarioName": "PoA Initialization",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 354,
+      "averageDuration": 354,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "initializePoa",
+          "keypair": "governance-authority",
+          "signature": "671oxrXZqJQT4Ck7Dp2bTcGVx8u3KnbcVVJdJHscEqHab7cP2khyj8QudhFrP9UioiQAqo2gzFQ5iMaaxC5TBCM4",
+          "success": true,
+          "duration": 354,
+          "timestamp": 1767983187898
+        }
+      ]
+    },
+    {
+      "scenarioName": "Emergency Pause",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 463,
+      "averageDuration": 463,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "emergencyPause",
+          "keypair": "governance-authority",
+          "signature": "M9yim4DmTM5nNksdCK1atEfRqYbrnBLxeTYvhxkYFDJjaRRTfDsnyoVGFypHrZVxuLJvubrwQnNUj8ALVpNzTwD",
+          "success": true,
+          "duration": 463,
+          "timestamp": 1767983188252
+        }
+      ]
+    },
+    {
+      "scenarioName": "Emergency Unpause",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 468,
+      "averageDuration": 468,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "emergencyUnpause",
+          "keypair": "governance-authority",
+          "signature": "XJdBANAUU3xnBD4TpwzHeKJQNrjbRx38UtCu5kbCGj1Y7myzRGmC6h7HHunDtEop5kjv9D2fmMuV4Sr4WBBaBpk",
+          "success": true,
+          "duration": 468,
+          "timestamp": 1767983188715
+        }
+      ]
+    },
+    {
+      "scenarioName": "Oracle Initialization",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 496,
+      "averageDuration": 496,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "initializeOracle",
+          "keypair": "oracle-authority",
+          "signature": "5crnZvYTKkoTGiFj5YyKqzz784Wtous2q6W4fd5nfjRcjnMz1rmB4Za4zjsZwXVncPJwmr6YQsaBfaapdhAHmMtk",
+          "success": true,
+          "duration": 496,
+          "timestamp": 1767983189187
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Oracle Status",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 519,
+      "averageDuration": 519,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "updateOracleStatus",
+          "keypair": "oracle-authority",
+          "signature": "qS3DhayeERYNJNGXXPgrSmgapCKaWwZfF7Ugc9HNRBvYxKPCoWPgfkdw9eJsjnYD1vGMBWdRKdi8ywaXe5bYrZj",
+          "success": true,
+          "duration": 519,
+          "timestamp": 1767983189683
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Validation Config",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 0,
+      "averageDuration": 0,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "updateValidationConfig",
+          "keypair": "oracle-authority",
+          "success": false,
+          "duration": 0,
+          "timestamp": 1767983190202,
+          "error": "anchor.BN is not a constructor"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Market Initialization",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 367,
+      "averageDuration": 367,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "initializeMarket",
+          "keypair": "dev-wallet",
+          "signature": "3qEwMbF6iBFNBjCyJWdMMZgFhWFQKkMM4sx6E1ke6Ngc86jpzyCm5ydfXAiXukkJYD4cquNVjaLpYafHJVf1cu9w",
+          "success": true,
+          "duration": 367,
+          "timestamp": 1767983190208
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Market Params",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 545,
+      "averageDuration": 545,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "updateMarketParams",
+          "keypair": "dev-wallet",
+          "signature": "4fY4u3AYsNs4xvxp7P5sGMyA2b9ByS49TH88HFxeRWFQzJBoFeJJk9Y9VLDvEpZBbwFJw6PXgSo83DgqdspU9Fra",
+          "success": true,
+          "duration": 545,
+          "timestamp": 1767983190575
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalScenarios": 14,
+    "totalTransactions": 26,
+    "successfulTransactions": 9,
+    "failedTransactions": 17,
+    "successRate": 34.61538461538461,
+    "averageTransactionDuration": 161.15384615384616,
+    "throughput": 2.5215788963243138,
+    "programStats": {
+      "Registry": {
+        "program": "Registry",
+        "totalTransactions": 18,
+        "successfulTransactions": 2,
+        "failedTransactions": 16,
+        "averageDuration": 54.333333333333336,
+        "totalComputeUnits": 0
+      },
+      "Governance": {
+        "program": "Governance",
+        "totalTransactions": 3,
+        "successfulTransactions": 3,
+        "failedTransactions": 0,
+        "averageDuration": 428.3333333333333,
+        "totalComputeUnits": 0
+      },
+      "Oracle": {
+        "program": "Oracle",
+        "totalTransactions": 3,
+        "successfulTransactions": 2,
+        "failedTransactions": 1,
+        "averageDuration": 338.3333333333333,
+        "totalComputeUnits": 0
+      },
+      "Trading": {
+        "program": "Trading",
+        "totalTransactions": 2,
+        "successfulTransactions": 2,
+        "failedTransactions": 0,
+        "averageDuration": 456,
+        "totalComputeUnits": 0
+      }
+    },
+    "keypairStats": {
+      "dev-wallet": {
+        "keypair": "dev-wallet",
+        "totalTransactions": 4,
+        "successfulTransactions": 4,
+        "failedTransactions": 0,
+        "averageDuration": 455.5
+      },
+      "producer-1": {
+        "keypair": "producer-1",
+        "totalTransactions": 4,
+        "successfulTransactions": 0,
+        "failedTransactions": 4,
+        "averageDuration": 5.75
+      },
+      "producer-2": {
+        "keypair": "producer-2",
+        "totalTransactions": 3,
+        "successfulTransactions": 0,
+        "failedTransactions": 3,
+        "averageDuration": 4
+      },
+      "producer-3": {
+        "keypair": "producer-3",
+        "totalTransactions": 3,
+        "successfulTransactions": 0,
+        "failedTransactions": 3,
+        "averageDuration": 3.6666666666666665
+      },
+      "consumer-1": {
+        "keypair": "consumer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 1
+      },
+      "consumer-2": {
+        "keypair": "consumer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 0
+      },
+      "oracle->producer-1": {
+        "keypair": "oracle->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 6
+      },
+      "oracle->producer-2": {
+        "keypair": "oracle->producer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 5
+      },
+      "oracle->producer-3": {
+        "keypair": "oracle->producer-3",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 5
+      },
+      "producer-2->producer-1": {
+        "keypair": "producer-2->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 5
+      },
+      "governance-authority": {
+        "keypair": "governance-authority",
+        "totalTransactions": 3,
+        "successfulTransactions": 3,
+        "failedTransactions": 0,
+        "averageDuration": 428.3333333333333
+      },
+      "oracle-authority": {
+        "keypair": "oracle-authority",
+        "totalTransactions": 3,
+        "successfulTransactions": 2,
+        "failedTransactions": 1,
+        "averageDuration": 338.3333333333333
+      }
+    }
+  }
+}

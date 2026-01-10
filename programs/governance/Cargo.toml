@@ -10,6 +10,7 @@ name = "governance"
 
 [features]
 default = []
+localnet = ["compute-debug/localnet"]
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 anchor-debug = []
@@ -23,3 +24,4 @@ idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 anchor-lang = { workspace = true }
 anchor-spl = { workspace = true }
 base64 = { workspace = true }
+compute-debug = { path = "../../shared/compute-debug", optional = true }

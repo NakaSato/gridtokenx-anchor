@@ -7,13 +7,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-blockbench = "CxRS3x417BDSDXtxg1M3nbwttca5VeDYih4DP2QPFgsY"
-energy_token = "MwAdshY2978VqcpJzWSKmPfDtKfweD7YLMCQSBcR4wP"
-governance = "2u2yvp6cBqegv7ApcLfvaFXd9WBrrCy6o3bhxtWgxpC5"
-oracle = "FpKNR5SybwgLH5MUj6mp3V9kbHmaqcRb4sCKJsUfa5x"
-registry = "8tWRwmu8Lfb3JtwgD5wV1F8FiemxmWQmETStSKy5Fxfi"
-tpc_benchmark = "7C37ZPyfpSVnDNZumxvx7Wsggzqu3yeU5rwJNY39hDai"
-trading = "FjNbXVFeRy2n4kJwFcrQDvXZs67AbKRg4uEQ1NpFk5Wu"
+blockbench = "9HqyYuqADh6K88gnvFav1J2mKQMgDyQjiJEa5u54Ad9v"
+energy_token = "4vCgSNVMCEhgaFebnoGizvaCJu2SXCiXh8bu1YpMocMk"
+governance = "opUKK54PxUHNgzkPAaJioCSWxx8P7p3tYeotyixE84W"
+oracle = "HTTcpqf79kGh83xfe7me4LvJcqqQfxBoB5MuUk8N4Qee"
+registry = "6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu"
+tpc_benchmark = "2cYLfKJyutgK47fKVBYagSp6Zy1eKfh3PUmmdu2ZNJvh"
+trading = "B3FHDFGqMazfbMNXc4RWJ4hpZM98ZGRdicYAC3pYF2az"
 
 [registry]
 url = "https://api.apr.dev"
@@ -35,21 +35,21 @@ shutdown_wait = 2000
 upgradeable = false
 
 [[test.genesis]]
-address = "MwAdshY2978VqcpJzWSKmPfDtKfweD7YLMCQSBcR4wP"
+address = "4vCgSNVMCEhgaFebnoGizvaCJu2SXCiXh8bu1YpMocMk"
 program = "target/deploy/energy_token.so"
 
 [[test.genesis]]
-address = "2u2yvp6cBqegv7ApcLfvaFXd9WBrrCy6o3bhxtWgxpC5"
+address = "opUKK54PxUHNgzkPAaJioCSWxx8P7p3tYeotyixE84W"
 program = "target/deploy/governance.so"
 
 [[test.genesis]]
-address = "FpKNR5SybwgLH5MUj6mp3V9kbHmaqcRb4sCKJsUfa5x"
+address = "HTTcpqf79kGh83xfe7me4LvJcqqQfxBoB5MuUk8N4Qee"
 program = "target/deploy/oracle.so"
 
 [[test.genesis]]
-address = "8tWRwmu8Lfb3JtwgD5wV1F8FiemxmWQmETStSKy5Fxfi"
+address = "6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu"
 program = "target/deploy/registry.so"
 
 [[test.genesis]]
-address = "FjNbXVFeRy2n4kJwFcrQDvXZs67AbKRg4uEQ1NpFk5Wu"
+address = "B3FHDFGqMazfbMNXc4RWJ4hpZM98ZGRdicYAC3pYF2az"
 program = "target/deploy/trading.so"

@@ -334,11 +334,11 @@ export function getDefaultConfig(): TestSuiteConfig {
   return {
     rpcUrl: process.env.SOLANA_URL || "http://localhost:8899",
     programIds: {
-      registry: "8tWRwmu8Lfb3JtwgD5wV1F8FiemxmWQmETStSKy5Fxfi",
-      energyToken: "MwAdshY2978VqcpJzWSKmPfDtKfweD7YLMCQSBcR4wP",
-      governance: "2u2yvp6cBqegv7ApcLfvaFXd9WBrrCy6o3bhxtWgxpC5",
-      oracle: "FpKNR5SybwgLH5MUj6mp3V9kbHmaqcRb4sCKJsUfa5x",
-      trading: "FjNbXVFeRy2n4kJwFcrQDvXZs67AbKRg4uEQ1NpFk5Wu",
+      registry: "6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu",
+      energyToken: "4vCgSNVMCEhgaFebnoGizvaCJu2SXCiXh8bu1YpMocMk",
+      governance: "opUKK54PxUHNgzkPAaJioCSWxx8P7p3tYeotyixE84W",
+      oracle: "HTTcpqf79kGh83xfe7me4LvJcqqQfxBoB5MuUk8N4Qee",
+      trading: "B3FHDFGqMazfbMNXc4RWJ4hpZM98ZGRdicYAC3pYF2az",
     },
     keypairsDir: "./keypairs",
     outputDir: "./test-results/transactions",

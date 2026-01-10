@@ -12,29 +12,42 @@ pub use errors::*;
 pub use events::*;
 pub use state::*;
 
-declare_id!("2u2yvp6cBqegv7ApcLfvaFXd9WBrrCy6o3bhxtWgxpC5");
+declare_id!("opUKK54PxUHNgzkPAaJioCSWxx8P7p3tYeotyixE84W");
+
+#[cfg(feature = "localnet")]
+use compute_debug::{compute_fn, compute_checkpoint};
+
+#[cfg(not(feature = "localnet"))]
+macro_rules! compute_fn {
+    ($name:expr => $block:block) => { $block };
+}
+#[cfg(not(feature = "localnet"))]
+macro_rules! compute_checkpoint {
+    ($name:expr) => {};
+}
 
 #[program]
 pub mod governance {
     use super::*;
 
-    /// Initialize PoA with single REC authority for ERC certification
     pub fn initialize_poa(ctx: Context<InitializePoa>) -> Result<()> {
-        handlers::initialize::handler(ctx)
+        compute_fn!("initialize_poa" => {
+            handlers::initialize::handler(ctx)
+        })
     }
 
-    /// Emergency pause functionality - REC authority only
     pub fn emergency_pause(ctx: Context<EmergencyControl>) -> Result<()> {
-        handlers::emergency::pause(ctx)
+        compute_fn!("emergency_pause" => {
+            handlers::emergency::pause(ctx)
+        })
     }
 
-    /// Emergency unpause functionality - REC authority only
     pub fn emergency_unpause(ctx: Context<EmergencyControl>) -> Result<()> {
-        handlers::emergency::unpause(ctx)
+        compute_fn!("emergency_unpause" => {
+            handlers::emergency::unpause(ctx)
+        })
     }
 
-    /// Issue ERC (Energy Renewable Certificate) - REC authority only
-    /// This prevents double-claiming by tracking claimed_erc_generation in the meter
     pub fn issue_erc(
         ctx: Context<IssueErc>,
         certificate_id: String,
@@ -42,114 +55,114 @@ pub mod governance {
         renewable_source: String,
         validation_data: String,
     ) -> Result<()> {
-        handlers::erc::issue(
-            ctx,
-            certificate_id,
-            energy_amount,
-            renewable_source,
-            validation_data,
-        )
+        compute_fn!("issue_erc" => {
+            handlers::erc::issue(
+                ctx,
+                certificate_id,
+                energy_amount,
+                renewable_source,
+                validation_data,
+            )
+        })
     }
 
-    /// Validate ERC for trading - REC authority only
     pub fn validate_erc_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
-        handlers::erc::validate_for_trading(ctx)
+        compute_fn!("validate_erc_for_trading" => {
+            handlers::erc::validate_for_trading(ctx)
+        })
     }
 
-    /// Update governance configuration - Engineering Department only
     pub fn update_governance_config(
         ctx: Context<UpdateGovernanceConfig>,
         erc_validation_enabled: bool,
     ) -> Result<()> {
-        handlers::config::update_governance_config(ctx, erc_validation_enabled)
+        compute_fn!("update_governance_config" => {
+            handlers::config::update_governance_config(ctx, erc_validation_enabled)
+        })
     }
 
-    /// Set maintenance mode - Engineering Department only
     pub fn set_maintenance_mode(
         ctx: Context<UpdateGovernanceConfig>,
         maintenance_enabled: bool,
     ) -> Result<()> {
-        handlers::config::set_maintenance_mode(ctx, maintenance_enabled)
+        compute_fn!("set_maintenance_mode" => {
+            handlers::config::set_maintenance_mode(ctx, maintenance_enabled)
+        })
     }
 
-    /// Update ERC limits - Engineering Department only
     pub fn update_erc_limits(
         ctx: Context<UpdateGovernanceConfig>,
         min_energy_amount: u64,
         max_erc_amount: u64,
         erc_validity_period: i64,
     ) -> Result<()> {
-        handlers::config::update_erc_limits(
-            ctx,
-            min_energy_amount,
-            max_erc_amount,
-            erc_validity_period,
-        )
+        compute_fn!("update_erc_limits" => {
+            handlers::config::update_erc_limits(
+                ctx,
+                min_energy_amount,
+                max_erc_amount,
+                erc_validity_period,
+            )
+        })
     }
 
-    /// Update authority contact info - Engineering Department only
     pub fn update_authority_info(
         ctx: Context<UpdateGovernanceConfig>,
         contact_info: String,
     ) -> Result<()> {
-        handlers::config::update_authority_info(ctx, contact_info)
+        compute_fn!("update_authority_info" => {
+            handlers::config::update_authority_info(ctx, contact_info)
+        })
     }
 
-    /// Get governance statistics
     pub fn get_governance_stats(ctx: Context<GetGovernanceStats>) -> Result<GovernanceStats> {
-        handlers::stats::handler(ctx)
+        compute_fn!("get_governance_stats" => {
+            handlers::stats::handler(ctx)
+        })
     }
     
-    // ========== NEW INSTRUCTIONS: ERC Revocation ==========
-    
-    /// Revoke an ERC certificate - REC authority only
-    /// Revoked certificates cannot be traded or used
     pub fn revoke_erc(ctx: Context<RevokeErc>, reason: String) -> Result<()> {
-        handlers::erc::revoke(ctx, reason)
+        compute_fn!("revoke_erc" => {
+            handlers::erc::revoke(ctx, reason)
+        })
     }
     
-    // ========== NEW INSTRUCTIONS: Certificate Transfer ==========
-    
-    /// Transfer an ERC certificate to a new owner
-    /// Requires: transfers enabled, certificate valid & validated for trading
     pub fn transfer_erc(ctx: Context<TransferErc>) -> Result<()> {
-        handlers::erc::transfer(ctx)
+        compute_fn!("transfer_erc" => {
+            handlers::erc::transfer(ctx)
+        })
     }
     
-    // ========== NEW INSTRUCTIONS: Multi-sig Authority ==========
-    
-    /// Propose a new authority (step 1 of 2-step transfer)
-    /// Current authority proposes, new authority must approve within 48h
     pub fn propose_authority_change(
         ctx: Context<ProposeAuthorityChange>,
         new_authority: Pubkey,
     ) -> Result<()> {
-        handlers::authority::propose_authority_change(ctx, new_authority)
+        compute_fn!("propose_authority_change" => {
+            handlers::authority::propose_authority_change(ctx, new_authority)
+        })
     }
     
-    /// Approve authority change (step 2 of 2-step transfer)
-    /// Must be called by the proposed new authority
     pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<()> {
-        handlers::authority::approve_authority_change(ctx)
+        compute_fn!("approve_authority_change" => {
+            handlers::authority::approve_authority_change(ctx)
+        })
     }
     
-    /// Cancel a pending authority change
-    /// Can only be called by current authority
     pub fn cancel_authority_change(ctx: Context<CancelAuthorityChange>) -> Result<()> {
-        handlers::authority::cancel_authority_change(ctx)
+        compute_fn!("cancel_authority_change" => {
+            handlers::authority::cancel_authority_change(ctx)
+        })
     }
     
-    // ========== NEW INSTRUCTIONS: Oracle Integration ==========
-    
-    /// Set oracle authority for data validation
-    /// Configures oracle-based validation for ERC issuance
     pub fn set_oracle_authority(
         ctx: Context<SetOracleAuthority>,
         oracle_authority: Pubkey,
         min_confidence: u8,
         require_validation: bool,
     ) -> Result<()> {
-        handlers::authority::set_oracle_authority(ctx, oracle_authority, min_confidence, require_validation)
+        compute_fn!("set_oracle_authority" => {
+            handlers::authority::set_oracle_authority(ctx, oracle_authority, min_confidence, require_validation)
+        })
     }
 }
 

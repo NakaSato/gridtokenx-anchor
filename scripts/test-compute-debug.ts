@@ -8,7 +8,7 @@ import { Program } from "@coral-xyz/anchor";
 import { Connection, PublicKey, Keypair } from "@solana/web3.js";
 import * as fs from "fs";
 
-const ENERGY_TOKEN_PROGRAM_ID = new PublicKey("5FVExLSAC94gSWH6TJa1TmBDWXuqFe5obZaC5DkqJihU");
+const ENERGY_TOKEN_PROGRAM_ID = new PublicKey("4vCgSNVMCEhgaFebnoGizvaCJu2SXCiXh8bu1YpMocMk");
 
 async function main() {
     console.log("=== Compute Debug Macro Test ===\n");
