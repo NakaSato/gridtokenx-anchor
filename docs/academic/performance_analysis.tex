@@ -61,12 +61,27 @@ BLOCKBENCH \cite{b4} provides a systematic framework for evaluating private bloc
 We extend the BLOCKBENCH methodology to Solana/Anchor with native Rust implementations of each benchmark category.
 
 \section{System Architecture}
-The platform is implemented as a suite of five interconnected Anchor smart contracts on Solana:
-1. \textbf{Registry}: Manages user identity and meter assets.
-2. \textbf{Oracle}: Validates off-chain sensor data.
-3. \textbf{Energy Token}: SPL-compliant token representing 1 kWh.
-4. \textbf{Trading}: Order book and settlement engine.
-5. \textbf{Governance}: Configuration and DAO parameters.
+The platform leverages the Solana blockchain's high throughput and low latency to implement a novel \textbf{"Dual-Tracker" Protocol Architecture}. This design cryptographically isolates the physical flow of energy from the financial flow of tokens, bridged by rigorous on-chain validation logic.
+
+\subsection{The Dual-Tracker Model}
+The architecture is composed of five specialized Anchor programs that function as two parallel tracking systems:
+
+\begin{enumerate}
+    \item \textbf{Physical Tracker (Registry \& Oracle)}:
+    The \textbf{Registry Program} acts as the source of truth for identity and physical assets, mapping a physical meter's unique ID to an on-chain public key. The \textbf{Oracle Program} ingests signed telemetry data from smart meters, updating the Registry with \texttt{total\_generation} and \texttt{total\_consumption} stats.
+
+    \item \textbf{Financial Tracker (Trading \& Energy Token)}:
+    The \textbf{Trading Program} manages the order book and matches bids and asks. It relies on the \textbf{Energy Token Program}, which governs the lifecycle of the GRID token.
+\end{enumerate}
+
+\subsection{Protocol Invariants}
+To prevent "double-spending" of energy credits, the system enforces the following invariant logic:
+
+\begin{itemize}
+    \item \textbf{Conservation of Mass}: Tokens can only be minted if the Registry confirms that $NetGeneration > SettledGeneration$. The \texttt{settle\_and\_mint\_tokens} instruction atomically updates the \texttt{SettledGeneration} counter and mints the exact equivalent amount of GRID tokens.
+    
+    \item \textbf{Proof of Origin}: The \textbf{Governance Program} issues non-fungible ERC Certificates. The Trading program explicitly verifies that a seller holds a valid certificate via Cross-Program Invocation (CPI) before accepting a sell order, ensuring only verified green energy enters the market.
+\end{itemize}
 
 \section{Methodology}
 
