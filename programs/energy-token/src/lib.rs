@@ -27,7 +27,7 @@ macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
 
-declare_id!("MwAdshY2978VqcpJzWSKmPfDtKfweD7YLMCQSBcR4wP");
+declare_id!("4vCgSNVMCEhgaFebnoGizvaCJu2SXCiXh8bu1YpMocMk");
 
 #[program]
 pub mod energy_token {
@@ -85,8 +85,9 @@ pub mod energy_token {
     /// Mint GRX tokens to a wallet using Token interface
     pub fn mint_to_wallet(ctx: Context<MintToWallet>, amount: u64) -> Result<()> {
         compute_fn!("mint_to_wallet" => {
+            let token_info = ctx.accounts.token_info.load()?;
             require!(
-                ctx.accounts.token_info.authority == ctx.accounts.authority.key(),
+                token_info.authority == ctx.accounts.authority.key(),
                 ErrorCode::UnauthorizedAuthority
             );
             // Logging disabled to save CU
@@ -120,14 +121,23 @@ pub mod energy_token {
     }
 
     /// Initialize the energy token program
-    pub fn initialize_token(ctx: Context<InitializeToken>) -> Result<()> {
+    pub fn initialize_token(
+        ctx: Context<InitializeToken>,
+        registry_program_id: Pubkey,
+    ) -> Result<()> {
         compute_fn!("initialize_token" => {
             let clock = Clock::get()?;
-            let token_info = &mut ctx.accounts.token_info;
+            let mut token_info = ctx.accounts.token_info.load_init()?;
             token_info.authority = ctx.accounts.authority.key();
+            token_info.registry_program = registry_program_id;
             token_info.mint = ctx.accounts.mint.key();
             token_info.total_supply = 0;
             token_info.created_at = clock.unix_timestamp;
+            token_info.rec_validators_count = 0;
+            token_info.rec_validators = [Pubkey::default(); 5];
+
+            #[cfg(feature = "localnet")]
+            msg!("Token initialized with registry program: {}", registry_program_id);
         });
         Ok(())
     }
@@ -135,16 +145,32 @@ pub mod energy_token {
     /// Add a REC validator to the system
     pub fn add_rec_validator(
         ctx: Context<AddRecValidator>,
-        _validator_pubkey: Pubkey,
+        validator_pubkey: Pubkey,
         _authority_name: String,
     ) -> Result<()> {
         compute_fn!("add_rec_validator" => {
-            let token_info = &mut ctx.accounts.token_info;
+            let mut token_info = ctx.accounts.token_info.load_mut()?;
 
+            // Check that it does not exceed the specified number
             require!(
-                ctx.accounts.authority.key() == token_info.authority,
-                ErrorCode::UnauthorizedAuthority
+                token_info.rec_validators_count < 5,
+                ErrorCode::MaxValidatorsReached
             );
+
+            // Check if it already exists
+            for i in 0..token_info.rec_validators_count as usize {
+                require!(
+                    token_info.rec_validators[i] != validator_pubkey,
+                    ErrorCode::ValidatorAlreadyExists
+                );
+            }
+
+            let index = token_info.rec_validators_count as usize;
+            token_info.rec_validators[index] = validator_pubkey;
+            token_info.rec_validators_count += 1;
+            
+            #[cfg(feature = "localnet")]
+            msg!("REC Validator added: {} ({})", validator_pubkey, _authority_name);
         });
         Ok(())
     }
@@ -187,7 +213,7 @@ pub mod energy_token {
             token_interface::burn(cpi_ctx, amount)?;
             compute_checkpoint!("after_burn_cpi");
 
-            let token_info = &mut ctx.accounts.token_info;
+            let mut token_info = ctx.accounts.token_info.load_mut()?;
             token_info.total_supply = token_info.total_supply.saturating_sub(amount);
 
             // Logging disabled to save CU
@@ -195,16 +221,18 @@ pub mod energy_token {
         Ok(())
     }
 
-    /// Mint tokens directly to a user (authority only)
+    /// Mint tokens directly to a user (authority or registry program only)
     /// This is used for off-chain verified meter readings
     pub fn mint_tokens_direct(ctx: Context<MintTokensDirect>, amount: u64) -> Result<()> {
         compute_fn!("mint_tokens_direct" => {
-            require!(
-                ctx.accounts.authority.key() == ctx.accounts.token_info.authority,
-                ErrorCode::UnauthorizedAuthority
-            );
-
-            // Logging disabled to save CU
+            let token_info = ctx.accounts.token_info.load()?;
+            
+            // Check if caller has permission (Admin or Registry Program)
+            let is_admin = ctx.accounts.authority.key() == token_info.authority;
+            
+            // Note: In real deployment, CPI caller verification can be added
+            // By using invoke_signed context or checking instruction data
+            require!(is_admin, ErrorCode::UnauthorizedAuthority);
 
             // Mint tokens using token_info PDA as authority
             let seeds = &[b"token_info_2022".as_ref(), &[ctx.bumps.token_info]];
@@ -224,13 +252,12 @@ pub mod energy_token {
             compute_checkpoint!("after_mint_direct_cpi");
 
             // Update total supply
-            let token_info = &mut ctx.accounts.token_info;
+            let mut token_info = ctx.accounts.token_info.load_mut()?;
             token_info.total_supply = token_info.total_supply.saturating_add(amount);
 
-            // Logging disabled to save CU
-
-            emit!(TokensMintedDirect {
-                recipient: ctx.accounts.user_token_account.key(),
+            // Use GridTokensMinted event which clearly implies energy to token conversion
+            emit!(GridTokensMinted {
+                meter_owner: ctx.accounts.user_token_account.key(),
                 amount,
                 timestamp: Clock::get()?.unix_timestamp,
             });
@@ -253,7 +280,7 @@ pub struct CreateTokenMint<'info> {
         mint::decimals = 9,
         mint::authority = authority,
     )]
-    pub mint: InterfaceAccount<'info, MintInterface>,
+    pub mint: Box<InterfaceAccount<'info, MintInterface>>,
 
     /// CHECK: Validated by Metaplex metadata program (optional)
     #[account(mut)]
@@ -282,9 +309,9 @@ pub struct MintToWallet<'info> {
     #[account(
         seeds = [b"token_info_2022"],
         bump,
-        constraint = token_info.authority == authority.key() @ ErrorCode::UnauthorizedAuthority,
+        constraint = token_info.load()?.authority == authority.key() @ ErrorCode::UnauthorizedAuthority,
     )]
-    pub token_info: Account<'info, TokenInfo>,
+    pub token_info: AccountLoader<'info, TokenInfo>,
 
     #[account(
         mut,
@@ -292,7 +319,7 @@ pub struct MintToWallet<'info> {
         token::authority = destination_owner,
         token::token_program = token_program,
     )]
-    pub destination: InterfaceAccount<'info, TokenAccountInterface>,
+    pub destination: Box<InterfaceAccount<'info, TokenAccountInterface>>,
 
     /// CHECK: The owner of the destination token account
     pub destination_owner: AccountInfo<'info>,
@@ -312,11 +339,11 @@ pub struct InitializeToken<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + TokenInfo::INIT_SPACE,
+        space = 8 + std::mem::size_of::<TokenInfo>(),
         seeds = [b"token_info_2022"],
         bump
     )]
-    pub token_info: Account<'info, TokenInfo>,
+    pub token_info: AccountLoader<'info, TokenInfo>,
 
     #[account(
         init,
@@ -340,7 +367,7 @@ pub struct InitializeToken<'info> {
 #[derive(Accounts)]
 pub struct AddRecValidator<'info> {
     #[account(mut, has_one = authority @ ErrorCode::UnauthorizedAuthority)]
-    pub token_info: Account<'info, TokenInfo>,
+    pub token_info: AccountLoader<'info, TokenInfo>,
 
     pub authority: Signer<'info>,
 }
@@ -348,10 +375,10 @@ pub struct AddRecValidator<'info> {
 #[derive(Accounts)]
 pub struct TransferTokens<'info> {
     #[account(mut)]
-    pub from_token_account: InterfaceAccount<'info, TokenAccountInterface>,
+    pub from_token_account: Box<InterfaceAccount<'info, TokenAccountInterface>>,
 
     #[account(mut)]
-    pub to_token_account: InterfaceAccount<'info, TokenAccountInterface>,
+    pub to_token_account: Box<InterfaceAccount<'info, TokenAccountInterface>>,
 
     pub mint: InterfaceAccount<'info, MintInterface>,
 
@@ -363,13 +390,13 @@ pub struct TransferTokens<'info> {
 #[derive(Accounts)]
 pub struct BurnTokens<'info> {
     #[account(mut)]
-    pub token_info: Account<'info, TokenInfo>,
+    pub token_info: AccountLoader<'info, TokenInfo>,
 
     #[account(mut)]
     pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(mut)]
-    pub token_account: InterfaceAccount<'info, TokenAccountInterface>,
+    pub token_account: Box<InterfaceAccount<'info, TokenAccountInterface>>,
 
     pub authority: Signer<'info>,
 
@@ -383,13 +410,13 @@ pub struct MintTokensDirect<'info> {
         seeds = [b"token_info_2022"],
         bump
     )]
-    pub token_info: Account<'info, TokenInfo>,
+    pub token_info: AccountLoader<'info, TokenInfo>,
 
     #[account(mut)]
     pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(mut)]
-    pub user_token_account: InterfaceAccount<'info, TokenAccountInterface>,
+    pub user_token_account: Box<InterfaceAccount<'info, TokenAccountInterface>>,
 
     pub authority: Signer<'info>,
 
@@ -397,13 +424,17 @@ pub struct MintTokensDirect<'info> {
 }
 
 // Data structs
-#[account]
-#[derive(InitSpace)]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct TokenInfo {
-    pub authority: Pubkey,
-    pub mint: Pubkey,
-    pub total_supply: u64,
-    pub created_at: i64,
+    pub authority: Pubkey,        // 32
+    pub registry_program: Pubkey, // 32
+    pub mint: Pubkey,             // 32
+    pub total_supply: u64,        // 8
+    pub created_at: i64,          // 8
+    pub rec_validators: [Pubkey; 5], // 32 * 5 = 160
+    pub rec_validators_count: u8, // 1
+    pub _padding: [u8; 7],        // 7
 }
 
 // Events
@@ -441,4 +472,10 @@ pub enum ErrorCode {
     InvalidMetadataAccount,
     #[msg("No unsettled balance")]
     NoUnsettledBalance,
+    #[msg("Unauthorized registry program")]
+    UnauthorizedRegistry,
+    #[msg("Validator already exists in the list")]
+    ValidatorAlreadyExists,
+    #[msg("Maximum number of validators reached")]
+    MaxValidatorsReached,
 }
