@@ -2,7 +2,7 @@
 
 ## GridTokenX vs Existing Energy Trading Platforms
 
-> *December 2025 Edition*
+> *January 2026 Edition*
 
 ---
 
@@ -710,8 +710,8 @@ regulatory and market conditions mature.
 
 ## 8. Document Navigation
 
-| Previous | Current | Next |
-|----------|---------|------|
+| Previous                                                   | Current                        | Next                                           |
+| ---------------------------------------------------------- | ------------------------------ | ---------------------------------------------- |
 | [08-RESEARCH-METHODOLOGY.md](./08-RESEARCH-METHODOLOGY.md) | **09-COMPARATIVE-ANALYSIS.md** | [10-FUTURE-ROADMAP.md](./10-FUTURE-ROADMAP.md) |
 
 ---

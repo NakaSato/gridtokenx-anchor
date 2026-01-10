@@ -1,5 +1,5 @@
 % GridTokenX White Paper
-% LaTeX Version 1.0 - December 2025
+% LaTeX Version 1.1 - January 2026
 % Blockchain-Based P2P Energy Trading Platform
 
 \documentclass[11pt,a4paper]{article}
@@ -70,7 +70,7 @@
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\textcolor{griddark}{\textit{GridTokenX White Paper}}}
-\fancyhead[R]{\textcolor{griddark}{\textit{Version 1.0}}}
+\fancyhead[R]{\textcolor{griddark}{\textit{Version 1.1}}}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0.4pt}
@@ -171,8 +171,8 @@
     \vspace{2cm}
     
     \begin{tabular}{ll}
-        \textbf{Version:} & 1.0 \\
-        \textbf{Date:} & December 2025 \\
+        \textbf{Version:} & 1.1 \\
+        \textbf{Date:} & January 2026 \\
         \textbf{Status:} & Technical Specification \\
         \textbf{Blockchain:} & Solana \\
     \end{tabular}
@@ -595,7 +595,7 @@ The platform demonstrates exceptional performance characteristics under various 
 
 \begin{table}[H]
 \centering
-\caption{GridTokenX Performance Metrics}
+\caption{GridTokenX Performance Metrics (via Blockbench)}
 \begin{tabular}{lp{8cm}}
 \toprule
 \textbf{Metric} & \textbf{Result} \\
@@ -615,7 +615,7 @@ We evaluated the system using standard database benchmarks adapted for blockchai
 
 \begin{table}[H]
 \centering
-\caption{Standardized Benchmark Results}
+\caption{Standardized Benchmark Results (TPC-Benchmark Adapted)}
 \begin{tabular}{lrrr}
 \toprule
 \textbf{Workload} & \textbf{Throughput} & \textbf{Latency} & \textbf{Success Rate} \\
@@ -1013,7 +1013,7 @@ Green Certification & On-chain & On-chain & On-chain & On-chain & Manual \\
 
 Our development strategy is divided into three distinct phases, focusing on building a solid technical foundation before scaling to mass adoption.
 
-\subsubsection{Phase 1: Foundation (Q4 2025 - Q1 2026)}
+\subsubsection{Phase 1: Foundation (Q4 2025 - Q2 2026)}
 
 \begin{figure}[H]
 \centering
@@ -1028,7 +1028,7 @@ Our development strategy is divided into three distinct phases, focusing on buil
 \node[program, right=of registry] (token) {Energy Token\\Program};
 \node[program, right=of token] (trading) {Trading\\Program};
 
-\node[milestone, below=of token] (testnet) {\textbf{TESTNET DEPLOYMENT \& AUDIT}\\(Public Beta)};
+\node[milestone, below=of token] (testnet) {\textbf{TESTNET DEPLOYMENT \& AUDIT}\\(Public Beta - Q1 2026)};
 
 \draw[arrow] (registry) -- (token);
 \draw[arrow] (token) -- (trading);
@@ -1049,14 +1049,14 @@ Our development strategy is divided into three distinct phases, focusing on buil
 \toprule
 \textbf{Quarter} & \textbf{Phase} & \textbf{Deliverables} \\
 \midrule
-Q1 2025 & 1 & Testnet Launch, Smart Contract Audits Complete \\
-Q2 2025 & 2 & Pilot Program Launch (500 households, Bangkok) \\
-Q3 2025 & 2 & Mainnet Beta Launch, Mobile App Release \\
-Q4 2025 & 2 & Industrial Microgrid Integration \\
-Q1 2026 & 3 & Regional Expansion (Thailand nationwide) \\
-Q2 2026 & 3 & Carbon Credit Bridging Integration \\
-Q3 2026 & 3 & ASEAN Market Entry (Vietnam, Indonesia) \\
-Q4 2026 & 3 & Full DAO Governance Launch \\
+Q4 2025 & 1 & SDK Release v1.0, Core Contracts Complete \\
+Q1 2026 & 1 & Testnet Launch, Smart Contract Audits \\
+Q2 2026 & 1 & Mainnet Launch, Mobile App Beta \\
+Q3 2026 & 2 & Thailand/Vietnam Market Entry \\
+Q4 2026 & 2 & Indonesia/Philippines Expansion \\
+Q1 2027 & 3 & Advanced Trading (Futures/Options) \\
+Q2 2027 & 3 & DeFi Integration (Lending/Yield) \\
+Q3 2027 & 3 & Carbon Credit Integration \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1180,7 +1180,7 @@ The development roadmap outlined in this document represents current plans and i
 \textit{GridTokenX --- Decentralizing the Future of Energy}
 
 \small
-Document Version 1.0 | December 2025
+Document Version 1.1 | January 2026
 
 \texttt{https://gridtokenx.io}
 \end{center}

@@ -6,25 +6,39 @@
 
 ## Table of Contents
 
-1. [Trading Algorithms](#1-trading-algorithms)
-   - [Market Price Clearing](#11-market-price-clearing)
-   - [Order Matching Algorithm](#12-order-matching-algorithm)
-   - [Volume-Weighted Average Price (VWAP)](#13-volume-weighted-average-price-vwap)
-   - [Price Discovery Mechanism](#14-price-discovery-mechanism)
-2. [Oracle Algorithms](#2-oracle-algorithms)
-   - [Meter Reading Validation](#21-meter-reading-validation)
-   - [Anomaly Detection](#22-anomaly-detection)
-   - [Quality Scoring](#23-quality-scoring)
-   - [Rate Limiting](#24-rate-limiting)
-3. [Energy Token Algorithms](#3-energy-token-algorithms)
-   - [Token Minting Calculation](#31-token-minting-calculation)
-   - [Token Burning Mechanism](#32-token-burning-mechanism)
-4. [Governance Algorithms](#4-governance-algorithms)
-   - [ERC Certificate Validation](#41-erc-certificate-validation)
-   - [Proof of Authority (PoA)](#42-proof-of-authority-poa)
-5. [Performance Optimizations](#5-performance-optimizations)
-   - [Compute Unit (CU) Optimization](#51-compute-unit-cu-optimization)
-   - [Zero-Copy Data Access](#52-zero-copy-data-access)
+- [GridTokenX Platform Algorithms](#gridtokenx-platform-algorithms)
+  - [Table of Contents](#table-of-contents)
+  - [1. Trading Algorithms](#1-trading-algorithms)
+    - [1.1 Market Price Clearing](#11-market-price-clearing)
+    - [1.2 Order Matching **Algorithm**](#12-order-matching-algorithm)
+    - [1.3 Volume-Weighted Average Price (VWAP)](#13-volume-weighted-average-price-vwap)
+    - [1.4 Price Discovery Mechanism](#14-price-discovery-mechanism)
+  - [2. Oracle Algorithms](#2-oracle-algorithms)
+    - [2.1 Meter Reading Validation](#21-meter-reading-validation)
+    - [2.2 Anomaly Detection](#22-anomaly-detection)
+    - [2.3 Quality Scoring](#23-quality-scoring)
+    - [2.4 Rate Limiting](#24-rate-limiting)
+  - [3. Energy Token Algorithms](#3-energy-token-algorithms)
+    - [3.1 Token Minting Calculation](#31-token-minting-calculation)
+    - [3.2 Token Burning Mechanism](#32-token-burning-mechanism)
+  - [4. Governance Algorithms](#4-governance-algorithms)
+    - [4.1 ERC Certificate Validation](#41-erc-certificate-validation)
+    - [4.2 Proof of Authority (PoA)](#42-proof-of-authority-poa)
+  - [5. Performance Optimizations](#5-performance-optimizations)
+    - [5.1 Compute Unit (CU) Optimization](#51-compute-unit-cu-optimization)
+      - [1. Lazy Updates](#1-lazy-updates)
+      - [2. Disable Logging](#2-disable-logging)
+      - [3. Saturation Math](#3-saturation-math)
+      - [4. Integer-Only Math](#4-integer-only-math)
+    - [5.2 Zero-Copy Data Access](#52-zero-copy-data-access)
+  - [Appendix A: Algorithm Complexity Analysis](#appendix-a-algorithm-complexity-analysis)
+    - [Trading Algorithms](#trading-algorithms)
+    - [Oracle Algorithms](#oracle-algorithms)
+  - [Appendix B: Security Considerations](#appendix-b-security-considerations)
+    - [Algorithm Security Features](#algorithm-security-features)
+  - [Appendix C: Future Algorithm Enhancements](#appendix-c-future-algorithm-enhancements)
+    - [Planned Improvements](#planned-improvements)
+  - [References](#references)
 
 ---
 
@@ -106,11 +120,11 @@ clearing_price = 5.00 + 0.005 = 5.005 ≈ 5.00 THB/kWh
 
 ---
 
-### 1.2 Order Matching Algorithm
+### 1.2 Order Matching **Algorithm**
 
 **Purpose:** Match buy and sell orders efficiently using Price-Time Priority with Pro-Rata allocation.
 
-**Algorithm:** Enhanced Continuous Double Auction (CDA)
+**Algorithm:** Continuous Double Auction (CDA)
 
 ```rust
 pub fn match_orders(
@@ -472,13 +486,13 @@ fn calculate_deviation(
 
 **Anomaly Detection Rules:**
 
-| Check Type | Threshold | Action |
-|------------|-----------|--------|
-| Timestamp | Must be > last reading | Reject |
-| Future Reading | ≤ current time + 60s | Reject |
-| Rate Limit | ≥ 60 seconds interval | Reject |
-| Production/Consumption Ratio | ≤ 10:1 | Reject |
-| Deviation from Last Reading | ≤ 50% default | Reject |
+| Check Type                   | Threshold              | Action |
+| ---------------------------- | ---------------------- | ------ |
+| Timestamp                    | Must be > last reading | Reject |
+| Future Reading               | ≤ current time + 60s   | Reject |
+| Rate Limit                   | ≥ 60 seconds interval  | Reject |
+| Production/Consumption Ratio | ≤ 10:1                 | Reject |
+| Deviation from Last Reading  | ≤ 50% default          | Reject |
 
 ---
 
@@ -563,11 +577,11 @@ fn update_reading_interval(
 
 **Rate Limit Tiers:**
 
-| Tier | Min Interval | Use Case |
-|------|-------------|----------|
-| Real-time | 60s | Smart meters |
-| Standard | 300s (5 min) | Normal meters |
-| Bulk | 900s (15 min) | Batch reporting |
+| Tier      | Min Interval  | Use Case        |
+| --------- | ------------- | --------------- |
+| Real-time | 60s           | Smart meters    |
+| Standard  | 300s (5 min)  | Normal meters   |
+| Bulk      | 900s (15 min) | Batch reporting |
 
 ---
 
@@ -850,13 +864,13 @@ let price = (buy_price.saturating_add(sell_price)) / 2;
 
 **CU Budget Estimates:**
 
-| Operation | CU Cost | Optimization |
-|-----------|---------|--------------|
-| Token Transfer | ~5,000 | Use TransferChecked |
-| Price Calculation | ~2,000 | Integer math |
-| msg!() logging | ~1,000 per call | Use events |
-| Account read | ~200-500 | Use zero_copy |
-| Price history update | ~3,000 | Lazy updates |
+| Operation            | CU Cost         | Optimization        |
+| -------------------- | --------------- | ------------------- |
+| Token Transfer       | ~5,000          | Use TransferChecked |
+| Price Calculation    | ~2,000          | Integer math        |
+| msg!() logging       | ~1,000 per call | Use events          |
+| Account read         | ~200-500        | Use zero_copy       |
+| Price history update | ~3,000          | Lazy updates        |
 
 ---
 
@@ -900,10 +914,10 @@ let mut market = ctx.accounts.market.load_mut()?; // Mutable
 **Performance Gains:**
 
 | Account Size | Normal Deserialize | Zero-Copy Load | Speedup |
-|--------------|-------------------|----------------|---------|
-| 1 KB | ~10,000 CU | ~500 CU | 20x |
-| 10 KB | ~100,000 CU | ~500 CU | 200x |
-| 100 KB | ~1,000,000 CU | ~500 CU | 2000x |
+| ------------ | ------------------ | -------------- | ------- |
+| 1 KB         | ~10,000 CU         | ~500 CU        | 20x     |
+| 10 KB        | ~100,000 CU        | ~500 CU        | 200x    |
+| 100 KB       | ~1,000,000 CU      | ~500 CU        | 2000x   |
 
 ---
 
@@ -911,20 +925,20 @@ let mut market = ctx.accounts.market.load_mut()?; // Mutable
 
 ### Trading Algorithms
 
-| Algorithm | Time Complexity | Space Complexity | Notes |
-|-----------|----------------|------------------|-------|
-| calculate_volume_weighted_price | O(1) | O(1) | Integer arithmetic only |
-| update_price_history | O(n) | O(1) | n = 24 (fixed) |
-| match_orders | O(1) | O(1) | Single order pair |
-| Batch matching | O(n log n) | O(n) | n = batch size |
+| Algorithm                       | Time Complexity | Space Complexity | Notes                   |
+| ------------------------------- | --------------- | ---------------- | ----------------------- |
+| calculate_volume_weighted_price | O(1)            | O(1)             | Integer arithmetic only |
+| update_price_history            | O(n)            | O(1)             | n = 24 (fixed)          |
+| match_orders                    | O(1)            | O(1)             | Single order pair       |
+| Batch matching                  | O(n log n)      | O(n)             | n = batch size          |
 
 ### Oracle Algorithms
 
-| Algorithm | Time Complexity | Space Complexity | Notes |
-|-----------|----------------|------------------|-------|
-| validate_meter_reading | O(1) | O(1) | Fixed validations |
-| update_quality_score | O(1) | O(1) | Simple division |
-| update_reading_interval | O(1) | O(1) | Moving average |
+| Algorithm               | Time Complexity | Space Complexity | Notes             |
+| ----------------------- | --------------- | ---------------- | ----------------- |
+| validate_meter_reading  | O(1)            | O(1)             | Fixed validations |
+| update_quality_score    | O(1)            | O(1)             | Simple division   |
+| update_reading_interval | O(1)            | O(1)             | Moving average    |
 
 ---
 

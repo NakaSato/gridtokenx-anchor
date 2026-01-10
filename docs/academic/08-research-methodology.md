@@ -2,7 +2,7 @@
 
 ## GridTokenX Academic Research Framework
 
-> *December 2025 Edition*
+> *January 2026 Edition*
 
 ---
 
@@ -313,7 +313,7 @@ Activities:
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
 │  3.1 Technical Evaluation                                              │
-│      ├─ Performance testing                                            │
+│      ├─ Performance testing (Blockbench, TPC)                          │
 │      ├─ Security testing                                               │
 │      └─ Integration testing                                            │
 │                                                                         │
@@ -388,7 +388,8 @@ Collection Method: Automated Testing & Monitoring
 │  Tools Used:                                                            │
 │  ├─ Solana CLI tools                                                   │
 │  ├─ Anchor testing framework                                           │
-│  ├─ Custom performance scripts                                         │
+│  ├─ Blockbench (Custom benchmarking tool)                              │
+│  ├─ TPC-Benchmark (Transaction Processing Perf. Council adaptation)    │
 │  └─ Prometheus/Grafana monitoring                                      │
 │                                                                         │
 │  Sample Size:                                                           │
@@ -443,6 +444,7 @@ Collection Method: Static & Dynamic Analysis
 │  └─ Manual code review                                                  │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
+
 ```
 
 ### 3.2 Secondary Data Sources
@@ -893,8 +895,8 @@ Single researcher        │ External code review; open source for scrutiny
 
 ## 8. Document Navigation
 
-| Previous | Current | Next |
-|----------|---------|------|
+| Previous                                             | Current                        | Next                                                       |
+| ---------------------------------------------------- | ------------------------------ | ---------------------------------------------------------- |
 | [07-SECURITY-ANALYSIS.md](./07-SECURITY-ANALYSIS.md) | **08-RESEARCH-METHODOLOGY.md** | [09-COMPARATIVE-ANALYSIS.md](./09-COMPARATIVE-ANALYSIS.md) |
 
 ---

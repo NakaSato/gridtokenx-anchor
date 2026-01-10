@@ -2,7 +2,7 @@
 
 ## GridTokenX Quality Assurance Framework
 
-> *December 2025 Edition*
+> *January 2026 Edition*
 
 ---
 
@@ -26,9 +26,9 @@ The GridTokenX platform employs a comprehensive testing strategy designed to ens
         ╱           ╲
        ╱  SYSTEM &   ╲       LOAD & SECURITY
       ╱  PERFORMANCE  ╲      ───────────────
-     ╱─────────────────╲     • High Volume Trading
-    ╱                   ╲    • Attack Vectors
-   ╱    INTEGRATION      ╲   • Resource Usage
+     ╱─────────────────╲     • Blockbench Analysis
+    ╱                   ╲    • TPC-Benchmark Adaptations
+   ╱    INTEGRATION      ╲   • High Volume Trading
   ╱───────────────────────╲  ────────────────
  ╱                         ╲ • Cross-Program Calls
 ╱       UNIT TESTS          ╲• Client SDK Integration
@@ -56,6 +56,7 @@ The testing environment is built upon the **Anchor Framework**, utilizing a loca
 *   **Runtime**: Node.js / TypeScript
 *   **Validator**: Local Solana Test Validator (simulating mainnet-beta features)
 *   **Assertions**: Chai / Mocha
+*   **Benchmarking**: Blockbench (Custom), TPC-Benchmark (Adapted)
 
 ### 2.2 Test Setup (`TestEnvironment`)
 
@@ -74,13 +75,13 @@ The GridTokenX test suite is categorized into several domains, each targeting sp
 
 Verifies the logic of individual smart contracts (programs).
 
-| Program | Focus Areas |
-| :--- | :--- |
+| Program          | Focus Areas                                                |
+| :--------------- | :--------------------------------------------------------- |
 | **Energy Token** | Minting, burning, transfer logic, smart meter integration. |
-| **Governance** | Proposal creation, voting mechanics, execution authority. |
-| **Oracle** | Data feed updates, staleness checks, authority validation. |
-| **Registry** | User registration, device verification, role management. |
-| **Trading** | Order matching, settlement, escrow management. |
+| **Governance**   | Proposal creation, voting mechanics, execution authority.  |
+| **Oracle**       | Data feed updates, staleness checks, authority validation. |
+| **Registry**     | User registration, device verification, role management.   |
+| **Trading**      | Order matching, settlement, escrow management.             |
 
 ### 3.2 Integration Testing
 
@@ -90,8 +91,10 @@ Ensures that different programs work together correctly.
 
 ### 3.3 Performance & Load Testing
 
-Evaluates system behavior under stress.
+Evaluates system behavior under stress using specialized tools.
 
+*   **Blockbench**: Custom benchmarking tool developed for GridTokenX to measure throughput and latency under variable load patterns specific to energy trading.
+*   **TPC-Benchmark**: Adapted standard transaction processing benchmarks to validate database and ledger performance.
 *   **Load Tests**:
     *   `high-volume`: Simulates massive transaction throughput.
     *   `concurrent-users`: Tests system stability with multiple simultaneous actors.
@@ -118,15 +121,15 @@ Proactive identification of vulnerabilities.
 
 ## 4. Performance Benchmarks
 
-Recent performance benchmarks (Sample Data) indicate the system's capability to handle high-frequency energy trading.
+Recent performance benchmarks utilizing **Blockbench** and **TPC-Benchmark** indicate the system's capability to handle high-frequency energy trading.
 
 ### 4.1 Summary Metrics
 
-| Metric | Value | Description |
-| :--- | :--- | :--- |
-| **Average Latency** | ~130 ms | Time to confirm transaction on local cluster. |
-| **Throughput** | ~8.7 TPS | Sustained transactions per second (single node). |
-| **Success Rate** | 100% | Reliability under test conditions. |
+| Metric              | Value    | Description                                      |
+| :------------------ | :------- | :----------------------------------------------- |
+| **Average Latency** | ~130 ms  | Time to confirm transaction on local cluster.    |
+| **Throughput**      | ~8.7 TPS | Sustained transactions per second (single node). |
+| **Success Rate**    | 100%     | Reliability under test conditions.               |
 
 ### 4.2 Operation Specifics
 
