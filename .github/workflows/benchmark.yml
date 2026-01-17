@@ -102,11 +102,10 @@ jobs:
       - name: Generate compatible Cargo.lock
         run: |
           rustup install 1.92.0
-          rm -f Cargo.lock
-          cargo +1.92.0 generate-lockfile
-          # Pin dependencies to versions compatible with SBF (Rust 1.75.0)
-          cargo +1.92.0 update -p borsh@1.6.0 --precise 1.5.8
-          cargo +1.92.0 update -p toml_parser@1.0.6 --precise 1.0.2
+          cargo +1.92.0 update
+          # Dependencies are now managed via Cargo.lock
+          # cargo +1.92.0 update -p borsh@1.6.0 --precise 1.5.8
+          # cargo +1.92.0 update -p toml_parser@1.0.6 --precise 1.0.2
 
       - name: Build Anchor programs
         run: anchor build
