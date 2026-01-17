@@ -99,8 +99,11 @@ jobs:
           solana-keygen new --no-bip39-passphrase -o ~/.config/solana/id.json --force
           solana config set --url localhost
 
-      - name: Remove incompatible Cargo.lock
-        run: rm -f Cargo.lock
+      - name: Generate compatible Cargo.lock
+        run: |
+          rustup install 1.75.0
+          rm -f Cargo.lock
+          cargo +1.75.0 generate-lockfile
 
       - name: Build Anchor programs
         run: anchor build
