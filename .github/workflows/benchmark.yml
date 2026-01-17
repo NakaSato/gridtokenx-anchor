@@ -106,6 +106,8 @@ jobs:
           cargo +1.75.0 generate-lockfile
           # Downgrade blake3 to avoid edition2024 errors in constant_time_eq
           cargo +1.75.0 update -p blake3 --precise 1.5.5
+          # Downgrade indexmap to avoid MSRV 1.82 requirement
+          cargo +1.75.0 update -p indexmap --precise 2.7.0
 
       - name: Build Anchor programs
         run: anchor build
