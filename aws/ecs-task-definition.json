@@ -1,11 +1,9 @@
 {
     "family": "gridtokenx-solana",
-    "networkMode": "awsvpc",
+    "networkMode": "host",
     "requiresCompatibilities": [
-        "FARGATE"
+        "EC2"
     ],
-    "cpu": "4096",
-    "memory": "32768",
     "executionRoleArn": "${EXECUTION_ROLE_ARN}",
     "taskRoleArn": "${TASK_ROLE_ARN}",
     "containerDefinitions": [
@@ -13,6 +11,8 @@
             "name": "solana-validator",
             "image": "${ECR_REPO_URI}:latest",
             "essential": true,
+            "memory": 500000,
+            "cpu": 61440,
             "portMappings": [
                 {
                     "containerPort": 8899,
@@ -31,6 +31,18 @@
                     "hostPort": 9900,
                     "protocol": "tcp",
                     "name": "faucet"
+                },
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp",
+                    "name": "gossip"
+                },
+                {
+                    "containerPort": 8001,
+                    "hostPort": 8001,
+                    "protocol": "udp",
+                    "name": "tpu"
                 }
             ],
             "environment": [
@@ -39,8 +51,16 @@
                     "value": "solana_runtime::message_processor=info"
                 },
                 {
+                    "name": "ACCOUNTS_DIR",
+                    "value": "/data/accounts"
+                },
+                {
                     "name": "LEDGER_DIR",
                     "value": "/data/ledger"
+                },
+                {
+                    "name": "SNAPSHOTS_DIR",
+                    "value": "/data/snapshots"
                 },
                 {
                     "name": "RPC_PORT",
@@ -55,7 +75,7 @@
                 "interval": 30,
                 "timeout": 10,
                 "retries": 5,
-                "startPeriod": 120
+                "startPeriod": 300
             },
             "logConfiguration": {
                 "logDriver": "awslogs",
@@ -67,20 +87,51 @@
             },
             "mountPoints": [
                 {
+                    "sourceVolume": "solana-accounts",
+                    "containerPath": "/data/accounts",
+                    "readOnly": false
+                },
+                {
                     "sourceVolume": "solana-ledger",
                     "containerPath": "/data/ledger",
                     "readOnly": false
+                },
+                {
+                    "sourceVolume": "solana-snapshots",
+                    "containerPath": "/data/snapshots",
+                    "readOnly": false
                 }
-            ]
+            ],
+            "ulimits": [
+                {
+                    "name": "nofile",
+                    "softLimit": 1000000,
+                    "hardLimit": 1000000
+                }
+            ],
+            "linuxParameters": {
+                "maxSwap": 0,
+                "swappiness": 0
+            }
         }
     ],
     "volumes": [
         {
+            "name": "solana-accounts",
+            "host": {
+                "sourcePath": "/data/accounts"
+            }
+        },
+        {
             "name": "solana-ledger",
-            "efsVolumeConfiguration": {
-                "fileSystemId": "${EFS_FILE_SYSTEM_ID}",
-                "rootDirectory": "/",
-                "transitEncryption": "ENABLED"
+            "host": {
+                "sourcePath": "/data/ledger"
+            }
+        },
+        {
+            "name": "solana-snapshots",
+            "host": {
+                "sourcePath": "/data/snapshots"
             }
         }
     ],

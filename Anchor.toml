@@ -7,20 +7,20 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-blockbench = "9HqyYuqADh6K88gnvFav1J2mKQMgDyQjiJEa5u54Ad9v"
-energy_token = "4vCgSNVMCEhgaFebnoGizvaCJu2SXCiXh8bu1YpMocMk"
-governance = "opUKK54PxUHNgzkPAaJioCSWxx8P7p3tYeotyixE84W"
-oracle = "HTTcpqf79kGh83xfe7me4LvJcqqQfxBoB5MuUk8N4Qee"
-registry = "6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu"
-tpc_benchmark = "2cYLfKJyutgK47fKVBYagSp6Zy1eKfh3PUmmdu2ZNJvh"
-trading = "B3FHDFGqMazfbMNXc4RWJ4hpZM98ZGRdicYAC3pYF2az"
+blockbench = "9qVk6eD69nzSTjjcHpxDjjXePMdGUVeazeQZYuSmhs1d"
+energy_token = "G8dC1NwdDiMhfrnPwkf9dMaR2AgrnFXcjWcepyGSHTfA"
+governance = "3d1BQT3EiwbspkD8HYKAnyLvKjs5kZwSbRBWwS5NHof9"
+oracle = "4Agkm8isGD6xDegsfoFzWN5Xp5WLVoqJyPDQLRsjh85u"
+registry = "EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+tpc_benchmark = "CKLCEJhsxMu1NNEu9oVuyDqpkXcR9dMr769XSuh2WAjC"
+trading = "CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "../keypairs/dev-wallet.json"
+wallet = "keypairs/dev-wallet.json"
 
 [scripts]
 benchmark-tpcc = "npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts"

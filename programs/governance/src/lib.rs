@@ -12,7 +12,7 @@ pub use errors::*;
 pub use events::*;
 pub use state::*;
 
-declare_id!("opUKK54PxUHNgzkPAaJioCSWxx8P7p3tYeotyixE84W");
+declare_id!("3d1BQT3EiwbspkD8HYKAnyLvKjs5kZwSbRBWwS5NHof9");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};
@@ -213,8 +213,7 @@ pub struct IssueErc<'info> {
     )]
     pub erc_certificate: Account<'info, ErcCertificate>,
     /// Meter account from registry program - tracks claimed ERC generation
-    #[account(mut)]
-    /// CHECK: Manual validation of Registry-owned account 
+    /// CHECK: Manual validation and read-only usage
     pub meter_account: AccountInfo<'info>,
     #[account(mut)]
     pub authority: Signer<'info>,

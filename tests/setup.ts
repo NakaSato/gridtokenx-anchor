@@ -187,71 +187,97 @@ export const expect = (actual: any) => {
   };
 };
 
-export const describe = (name: string, fn: () => void | Promise<void>) => {
-  console.log(`\n📋 ${name}`);
-  fn();
-};
+// Test Runner State
+interface TestContext {
+  befores: Array<() => Promise<void> | void>;
+  beforeEaches: Array<() => Promise<void> | void>;
+  afters: Array<() => Promise<void> | void>;
+  tests: Array<{ name: string; fn: () => Promise<void> | void }>;
+}
 
-export const it = (name: string, fn: () => void | Promise<void>) => {
-  console.log(`  ✅ ${name}`);
-  try {
-    const result = fn();
-    if (result instanceof Promise) {
-      return result.catch((error) => {
-        console.error(`    ❌ Failed: ${error.message}`);
-        throw error;
-      });
-    }
-  } catch (error: any) {
-    console.error(`    ❌ Failed: ${error.message}`);
-    throw error;
-  }
+let currentContext: TestContext = {
+  befores: [],
+  beforeEaches: [],
+  afters: [],
+  tests: []
 };
 
 export const before = (fn: () => void | Promise<void>) => {
-  console.log(`  🛠️  Setup`);
-  try {
-    const result = fn();
-    if (result instanceof Promise) {
-      return result.catch((error) => {
-        console.error(`    ❌ Setup failed: ${error.message}`);
-        throw error;
-      });
-    }
-  } catch (error: any) {
-    console.error(`    ❌ Setup failed: ${error.message}`);
-    throw error;
-  }
+  currentContext.befores.push(fn);
 };
 
 export const beforeEach = (fn: () => void | Promise<void>) => {
-  console.log(`  🔄 Reset`);
-  try {
-    const result = fn();
-    if (result instanceof Promise) {
-      return result.catch((error) => {
-        console.error(`    ❌ Reset failed: ${error.message}`);
-        throw error;
-      });
-    }
-  } catch (error: any) {
-    console.error(`    ❌ Reset failed: ${error.message}`);
-    throw error;
-  }
+  currentContext.beforeEaches.push(fn);
 };
 
 export const after = (fn: () => void | Promise<void>) => {
-  console.log(`  🧹 Cleanup`);
-  try {
-    const result = fn();
-    if (result instanceof Promise) {
-      return result.catch((error) => {
-        console.error(`    ❌ Cleanup failed: ${error.message}`);
-        throw error;
-      });
+  currentContext.afters.push(fn);
+};
+
+export const it = (name: string, fn: () => void | Promise<void>) => {
+  currentContext.tests.push({ name, fn });
+};
+
+export const describe = async (name: string, fn: () => void) => {
+  console.log(`\n📋 ${name}`);
+
+  // Reset context (simplistic support for single describe per file)
+  currentContext = {
+    befores: [],
+    beforeEaches: [],
+    afters: [],
+    tests: []
+  };
+
+  // 1. Register hooks and tests
+  fn();
+
+  // 2. Execute 'before' hooks
+  if (currentContext.befores.length > 0) {
+    console.log(`  🛠️  Setup`);
+    for (const setup of currentContext.befores) {
+      try {
+        await setup();
+      } catch (error: any) {
+        console.error(`    ❌ Setup failed: ${error.message}`);
+        process.exit(1);
+      }
     }
-  } catch (error: any) {
-    console.error(`    ❌ Cleanup failed: ${error.message}`);
-    throw error;
+  }
+
+  // 3. Execute Tests
+  for (const test of currentContext.tests) {
+    // Run beforeEach
+    for (const be of currentContext.beforeEaches) {
+      try {
+        await be();
+      } catch (error: any) {
+        console.error(`    ❌ BeforeEach failed: ${error.message}`);
+        process.exit(1);
+      }
+    }
+
+    console.log(`  ✅ ${test.name}`);
+    try {
+      await test.fn();
+    } catch (error: any) {
+      console.error(`    ❌ Failed: ${error.message}`);
+      if (error.stack) {
+        console.error(error.stack.split('\n').slice(0, 3).join('\n'));
+      }
+      process.exit(1);
+    }
+  }
+
+  // 4. Execute 'after' hooks
+  if (currentContext.afters.length > 0) {
+    console.log(`  🧹 Cleanup`);
+    for (const cleanup of currentContext.afters) {
+      try {
+        await cleanup();
+      } catch (error: any) {
+        console.error(`    ❌ Cleanup failed: ${error.message}`);
+      }
+    }
   }
 };

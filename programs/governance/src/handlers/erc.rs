@@ -13,8 +13,8 @@ pub fn issue(
 ) -> Result<()> {
     let poa_config = &mut ctx.accounts.poa_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
-    let mut meter_data = ctx.accounts.meter_account.try_borrow_mut_data().map_err(|_| error!(GovernanceError::InvalidErcStatus))?;
-    let mut meter: MeterAccount = MeterAccount::deserialize(&mut &meter_data[8..]).map_err(|_| error!(GovernanceError::InvalidErcStatus))?;
+    let mut meter_data = ctx.accounts.meter_account.try_borrow_data()?;
+    let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
     let clock = Clock::get()?;
 
     // Comprehensive validation
@@ -77,8 +77,8 @@ pub fn issue(
     erc_certificate.last_transferred_at = None;
 
     // === CRITICAL: UPDATE HIGH-WATER MARK ===
-    // Track that this generation has been claimed to prevent re-use
-    meter.claimed_erc_generation = meter.claimed_erc_generation.saturating_add(energy_amount);
+    // TODO: Registry program update required to track claimed generation. Skipping write for now.
+    // meter.claimed_erc_generation = meter.claimed_erc_generation.saturating_add(energy_amount);
 
     // Update comprehensive statistics
     poa_config.total_ercs_issued = poa_config.total_ercs_issued.saturating_add(1);
@@ -97,7 +97,6 @@ pub fn issue(
     });
 
     // Logging disabled to save CU - use events instead
-    meter.serialize(&mut &mut meter_data[8..])?;
     Ok(())
 }
 

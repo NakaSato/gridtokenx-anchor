@@ -210,14 +210,14 @@ pub fn new_order<'info>(
         
         // Deserialize Item (read-only)
         let item_data = item_account.try_borrow_data()?;
-        let item: Item = Item::try_deserialize(&mut &item_data[8..])?;
+        let item: Item = Item::try_deserialize(&mut &item_data[..])?;
         
         // Verify item ID matches
         require!(item.i_id == ol_input.i_id, TpcError::ItemNotFound);
         
         // Deserialize and update Stock (mutable)
         let mut stock_data = stock_account.try_borrow_mut_data()?;
-        let mut stock: Stock = Stock::try_deserialize(&mut &stock_data[8..])?;
+        let mut stock: Stock = Stock::try_deserialize(&mut &stock_data[..])?;
         
         // Verify stock matches
         require!(

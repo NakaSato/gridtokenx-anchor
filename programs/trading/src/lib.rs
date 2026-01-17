@@ -17,7 +17,7 @@ macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
 
-declare_id!("B3FHDFGqMazfbMNXc4RWJ4hpZM98ZGRdicYAC3pYF2az");
+declare_id!("CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J");
 
 #[program]
 pub mod trading {
@@ -414,6 +414,185 @@ pub mod trading {
 
         Ok(())
     }
+
+    /// Execute a truly atomic settlement between buyer and seller
+    /// This performs both currency and energy transfers in a single instruction
+    pub fn execute_atomic_settlement(
+        ctx: Context<ExecuteAtomicSettlement>,
+        amount: u64,
+        price: u64,
+        wheeling_charge: u64,
+    ) -> Result<()> {
+        compute_fn!("execute_atomic_settlement" => {
+            let mut market = ctx.accounts.market.load_mut()?;
+            let mut buy_order = ctx.accounts.buy_order.load_mut()?;
+            let mut sell_order = ctx.accounts.sell_order.load_mut()?;
+            let clock = Clock::get()?;
+
+            msg!("Secondary Token Program: {}", ctx.accounts.secondary_token_program.key());
+            msg!("System Program: {}", ctx.accounts.system_program.key());
+            msg!("Token Program: {}", ctx.accounts.token_program.key());
+
+            // 1. Validation
+            require!(amount > 0, ErrorCode::InvalidAmount);
+            require!(
+                buy_order.status == OrderStatus::Active as u8 || 
+                buy_order.status == OrderStatus::PartiallyFilled as u8,
+                ErrorCode::InactiveBuyOrder
+            );
+            require!(
+                sell_order.status == OrderStatus::Active as u8 || 
+                sell_order.status == OrderStatus::PartiallyFilled as u8,
+                ErrorCode::InactiveSellOrder
+            );
+            
+            // Check limits
+            let buy_rem = buy_order.amount.saturating_sub(buy_order.filled_amount);
+            let sell_rem = sell_order.amount.saturating_sub(sell_order.filled_amount);
+            require!(amount <= buy_rem && amount <= sell_rem, ErrorCode::InvalidAmount);
+            
+            // Note: price is already matched by Gateway
+            
+            let total_currency_value = amount.saturating_mul(price);
+            let market_fee = (total_currency_value * market.market_fee_bps as u64) / 10000;
+            let net_seller_amount = total_currency_value
+                .saturating_sub(market_fee)
+                .saturating_sub(wheeling_charge);
+
+            // 2. TOKEN TRANSFERS (Atomic Swap)
+            
+            // A. Transfer Currency from API Escrow to Destinations
+            // Fee
+            if market_fee > 0 {
+                let cpi_accounts = anchor_spl::token_interface::TransferChecked {
+                    from: ctx.accounts.buyer_currency_escrow.to_account_info(),
+                    mint: ctx.accounts.currency_mint.to_account_info(),
+                    to: ctx.accounts.fee_collector.to_account_info(),
+                    authority: ctx.accounts.escrow_authority.to_account_info(),
+                };
+                let cpi_program = ctx.accounts.token_program.to_account_info();
+                anchor_spl::token_interface::transfer_checked(
+                    CpiContext::new(cpi_program, cpi_accounts), 
+                    market_fee,
+                    ctx.accounts.currency_mint.decimals
+                )?;
+            }
+
+            // Wheeling Charge
+            if wheeling_charge > 0 {
+                let cpi_accounts = anchor_spl::token_interface::TransferChecked {
+                    from: ctx.accounts.buyer_currency_escrow.to_account_info(),
+                    mint: ctx.accounts.currency_mint.to_account_info(),
+                    to: ctx.accounts.wheeling_collector.to_account_info(),
+                    authority: ctx.accounts.escrow_authority.to_account_info(),
+                };
+                let cpi_program = ctx.accounts.token_program.to_account_info();
+                anchor_spl::token_interface::transfer_checked(
+                    CpiContext::new(cpi_program, cpi_accounts), 
+                    wheeling_charge,
+                    ctx.accounts.currency_mint.decimals
+                )?;
+            }
+
+            // Seller Proceeds
+            if net_seller_amount > 0 {
+                let cpi_accounts = anchor_spl::token_interface::TransferChecked {
+                    from: ctx.accounts.buyer_currency_escrow.to_account_info(),
+                    mint: ctx.accounts.currency_mint.to_account_info(),
+                    to: ctx.accounts.seller_currency_account.to_account_info(),
+                    authority: ctx.accounts.escrow_authority.to_account_info(),
+                };
+                let cpi_program = ctx.accounts.token_program.to_account_info();
+                anchor_spl::token_interface::transfer_checked(
+                    CpiContext::new(cpi_program, cpi_accounts), 
+                    net_seller_amount,
+                    ctx.accounts.currency_mint.decimals
+                )?;
+            }
+
+            // B. Transfer Energy from API Escrow to Buyer
+            let cpi_accounts = anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.seller_energy_escrow.to_account_info(),
+                mint: ctx.accounts.energy_mint.to_account_info(),
+                to: ctx.accounts.buyer_energy_account.to_account_info(),
+                authority: ctx.accounts.escrow_authority.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.secondary_token_program.to_account_info();
+            anchor_spl::token_interface::transfer_checked(
+                CpiContext::new(cpi_program, cpi_accounts), 
+                amount,
+                ctx.accounts.energy_mint.decimals
+            )?;
+
+            // 3. Update State
+            buy_order.filled_amount += amount;
+            sell_order.filled_amount += amount;
+
+            if buy_order.filled_amount >= buy_order.amount {
+                buy_order.status = OrderStatus::Completed as u8;
+            } else {
+                buy_order.status = OrderStatus::PartiallyFilled as u8;
+            }
+
+            if sell_order.filled_amount >= sell_order.amount {
+                sell_order.status = OrderStatus::Completed as u8;
+            } else {
+                sell_order.status = OrderStatus::PartiallyFilled as u8;
+            }
+
+            market.total_volume += amount;
+            market.total_trades += 1;
+
+            emit!(OrderMatched {
+                sell_order: ctx.accounts.sell_order.key(),
+                buy_order: ctx.accounts.buy_order.key(),
+                seller: sell_order.seller,
+                buyer: buy_order.buyer,
+                amount,
+                price,
+                total_value: total_currency_value,
+                fee_amount: market_fee,
+                timestamp: clock.unix_timestamp,
+            });
+        });
+
+        Ok(())
+    }
+
+    /// Transfer carbon credits (REC tokens) between wallets
+    /// Allows users to transfer their renewable energy credits to other users
+    pub fn transfer_carbon_credits(
+        ctx: Context<TransferCarbonCredits>,
+        amount: u64,
+    ) -> Result<()> {
+        compute_fn!("transfer_carbon_credits" => {
+            require!(amount > 0, ErrorCode::InvalidAmount);
+            let clock = Clock::get()?;
+
+            // Transfer REC tokens from sender to receiver
+            let cpi_accounts = anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.sender_rec_account.to_account_info(),
+                mint: ctx.accounts.rec_mint.to_account_info(),
+                to: ctx.accounts.receiver_rec_account.to_account_info(),
+                authority: ctx.accounts.sender.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            anchor_spl::token_interface::transfer_checked(
+                CpiContext::new(cpi_program, cpi_accounts),
+                amount,
+                ctx.accounts.rec_mint.decimals
+            )?;
+
+            emit!(CarbonCreditTransferred {
+                sender: ctx.accounts.sender.key(),
+                receiver: ctx.accounts.receiver.key(),
+                amount,
+                timestamp: clock.unix_timestamp,
+            });
+        });
+
+        Ok(())
+    }
 }
 
 // Helper functions
@@ -670,6 +849,75 @@ pub struct ExecuteBatch<'info> {
     pub authority: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct ExecuteAtomicSettlement<'info> {
+    #[account(mut)]
+    pub market: AccountLoader<'info, Market>,
+
+    #[account(mut)]
+    pub buy_order: AccountLoader<'info, Order>,
+
+    #[account(mut)]
+    pub sell_order: AccountLoader<'info, Order>,
+
+    /// CHECK: Buyer's token account for currency (Escrow)
+    #[account(mut)]
+    pub buyer_currency_escrow: AccountInfo<'info>,
+
+    /// CHECK: Seller's token account for energy (Escrow)
+    #[account(mut)]
+    pub seller_energy_escrow: AccountInfo<'info>,
+
+    /// CHECK: Seller's token account for currency (receiver)
+    #[account(mut)]
+    pub seller_currency_account: AccountInfo<'info>,
+
+    /// CHECK: Buyer's token account for energy (receiver)
+    #[account(mut)]
+    pub buyer_energy_account: AccountInfo<'info>,
+
+    /// CHECK: Fee collector account
+    #[account(mut)]
+    pub fee_collector: AccountInfo<'info>,
+
+    /// CHECK: Wheeling charge collector account
+    #[account(mut)]
+    pub wheeling_collector: AccountInfo<'info>,
+
+    pub energy_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
+    pub currency_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
+
+    pub escrow_authority: Signer<'info>, // API Authority that owns escrows
+    pub market_authority: Signer<'info>,
+
+    pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+    pub system_program: Program<'info, System>,
+    pub secondary_token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct TransferCarbonCredits<'info> {
+    /// Sender of carbon credits
+    #[account(mut)]
+    pub sender: Signer<'info>,
+
+    /// CHECK: Receiver pubkey for the transfer
+    pub receiver: AccountInfo<'info>,
+
+    /// Sender's REC token account
+    #[account(mut)]
+    pub sender_rec_account: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+
+    /// Receiver's REC token account
+    #[account(mut)]
+    pub receiver_rec_account: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+
+    /// REC mint (Renewable Energy Certificate token)
+    pub rec_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
+
+    pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+}
+
 // Data structs
 /// Market account for order and trade management
 #[account(zero_copy)]
@@ -872,6 +1120,14 @@ pub struct BatchExecuted {
     pub batch_id: u64,
     pub order_count: u32,
     pub total_volume: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct CarbonCreditTransferred {
+    pub sender: Pubkey,
+    pub receiver: Pubkey,
+    pub amount: u64,
     pub timestamp: i64,
 }
 

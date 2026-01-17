@@ -3,29 +3,21 @@
     "cluster": "gridtokenx-cluster",
     "taskDefinition": "gridtokenx-solana",
     "desiredCount": 1,
-    "launchType": "FARGATE",
-    "platformVersion": "LATEST",
+    "schedulingStrategy": "REPLICA",
     "deploymentConfiguration": {
-        "maximumPercent": 200,
-        "minimumHealthyPercent": 100,
+        "maximumPercent": 100,
+        "minimumHealthyPercent": 0,
         "deploymentCircuitBreaker": {
             "enable": true,
             "rollback": true
         }
     },
-    "networkConfiguration": {
-        "awsvpcConfiguration": {
-            "subnets": [
-                "${SUBNET_1}",
-                "${SUBNET_2}"
-            ],
-            "securityGroups": [
-                "${SECURITY_GROUP_ID}"
-            ],
-            "assignPublicIp": "ENABLED"
+    "capacityProviderStrategy": [
+        {
+            "capacityProvider": "gridtokenx-ec2-capacity-provider",
+            "weight": 1
         }
-    },
-    "healthCheckGracePeriodSeconds": 120,
+    ],
     "enableExecuteCommand": true,
     "tags": [
         {
