@@ -105,7 +105,7 @@ jobs:
           rm -f Cargo.lock
           cargo +1.92.0 generate-lockfile
           # Downgrade proc-macro-crate first (brings compatible toml_edit 0.22.x)
-          cargo +1.92.0 update -p proc-macro-crate --precise 3.2.0
+          cargo +1.92.0 update -p proc-macro-crate@3.4.0 --precise 3.2.0
           # Pin num_enum_derive to avoid proc-macro-crate upgrade
           cargo +1.92.0 update -p num_enum_derive --precise 0.7.3
           # Downgrade blake3 to avoid edition2024 errors in constant_time_eq
