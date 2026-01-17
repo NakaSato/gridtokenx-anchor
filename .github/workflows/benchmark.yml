@@ -104,12 +104,12 @@ jobs:
           rustup install 1.92.0
           rm -f Cargo.lock
           cargo +1.92.0 generate-lockfile
+          # Downgrade proc-macro-crate first (brings compatible toml_edit 0.22.x)
+          cargo +1.92.0 update -p proc-macro-crate --precise 3.2.0
+          # Pin num_enum_derive to avoid proc-macro-crate upgrade
+          cargo +1.92.0 update -p num_enum_derive --precise 0.7.3
           # Downgrade blake3 to avoid edition2024 errors in constant_time_eq
           cargo +1.92.0 update -p blake3 --precise 1.5.5
-          # Downgrade toml_edit to get compatible indexmap version
-          cargo +1.92.0 update -p toml_edit@0.23.10+spec-1.0.0 --precise 0.22.22
-          # Downgrade proc-macro-crate to use older toml_edit
-          cargo +1.92.0 update -p proc-macro-crate --precise 3.2.0
 
       - name: Build Anchor programs
         run: anchor build
