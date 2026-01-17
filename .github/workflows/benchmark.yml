@@ -99,6 +99,9 @@ jobs:
           solana-keygen new --no-bip39-passphrase -o ~/.config/solana/id.json --force
           solana config set --url localhost
 
+      - name: Remove incompatible Cargo.lock
+        run: rm Cargo.lock
+
       - name: Build Anchor programs
         run: anchor build
 
