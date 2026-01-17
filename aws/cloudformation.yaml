@@ -2,7 +2,8 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   GridTokenX Solana Blockchain - Standalone EC2 Instance
   FOR RESEARCH USE ONLY - Master's Degree Paper Testing
-  Instance: r7a.16xlarge (64 vCPU, 512GB RAM, NVMe storage)
+  Spec: 8 vCPU, 32GB RAM, 100GB SSD (Matches Research Hardware)
+  OS: Ubuntu 20.04 LTS
   Private network - No public IP
   NOT FOR PRODUCTION USE
 
@@ -25,11 +26,9 @@ Parameters:
 
   InstanceType:
     Type: String
-    Default: r7a.16xlarge
+    Default: m5.2xlarge
     AllowedValues:
-      - r7a.16xlarge   # AMD EPYC, 64 vCPU, 512GB RAM
-      - r7i.16xlarge   # Intel Sapphire Rapids, 64 vCPU, 512GB RAM  
-      - i4i.16xlarge   # Intel, 64 vCPU, 512GB RAM, 4x3.75TB NVMe
+      - m5.2xlarge    # 8 vCPU, 32GB RAM - Research Specification matching Intel Xeon E5-1650 v4
     Description: EC2 instance type for Solana validator
 
   KeyPairName:
@@ -37,9 +36,9 @@ Parameters:
     Description: EC2 Key Pair for SSH access
 
   AmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
-    Description: Amazon Linux 2023 AMI
+    Type: String
+    Default: ami-0c55b159cbfafe1f0
+    Description: Ubuntu 20.04 LTS AMI (update for your region)
 
 Resources:
   # ============================================
@@ -232,37 +231,21 @@ Resources:
       SecurityGroupIds:
         - !Ref SolanaSecurityGroup
       BlockDeviceMappings:
-        - DeviceName: /dev/xvda
+        - DeviceName: /dev/sda1
           Ebs:
-            VolumeSize: 500
+            VolumeSize: 100
             VolumeType: gp3
-            Iops: 16000
-            Throughput: 1000
+            Iops: 3000
+            Throughput: 125
             Encrypted: true
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           set -ex
           
-          # Install dependencies
-          dnf install -y nvme-cli xfsprogs curl
-          
-          # Mount NVMe instance store volumes
-          mkdir -p /data/accounts /data/ledger /data/snapshots
-          
-          NVME_DEVICES=$(nvme list | grep "Instance Storage" | awk '{print $1}' || true)
-          MOUNT_INDEX=0
-          MOUNT_PATHS=("/data/accounts" "/data/ledger" "/data/snapshots")
-          
-          for DEVICE in $NVME_DEVICES; do
-            if [ $MOUNT_INDEX -lt 3 ]; then
-              MOUNT_PATH="${!MOUNT_PATHS[$MOUNT_INDEX]}"
-              mkfs.xfs $DEVICE || true
-              mount $DEVICE $MOUNT_PATH
-              echo "$DEVICE $MOUNT_PATH xfs defaults,nofail 0 2" >> /etc/fstab
-              MOUNT_INDEX=$((MOUNT_INDEX + 1))
-            fi
-          done
+          # System updates
+          apt-get update && apt-get upgrade -y
+          apt-get install -y curl
           
           # Kernel optimizations for Solana
           cat >> /etc/sysctl.conf << EOF
