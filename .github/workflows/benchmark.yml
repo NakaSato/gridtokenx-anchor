@@ -101,13 +101,15 @@ jobs:
 
       - name: Generate compatible Cargo.lock
         run: |
-          rustup install 1.75.0
+          rustup install 1.92.0
           rm -f Cargo.lock
-          cargo +1.75.0 generate-lockfile
+          cargo +1.92.0 generate-lockfile
           # Downgrade blake3 to avoid edition2024 errors in constant_time_eq
-          cargo +1.75.0 update -p blake3 --precise 1.5.5
-          # Downgrade indexmap to avoid MSRV 1.82 requirement
-          cargo +1.75.0 update -p indexmap --precise 2.7.0
+          cargo +1.92.0 update -p blake3 --precise 1.5.5
+          # Downgrade toml_edit to get compatible indexmap version
+          cargo +1.92.0 update -p toml_edit --precise 0.22.22
+          # Downgrade proc-macro-crate to use older toml_edit
+          cargo +1.92.0 update -p proc-macro-crate --precise 3.2.0
 
       - name: Build Anchor programs
         run: anchor build
