@@ -28,7 +28,7 @@ env:
 jobs:
   benchmark:
     name: TPC-C Benchmark
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     
     steps:
@@ -38,11 +38,12 @@ jobs:
       - name: Identify Runner IP
         run: |
           RUNNER_IP=$(curl -s https://ifconfig.me)
+          OS_VERSION=$(lsb_release -ds)
           echo "## 🚀 Runner Information" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Public IP** | \`$RUNNER_IP\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **OS** | Ubuntu 20.04 LTS (Research Spec) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **OS Version** | $OS_VERSION |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Setup Node.js
@@ -148,7 +149,7 @@ jobs:
 
   poa-cluster:
     name: PoA Cluster Test
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     if: github.event_name == 'workflow_dispatch'
     
