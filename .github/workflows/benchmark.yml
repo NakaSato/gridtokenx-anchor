@@ -2,7 +2,7 @@ name: TPC-C Benchmark CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'programs/**'
       - 'tests/performance/**'
@@ -28,12 +28,22 @@ env:
 jobs:
   benchmark:
     name: TPC-C Benchmark
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     timeout-minutes: 30
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Identify Runner IP
+        run: |
+          RUNNER_IP=$(curl -s https://ifconfig.me)
+          echo "## 🚀 Runner Information" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Public IP** | \`$RUNNER_IP\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **OS** | Ubuntu 20.04 LTS (Research Spec) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -98,17 +108,22 @@ jobs:
       - name: Run TPC-C Benchmark
         id: benchmark
         run: |
-          npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts 2>&1 | tee benchmark-output.txt
+          echo "Starting TPC-C Benchmark with Scale Factor (W)=${{ github.event.inputs.warehouses || '1' }}"
+          npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts \
+            --warehouses=${{ github.event.inputs.warehouses || '1' }} \
+            --duration=${{ github.event.inputs.duration || '60' }} \
+            --use-real-programs=true 2>&1 | tee benchmark-output.txt
           
           # Extract metrics for summary
-          TPMC=$(grep "New-Order/min:" benchmark-output.txt | awk '{print $2}' | tr -d ',')
-          TPS=$(grep "Overall TPS:" benchmark-output.txt | awk '{print $3}')
-          SUCCESS_RATE=$(grep "Successful:" benchmark-output.txt | head -1 | grep -oP '\d+')
-          P99=$(grep "p99:" benchmark-output.txt | head -1 | awk '{print $2}' | tr -d ',')
+          TPMC=$(grep "New-Order/min:" benchmark-output.txt | awk '{print $2}' | tr -d ',' || echo "0")
+          TPS=$(grep "Overall TPS:" benchmark-output.txt | awk '{print $3}' || echo "0")
+          SUCCESS_RATE=$(grep "Successful:" benchmark-output.txt | head -1 | grep -oP '\d+' | head -1 || echo "0")
+          P99=$(grep "p99:" benchmark-output.txt | head -1 | awk '{print $2}' | tr -d ',' || echo "0")
           
           echo "tpmc=$TPMC" >> $GITHUB_OUTPUT
           echo "tps=$TPS" >> $GITHUB_OUTPUT
           echo "p99=$P99" >> $GITHUB_OUTPUT
+          echo "success_rate=$SUCCESS_RATE" >> $GITHUB_OUTPUT
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
@@ -123,15 +138,17 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Scale Factor (W)** | ${{ github.event.inputs.warehouses || '1' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **tpmC** | ${{ steps.benchmark.outputs.tpmc }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **TPS** | ${{ steps.benchmark.outputs.tps }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Throughput (TPS)** | ${{ steps.benchmark.outputs.tps }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Success Rate** | ${{ steps.benchmark.outputs.success_rate }}% |" >> $GITHUB_STEP_SUMMARY
           echo "| **p99 Latency** | ${{ steps.benchmark.outputs.p99 }} μs |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ Benchmark completed successfully" >> $GITHUB_STEP_SUMMARY
 
   poa-cluster:
     name: PoA Cluster Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     timeout-minutes: 45
     if: github.event_name == 'workflow_dispatch'
     
