@@ -100,7 +100,7 @@ jobs:
           solana config set --url localhost
 
       - name: Remove incompatible Cargo.lock
-        run: rm Cargo.lock
+        run: rm -f Cargo.lock
 
       - name: Build Anchor programs
         run: anchor build
