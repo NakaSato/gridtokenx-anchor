@@ -27,7 +27,7 @@ macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
 
-declare_id!("G8dC1NwdDiMhfrnPwkf9dMaR2AgrnFXcjWcepyGSHTfA");
+declare_id!("8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq");
 
 #[program]
 pub mod energy_token {
@@ -225,14 +225,17 @@ pub mod energy_token {
     /// This is used for off-chain verified meter readings
     pub fn mint_tokens_direct(ctx: Context<MintTokensDirect>, amount: u64) -> Result<()> {
         compute_fn!("mint_tokens_direct" => {
-            let token_info = ctx.accounts.token_info.load()?;
+            // Scope the borrow to ensure it drops before mutable borrow later
+            {
+                let token_info = ctx.accounts.token_info.load()?;
             
-            // Check if caller has permission (Admin or Registry Program)
-            let is_admin = ctx.accounts.authority.key() == token_info.authority;
+                // Check if caller has permission (Admin or Registry Program)
+                let is_admin = ctx.accounts.authority.key() == token_info.authority;
             
-            // Note: In real deployment, CPI caller verification can be added
-            // By using invoke_signed context or checking instruction data
-            require!(is_admin, ErrorCode::UnauthorizedAuthority);
+                // Note: In real deployment, CPI caller verification can be added
+                // By using invoke_signed context or checking instruction data
+                require!(is_admin, ErrorCode::UnauthorizedAuthority);
+            }
 
             // Mint tokens using token_info PDA as authority
             let seeds = &[b"token_info_2022".as_ref(), &[ctx.bumps.token_info]];

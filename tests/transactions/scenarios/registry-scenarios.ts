@@ -61,7 +61,7 @@ export class RegistryScenarios {
       // Check if already initialized
       let needsInit = false;
       try {
-        await this.program.account.registry.fetch(registryPda);
+        await (this.program.account as any).registry.fetch(registryPda);
         const duration = Date.now() - startTime;
         this.reporter.recordTransaction({
           program: "Registry",
@@ -183,11 +183,11 @@ export class RegistryScenarios {
         // Register user
         try {
           const signature = await this.program.methods
-            .registerUser(userType, location)
+            .registerUser(userType, 13.75, 100.5) // Dummy coordinates
             .accounts({
               registry: registryPda,
               userAccount: userAccountPda,
-              userAuthority: user.publicKey,
+              authority: user.publicKey,
               systemProgram: anchor.web3.SystemProgram.programId,
             })
             .signers([user.keypair])
@@ -261,7 +261,7 @@ export class RegistryScenarios {
 
           // Find PDAs
           const [meterAccountPda] = PublicKey.findProgramAddressSync(
-            [Buffer.from("meter"), Buffer.from(meterId)],
+            [Buffer.from("meter"), producer.publicKey.toBuffer(), Buffer.from(meterId)],
             this.program.programId
           );
 
@@ -283,7 +283,7 @@ export class RegistryScenarios {
                 registry: registryPda,
                 userAccount: userAccountPda,
                 meterAccount: meterAccountPda,
-                userAuthority: producer.publicKey,
+                owner: producer.publicKey,
                 systemProgram: anchor.web3.SystemProgram.programId,
               })
               .signers([producer.keypair])
@@ -357,7 +357,7 @@ export class RegistryScenarios {
 
         // Find meter account PDA
         const [meterAccountPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("meter"), Buffer.from(meterId)],
+          [Buffer.from("meter"), producer.publicKey.toBuffer(), Buffer.from(meterId)],
           this.program.programId
         );
 
@@ -426,7 +426,7 @@ export class RegistryScenarios {
       try {
         // Find meter account PDA
         const [meterAccountPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("meter"), Buffer.from(meterId)],
+          [Buffer.from("meter"), producer.publicKey.toBuffer(), Buffer.from(meterId)],
           this.program.programId
         );
 
@@ -515,7 +515,7 @@ export class RegistryScenarios {
 
       try {
         const [meterAccountPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("meter"), Buffer.from(meterId)],
+          [Buffer.from("meter"), producer1.publicKey.toBuffer(), Buffer.from(meterId)],
           this.program.programId
         );
 

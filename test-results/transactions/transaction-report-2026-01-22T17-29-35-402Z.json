@@ -1,0 +1,693 @@
+{
+  "testSuiteName": "GridTokenX Transaction Tests",
+  "startTime": 1769102953117,
+  "endTime": 1769102975402,
+  "totalDuration": 22285,
+  "scenarios": [
+    {
+      "scenarioName": "Registry Initialization",
+      "program": "Registry",
+      "totalTransactions": 2,
+      "successfulTransactions": 2,
+      "failedTransactions": 0,
+      "totalDuration": 812,
+      "averageDuration": 406,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "initializeRegistry",
+          "keypair": "dev-wallet",
+          "signature": "3SfcyAXeJZ9nDxAxjPhQNF5pJmoyL9CrEt7bnJfwYZgPkTpEuxZinpp4HMHEHXUY7TSQkFBJQ92Tvy1vBgyHu2gs",
+          "success": true,
+          "duration": 452,
+          "timestamp": 1769102959036
+        },
+        {
+          "program": "Registry",
+          "operation": "setOracleAuthority",
+          "keypair": "dev-wallet",
+          "signature": "53egHxSWZstGYVkwTGnz5JcCrvrQN8ZmhYSFNgtywUMBBuS4ygtF9iA2we7hvwAUUuAvffQELnGB6nNGzzc4M57s",
+          "success": true,
+          "duration": 360,
+          "timestamp": 1769102959488
+        }
+      ]
+    },
+    {
+      "scenarioName": "Multi-User Registration",
+      "program": "Registry",
+      "totalTransactions": 5,
+      "successfulTransactions": 5,
+      "failedTransactions": 0,
+      "totalDuration": 2412,
+      "averageDuration": 482.4,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-1",
+          "signature": "4gkmbqTguEwDyocdB1J8QSJdBk97EmWWGLW3PcoQo58dU9uE4hSqvbSmwjqwMNgurgeCH99gYwK9Pjc7F1f5HbDF",
+          "success": true,
+          "duration": 469,
+          "timestamp": 1769102959848
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-2",
+          "signature": "4yVEWLPLfbSsg1Sb2aNGfCqtyaE2iAjmDkdFA6guidkWZ1WafmosXRYBSbfHhoKvb81o9GWXGFDacjroSMypJVEC",
+          "success": true,
+          "duration": 456,
+          "timestamp": 1769102960317
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-3",
+          "signature": "3kmYBactxPhwfmWz7q3RbUmSg28HqqotbcfEt2TVpE1UaR76qpUtEzU5cqAjudFY9wwvyoSAtDfrc75HBkyoCAZj",
+          "success": true,
+          "duration": 509,
+          "timestamp": 1769102960773
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-1",
+          "signature": "mRYfwDAk1GzRQdpVFiKaHWkoyMEuummeRPBaRoxnFYhBcmCBcNoLwFjFUZv4HUGFSx6gJ7h6LJguwMCNxAFKcCB",
+          "success": true,
+          "duration": 472,
+          "timestamp": 1769102961282
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-2",
+          "signature": "3jztNweuZnwEnHVtftLsBysUpmvroe28GXKLpPNvdRu4Foi4QesqU8Nkrzmti8uN3J1wVyhexteWadtpeqKdoNbt",
+          "success": true,
+          "duration": 506,
+          "timestamp": 1769102961754
+        }
+      ]
+    },
+    {
+      "scenarioName": "Multi-Meter Registration",
+      "program": "Registry",
+      "totalTransactions": 4,
+      "successfulTransactions": 4,
+      "failedTransactions": 0,
+      "totalDuration": 1853,
+      "averageDuration": 463.25,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "signature": "nRPrTA2oTQtBjX5AzisDNuJ8K1PbKCHFWXh9AzDgdw1ocrXr2u9S3xJ4v7D79B5eymSuMdEAH6gSNjKm9hNdFhD",
+          "success": true,
+          "duration": 509,
+          "timestamp": 1769102962260
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "signature": "59QKPabPBXBgyG7ifWLuCYB9Bibfx8odGaUepax2Ey7hKVXittygMuFHneNhXTbRhJR6kkGuNJDqDj93Wpwy3uJ9",
+          "success": true,
+          "duration": 407,
+          "timestamp": 1769102962769
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-2",
+          "signature": "4GxXKns2HWg91BLMdv4Qv7CyAtjvZTBtc5BqCGdXKR5EZB4GJ6eHduMKCsDswk7b4tEqfgHsET4QDZ9GNEqz1G86",
+          "success": true,
+          "duration": 469,
+          "timestamp": 1769102963176
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-3",
+          "signature": "3tav2tLA8cUHWRa5wpszQLPq1WatUaS4uKAcf81LJf56HCCqmLsa36A4B6vqGFgah4zbiKZmDZnbbaa6zbV869KU",
+          "success": true,
+          "duration": 468,
+          "timestamp": 1769102963645
+        }
+      ]
+    },
+    {
+      "scenarioName": "Concurrent Meter Updates",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 3,
+      "failedTransactions": 0,
+      "totalDuration": 1397,
+      "averageDuration": 465.6666666666667,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-1",
+          "signature": "VGWn2rTbFegktS2bSBKJB2TPEadmz2vZkXF43miRWbsrQvGsaTvRSH9cjhc7FK4UfkWh2w3DqK8ucQNbzgCjFvi",
+          "success": true,
+          "duration": 508,
+          "timestamp": 1769102964113
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-2",
+          "signature": "4p8mex6ZhUwV21PwpPgrkfiMfspLwwc1mvvRLmivK6ZhA6uaeng4ktJHGMQGtzuTXcGvYbUssqowJxMM5VYh5uKY",
+          "success": true,
+          "duration": 520,
+          "timestamp": 1769102964621
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-3",
+          "signature": "5xnG8GafPevzRTWa6UYS4zKaykcqsmnzn9HTvwZRvAa5VinB7hAeuDF8YTMU4tXNTWNNeR1LS4M8Dhyy12DTj85p",
+          "success": true,
+          "duration": 369,
+          "timestamp": 1769102965141
+        }
+      ]
+    },
+    {
+      "scenarioName": "Balance Settlement Flow",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 3,
+      "failedTransactions": 0,
+      "totalDuration": 1489,
+      "averageDuration": 496.3333333333333,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-1",
+          "signature": "3KMsfMU5R2nSKKFMgvXdyHWHGuj3pCEWAaPR1gtRQjfQf1tanJrhYc51YJgm4VVzve2zR9cQY6VWZDnfmxghe7yR",
+          "success": true,
+          "duration": 477,
+          "timestamp": 1769102965510
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-2",
+          "signature": "4ikfaybQu9nDtnYorYXJhjrNMgr5zNqDHcrD5R36vBEB7j3L6Ekp6BHYetv6iJAWhccWUcnCcRpaeZPJNazFTbXi",
+          "success": true,
+          "duration": 495,
+          "timestamp": 1769102965989
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-3",
+          "signature": "2Wx3nYi6mZqyLu45n9uKpd2BpxaavyCgSKxkupDKCd1M9dwzUwQ4m7LUPKydXgAVRZW9orE6Srreo7EoDDLjRicP",
+          "success": true,
+          "duration": 517,
+          "timestamp": 1769102966485
+        }
+      ]
+    },
+    {
+      "scenarioName": "Authorization Checks",
+      "program": "Registry",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 7,
+      "averageDuration": 7,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "unauthorizedSettlement",
+          "keypair": "producer-2->producer-1",
+          "success": true,
+          "duration": 7,
+          "timestamp": 1769102967003,
+          "error": "Properly rejected (expected)"
+        }
+      ]
+    },
+    {
+      "scenarioName": "PoA Initialization",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 369,
+      "averageDuration": 369,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "initializePoa",
+          "keypair": "governance-authority",
+          "signature": "2jZarspqUJbzf8jha558f6KzBuf225NapayuGusnW5TLb3X4ZTdAzvx1ucuS594jwkQsHQBjVdKTq1F39TFeqAjm",
+          "success": true,
+          "duration": 369,
+          "timestamp": 1769102967019
+        }
+      ]
+    },
+    {
+      "scenarioName": "Emergency Pause",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 459,
+      "averageDuration": 459,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "emergencyPause",
+          "keypair": "governance-authority",
+          "signature": "2syspHyNjezrCuAMm5gi7c4XvSNgtwX8qx44Yi7mWU2uYTkSMBrxZfDCR3UvvaSubH4PGF1jHGvL6j8MNGc8janL",
+          "success": true,
+          "duration": 459,
+          "timestamp": 1769102967389
+        }
+      ]
+    },
+    {
+      "scenarioName": "Emergency Unpause",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 496,
+      "averageDuration": 496,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "emergencyUnpause",
+          "keypair": "governance-authority",
+          "signature": "4GG1ge1dTE45Dv2pMwiGhDc8FEgkT4ymZGKJ2mphpgPak35EYhP3PWAdhCqYEHHGasJ1bok4Ec6BdNVE85mzGFmo",
+          "success": true,
+          "duration": 496,
+          "timestamp": 1769102967848
+        }
+      ]
+    },
+    {
+      "scenarioName": "ERC Full Lifecycle",
+      "program": "Governance",
+      "totalTransactions": 4,
+      "successfulTransactions": 3,
+      "failedTransactions": 1,
+      "totalDuration": 1361,
+      "averageDuration": 340.25,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "signature": "AhLgathU5wfvb4yGKrY7grGjFbCa95TYzdBTGMBtYxbdV4UDcAjDRgAUsXVN1sLhxgS5oQuugXsmk7KhJnoE3sd",
+          "success": true,
+          "duration": 509,
+          "timestamp": 1769102968345
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "signature": "3YWuknqG5zgABVETRK5Vqi2jd7r3JY1wpoFdgv4nN7r1q8wtR9WDj74JephLbhJhXZtCRSoz4y5sy9ZwBrkYpChA",
+          "success": true,
+          "duration": 388,
+          "timestamp": 1769102968854
+        },
+        {
+          "program": "Governance",
+          "operation": "transferErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 9,
+          "timestamp": 1769102969242,
+          "error": "AnchorError thrown in programs/governance/src/handlers/erc.rs:202. Error Code: TransfersNotAllowed. "
+        },
+        {
+          "program": "Governance",
+          "operation": "revokeErc",
+          "keypair": "governance-authority",
+          "signature": "UgzDdCXJj5SVmy9qZxNnCcrwZfMo2Dpgp89EdTrjGe2Y3TxBopFvaiSSjbfv1VquMPSqay8nF2iRcvzVvo3XpMK",
+          "success": true,
+          "duration": 455,
+          "timestamp": 1769102969251
+        }
+      ]
+    },
+    {
+      "scenarioName": "ERC Batch Issuance",
+      "program": "Governance",
+      "totalTransactions": 5,
+      "successfulTransactions": 5,
+      "failedTransactions": 0,
+      "totalDuration": 2374,
+      "averageDuration": 474.8,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "signature": "2KvTMgP9qX8TufAnNiAtGUfuYx8mywYzNjAMRnWj7kyUiRh3TuLBB5ZEkYWWs6m8eLdUL6uSGGA2eHkFJCTUsTsG",
+          "success": true,
+          "duration": 506,
+          "timestamp": 1769102969706
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "signature": "5F9kYVKnX4itrYkspmEaPhwk1fueq5VNaSF9K6WEuxN5NLEnkjrs95TedhNStupni1EsFuxZSx7TSAAGCMHWddgj",
+          "success": true,
+          "duration": 504,
+          "timestamp": 1769102970212
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "signature": "2TKUa3mGkgrt6nJcABGeh1vAtUzZaoAwdGzT1PnQxMBXy2Ks3fCvAmrFwSPV655XNJZwoFHVn1sN8Amm2rqUF2Uj",
+          "success": true,
+          "duration": 514,
+          "timestamp": 1769102970717
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "signature": "2MLmZF2reJKA8hTL49UEqnDeHPJbMj6XJaJorhGCAEsWwSze8p5wfpPL7wQwcS2M2RfjbPevpXPhaBfumZqqmCoq",
+          "success": true,
+          "duration": 377,
+          "timestamp": 1769102971231
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "signature": "3JCyLpRzpJthaP9g4N5tSnCYnTYSLCVWaqVUgiawmjzPnW94kea24VAATcv5iGnbyG33nHjNA9837cb4RnifN26v",
+          "success": true,
+          "duration": 473,
+          "timestamp": 1769102971609
+        }
+      ]
+    },
+    {
+      "scenarioName": "ERC Validation Edge Cases",
+      "program": "Governance",
+      "totalTransactions": 6,
+      "successfulTransactions": 2,
+      "failedTransactions": 4,
+      "totalDuration": 1049,
+      "averageDuration": 174.83333333333334,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "signature": "4sCM1U9h9ZnHyZivQnZJXu86hgAawCKL8bF1X48DMdCyCMsbJKoRQmbzTMXq7vAgtsQHSmaexZHUYdcJzD7eqqdP",
+          "success": true,
+          "duration": 505,
+          "timestamp": 1769102972083
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "signature": "2WvtTitAN9TvvgPZ4WAxYFYxDixRGCy4hVpAHiuRaHccUh9nMbAxV6wLEVHyDvbx4xGUBkBYDFBiJiiViR1pEbSV",
+          "success": true,
+          "duration": 517,
+          "timestamp": 1769102972588
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102973106,
+          "error": "AnchorError thrown in programs/governance/src/handlers/erc.rs:49. Error Code: InsufficientUnclaimedG"
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102973113,
+          "error": "AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102973120,
+          "error": "AnchorError thrown in programs/governance/src/handlers/erc.rs:49. Error Code: InsufficientUnclaimedG"
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769102973127,
+          "error": "AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Oracle Initialization",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 354,
+      "averageDuration": 354,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "initializeOracle",
+          "keypair": "oracle-authority",
+          "signature": "26nvXQGuYnFXL1m8b4o1FaiiG9KFmgKMta6hSwMgAArJGKHKru763tDZaS34sKtQJ6HEuYtU3t9SX9GjdKdjm6u5",
+          "success": true,
+          "duration": 354,
+          "timestamp": 1769102973138
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Oracle Status",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 548,
+      "averageDuration": 548,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "updateOracleStatus",
+          "keypair": "oracle-authority",
+          "signature": "3pnjxv1Q97njJQJatCY8A6fUbo75EMBmG9efEWp762bJt4QJvdrsPDGXBTk9EMwiSvtQhNnQ4p4n5ri8jroowCn2",
+          "success": true,
+          "duration": 548,
+          "timestamp": 1769102973492
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Validation Config",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 503,
+      "averageDuration": 503,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "updateValidationConfig",
+          "keypair": "oracle-authority",
+          "signature": "4RkgzBSgYmv33xRirBZK9DCGYNdt34Zz2VZAdFEprc6Amk2f9tmMw3p1LfY2DybKppuu46SsQFyVv89s1kguDSKw",
+          "success": true,
+          "duration": 503,
+          "timestamp": 1769102974041
+        }
+      ]
+    },
+    {
+      "scenarioName": "Market Initialization",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 392,
+      "averageDuration": 392,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "initializeMarket",
+          "keypair": "dev-wallet",
+          "signature": "2FZ67kMbj77Uy4SaiBmJwhDNF7sSY1ZfMaYjaajp9w3qgcaGFSBNMYyPYwg7or7hyeR4FciWP3QM7VFDds9iwAdX",
+          "success": true,
+          "duration": 392,
+          "timestamp": 1769102974550
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Market Params",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 457,
+      "averageDuration": 457,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "updateMarketParams",
+          "keypair": "dev-wallet",
+          "signature": "2rQgAQgw5cyVJZewLmBRMjydHKhe75UUxYWNZvpZbr2AbeQLxwDqEPpUsbs8NH1VsySNGU8snSETmB6A5hB6WKns",
+          "success": true,
+          "duration": 457,
+          "timestamp": 1769102974942
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalScenarios": 17,
+    "totalTransactions": 41,
+    "successfulTransactions": 36,
+    "failedTransactions": 5,
+    "successRate": 87.8048780487805,
+    "averageTransactionDuration": 398.3414634146341,
+    "throughput": 1.8398025577742876,
+    "programStats": {
+      "Registry": {
+        "program": "Registry",
+        "totalTransactions": 18,
+        "successfulTransactions": 18,
+        "failedTransactions": 0,
+        "averageDuration": 442.77777777777777,
+        "totalComputeUnits": 0
+      },
+      "Governance": {
+        "program": "Governance",
+        "totalTransactions": 18,
+        "successfulTransactions": 13,
+        "failedTransactions": 5,
+        "averageDuration": 339.3333333333333,
+        "totalComputeUnits": 0
+      },
+      "Oracle": {
+        "program": "Oracle",
+        "totalTransactions": 3,
+        "successfulTransactions": 3,
+        "failedTransactions": 0,
+        "averageDuration": 468.3333333333333,
+        "totalComputeUnits": 0
+      },
+      "Trading": {
+        "program": "Trading",
+        "totalTransactions": 2,
+        "successfulTransactions": 2,
+        "failedTransactions": 0,
+        "averageDuration": 424.5,
+        "totalComputeUnits": 0
+      }
+    },
+    "keypairStats": {
+      "dev-wallet": {
+        "keypair": "dev-wallet",
+        "totalTransactions": 4,
+        "successfulTransactions": 4,
+        "failedTransactions": 0,
+        "averageDuration": 415.25
+      },
+      "producer-1": {
+        "keypair": "producer-1",
+        "totalTransactions": 4,
+        "successfulTransactions": 4,
+        "failedTransactions": 0,
+        "averageDuration": 465.5
+      },
+      "producer-2": {
+        "keypair": "producer-2",
+        "totalTransactions": 3,
+        "successfulTransactions": 3,
+        "failedTransactions": 0,
+        "averageDuration": 473.3333333333333
+      },
+      "producer-3": {
+        "keypair": "producer-3",
+        "totalTransactions": 3,
+        "successfulTransactions": 3,
+        "failedTransactions": 0,
+        "averageDuration": 498
+      },
+      "consumer-1": {
+        "keypair": "consumer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 472
+      },
+      "consumer-2": {
+        "keypair": "consumer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 506
+      },
+      "oracle->producer-1": {
+        "keypair": "oracle->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 508
+      },
+      "oracle->producer-2": {
+        "keypair": "oracle->producer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 520
+      },
+      "oracle->producer-3": {
+        "keypair": "oracle->producer-3",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 369
+      },
+      "producer-2->producer-1": {
+        "keypair": "producer-2->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 7
+      },
+      "governance-authority": {
+        "keypair": "governance-authority",
+        "totalTransactions": 18,
+        "successfulTransactions": 13,
+        "failedTransactions": 5,
+        "averageDuration": 339.3333333333333
+      },
+      "oracle-authority": {
+        "keypair": "oracle-authority",
+        "totalTransactions": 3,
+        "successfulTransactions": 3,
+        "failedTransactions": 0,
+        "averageDuration": 468.3333333333333
+      }
+    }
+  }
+}

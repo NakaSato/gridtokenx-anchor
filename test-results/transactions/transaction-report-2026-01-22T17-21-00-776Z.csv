@@ -1,0 +1,95 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Registry Initialization","Registry","initializeRegistry","dev-wallet","true","445","2026-01-22T17:20:53.802Z","5v7ngcUSAXuGriTPqsxex7F2P9SuUjHsnEib8gkw45jQ2422ySLkiqX6S9eWQLp9SAajp65ykd7FaKwgWdkTwQwg",""
+"Registry Initialization","Registry","setOracleAuthority","dev-wallet","true","400","2026-01-22T17:20:54.247Z","385nooMcdiMBjBpwcNJEeMpmZARrTa6DgUkF45d1QzxGEQfucJkSn5i5xdxGWLjkDKYZbfkWPwkK16EmbmPx9wqY",""
+"Multi-User Registration","Registry","registerUser","producer-1","true","535","2026-01-22T17:20:54.647Z","2bTBTmsw17YDLcd4XKFULLQQjdLvN3e2PRtTVj8AyNVRkN7k3iry9zwuCyxWhDSnZ69E6y2xU7R8Wdsid8iYRn3k",""
+"Multi-User Registration","Registry","registerUser","producer-2","true","395","2026-01-22T17:20:55.182Z","5w7Y2gNEkXACtCREpN8ZWZZ5KbHWsEWhsw8KQJNUxaFHFJFxsj6zVNtUkjo8kxHGGSmkD1wusJqqd3GerJ2czj8Q",""
+"Multi-User Registration","Registry","registerUser","producer-3","true","466","2026-01-22T17:20:55.577Z","58b1mVAmQ6ub7NwU13MXFwRjeEPQjKPsEyat3WMthhrAZpKzQLYkMUcZbkjAKvDxXVUYRLDofsqWXUQBQ1rrfgZj",""
+"Multi-User Registration","Registry","registerUser","consumer-1","true","478","2026-01-22T17:20:56.043Z","49ek69k9SZvF4YKGEtr1yXua7ELAynxDkMfTbvwhaFNmYT8qu9Uk5kBeJfsSC69kdFi8LuqojPfworvEna79pChS",""
+"Multi-User Registration","Registry","registerUser","consumer-2","true","516","2026-01-22T17:20:56.521Z","53CfzofFLHLL2peyRPqMFfLkD1ids5mfRYVGEt79Xo3HsT6qx9caSxGFUypjQv8UsP3YKj2qrNrqeJAjo8iBKJX1",""
+"Multi-Meter Registration","Registry","registerMeter","producer-1","false","9","2026-01-22T17:20:57.037Z","","AnchorError caused by account: meter_account. Error Code: ConstraintSeeds. Error Number: 2006. Error Message: A seeds constraint was violated.
+Program log: Left:
+Program log: 9vaq563XeVr9TmHUSDMjoDNUoriqYbg4TFV5zEiA6azN
+Program log: Right:
+Program log: 4fK5iCGiUEuEttsxZ4Z5DPeXGDsUgbWeRJWix8eHoNvk"
+"Multi-Meter Registration","Registry","registerMeter","producer-1","false","7","2026-01-22T17:20:57.046Z","","AnchorError caused by account: meter_account. Error Code: ConstraintSeeds. Error Number: 2006. Error Message: A seeds constraint was violated.
+Program log: Left:
+Program log: dVFc8jEC1RV75U4rBpugr8RuL3jj2WAdRRSosgr2vg5
+Program log: Right:
+Program log: 87nuYumRNFCsRdWxZV5UhA47r75ZLn8HMh7kW7mLf8vH"
+"Multi-Meter Registration","Registry","registerMeter","producer-2","false","7","2026-01-22T17:20:57.053Z","","AnchorError caused by account: meter_account. Error Code: ConstraintSeeds. Error Number: 2006. Error Message: A seeds constraint was violated.
+Program log: Left:
+Program log: 7ybak6Lqz52CkvLNVjL4JwZN8HDBLyWtSffcruc85iQL
+Program log: Right:
+Program log: ApGuX3LfjsNA2uXJTe2XG1r3p6aCA7fTZfVjB62njsjk"
+"Multi-Meter Registration","Registry","registerMeter","producer-3","false","7","2026-01-22T17:20:57.060Z","","AnchorError caused by account: meter_account. Error Code: ConstraintSeeds. Error Number: 2006. Error Message: A seeds constraint was violated.
+Program log: Left:
+Program log: CxY1JXoBPwLvWtVRNceUGogs8vuCZvTZCGXCvEFg7pyH
+Program log: Right:
+Program log: 7fnqdKXcL5C6hd3YBAC4rE3zMqzx1PeayJYaVbMvjMWX"
+"Concurrent Meter Updates","Registry","updateMeterReading","oracle->producer-1","false","6","2026-01-22T17:20:57.067Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Concurrent Meter Updates","Registry","updateMeterReading","oracle->producer-2","false","6","2026-01-22T17:20:57.073Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Concurrent Meter Updates","Registry","updateMeterReading","oracle->producer-3","false","6","2026-01-22T17:20:57.079Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Balance Settlement Flow","Registry","settleMeterBalance","producer-1","false","5","2026-01-22T17:20:57.086Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Balance Settlement Flow","Registry","settleMeterBalance","producer-2","false","6","2026-01-22T17:20:57.091Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Balance Settlement Flow","Registry","settleMeterBalance","producer-3","false","6","2026-01-22T17:20:57.097Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Authorization Checks","Registry","unauthorizedSettlement","producer-2->producer-1","false","5","2026-01-22T17:20:57.103Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"PoA Initialization","Governance","initializePoa","governance-authority","true","324","2026-01-22T17:20:57.119Z","1CJydvuaSkGMo93MekPsy28fg4W7j7ww9ym5YfRWcxEDotBTtgFnCKw7mLxJh3o9jzq9ML4UWwyfkt63n4ZkSMW",""
+"Emergency Pause","Governance","emergencyPause","governance-authority","true","471","2026-01-22T17:20:57.443Z","31815g76B9WSiKiLiBjSt6XU2ic97dQLbFStqLGL6dghhuvzJYvcocvxf8UhC78x9H4Jw4trNz7sAZbG5Tpbw9eU",""
+"Emergency Unpause","Governance","emergencyUnpause","governance-authority","true","525","2026-01-22T17:20:57.915Z","5tx6kJFgCoZLHqT71QME9Xz6VFbvtbwTM8XRsc8S2BtioFdUPjCD43Szzy86fJ6rhPmpwJPaPynx1UH1ZeC2k1Et",""
+"ERC Full Lifecycle","Governance","issueErc","governance-authority","false","8","2026-01-22T17:20:58.440Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program "
+"ERC Full Lifecycle","Governance","validateErcForTrading","governance-authority","false","8","2026-01-22T17:20:58.448Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"ERC Full Lifecycle","Governance","transferErc","governance-authority","false","7","2026-01-22T17:20:58.456Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"ERC Full Lifecycle","Governance","revokeErc","governance-authority","false","7","2026-01-22T17:20:58.463Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"ERC Batch Issuance","Governance","issueErc","governance-authority","false","7","2026-01-22T17:20:58.470Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program "
+"ERC Batch Issuance","Governance","issueErc","governance-authority","false","7","2026-01-22T17:20:58.477Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program "
+"ERC Batch Issuance","Governance","issueErc","governance-authority","false","6","2026-01-22T17:20:58.485Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program "
+"ERC Batch Issuance","Governance","issueErc","governance-authority","false","7","2026-01-22T17:20:58.492Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program "
+"ERC Batch Issuance","Governance","issueErc","governance-authority","false","6","2026-01-22T17:20:58.499Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program "
+"ERC Validation Edge Cases","Governance","issueErc","governance-authority","false","6","2026-01-22T17:20:58.506Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program "
+"ERC Validation Edge Cases","Governance","validateErcForTrading","governance-authority","false","7","2026-01-22T17:20:58.512Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"ERC Validation Edge Cases","Governance","issueErc","governance-authority","false","6","2026-01-22T17:20:58.519Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program "
+"ERC Validation Edge Cases","Governance","validateErcForTrading","governance-authority","false","7","2026-01-22T17:20:58.525Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"ERC Validation Edge Cases","Governance","issueErc","governance-authority","false","6","2026-01-22T17:20:58.532Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program "
+"ERC Validation Edge Cases","Governance","validateErcForTrading","governance-authority","false","7","2026-01-22T17:20:58.538Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"Oracle Initialization","Oracle","initializeOracle","oracle-authority","true","352","2026-01-22T17:20:58.550Z","2qw946FRf1RyTs1H1RHk7SL7aqFsBy8fN5na264QDgbd5aFWmDGFBFoYvBwHxXHParRcGBjZsxA62wGDDefLDXHf",""
+"Update Oracle Status","Oracle","updateOracleStatus","oracle-authority","true","507","2026-01-22T17:20:58.902Z","4b7kQ5ooRVfMaDJrH9Dgg4W2Q4vuEeWq8qZZYWw1A2L5iE8mZyzGtVpXaKhUDr3d4564eXBR5xPeBuxTgaFbMnc9",""
+"Update Validation Config","Oracle","updateValidationConfig","oracle-authority","true","513","2026-01-22T17:20:59.409Z","473h9WZ3n6NZVXwYdNs6PWvawN95nxLDYcjSfQ3AJjCkiGzzkqSnju64sANezyULYu5M2ea5wYG8ZGySCR6X8WLC",""
+"Market Initialization","Trading","initializeMarket","dev-wallet","true","382","2026-01-22T17:20:59.926Z","wbUg69xTVdDrLsnpyBwchbadonaRs9u7GvTZdiuq651k8aSguzT9JkTEP2xGjKwcEWXRdFUVTQiP3ot96xGQ3tJ",""
+"Update Market Params","Trading","updateMarketParams","dev-wallet","true","465","2026-01-22T17:21:00.309Z","49gXPhxwXavP9xisqVTSzXnCQDELHUqQJTy64Nh1NjypdSpRWzgZutQsCnBT29Fhzy8WaXFc2oy4ZXAxR87NWWaY",""

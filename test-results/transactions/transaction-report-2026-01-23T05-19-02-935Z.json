@@ -1,0 +1,159 @@
+{
+  "testSuiteName": "GridTokenX Transaction Tests",
+  "startTime": 1769145539375,
+  "endTime": 1769145542935,
+  "totalDuration": 3560,
+  "scenarios": [
+    {
+      "scenarioName": "Initialize Nullifier Set",
+      "program": "Privacy",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 471,
+      "averageDuration": 471,
+      "transactions": [
+        {
+          "program": "Privacy",
+          "operation": "initializeNullifierSet",
+          "keypair": "dev-wallet",
+          "signature": "3Ukew6QGvtcpjFbq6LXEJW1tr35CmKUSFMWLW9geojFDXB58nEWatMiaotyiegjnt1YU32LFiwNtB3frtvniA3gJ",
+          "success": true,
+          "duration": 471,
+          "timestamp": 1769145541527
+        }
+      ]
+    },
+    {
+      "scenarioName": "Initialize Private Balance",
+      "program": "Privacy",
+      "totalTransactions": 2,
+      "successfulTransactions": 2,
+      "failedTransactions": 0,
+      "totalDuration": 1435,
+      "averageDuration": 717.5,
+      "transactions": [
+        {
+          "program": "Privacy",
+          "operation": "initPrivateBalance (Sender)",
+          "keypair": "wallet-1",
+          "signature": "5eiHQQvMWG2Sk5DxguJGW3s5AxM6W8tBU5FsGuFjjDFt5RSBUHioxYavbGJE3BuAEwmbqhiEDEp7z2dwD3oVTgx3",
+          "success": true,
+          "duration": 514,
+          "timestamp": 1769145541998
+        },
+        {
+          "program": "Privacy",
+          "operation": "initPrivateBalance (Recipient)",
+          "keypair": "wallet-2",
+          "signature": "4i4X3spSKiwWVbjpWYifuawep95qtqbyPvRhPLewsyu9MvxcjT76RjMjAEMs6rY7vZ8oFqrRjiQvE86YQ3SsmbRh",
+          "success": true,
+          "duration": 921,
+          "timestamp": 1769145541998
+        }
+      ]
+    },
+    {
+      "scenarioName": "Shield Tokens",
+      "program": "Privacy",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 0,
+      "averageDuration": 0,
+      "transactions": [
+        {
+          "program": "Privacy",
+          "operation": "shieldTokens",
+          "keypair": "wallet-1",
+          "success": false,
+          "duration": 0,
+          "timestamp": 1769145542919,
+          "error": "anchor.BN is not a constructor"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Private Transfer",
+      "program": "Privacy",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 15,
+      "averageDuration": 15,
+      "transactions": [
+        {
+          "program": "Privacy",
+          "operation": "privateTransfer",
+          "keypair": "wallet-1",
+          "success": false,
+          "duration": 15,
+          "timestamp": 1769145542920,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program failed to complete. \nLogs: \n[\n  \"Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J invoke [1]\",\n  \"Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 1789 of 200000 compute units\",\n  \"Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: Access violation in stack frame 3 at address 0x200003fa0 of size 8\"\n]. \nCatch the `SendTransactionError` and call `getLogs()` on it for full details."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Unshield Tokens",
+      "program": "Privacy",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 0,
+      "averageDuration": 0,
+      "transactions": [
+        {
+          "program": "Privacy",
+          "operation": "unshieldTokens",
+          "keypair": "wallet-1",
+          "success": false,
+          "duration": 0,
+          "timestamp": 1769145542935,
+          "error": "anchor.BN is not a constructor"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalScenarios": 5,
+    "totalTransactions": 6,
+    "successfulTransactions": 3,
+    "failedTransactions": 3,
+    "successRate": 50,
+    "averageTransactionDuration": 320.1666666666667,
+    "throughput": 1.6853932584269664,
+    "programStats": {
+      "Privacy": {
+        "program": "Privacy",
+        "totalTransactions": 6,
+        "successfulTransactions": 3,
+        "failedTransactions": 3,
+        "averageDuration": 320.1666666666667,
+        "totalComputeUnits": 0
+      }
+    },
+    "keypairStats": {
+      "dev-wallet": {
+        "keypair": "dev-wallet",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 471
+      },
+      "wallet-1": {
+        "keypair": "wallet-1",
+        "totalTransactions": 4,
+        "successfulTransactions": 1,
+        "failedTransactions": 3,
+        "averageDuration": 132.25
+      },
+      "wallet-2": {
+        "keypair": "wallet-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 921
+      }
+    }
+  }
+}

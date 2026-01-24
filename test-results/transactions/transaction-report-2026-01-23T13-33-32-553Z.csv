@@ -1,0 +1,20 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Initialize Nullifier Set","Privacy","initializeNullifierSet","dev-wallet","true","371","2026-01-23T13:33:30.301Z","4ZGnedeLSGp4Gq6sWLyWap2dkYSfGnKbya9HmGSfSY7cdxVM37vBAUqe1AD1pEKQeAtxEo2kJFspp8WERX5BP9Su",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Sender)","wallet-1","true","469","2026-01-23T13:33:30.672Z","2D5yq9phVbE1xewaJaXPNstvzdbtGGeFVibdLU8Lx4VKvGnwiKWrTSwEsQZQkRT7DLvvHXUYVbT3xGJ6o8zbDJKh",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Recipient)","wallet-2","true","968","2026-01-23T13:33:30.672Z","5hm6fhUkifTRGSkgq8qwpVm6uaCGqzppxy5mknhdS2WSZY67m27y2fT8ufBdFN1dkMqnGFvP8ZsqAwWLiDtyfynh",""
+"Shield Tokens","Privacy","shieldTokens","wallet-1","false","8","2026-01-23T13:33:31.640Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program failed to complete. 
+Logs: 
+[
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J invoke [1]",
+  "Program log: Instruction: ShieldTokens",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+  "Program log: Instruction: Burn",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4707 of 193377 compute units",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 11456 of 200000 compute units",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: InvalidLength"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details."
+"Private Transfer","Privacy","privateTransfer","wallet-1","true","506","2026-01-23T13:33:31.648Z","5RP4yxi4F1dzET8weqvqsoB3vt6pgn7Dj3zBJcAbkyAfabAsTC2VjuyNZsR3y7zJHLd68QrGpR3oxthksQdxVMhU",""
+"Unshield Tokens","Privacy","unshieldTokens","wallet-1","true","398","2026-01-23T13:33:32.154Z","2kvL8PKVj3HsjD6XCKpD3ChfowoyQEg1MLn5LnfgBbCrxFtBn5rt6kD8mhCBbiUQ8NouZqK8T1CnGDgnhqkjx4C6",""

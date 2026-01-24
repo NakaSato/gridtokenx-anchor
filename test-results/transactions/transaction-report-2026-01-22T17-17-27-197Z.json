@@ -1,0 +1,693 @@
+{
+  "testSuiteName": "GridTokenX Transaction Tests",
+  "startTime": 1769102236747,
+  "endTime": 1769102247196,
+  "totalDuration": 10449,
+  "scenarios": [
+    {
+      "scenarioName": "Registry Initialization",
+      "program": "Registry",
+      "totalTransactions": 2,
+      "successfulTransactions": 2,
+      "failedTransactions": 0,
+      "totalDuration": 999,
+      "averageDuration": 499.5,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "initializeRegistry",
+          "keypair": "dev-wallet",
+          "signature": "4rvczcR6GgYrMKTfRob2Xzppmaj3xwCM8vU4WDgUA3ZTVt3tTBeW7bK9xYBB4mfG4DJTTY6HM1K9UYuRDNoAv2gs",
+          "success": true,
+          "duration": 491,
+          "timestamp": 1769102242542
+        },
+        {
+          "program": "Registry",
+          "operation": "setOracleAuthority",
+          "keypair": "dev-wallet",
+          "signature": "2MzyUW6QRuTL4pyJGM4qULQifzDVhdHbrPxZQAqJJwrUPz6QheA5RZcXEu3AmwGtp61ZfBj2PfgKKEWcDHHNDcc4",
+          "success": true,
+          "duration": 508,
+          "timestamp": 1769102243033
+        }
+      ]
+    },
+    {
+      "scenarioName": "Multi-User Registration",
+      "program": "Registry",
+      "totalTransactions": 5,
+      "successfulTransactions": 0,
+      "failedTransactions": 5,
+      "totalDuration": 10,
+      "averageDuration": 2,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 2,
+          "timestamp": 1769102243542,
+          "error": "unknown signer: BtMe2s2chkYvNkru1zbzd6vCPQgJTtNKYxXteA9doABs"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 2,
+          "timestamp": 1769102243544,
+          "error": "unknown signer: 4tweygLheCwvaTaWmrSZHJTgHur3gRKLi4Jdm5zb48cR"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 2,
+          "timestamp": 1769102243546,
+          "error": "unknown signer: 4Avnz7ohd2a9PcGquhNjBLmgRW681XXGTs9oDgA9yQ5U"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-1",
+          "success": false,
+          "duration": 2,
+          "timestamp": 1769102243548,
+          "error": "unknown signer: GPJz747szG8gvH5pWWwmjW7y2cDYG2LMfTuRMfw3P95u"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-2",
+          "success": false,
+          "duration": 2,
+          "timestamp": 1769102243550,
+          "error": "unknown signer: 9Z993Uqf8BXG5juwQNeyv9uFaCyFqjQJgQS1XfYsWTN1"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Multi-Meter Registration",
+      "program": "Registry",
+      "totalTransactions": 4,
+      "successfulTransactions": 0,
+      "failedTransactions": 4,
+      "totalDuration": 8,
+      "averageDuration": 2,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 2,
+          "timestamp": 1769102243552,
+          "error": "unknown signer: BtMe2s2chkYvNkru1zbzd6vCPQgJTtNKYxXteA9doABs"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 2,
+          "timestamp": 1769102243554,
+          "error": "unknown signer: BtMe2s2chkYvNkru1zbzd6vCPQgJTtNKYxXteA9doABs"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 1,
+          "timestamp": 1769102243556,
+          "error": "unknown signer: 4tweygLheCwvaTaWmrSZHJTgHur3gRKLi4Jdm5zb48cR"
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 3,
+          "timestamp": 1769102243557,
+          "error": "unknown signer: 4Avnz7ohd2a9PcGquhNjBLmgRW681XXGTs9oDgA9yQ5U"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Concurrent Meter Updates",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 0,
+      "failedTransactions": 3,
+      "totalDuration": 20,
+      "averageDuration": 6.666666666666667,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-1",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102243560,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.\nProgram log: Left:\nProgram log: 11111111111111111111111111111111\nProgram log: Right:\nProgram log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-2",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769102243567,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.\nProgram log: Left:\nProgram log: 11111111111111111111111111111111\nProgram log: Right:\nProgram log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-3",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102243573,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.\nProgram log: Left:\nProgram log: 11111111111111111111111111111111\nProgram log: Right:\nProgram log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Balance Settlement Flow",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 0,
+      "failedTransactions": 3,
+      "totalDuration": 17,
+      "averageDuration": 5.666666666666667,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769102243580,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.\nProgram log: Left:\nProgram log: 11111111111111111111111111111111\nProgram log: Right:\nProgram log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769102243585,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.\nProgram log: Left:\nProgram log: 11111111111111111111111111111111\nProgram log: Right:\nProgram log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769102243591,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.\nProgram log: Left:\nProgram log: 11111111111111111111111111111111\nProgram log: Right:\nProgram log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Authorization Checks",
+      "program": "Registry",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 5,
+      "averageDuration": 5,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "unauthorizedSettlement",
+          "keypair": "producer-2->producer-1",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769102243597,
+          "error": "AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.\nProgram log: Left:\nProgram log: 11111111111111111111111111111111\nProgram log: Right:\nProgram log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+        }
+      ]
+    },
+    {
+      "scenarioName": "PoA Initialization",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 282,
+      "averageDuration": 282,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "initializePoa",
+          "keypair": "governance-authority",
+          "signature": "3Magea6Re4cEv344RMYKgqfKjQR4zAoGxiFempnqRNpyDdYJdad1nXPgWfyGX6TxBZPNVoTGpXWEWFSSfh7eRisV",
+          "success": true,
+          "duration": 282,
+          "timestamp": 1769102243650
+        }
+      ]
+    },
+    {
+      "scenarioName": "Emergency Pause",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 463,
+      "averageDuration": 463,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "emergencyPause",
+          "keypair": "governance-authority",
+          "signature": "4uWZF885FAJpCWXcuTsPxgA7bCP4tCMpYpRXttrnx7mQ38VTBybG2CUwwRmc5ouXQzSHJE8sy6Kfu53dxcncKEkV",
+          "success": true,
+          "duration": 463,
+          "timestamp": 1769102243933
+        }
+      ]
+    },
+    {
+      "scenarioName": "Emergency Unpause",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 499,
+      "averageDuration": 499,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "emergencyUnpause",
+          "keypair": "governance-authority",
+          "signature": "5YmUXqzrLCFWhTv32hFRqhjTf3A42mCb2jezsZ9jWLBFuEw1wiH4ALF41UG3cGGGhcp4Yj5hyHyBxczfCMAdDeob",
+          "success": true,
+          "duration": 499,
+          "timestamp": 1769102244396
+        }
+      ]
+    },
+    {
+      "scenarioName": "ERC Full Lifecycle",
+      "program": "Governance",
+      "totalTransactions": 4,
+      "successfulTransactions": 0,
+      "failedTransactions": 4,
+      "totalDuration": 31,
+      "averageDuration": 7.75,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 8,
+          "timestamp": 1769102244896,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program "
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 8,
+          "timestamp": 1769102244904,
+          "error": "AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+        },
+        {
+          "program": "Governance",
+          "operation": "transferErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 8,
+          "timestamp": 1769102244912,
+          "error": "AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+        },
+        {
+          "program": "Governance",
+          "operation": "revokeErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102244920,
+          "error": "AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+        }
+      ]
+    },
+    {
+      "scenarioName": "ERC Batch Issuance",
+      "program": "Governance",
+      "totalTransactions": 5,
+      "successfulTransactions": 0,
+      "failedTransactions": 5,
+      "totalDuration": 35,
+      "averageDuration": 7,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102244927,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102244934,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102244941,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102244948,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102244956,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program "
+        }
+      ]
+    },
+    {
+      "scenarioName": "ERC Validation Edge Cases",
+      "program": "Governance",
+      "totalTransactions": 6,
+      "successfulTransactions": 0,
+      "failedTransactions": 6,
+      "totalDuration": 40,
+      "averageDuration": 6.666666666666667,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102244963,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program "
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769102244970,
+          "error": "AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102244976,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program "
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769102244983,
+          "error": "AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102244989,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program "
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769102244996,
+          "error": "AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Oracle Initialization",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 400,
+      "averageDuration": 400,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "initializeOracle",
+          "keypair": "oracle-authority",
+          "signature": "qULxUzV6JVu4Aazh3cuGaKNFTDaJSU4oC4eLZfRA547AQydAVd8xknWm5Q68uS1YU4WZ5SB6QLGrVzTUe5d39Em",
+          "success": true,
+          "duration": 400,
+          "timestamp": 1769102245007
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Oracle Status",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 389,
+      "averageDuration": 389,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "updateOracleStatus",
+          "keypair": "oracle-authority",
+          "signature": "AKTSzkGH8nWuAYBS3BsKwjUBSN8omMxs52HpXwDZNcUftCqqCwVDwWMWRdjDQw3N1L8rNhmquU1YocCJ5ZzWPQe",
+          "success": true,
+          "duration": 389,
+          "timestamp": 1769102245407
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Validation Config",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 538,
+      "averageDuration": 538,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "updateValidationConfig",
+          "keypair": "oracle-authority",
+          "signature": "2Pa6SyH1zccLZm2N1x9WxTXGihGjFnTbGb2zz2ANVZVpK9uGkMdZwWJM6FenrcdBUQBYsjjU8SDEtZMQJYZzTqZZ",
+          "success": true,
+          "duration": 538,
+          "timestamp": 1769102245796
+        }
+      ]
+    },
+    {
+      "scenarioName": "Market Initialization",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 386,
+      "averageDuration": 386,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "initializeMarket",
+          "keypair": "dev-wallet",
+          "signature": "56z3DNWizch1eeKmMAjNsWmdyPGCyUDXUc2de2WLrniggWk2QoFQjUPs67EGupXbDZv3jdTxZkVchkhVHPJvHsze",
+          "success": true,
+          "duration": 386,
+          "timestamp": 1769102246337
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Market Params",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 471,
+      "averageDuration": 471,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "updateMarketParams",
+          "keypair": "dev-wallet",
+          "signature": "2Xck6QwwyzyY9JG8K5VVu22PWjfPrGixTx47eeyX2WBn2TmgBqkbRhKLpK6yFMs4G8n9Xb31JP6ph9sJJotyhAPf",
+          "success": true,
+          "duration": 471,
+          "timestamp": 1769102246723
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalScenarios": 17,
+    "totalTransactions": 41,
+    "successfulTransactions": 10,
+    "failedTransactions": 31,
+    "successRate": 24.390243902439025,
+    "averageTransactionDuration": 112.02439024390245,
+    "throughput": 3.923820461288162,
+    "programStats": {
+      "Registry": {
+        "program": "Registry",
+        "totalTransactions": 18,
+        "successfulTransactions": 2,
+        "failedTransactions": 16,
+        "averageDuration": 58.833333333333336,
+        "totalComputeUnits": 0
+      },
+      "Governance": {
+        "program": "Governance",
+        "totalTransactions": 18,
+        "successfulTransactions": 3,
+        "failedTransactions": 15,
+        "averageDuration": 75,
+        "totalComputeUnits": 0
+      },
+      "Oracle": {
+        "program": "Oracle",
+        "totalTransactions": 3,
+        "successfulTransactions": 3,
+        "failedTransactions": 0,
+        "averageDuration": 442.3333333333333,
+        "totalComputeUnits": 0
+      },
+      "Trading": {
+        "program": "Trading",
+        "totalTransactions": 2,
+        "successfulTransactions": 2,
+        "failedTransactions": 0,
+        "averageDuration": 428.5,
+        "totalComputeUnits": 0
+      }
+    },
+    "keypairStats": {
+      "dev-wallet": {
+        "keypair": "dev-wallet",
+        "totalTransactions": 4,
+        "successfulTransactions": 4,
+        "failedTransactions": 0,
+        "averageDuration": 464
+      },
+      "producer-1": {
+        "keypair": "producer-1",
+        "totalTransactions": 4,
+        "successfulTransactions": 0,
+        "failedTransactions": 4,
+        "averageDuration": 2.75
+      },
+      "producer-2": {
+        "keypair": "producer-2",
+        "totalTransactions": 3,
+        "successfulTransactions": 0,
+        "failedTransactions": 3,
+        "averageDuration": 3
+      },
+      "producer-3": {
+        "keypair": "producer-3",
+        "totalTransactions": 3,
+        "successfulTransactions": 0,
+        "failedTransactions": 3,
+        "averageDuration": 3.6666666666666665
+      },
+      "consumer-1": {
+        "keypair": "consumer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 2
+      },
+      "consumer-2": {
+        "keypair": "consumer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 2
+      },
+      "oracle->producer-1": {
+        "keypair": "oracle->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 7
+      },
+      "oracle->producer-2": {
+        "keypair": "oracle->producer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 6
+      },
+      "oracle->producer-3": {
+        "keypair": "oracle->producer-3",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 7
+      },
+      "producer-2->producer-1": {
+        "keypair": "producer-2->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 5
+      },
+      "governance-authority": {
+        "keypair": "governance-authority",
+        "totalTransactions": 18,
+        "successfulTransactions": 3,
+        "failedTransactions": 15,
+        "averageDuration": 75
+      },
+      "oracle-authority": {
+        "keypair": "oracle-authority",
+        "totalTransactions": 3,
+        "successfulTransactions": 3,
+        "failedTransactions": 0,
+        "averageDuration": 442.3333333333333
+      }
+    }
+  }
+}

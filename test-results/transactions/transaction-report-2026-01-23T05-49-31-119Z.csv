@@ -1,0 +1,22 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Initialize Nullifier Set","Privacy","initializeNullifierSet","dev-wallet","true","458","2026-01-23T05:49:28.798Z","2UGngTBsVJPA1cXwSD7nx5SxT62135m3CHmJvEe6szwh4z9Sz5VtedogVxs6HpmQyd4GRrS5DavN1UFCiQyvaEVc",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Sender)","wallet-1","true","476","2026-01-23T05:49:29.256Z","fWCf7oY3Hy1QQCQqTH9sJi5Kkg7c2sEN2yqdTH7KpBe9FoaYxnWXGGhUomEisGEqfZXQTrHewLrvUZN9jG4YbFq",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Recipient)","wallet-2","true","987","2026-01-23T05:49:29.256Z","5Q2JVoSwhWMPFFTLKWU6gk45YNbkXn7JaLmfnWsukgAVKrPMcJC6ypowpfna2HeQwcx71CqfnpfVL8MiY8Yggkpt",""
+"Shield Tokens","Privacy","shieldTokens","wallet-1","false","8","2026-01-23T05:49:30.244Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program failed to complete. 
+Logs: 
+[
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J invoke [1]",
+  "Program log: Instruction: ShieldTokens",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+  "Program log: Instruction: Burn",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4707 of 193380 compute units",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+  "Program log: Syscall failed: v*G",
+  "Program log: panicked at programs/trading/src/privacy.rs:172:17:\nSyscall failed: group_op_add",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 15726 of 200000 compute units",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: SBF program panicked"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details."
+"Private Transfer","Privacy","privateTransfer","wallet-1","true","397","2026-01-23T05:49:30.252Z","2gseVVm6vwMam64WEraSZUToWqPGhfsCEeqEypze9XwDQPnV7TNvUDzDRbPEFYRuFh6RkZMA3PGdk24tpBV7UAMe",""
+"Unshield Tokens","Privacy","unshieldTokens","wallet-1","true","468","2026-01-23T05:49:30.649Z","4bKV9g5zZGtuguUrfhDW1jh48uH4WcuDN8xnYUSxfW1kTUspS6SsNDxtcdVQiRe4iZmfZnzQjuzQW9TJxNAEvCP5",""

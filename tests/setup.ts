@@ -1,28 +1,26 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import type {
-  EnergyToken,
-  Governance,
-  Oracle,
-  Registry,
-  Trading
-} from "../target/types/index.ts";
+import { Trading } from "../target/types/trading";
+import { EnergyToken } from "../target/types/energy_token";
+import { Governance } from "../target/types/governance";
+import { Oracle } from "../target/types/oracle";
+import { Registry } from "../target/types/registry";
 import * as fs from "fs";
 
-export const PROGRAM_IDS = {
-  energy_token: "4vCgSNVMCEhgaFebnoGizvaCJu2SXCiXh8bu1YpMocMk",
-  governance: "opUKK54PxUHNgzkPAaJioCSWxx8P7p3tYeotyixE84W",
-  oracle: "HTTcpqf79kGh83xfe7me4LvJcqqQfxBoB5MuUk8N4Qee",
-  registry: "6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu",
-  trading: "B3FHDFGqMazfbMNXc4RWJ4hpZM98ZGRdicYAC3pYF2az",
-} as const;
-
+/**
+ * GridTokenX Test Environment Setup
+ * 
+ * Provides a standardized environment for integration tests with:
+ * - Program instances (Trading, Governance, EnergyToken, etc.)
+ * - Test wallets (Authority and Test User)
+ * - Connection and Provider management
+ */
 export class TestEnvironment {
   public provider: anchor.AnchorProvider;
   public connection: anchor.web3.Connection;
   public wallet: anchor.Wallet;
 
-  // Programs
+  // Program instances
   public energyTokenProgram: Program<EnergyToken>;
   public governanceProgram: Program<Governance>;
   public oracleProgram: Program<Oracle>;
@@ -51,87 +49,63 @@ export class TestEnvironment {
     // Generate test keypairs
     // Load authority from dev-wallet.json
     const walletPath = "./keypairs/dev-wallet.json";
-    // import * as fs from "fs"; // Moved to top level
     const walletData = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
     this.authority = anchor.web3.Keypair.fromSecretKey(new Uint8Array(walletData));
     this.testUser = anchor.web3.Keypair.generate();
     this.recValidator = anchor.web3.Keypair.generate();
   }
 
-  static async create(): Promise<TestEnvironment> {
+  public static async create(): Promise<TestEnvironment> {
     const env = new TestEnvironment();
 
-    // Airdrop SOL to test accounts
-    await env.airdropSol(env.authority.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
-    await env.airdropSol(env.testUser.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
-    await env.airdropSol(env.recValidator.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
+    // Airdrop to authority and test user
+    const airdropAuth = await env.connection.requestAirdrop(env.authority.publicKey, 100 * anchor.web3.LAMPORTS_PER_SOL);
+    await env.connection.confirmTransaction(airdropAuth);
+
+    const airdropUser = await env.connection.requestAirdrop(env.testUser.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
+    await env.connection.confirmTransaction(airdropUser);
 
     return env;
   }
-
-  public async airdropSol(publicKey: anchor.web3.PublicKey, amount: number): Promise<void> {
-    const signature = await this.connection.requestAirdrop(publicKey, amount);
-    await this.connection.confirmTransaction(signature);
-  }
-
-  findProgramAddress(seeds: Buffer[], programId: anchor.web3.PublicKey): [anchor.web3.PublicKey, number] {
-    return anchor.web3.PublicKey.findProgramAddressSync(seeds, programId);
-  }
-
-  async getBalance(publicKey: anchor.web3.PublicKey): Promise<number> {
-    return await this.connection.getBalance(publicKey);
-  }
-
-  async getTokenBalance(tokenAccount: anchor.web3.PublicKey): Promise<number> {
-    const accountInfo = await this.connection.getAccountInfo(tokenAccount);
-    if (!accountInfo) return 0;
-
-    // Parse SPL token account data
-    const data = accountInfo.data;
-    const amount = data.readBigUInt64LE(64);
-    return Number(amount);
-  }
-
-  async waitForTransaction(signature: string): Promise<void> {
-    await this.connection.confirmTransaction(signature);
-  }
-
-  generateTestKeypair(): anchor.web3.Keypair {
-    return anchor.web3.Keypair.generate();
-  }
-
-  generateTestId(): string {
-    return `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
 }
 
+/**
+ * Basic Assertion Library (Simple expect equivalent)
+ */
 export const expect = (actual: any) => {
   return {
     to: {
       equal: (expected: any) => {
         if (actual !== expected) {
-          throw new Error(`Expected ${expected}, but got ${actual}`);
+          throw new Error(`Expected ${actual} to equal ${expected}`);
+        }
+      },
+      not: {
+        equal: (expected: any) => {
+          if (actual === expected) {
+            throw new Error(`Expected ${actual} NOT to equal ${expected}`);
+          }
         }
       },
       be: {
         true: () => {
-          if (!actual) {
-            throw new Error(`Expected true, but got ${actual}`);
+          if (actual !== true) {
+            throw new Error(`Expected ${actual} to be true`);
           }
         },
         false: () => {
-          if (actual) {
-            throw new Error(`Expected false, but got ${actual}`);
+          if (actual !== false) {
+            throw new Error(`Expected ${actual} to be false`);
           }
         },
         null: () => {
           if (actual !== null) {
-            throw new Error(`Expected null, but got ${actual}`);
+            throw new Error(`Expected ${actual} to be null`);
           }
         },
         undefined: () => {
           if (actual !== undefined) {
-            throw new Error(`Expected undefined, but got ${actual}`);
+            throw new Error(`Expected ${actual} to be undefined`);
           }
         },
         greaterThan: (expected: number) => {

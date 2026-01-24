@@ -22,8 +22,11 @@ localnet = ["compute-debug/localnet"]
 
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
-anchor-spl = { workspace = true }
+anchor-spl = { version = "0.32.1" }
 spl-token = { workspace = true }
+
+sha2 = "0.10"
+hmac = "0.12"
 base64 = { workspace = true }
 bytemuck = { version = "1.16", features = ["derive"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }

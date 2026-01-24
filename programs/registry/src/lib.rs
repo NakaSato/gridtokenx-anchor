@@ -3,7 +3,7 @@
 use anchor_lang::prelude::*;
 use base64::{engine::general_purpose, Engine as _};
 
-declare_id!("EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ");
+declare_id!("3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};

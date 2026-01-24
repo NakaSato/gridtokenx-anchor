@@ -1,0 +1,29 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Initialize Nullifier Set","Privacy","initializeNullifierSet","dev-wallet","true","559","2026-01-23T05:20:56.943Z","5VnShMGJzVYq2P6T8tupgEBUV7aSQDU4wrwdRx1YqDMTJdWJngb4emDb2FEcdo7E3arbRLUpbWjrggpT5oFDwPst",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Sender)","wallet-1","true","376","2026-01-23T05:20:57.502Z","qyLiSspPWAYjdxEQfwvwtx4PejNbyUE3qZYHDDgVqAe2N8VVRc1rhbPfzfc94bcj3mJVWv4pdUtFuYYvJf4Brbn",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Recipient)","wallet-2","true","849","2026-01-23T05:20:57.502Z","61Gc66CUxcsvygkxFNJuvfE62GU5MyM8Y9AFBbF8qHbRE23cpDU34n2tHvaDNecWC4ZVoEjfvdpbVkEXyss19AWs",""
+"Shield Tokens","Privacy","shieldTokens","wallet-1","false","8","2026-01-23T05:20:58.351Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program failed to complete. 
+Logs: 
+[
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J invoke [1]",
+  "Program log: Instruction: ShieldTokens",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+  "Program log: Instruction: Burn",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4707 of 193380 compute units",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+  "Program log: Calling sol_curve_multiscalar_mul...",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 11556 of 200000 compute units",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: InvalidLength"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details."
+"Private Transfer","Privacy","privateTransfer","wallet-1","false","11","2026-01-23T05:20:58.359Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program failed to complete. 
+Logs: 
+[
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J invoke [1]",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 1789 of 200000 compute units",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: Access violation in stack frame 3 at address 0x200003fa0 of size 8"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details."
+"Unshield Tokens","Privacy","unshieldTokens","wallet-1","true","479","2026-01-23T05:20:58.370Z","4JRXeYq2JgWPLGf1u5SMxUPwqMKjxBJzwQmpaKqKo7WGHF5c4YXeUPDrLADDxBbenb4h4UDfVQuQm1nDBvPJevtm",""

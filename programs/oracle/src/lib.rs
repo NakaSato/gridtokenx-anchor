@@ -2,7 +2,7 @@
 
 use anchor_lang::prelude::*;
 
-declare_id!("4Agkm8isGD6xDegsfoFzWN5Xp5WLVoqJyPDQLRsjh85u");
+declare_id!("ACeKwdMK1sma3EPnxy7bvgC5yMwy8tg7ZUJvaogC9YfR");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};

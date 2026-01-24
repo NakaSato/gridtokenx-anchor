@@ -1,0 +1,805 @@
+{
+  "testSuiteName": "GridTokenX Transaction Tests",
+  "startTime": 1769184935753,
+  "endTime": 1769184944170,
+  "totalDuration": 8417,
+  "scenarios": [
+    {
+      "scenarioName": "Registry Initialization",
+      "program": "Registry",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 21,
+      "averageDuration": 21,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "initializeRegistry",
+          "keypair": "dev-wallet",
+          "success": false,
+          "duration": 21,
+          "timestamp": 1769184935845,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Multi-User Registration",
+      "program": "Registry",
+      "totalTransactions": 5,
+      "successfulTransactions": 0,
+      "failedTransactions": 5,
+      "totalDuration": 92,
+      "averageDuration": 18.4,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 8,
+          "timestamp": 1769184935866,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769184935874,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 55,
+          "timestamp": 1769184935881,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-1",
+          "success": false,
+          "duration": 8,
+          "timestamp": 1769184935937,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "consumer-2",
+          "success": false,
+          "duration": 14,
+          "timestamp": 1769184935945,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Multi-Meter Registration",
+      "program": "Registry",
+      "totalTransactions": 4,
+      "successfulTransactions": 0,
+      "failedTransactions": 4,
+      "totalDuration": 30,
+      "averageDuration": 7.5,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 9,
+          "timestamp": 1769184935960,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 8,
+          "timestamp": 1769184935969,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184935977,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "registerMeter",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769184935983,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Concurrent Meter Updates",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 0,
+      "failedTransactions": 3,
+      "totalDuration": 21,
+      "averageDuration": 7,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-1",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769184935990,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-2",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769184935997,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "updateMeterReading",
+          "keypair": "oracle->producer-3",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769184936004,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Balance Settlement Flow",
+      "program": "Registry",
+      "totalTransactions": 3,
+      "successfulTransactions": 0,
+      "failedTransactions": 3,
+      "totalDuration": 17,
+      "averageDuration": 5.666666666666667,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769184936011,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-2",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936016,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        },
+        {
+          "program": "Registry",
+          "operation": "settleMeterBalance",
+          "keypair": "producer-3",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936022,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Authorization Checks",
+      "program": "Registry",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 6,
+      "averageDuration": 6,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "unauthorizedSettlement",
+          "keypair": "producer-2->producer-1",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936028,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        }
+      ]
+    },
+    {
+      "scenarioName": "PoA Initialization",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 6,
+      "averageDuration": 6,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "initializePoa",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936041,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        }
+      ]
+    },
+    {
+      "scenarioName": "Emergency Pause",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 6,
+      "averageDuration": 6,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "emergencyPause",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936047,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        }
+      ]
+    },
+    {
+      "scenarioName": "Emergency Unpause",
+      "program": "Governance",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 7,
+      "averageDuration": 7,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "emergencyUnpause",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769184936053,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        }
+      ]
+    },
+    {
+      "scenarioName": "ERC Full Lifecycle",
+      "program": "Governance",
+      "totalTransactions": 4,
+      "successfulTransactions": 0,
+      "failedTransactions": 4,
+      "totalDuration": 23,
+      "averageDuration": 5.75,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 7,
+          "timestamp": 1769184936066,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936073,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "transferErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769184936080,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "revokeErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769184936085,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        }
+      ]
+    },
+    {
+      "scenarioName": "ERC Batch Issuance",
+      "program": "Governance",
+      "totalTransactions": 5,
+      "successfulTransactions": 0,
+      "failedTransactions": 5,
+      "totalDuration": 30,
+      "averageDuration": 6,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936096,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936108,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936119,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936130,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936141,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        }
+      ]
+    },
+    {
+      "scenarioName": "ERC Validation Edge Cases",
+      "program": "Governance",
+      "totalTransactions": 8,
+      "successfulTransactions": 0,
+      "failedTransactions": 8,
+      "totalDuration": 43,
+      "averageDuration": 5.375,
+      "transactions": [
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936152,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769184936158,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936169,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769184936175,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769184936185,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "validateErcForTrading",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769184936191,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936196,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        },
+        {
+          "program": "Governance",
+          "operation": "issueErc",
+          "keypair": "governance-authority",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769184936202,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        }
+      ]
+    },
+    {
+      "scenarioName": "Oracle Initialization",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 6,
+      "averageDuration": 6,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "initializeOracle",
+          "keypair": "oracle-authority",
+          "success": false,
+          "duration": 6,
+          "timestamp": 1769184936212,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The declared program id does not match the actual program id."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Oracle Status",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 5,
+      "averageDuration": 5,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "updateOracleStatus",
+          "keypair": "oracle-authority",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769184936218,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Validation Config",
+      "program": "Oracle",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 5,
+      "averageDuration": 5,
+      "transactions": [
+        {
+          "program": "Oracle",
+          "operation": "updateValidationConfig",
+          "keypair": "oracle-authority",
+          "success": false,
+          "duration": 5,
+          "timestamp": 1769184936223,
+          "error": "AnchorError occurred. Error Code: DeclaredProgramIdMismatch. Error Number: 4100. Error Message: The "
+        }
+      ]
+    },
+    {
+      "scenarioName": "Market Initialization",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 2,
+      "averageDuration": 2,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "initializeMarket",
+          "keypair": "dev-wallet",
+          "success": true,
+          "duration": 2,
+          "timestamp": 1769184936376,
+          "error": "Already initialized (expected)"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Market Params",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 333,
+      "averageDuration": 333,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "updateMarketParams",
+          "keypair": "dev-wallet",
+          "signature": "2Ni4jNJAeaUVPZzzjL6LzExvgfP6AM3p7MCAFeNvCLgcAi79gGnsD7xy6uwGziHmrdd6MW41i99CEwuK1SxicrGQ",
+          "success": true,
+          "duration": 333,
+          "timestamp": 1769184936378
+        }
+      ]
+    },
+    {
+      "scenarioName": "Create Orders",
+      "program": "Trading",
+      "totalTransactions": 2,
+      "successfulTransactions": 2,
+      "failedTransactions": 0,
+      "totalDuration": 961,
+      "averageDuration": 480.5,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "createSellOrder",
+          "keypair": "producer-0",
+          "signature": "3zFbAVovpYdSTcwfvagVccfU8LskNjxeNS7zXyDtJneGhF3pXxuf8fHP2VGx7vaEwaagiweHTV4Th27CXwB3xn6N",
+          "success": true,
+          "duration": 470,
+          "timestamp": 1769184936712
+        },
+        {
+          "program": "Trading",
+          "operation": "createBuyOrder",
+          "keypair": "consumer-0",
+          "signature": "4XY1dzBx1RhrG3FRLwusTYPW8J6NUE4kqEabXreDd32STH35si2RWGXYVubVkp4dAvKwk1htXNxBP8vS7b9fj8W5",
+          "success": true,
+          "duration": 491,
+          "timestamp": 1769184937182
+        }
+      ]
+    },
+    {
+      "scenarioName": "Match Orders",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 1375,
+      "averageDuration": 1375,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "matchOrders",
+          "keypair": "dev-wallet",
+          "signature": "54j3eGjTh7KkNLbJ7xhB1h683EYhbwksDPRr7EyfRsvTmb8Btf2BQRF22NTnVHo8bNm3ZUG8JmfzkLvQpu4oGzwj",
+          "success": true,
+          "duration": 1375,
+          "timestamp": 1769184937673
+        }
+      ]
+    },
+    {
+      "scenarioName": "Atomic Settlement",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 5118,
+      "averageDuration": 5118,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "executeAtomicSettlement",
+          "keypair": "dev-wallet",
+          "signature": "4h2oaDsZBUJdRSfKAhRS8aaknuzNTUjKVw6qVpaeYpbamMaWWRhafjPVShQxzbX2Wpu32CoH7761qiLUn5ntvK2t",
+          "success": true,
+          "duration": 5118,
+          "timestamp": 1769184939048
+        }
+      ]
+    },
+    {
+      "scenarioName": "Complete Energy Trading Journey",
+      "program": "Integration",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 0,
+      "averageDuration": 0,
+      "transactions": [
+        {
+          "program": "Registry",
+          "operation": "registerUser",
+          "keypair": "producer-1",
+          "success": false,
+          "duration": 0,
+          "timestamp": 1769184944170,
+          "error": "Account `registry` not provided."
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalScenarios": 21,
+    "totalTransactions": 47,
+    "successfulTransactions": 6,
+    "failedTransactions": 41,
+    "successRate": 12.76595744680851,
+    "averageTransactionDuration": 172.48936170212767,
+    "throughput": 5.583937269811097,
+    "programStats": {
+      "Registry": {
+        "program": "Registry",
+        "totalTransactions": 18,
+        "successfulTransactions": 0,
+        "failedTransactions": 18,
+        "averageDuration": 10.38888888888889,
+        "totalComputeUnits": 0
+      },
+      "Governance": {
+        "program": "Governance",
+        "totalTransactions": 20,
+        "successfulTransactions": 0,
+        "failedTransactions": 20,
+        "averageDuration": 5.75,
+        "totalComputeUnits": 0
+      },
+      "Oracle": {
+        "program": "Oracle",
+        "totalTransactions": 3,
+        "successfulTransactions": 0,
+        "failedTransactions": 3,
+        "averageDuration": 5.333333333333333,
+        "totalComputeUnits": 0
+      },
+      "Trading": {
+        "program": "Trading",
+        "totalTransactions": 6,
+        "successfulTransactions": 6,
+        "failedTransactions": 0,
+        "averageDuration": 1298.1666666666667,
+        "totalComputeUnits": 0
+      }
+    },
+    "keypairStats": {
+      "dev-wallet": {
+        "keypair": "dev-wallet",
+        "totalTransactions": 5,
+        "successfulTransactions": 4,
+        "failedTransactions": 1,
+        "averageDuration": 1369.8
+      },
+      "producer-1": {
+        "keypair": "producer-1",
+        "totalTransactions": 5,
+        "successfulTransactions": 0,
+        "failedTransactions": 5,
+        "averageDuration": 6
+      },
+      "producer-2": {
+        "keypair": "producer-2",
+        "totalTransactions": 3,
+        "successfulTransactions": 0,
+        "failedTransactions": 3,
+        "averageDuration": 6.333333333333333
+      },
+      "producer-3": {
+        "keypair": "producer-3",
+        "totalTransactions": 3,
+        "successfulTransactions": 0,
+        "failedTransactions": 3,
+        "averageDuration": 22.666666666666668
+      },
+      "consumer-1": {
+        "keypair": "consumer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 8
+      },
+      "consumer-2": {
+        "keypair": "consumer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 14
+      },
+      "oracle->producer-1": {
+        "keypair": "oracle->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 7
+      },
+      "oracle->producer-2": {
+        "keypair": "oracle->producer-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 7
+      },
+      "oracle->producer-3": {
+        "keypair": "oracle->producer-3",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 7
+      },
+      "producer-2->producer-1": {
+        "keypair": "producer-2->producer-1",
+        "totalTransactions": 1,
+        "successfulTransactions": 0,
+        "failedTransactions": 1,
+        "averageDuration": 6
+      },
+      "governance-authority": {
+        "keypair": "governance-authority",
+        "totalTransactions": 20,
+        "successfulTransactions": 0,
+        "failedTransactions": 20,
+        "averageDuration": 5.75
+      },
+      "oracle-authority": {
+        "keypair": "oracle-authority",
+        "totalTransactions": 3,
+        "successfulTransactions": 0,
+        "failedTransactions": 3,
+        "averageDuration": 5.333333333333333
+      },
+      "producer-0": {
+        "keypair": "producer-0",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 470
+      },
+      "consumer-0": {
+        "keypair": "consumer-0",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 491
+      }
+    }
+  }
+}

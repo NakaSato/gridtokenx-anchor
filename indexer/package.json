@@ -1,0 +1,40 @@
+{
+    "name": "gridtokenx-indexer",
+    "version": "1.0.0",
+    "description": "Multi-threaded off-chain indexer for GridTokenX Anchor programs",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsx watch src/index.ts",
+        "dev:single": "SINGLE_THREADED=true tsx watch src/index-single.ts",
+        "start": "node dist/index.js",
+        "start:single": "SINGLE_THREADED=true node dist/index-single.js",
+        "test": "vitest",
+        "db:migrate": "tsx src/database/migrate.ts",
+        "db:seed": "tsx src/database/seed.ts",
+        "lint": "eslint src --ext .ts"
+    },
+    "dependencies": {
+        "@solana/web3.js": "^1.91.0",
+        "@coral-xyz/anchor": "^0.32.0",
+        "express": "^4.18.2",
+        "pg": "^8.11.3",
+        "graphql": "^16.8.1",
+        "graphql-yoga": "^5.1.1",
+        "ioredis": "^5.3.2",
+        "dotenv": "^16.4.1",
+        "pino": "^8.18.0",
+        "pino-pretty": "^10.3.1"
+    },
+    "devDependencies": {
+        "@types/express": "^4.17.21",
+        "@types/node": "^20.11.0",
+        "@types/pg": "^8.10.9",
+        "typescript": "^5.3.3",
+        "tsx": "^4.7.0",
+        "vitest": "^1.2.1",
+        "eslint": "^8.56.0",
+        "@typescript-eslint/eslint-plugin": "^6.19.0",
+        "@typescript-eslint/parser": "^6.19.0"
+    }
+}

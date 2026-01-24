@@ -256,7 +256,8 @@ export class TransactionTestSuite {
             this.programs.governance,
             this.keypairManager,
             this.reporter,
-            this.validator
+            this.validator,
+            this.programs.registry // Pass registry for state preparation
           );
           await scenarios.runAllScenarios();
         } else {
@@ -291,6 +292,21 @@ export class TransactionTestSuite {
           await scenarios.runAllScenarios();
         } else {
           console.warn(`  ⚠️  Trading program not loaded, skipping`);
+        }
+        break;
+
+      case "privacy":
+        if (this.programs.trading) {
+          const { PrivacyScenarios } = await import("./scenarios/privacy-scenarios.js");
+          const scenarios = new PrivacyScenarios(
+            this.programs.trading,
+            this.keypairManager,
+            this.reporter,
+            this.validator
+          );
+          await scenarios.runAllScenarios();
+        } else {
+          console.warn(`  ⚠️  Trading (Privacy) program not loaded, skipping`);
         }
         break;
 
@@ -334,11 +350,11 @@ export function getDefaultConfig(): TestSuiteConfig {
   return {
     rpcUrl: process.env.SOLANA_URL || "http://localhost:8899",
     programIds: {
-      registry: "6fDca5JEh2DDzmZDJB9QbLWpfPAnyoGfe3hfortitpnu",
-      energyToken: "4vCgSNVMCEhgaFebnoGizvaCJu2SXCiXh8bu1YpMocMk",
-      governance: "opUKK54PxUHNgzkPAaJioCSWxx8P7p3tYeotyixE84W",
-      oracle: "HTTcpqf79kGh83xfe7me4LvJcqqQfxBoB5MuUk8N4Qee",
-      trading: "B3FHDFGqMazfbMNXc4RWJ4hpZM98ZGRdicYAC3pYF2az",
+      registry: "EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ",
+      energyToken: "G8dC1NwdDiMhfrnPwkf9dMaR2AgrnFXcjWcepyGSHTfA",
+      governance: "3d1BQT3EiwbspkD8HYKAnyLvKjs5kZwSbRBWwS5NHof9",
+      oracle: "4Agkm8isGD6xDegsfoFzWN5Xp5WLVoqJyPDQLRsjh85u",
+      trading: "GTuRUUwCfvmqW7knqQtzQLMCy61p4UKUrdT5ssVgZbat",
     },
     keypairsDir: "./keypairs",
     outputDir: "./test-results/transactions",

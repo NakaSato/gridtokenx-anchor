@@ -1,0 +1,7 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Market Initialization","Trading","initializeMarket","dev-wallet","true","2","2026-01-23T14:51:25.374Z","","Already initialized (expected)"
+"Update Market Params","Trading","updateMarketParams","dev-wallet","true","328","2026-01-23T14:51:25.377Z","4iw2MnNRptBep77uNUfijWzkE5Ngy9Z4aHVyyoHAKoFkEX6pvYFCmThXQUF6XRuFBJVMM8XxbAjAqzzMrbc9Qs5g",""
+"Create Orders","Trading","createSellOrder","producer-0","true","501","2026-01-23T14:51:25.706Z","3g4nfcA7bm5fCbb73zeiN3q1knsA6YVecYTRmzf1eWQHp4sxo3ucSwczNBfqjLApWg56Lm9yS7AMkbtfkEaC4Avz",""
+"Create Orders","Trading","createBuyOrder","consumer-0","true","514","2026-01-23T14:51:26.207Z","5nYcfdatgjZ7UL8XRame39CQGsKx3kVJgMcqFdBq1cgmhihCzAJGMpP3YKYW6ztHaZtpn2kC5xU28QqhztcV3b1E",""
+"Match Orders","Trading","matchOrders","dev-wallet","true","1351","2026-01-23T14:51:26.722Z","3fy5Tm4DyAkqcWHdy7VPhauzK68HoPUGpUusi1vP16VXT6mJvHuJJ3KBwFUupy4rhh9c7pZ6r5wduBGDf6y2EAR3",""
+"Atomic Settlement","Trading","executeAtomicSettlement","dev-wallet","true","5112","2026-01-23T14:51:28.074Z","5xryzaRepySwjksqf1gRCRHdLwCCrhpA52VvHjH1jH9Epm12ksMFUws7x4bkXsfC9NEk3NVpZwEVyujp6boQWJTG",""

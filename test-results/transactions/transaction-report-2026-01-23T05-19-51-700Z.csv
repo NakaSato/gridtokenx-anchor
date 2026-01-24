@@ -1,0 +1,43 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Initialize Nullifier Set","Privacy","initializeNullifierSet","dev-wallet","true","462","2026-01-23T05:19:50.183Z","5drmpbG2AF7AuTyrT2yi3cfaUYMHrQyXg6ZcHyVVCetqHDgVMcf2NPPhq5rL6f1GA3s3tbRAhgT4SsT3knzjeDob",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Sender)","wallet-1","true","507","2026-01-23T05:19:50.645Z","2nKSqh6aASQr1sGaST3vFN8bxuWY3NbVdWebQYYLx21o4kmMBUci8jo7nYXroR1UpdYemsdZ9X54hsKtjV1Xj6bw",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Recipient)","wallet-2","true","1025","2026-01-23T05:19:50.645Z","5rvveQ4tup34sFzeZKXNPBiSWmuxdM14VtuhaPJ7j2fnN74UuMHeNzqYrb1vqvEJPLxbsUqvPYMX3z6XHHPcPTcE",""
+"Shield Tokens","Privacy","shieldTokens","wallet-1","false","8","2026-01-23T05:19:51.670Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program failed to complete. 
+Logs: 
+[
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J invoke [1]",
+  "Program log: Instruction: ShieldTokens",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+  "Program log: Instruction: Burn",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4707 of 193380 compute units",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+  "Program log: Calling sol_curve_multiscalar_mul...",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 11556 of 200000 compute units",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: InvalidLength"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details."
+"Private Transfer","Privacy","privateTransfer","wallet-1","false","13","2026-01-23T05:19:51.678Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program failed to complete. 
+Logs: 
+[
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J invoke [1]",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 1789 of 200000 compute units",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: Access violation in stack frame 3 at address 0x200003fa0 of size 8"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details."
+"Unshield Tokens","Privacy","unshieldTokens","wallet-1","false","8","2026-01-23T05:19:51.691Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: custom program error: 0x4. 
+Logs: 
+[
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J invoke [1]",
+  "Program log: Instruction: UnshieldTokens",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+  "Program log: Instruction: MintTo",
+  "Program log: Error: owner does not match",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4253 of 187913 compute units",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA failed: custom program error: 0x4",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 16340 of 200000 compute units",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: custom program error: 0x4"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details."

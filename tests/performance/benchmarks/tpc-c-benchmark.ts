@@ -354,8 +354,8 @@ export class TPCCBenchmarkEngine {
     }
 
     private getProgramId(): PublicKey {
-        // TPC-C benchmark program ID (generated for this project)
-        return new PublicKey("HEqH8sdd7KRxhwQYVpJrbb7kzW3P22PYkber756zs5vS");
+        // Updated to match Anchor.toml program ID for tpc_benchmark
+        return new PublicKey("CKLCEJhsxMu1NNEu9oVuyDqpkXcR9dMr769XSuh2WAjC");
     }
 
     private u64ToBuffer(num: number): Buffer {

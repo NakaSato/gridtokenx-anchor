@@ -1,0 +1,159 @@
+{
+  "testSuiteName": "GridTokenX Transaction Tests",
+  "startTime": 1769179633056,
+  "endTime": 1769179646088,
+  "totalDuration": 13032,
+  "scenarios": [
+    {
+      "scenarioName": "Market Initialization",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 294,
+      "averageDuration": 294,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "initializeMarket",
+          "keypair": "dev-wallet",
+          "signature": "GE85zCKPeCurXec1GDDyj8ra3sPAfcGYY37n6HjqwM1rQ9dfDkrVCzsr6Njf51PaF9NPjTer1HoKf8k64oqvhPd",
+          "success": true,
+          "duration": 294,
+          "timestamp": 1769179639156
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Market Params",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 497,
+      "averageDuration": 497,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "updateMarketParams",
+          "keypair": "dev-wallet",
+          "signature": "3rfPSpmZATvYmwkWdNaK56bojG5sQonsgvivqukoeJ2ZApbE5y1oRcsip7rS85ksERhtA5i1XP3EbGM54wZXbsSk",
+          "success": true,
+          "duration": 497,
+          "timestamp": 1769179639450
+        }
+      ]
+    },
+    {
+      "scenarioName": "Create Orders",
+      "program": "Trading",
+      "totalTransactions": 2,
+      "successfulTransactions": 2,
+      "failedTransactions": 0,
+      "totalDuration": 877,
+      "averageDuration": 438.5,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "createSellOrder",
+          "keypair": "producer-0",
+          "signature": "Sa3GDmuW9ff6HY3Mj8t3AUyeTnhWqNwFa69ffv5JoUxbLXUziT6jqJsuiKb7FVFHDr9iqY45pCfs7E8CjJouBJm",
+          "success": true,
+          "duration": 413,
+          "timestamp": 1769179640946
+        },
+        {
+          "program": "Trading",
+          "operation": "createBuyOrder",
+          "keypair": "consumer-0",
+          "signature": "2PRiMo5Ai84BUS5fgLrLEXySt2NrrzBNp7ZSodZVK3uR86yCHNtgAL932siKqvQ1bnZw47KAVQHE8EQBxGiCSFMG",
+          "success": true,
+          "duration": 464,
+          "timestamp": 1769179641359
+        }
+      ]
+    },
+    {
+      "scenarioName": "Match Orders",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 468,
+      "averageDuration": 468,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "matchOrders",
+          "keypair": "dev-wallet",
+          "signature": "3cDszfPyLZfyiaUzEzMSNLsVs9P4Pvr9sj5BcBf4wKvPPePytuxygDSLBSvwaAYYqFB3EtrTCZgRFkfca47EfKSF",
+          "success": true,
+          "duration": 468,
+          "timestamp": 1769179641823
+        }
+      ]
+    },
+    {
+      "scenarioName": "Atomic Settlement",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 3796,
+      "averageDuration": 3796,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "executeAtomicSettlement",
+          "keypair": "dev-wallet",
+          "success": false,
+          "duration": 3796,
+          "timestamp": 1769179642291,
+          "error": "AnchorError thrown in programs/trading/src/lib.rs:462. Error Code: InactiveBuyOrder. Error Number: 6004. Error Message: Inactive buy order."
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalScenarios": 5,
+    "totalTransactions": 6,
+    "successfulTransactions": 5,
+    "failedTransactions": 1,
+    "successRate": 83.33333333333334,
+    "averageTransactionDuration": 988.6666666666666,
+    "throughput": 0.4604051565377532,
+    "programStats": {
+      "Trading": {
+        "program": "Trading",
+        "totalTransactions": 6,
+        "successfulTransactions": 5,
+        "failedTransactions": 1,
+        "averageDuration": 988.6666666666666,
+        "totalComputeUnits": 0
+      }
+    },
+    "keypairStats": {
+      "dev-wallet": {
+        "keypair": "dev-wallet",
+        "totalTransactions": 4,
+        "successfulTransactions": 3,
+        "failedTransactions": 1,
+        "averageDuration": 1263.75
+      },
+      "producer-0": {
+        "keypair": "producer-0",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 413
+      },
+      "consumer-0": {
+        "keypair": "consumer-0",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 464
+      }
+    }
+  }
+}

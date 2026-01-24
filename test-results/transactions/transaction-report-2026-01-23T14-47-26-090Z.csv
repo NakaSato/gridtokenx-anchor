@@ -1,0 +1,7 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Market Initialization","Trading","initializeMarket","dev-wallet","true","294","2026-01-23T14:47:19.156Z","GE85zCKPeCurXec1GDDyj8ra3sPAfcGYY37n6HjqwM1rQ9dfDkrVCzsr6Njf51PaF9NPjTer1HoKf8k64oqvhPd",""
+"Update Market Params","Trading","updateMarketParams","dev-wallet","true","497","2026-01-23T14:47:19.450Z","3rfPSpmZATvYmwkWdNaK56bojG5sQonsgvivqukoeJ2ZApbE5y1oRcsip7rS85ksERhtA5i1XP3EbGM54wZXbsSk",""
+"Create Orders","Trading","createSellOrder","producer-0","true","413","2026-01-23T14:47:20.946Z","Sa3GDmuW9ff6HY3Mj8t3AUyeTnhWqNwFa69ffv5JoUxbLXUziT6jqJsuiKb7FVFHDr9iqY45pCfs7E8CjJouBJm",""
+"Create Orders","Trading","createBuyOrder","consumer-0","true","464","2026-01-23T14:47:21.359Z","2PRiMo5Ai84BUS5fgLrLEXySt2NrrzBNp7ZSodZVK3uR86yCHNtgAL932siKqvQ1bnZw47KAVQHE8EQBxGiCSFMG",""
+"Match Orders","Trading","matchOrders","dev-wallet","true","468","2026-01-23T14:47:21.823Z","3cDszfPyLZfyiaUzEzMSNLsVs9P4Pvr9sj5BcBf4wKvPPePytuxygDSLBSvwaAYYqFB3EtrTCZgRFkfca47EfKSF",""
+"Atomic Settlement","Trading","executeAtomicSettlement","dev-wallet","false","3796","2026-01-23T14:47:22.291Z","","AnchorError thrown in programs/trading/src/lib.rs:462. Error Code: InactiveBuyOrder. Error Number: 6004. Error Message: Inactive buy order."

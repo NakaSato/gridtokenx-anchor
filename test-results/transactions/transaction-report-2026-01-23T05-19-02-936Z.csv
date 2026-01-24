@@ -1,0 +1,15 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Initialize Nullifier Set","Privacy","initializeNullifierSet","dev-wallet","true","471","2026-01-23T05:19:01.527Z","3Ukew6QGvtcpjFbq6LXEJW1tr35CmKUSFMWLW9geojFDXB58nEWatMiaotyiegjnt1YU32LFiwNtB3frtvniA3gJ",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Sender)","wallet-1","true","514","2026-01-23T05:19:01.998Z","5eiHQQvMWG2Sk5DxguJGW3s5AxM6W8tBU5FsGuFjjDFt5RSBUHioxYavbGJE3BuAEwmbqhiEDEp7z2dwD3oVTgx3",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Recipient)","wallet-2","true","921","2026-01-23T05:19:01.998Z","4i4X3spSKiwWVbjpWYifuawep95qtqbyPvRhPLewsyu9MvxcjT76RjMjAEMs6rY7vZ8oFqrRjiQvE86YQ3SsmbRh",""
+"Shield Tokens","Privacy","shieldTokens","wallet-1","false","0","2026-01-23T05:19:02.919Z","","anchor.BN is not a constructor"
+"Private Transfer","Privacy","privateTransfer","wallet-1","false","15","2026-01-23T05:19:02.920Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program failed to complete. 
+Logs: 
+[
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J invoke [1]",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 1789 of 200000 compute units",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: Access violation in stack frame 3 at address 0x200003fa0 of size 8"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details."
+"Unshield Tokens","Privacy","unshieldTokens","wallet-1","false","0","2026-01-23T05:19:02.935Z","","anchor.BN is not a constructor"

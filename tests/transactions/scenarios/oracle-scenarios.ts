@@ -6,6 +6,7 @@
 
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
+import { BN } from "bn.js";
 import KeypairManager from "../keypair-manager.js";
 import { TransactionReporter, StateValidator } from "../utils/index.js";
 
@@ -174,8 +175,8 @@ export class OracleScenarios {
 
       const signature = await this.program.methods
         .updateValidationConfig(
-          new anchor.BN(0),          // min_energy_value
-          new anchor.BN(2000000),    // max_energy_value (2M kWh)
+          new BN(0),                 // min_energy_value
+          new BN(2000000),           // max_energy_value (2M kWh)
           true,                       // anomaly_detection_enabled
           75,                         // max_reading_deviation_percent
           false                       // require_consensus

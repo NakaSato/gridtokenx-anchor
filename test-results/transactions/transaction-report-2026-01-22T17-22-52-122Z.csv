@@ -1,0 +1,70 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Registry Initialization","Registry","initializeRegistry","dev-wallet","true","459","2026-01-22T17:22:43.025Z","2qPiRU58EQ9epQnpBWvL5EJYs5iwuDLVYoKsF4SRmswMP6AUvogiLhRzGuUmfKzDEyY5Twja2z3gXBDtaoX1KxWh",""
+"Registry Initialization","Registry","setOracleAuthority","dev-wallet","true","418","2026-01-22T17:22:43.484Z","WmUoyKwU2he3mJDLaxVz3R99aYLrW1Ywzi3tKtcxBXtHP1nWzR9tGtc8dzVZrCaDW1DLu6pRzcUuh48K33H7nA2",""
+"Multi-User Registration","Registry","registerUser","producer-1","true","471","2026-01-22T17:22:43.902Z","4gKxvoKZsiJiRRBfXJaUidEyqsh4Zrq1TKRTtPCfVg9G8t7iK6o5w2WcSbCXKFxEjyKhM2zagUToDUyU2Dgvvc8M",""
+"Multi-User Registration","Registry","registerUser","producer-2","true","459","2026-01-22T17:22:44.373Z","28wU5CJzAAAr8bEZg4cszj4HzyygE9FcTe5JHQyfcxZtApzj4Vr2uNyTLRA4KmkaFnsWZBty4Z5dcSeDL3e2TLqu",""
+"Multi-User Registration","Registry","registerUser","producer-3","true","498","2026-01-22T17:22:44.832Z","3AWv6JcMXQaCkLjrae9ZCU6KET1wcnemcnKkW4xyiMqDmWf1oywxXrvgjeAXte2zDCFy9DSjGL28gbbNE6xwruxM",""
+"Multi-User Registration","Registry","registerUser","consumer-1","true","517","2026-01-22T17:22:45.330Z","2ZWVCSxyau9me4gx5Rfn9mABDEpPaEtqZQQaxqpCaob5HkyRxx6SsXcxBvnjBBNt4QXM5vw7q92TP5nZinjyfnZ7",""
+"Multi-User Registration","Registry","registerUser","consumer-2","true","512","2026-01-22T17:22:45.847Z","3zoVcAuketwnFyaMKbhvHYbvXUDj4idBdBb5nFK741YCqZkHV2ELDWCewPY4AXWRqjZkhseYU5UtGRapbc95qZE",""
+"Multi-Meter Registration","Registry","registerMeter","producer-1","true","406","2026-01-22T17:22:46.359Z","3ToAzHfDbRWD8h9oCKN19GnP33oqVFfEmtifTGTsDBYatmRYx9GCvrr3jHb29mQZsaA4U9Qz75aSE3QanEx3MJQL",""
+"Multi-Meter Registration","Registry","registerMeter","producer-1","true","464","2026-01-22T17:22:46.765Z","3ouPZ2Ynh67MFMxXLwdv7oTcZQR1G8rTgoKR7c2GV79uFLiWCou6xwapVJVFipKbAa2WXkbbZrnf271HLexeSw5r",""
+"Multi-Meter Registration","Registry","registerMeter","producer-2","true","470","2026-01-22T17:22:47.229Z","5RV4Ldkeq8m5iQRbzALEW8SHpzJ1XaFng5E8Qjr5NeDGQGXG1d482h7XJDNBHz6uk1nXCat5xoJhQFJFRDQCURwV",""
+"Multi-Meter Registration","Registry","registerMeter","producer-3","true","459","2026-01-22T17:22:47.699Z","4ny2mz3kFnaqFYSq9jv9uo8rojrhPe7dMusfdhFJjViLft1jZn6BKPU6qDMW3XJc5E48StUrd5cVUsUYcvth4mKj",""
+"Concurrent Meter Updates","Registry","updateMeterReading","oracle->producer-1","false","7","2026-01-22T17:22:48.158Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Concurrent Meter Updates","Registry","updateMeterReading","oracle->producer-2","false","6","2026-01-22T17:22:48.165Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Concurrent Meter Updates","Registry","updateMeterReading","oracle->producer-3","false","7","2026-01-22T17:22:48.171Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Balance Settlement Flow","Registry","settleMeterBalance","producer-1","false","7","2026-01-22T17:22:48.178Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Balance Settlement Flow","Registry","settleMeterBalance","producer-2","false","5","2026-01-22T17:22:48.185Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Balance Settlement Flow","Registry","settleMeterBalance","producer-3","false","6","2026-01-22T17:22:48.190Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"Authorization Checks","Registry","unauthorizedSettlement","producer-2->producer-1","false","6","2026-01-22T17:22:48.196Z","","AnchorError caused by account: meter_account. Error Code: AccountOwnedByWrongProgram. Error Number: 3007. Error Message: The given account is owned by a different program than expected.
+Program log: Left:
+Program log: 11111111111111111111111111111111
+Program log: Right:
+Program log: EgpmmYPFDAX8QfawUEFissBXi3yG6AapoxNfB6KdGtBQ"
+"PoA Initialization","Governance","initializePoa","governance-authority","true","413","2026-01-22T17:22:48.216Z","kWt4Wf42kvShNWVq8QhJ2ajCFL4eeAqEjLGmd5B9j9QkaMDGdPqmZUqCZC2FXSA6We6CY26Pr6YyjcVxrTDmijU",""
+"Emergency Pause","Governance","emergencyPause","governance-authority","true","515","2026-01-22T17:22:48.629Z","5xrbgLHNtjU7aYXPhast3XqsayAAgFfhFKk3JL6npfVoCFzpurKqq2QzVsZuEThq6nmuSjeYGv9YGwvcNN6AX3os",""
+"Emergency Unpause","Governance","emergencyUnpause","governance-authority","true","411","2026-01-22T17:22:49.144Z","5dCDePoJAHmgcKMab51ZNnTWnvqjaaErtaBYrryQCeFiyMcXigHBkT6Xjo7swmoY4jj4kvM363iihXERMWH4PgMX",""
+"ERC Full Lifecycle","Governance","issueErc","governance-authority","false","8","2026-01-22T17:22:49.556Z","","AnchorError thrown in programs/governance/src/handlers/erc.rs:29. Error Code: ExceedsMaximumEnergy. "
+"ERC Full Lifecycle","Governance","validateErcForTrading","governance-authority","false","6","2026-01-22T17:22:49.564Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"ERC Full Lifecycle","Governance","transferErc","governance-authority","false","7","2026-01-22T17:22:49.571Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"ERC Full Lifecycle","Governance","revokeErc","governance-authority","false","6","2026-01-22T17:22:49.578Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"ERC Batch Issuance","Governance","issueErc","governance-authority","false","7","2026-01-22T17:22:49.585Z","","AnchorError thrown in programs/governance/src/handlers/erc.rs:29. Error Code: ExceedsMaximumEnergy. "
+"ERC Batch Issuance","Governance","issueErc","governance-authority","false","7","2026-01-22T17:22:49.592Z","","AnchorError thrown in programs/governance/src/handlers/erc.rs:29. Error Code: ExceedsMaximumEnergy. "
+"ERC Batch Issuance","Governance","issueErc","governance-authority","false","6","2026-01-22T17:22:49.599Z","","AnchorError thrown in programs/governance/src/handlers/erc.rs:29. Error Code: ExceedsMaximumEnergy. "
+"ERC Batch Issuance","Governance","issueErc","governance-authority","false","6","2026-01-22T17:22:49.606Z","","AnchorError thrown in programs/governance/src/handlers/erc.rs:29. Error Code: ExceedsMaximumEnergy. "
+"ERC Batch Issuance","Governance","issueErc","governance-authority","false","6","2026-01-22T17:22:49.613Z","","AnchorError thrown in programs/governance/src/handlers/erc.rs:29. Error Code: ExceedsMaximumEnergy. "
+"ERC Validation Edge Cases","Governance","issueErc","governance-authority","false","7","2026-01-22T17:22:49.619Z","","AnchorError thrown in programs/governance/src/handlers/erc.rs:25. Error Code: BelowMinimumEnergy. Er"
+"ERC Validation Edge Cases","Governance","validateErcForTrading","governance-authority","false","9","2026-01-22T17:22:49.626Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"ERC Validation Edge Cases","Governance","issueErc","governance-authority","false","21","2026-01-22T17:22:49.635Z","","AnchorError thrown in programs/governance/src/handlers/erc.rs:49. Error Code: InsufficientUnclaimedG"
+"ERC Validation Edge Cases","Governance","validateErcForTrading","governance-authority","false","59","2026-01-22T17:22:49.656Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"ERC Validation Edge Cases","Governance","issueErc","governance-authority","false","35","2026-01-22T17:22:49.716Z","","AnchorError thrown in programs/governance/src/handlers/erc.rs:29. Error Code: ExceedsMaximumEnergy. "
+"ERC Validation Edge Cases","Governance","validateErcForTrading","governance-authority","false","82","2026-01-22T17:22:49.752Z","","AnchorError caused by account: erc_certificate. Error Code: AccountNotInitialized. Error Number: 301"
+"Oracle Initialization","Oracle","initializeOracle","oracle-authority","true","252","2026-01-22T17:22:49.840Z","4BptbVQ13gotV4STWpshat6D7ojSgvE2RSnV7s6t2hqWx3fXF8rr7QuX1b8VaqcsC4WAGG987b4n9UeDgLBbU1Ah",""
+"Update Oracle Status","Oracle","updateOracleStatus","oracle-authority","true","598","2026-01-22T17:22:50.093Z","i26nzuTaiBCGQ7SJMtawf8muJ6xM1LxDdWNhox5C1K39yt2sYohxmY8Q3PAu1AkA4M4nXvhgguaAu8TmJci9GXr",""
+"Update Validation Config","Oracle","updateValidationConfig","oracle-authority","true","510","2026-01-22T17:22:50.691Z","QHJbi6iQ4QZhZnmoX6rTga7sjuHLcqAeTDy1v3FYiz1bKkorDM891AdEHyuSoK7J54TsXfFGXugxN5Je9cciTwt",""
+"Market Initialization","Trading","initializeMarket","dev-wallet","true","502","2026-01-22T17:22:51.207Z","dXWsucKqBY3V6fTcNUC9RVXkUY2U3q3sNyhzgBs2DpMSJgAxStVkD1LJixTnRMUUG2pbGC5kNsWSngmWkagVPKh",""
+"Update Market Params","Trading","updateMarketParams","dev-wallet","true","410","2026-01-22T17:22:51.709Z","2gsRvvKgR93t5sJo7oWSVAgoiTyRWmSqHB7owN3oL9y72TiTk2ax5yR5hJAa4dQakxaiHYkyj2fb1ncbfbPp51vo",""

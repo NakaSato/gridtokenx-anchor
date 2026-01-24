@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: gridtokenx-indexer-db
+    environment:
+      POSTGRES_USER: gridtokenx
+      POSTGRES_PASSWORD: gridtokenx_secret
+      POSTGRES_DB: gridtokenx
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gridtokenx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and deduplication
+  redis:
+    image: redis:7-alpine
+    container_name: gridtokenx-indexer-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Indexer service (development mode)
+  indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gridtokenx-indexer
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://gridtokenx:gridtokenx_secret@postgres:5432/gridtokenx
+      - REDIS_URL=redis://redis:6379
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-http://host.docker.internal:8899}
+      - SOLANA_WS_URL=${SOLANA_WS_URL:-ws://host.docker.internal:8900}
+      - API_PORT=4000
+      - LOG_LEVEL=info
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src:ro
+    restart: unless-stopped
+
+  # Adminer for database management (optional)
+  adminer:
+    image: adminer:latest
+    container_name: gridtokenx-adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    profiles:
+      - tools
+
+  # Redis Commander for Redis management (optional)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: gridtokenx-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: gridtokenx-indexer-network

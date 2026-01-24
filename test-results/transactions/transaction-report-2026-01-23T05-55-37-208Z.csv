@@ -1,0 +1,22 @@
+Scenario,Program,Operation,Keypair,Success,Duration(ms),Timestamp,Signature,Error
+"Initialize Nullifier Set","Privacy","initializeNullifierSet","dev-wallet","true","514","2026-01-23T05:55:34.878Z","5UNBARHrdh8o6C9HX2b4uNzX514MW3LbUsSGLSXen9u71yu7j1qqLhhm6k1vomRQMBLrnrg5iRdcAtrGZYok898J",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Sender)","wallet-1","true","404","2026-01-23T05:55:35.393Z","4FsNtGsm5WA9sQocyQc3gvLtSGrjYKRdwcGq3XHY5uRXhHnQxCXtRj8bVKJPX2atcZStguzjhC1gE2671qKieAhU",""
+"Initialize Private Balance","Privacy","initPrivateBalance (Recipient)","wallet-2","true","870","2026-01-23T05:55:35.393Z","3SsMcKXp9Frs2FmCSpUSZFZeSpY9rkg4fFKLjszrKLqiAttJCtPWLMDDTTDVddptY6ZEe2sk6iKStHDhXNS3xUp4",""
+"Shield Tokens","Privacy","shieldTokens","wallet-1","false","7","2026-01-23T05:55:36.264Z","","Simulation failed. 
+Message: Transaction simulation failed: Error processing Instruction 0: Program failed to complete. 
+Logs: 
+[
+  "Program log: Instruction: ShieldTokens",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+  "Program log: Instruction: Burn",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4707 of 193404 compute units",
+  "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+  "Program log: Commitment::new start",
+  "Program log: WARNING: Using stub for Commitment::new due to syscall issues",
+  "Program log: panicked at programs/trading/src/privacy.rs:134:17:\nSyscall failed: group_op_add",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 13571 of 200000 compute units",
+  "Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: SBF program panicked"
+]. 
+Catch the `SendTransactionError` and call `getLogs()` on it for full details."
+"Private Transfer","Privacy","privateTransfer","wallet-1","true","468","2026-01-23T05:55:36.271Z","31RM76KdniX8GwWeVvqxC6JVbYCP5tBE5CAu6BraaBBF5SGuXKScFdn7BWMre8btbDf5wDbnVHLFQPXDKeWGprVj",""
+"Unshield Tokens","Privacy","unshieldTokens","wallet-1","true","468","2026-01-23T05:55:36.739Z","2HA1u6PR6gXtGMzhLtBiZBtZeJVy68nX9PBsjYvXNRt7omrLwSaFXB3hX2neXoUUZkmRaYURXFL48Zngmv99fRzK",""

@@ -1,0 +1,159 @@
+{
+  "testSuiteName": "GridTokenX Transaction Tests",
+  "startTime": 1769179884895,
+  "endTime": 1769179893186,
+  "totalDuration": 8291,
+  "scenarios": [
+    {
+      "scenarioName": "Market Initialization",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 2,
+      "averageDuration": 2,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "initializeMarket",
+          "keypair": "dev-wallet",
+          "success": true,
+          "duration": 2,
+          "timestamp": 1769179885374,
+          "error": "Already initialized (expected)"
+        }
+      ]
+    },
+    {
+      "scenarioName": "Update Market Params",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 328,
+      "averageDuration": 328,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "updateMarketParams",
+          "keypair": "dev-wallet",
+          "signature": "4iw2MnNRptBep77uNUfijWzkE5Ngy9Z4aHVyyoHAKoFkEX6pvYFCmThXQUF6XRuFBJVMM8XxbAjAqzzMrbc9Qs5g",
+          "success": true,
+          "duration": 328,
+          "timestamp": 1769179885377
+        }
+      ]
+    },
+    {
+      "scenarioName": "Create Orders",
+      "program": "Trading",
+      "totalTransactions": 2,
+      "successfulTransactions": 2,
+      "failedTransactions": 0,
+      "totalDuration": 1015,
+      "averageDuration": 507.5,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "createSellOrder",
+          "keypair": "producer-0",
+          "signature": "3g4nfcA7bm5fCbb73zeiN3q1knsA6YVecYTRmzf1eWQHp4sxo3ucSwczNBfqjLApWg56Lm9yS7AMkbtfkEaC4Avz",
+          "success": true,
+          "duration": 501,
+          "timestamp": 1769179885706
+        },
+        {
+          "program": "Trading",
+          "operation": "createBuyOrder",
+          "keypair": "consumer-0",
+          "signature": "5nYcfdatgjZ7UL8XRame39CQGsKx3kVJgMcqFdBq1cgmhihCzAJGMpP3YKYW6ztHaZtpn2kC5xU28QqhztcV3b1E",
+          "success": true,
+          "duration": 514,
+          "timestamp": 1769179886207
+        }
+      ]
+    },
+    {
+      "scenarioName": "Match Orders",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 1351,
+      "averageDuration": 1351,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "matchOrders",
+          "keypair": "dev-wallet",
+          "signature": "3fy5Tm4DyAkqcWHdy7VPhauzK68HoPUGpUusi1vP16VXT6mJvHuJJ3KBwFUupy4rhh9c7pZ6r5wduBGDf6y2EAR3",
+          "success": true,
+          "duration": 1351,
+          "timestamp": 1769179886722
+        }
+      ]
+    },
+    {
+      "scenarioName": "Atomic Settlement",
+      "program": "Trading",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 5112,
+      "averageDuration": 5112,
+      "transactions": [
+        {
+          "program": "Trading",
+          "operation": "executeAtomicSettlement",
+          "keypair": "dev-wallet",
+          "signature": "5xryzaRepySwjksqf1gRCRHdLwCCrhpA52VvHjH1jH9Epm12ksMFUws7x4bkXsfC9NEk3NVpZwEVyujp6boQWJTG",
+          "success": true,
+          "duration": 5112,
+          "timestamp": 1769179888074
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalScenarios": 5,
+    "totalTransactions": 6,
+    "successfulTransactions": 6,
+    "failedTransactions": 0,
+    "successRate": 100,
+    "averageTransactionDuration": 1301.3333333333333,
+    "throughput": 0.7236762754794355,
+    "programStats": {
+      "Trading": {
+        "program": "Trading",
+        "totalTransactions": 6,
+        "successfulTransactions": 6,
+        "failedTransactions": 0,
+        "averageDuration": 1301.3333333333333,
+        "totalComputeUnits": 0
+      }
+    },
+    "keypairStats": {
+      "dev-wallet": {
+        "keypair": "dev-wallet",
+        "totalTransactions": 4,
+        "successfulTransactions": 4,
+        "failedTransactions": 0,
+        "averageDuration": 1698.25
+      },
+      "producer-0": {
+        "keypair": "producer-0",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 501
+      },
+      "consumer-0": {
+        "keypair": "consumer-0",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 514
+      }
+    }
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "testSuiteName": "GridTokenX Transaction Tests",
+  "startTime": 1769147151170,
+  "endTime": 1769147156174,
+  "totalDuration": 5004,
+  "scenarios": [
+    {
+      "scenarioName": "Initialize Nullifier Set",
+      "program": "Privacy",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 500,
+      "averageDuration": 500,
+      "transactions": [
+        {
+          "program": "Privacy",
+          "operation": "initializeNullifierSet",
+          "keypair": "dev-wallet",
+          "signature": "61LHVveun4LUHfqnSLFizstwEYHsGjUMfUYiitBanCXNUyAAz87R9q19U6kisUfMLdknL7PRByeap27eEpz1eMCL",
+          "success": true,
+          "duration": 500,
+          "timestamp": 1769147153813
+        }
+      ]
+    },
+    {
+      "scenarioName": "Initialize Private Balance",
+      "program": "Privacy",
+      "totalTransactions": 2,
+      "successfulTransactions": 2,
+      "failedTransactions": 0,
+      "totalDuration": 1437,
+      "averageDuration": 718.5,
+      "transactions": [
+        {
+          "program": "Privacy",
+          "operation": "initPrivateBalance (Sender)",
+          "keypair": "wallet-1",
+          "signature": "4VutdReht3j1HB4uXTCGBXFs1hHoBJ32fPCWxYZiXQ5NYY6cknYfDoyovtvmoKrmEh2oxmHmBjKKVPy5ikVug4RG",
+          "success": true,
+          "duration": 519,
+          "timestamp": 1769147154314
+        },
+        {
+          "program": "Privacy",
+          "operation": "initPrivateBalance (Recipient)",
+          "keypair": "wallet-2",
+          "signature": "5JZMztk8P5s92PgWVG57F1Wh5twFuPWGncLZEXQmdFrMrHqaLMZfJ9pukBdENT648DzBeFGhQrDxpLXuYtiwwreE",
+          "success": true,
+          "duration": 918,
+          "timestamp": 1769147154314
+        }
+      ]
+    },
+    {
+      "scenarioName": "Shield Tokens",
+      "program": "Privacy",
+      "totalTransactions": 1,
+      "successfulTransactions": 0,
+      "failedTransactions": 1,
+      "totalDuration": 9,
+      "averageDuration": 9,
+      "transactions": [
+        {
+          "program": "Privacy",
+          "operation": "shieldTokens",
+          "keypair": "wallet-1",
+          "success": false,
+          "duration": 9,
+          "timestamp": 1769147155232,
+          "error": "Simulation failed. \nMessage: Transaction simulation failed: Error processing Instruction 0: Program failed to complete. \nLogs: \n[\n  \"Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J invoke [1]\",\n  \"Program log: Instruction: ShieldTokens\",\n  \"Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]\",\n  \"Program log: Instruction: Burn\",\n  \"Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4707 of 193380 compute units\",\n  \"Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success\",\n  \"Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J consumed 11808 of 200000 compute units\",\n  \"Program CrfC5coUm2ty6DphLBFhAmr8m1AMutf8KTW2JYS38Z5J failed: InvalidLength\"\n]. \nCatch the `SendTransactionError` and call `getLogs()` on it for full details."
+        }
+      ]
+    },
+    {
+      "scenarioName": "Private Transfer",
+      "program": "Privacy",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 456,
+      "averageDuration": 456,
+      "transactions": [
+        {
+          "program": "Privacy",
+          "operation": "privateTransfer",
+          "keypair": "wallet-1",
+          "signature": "2Tpv3ie6Si9xFGxrTYRtz6nXAPHMnKMw8iBsARfj35aNS8b7b8egoyFj5WHu2BT35ztBsLVMKfgqGr3qL36M1Cr2",
+          "success": true,
+          "duration": 456,
+          "timestamp": 1769147155241
+        }
+      ]
+    },
+    {
+      "scenarioName": "Unshield Tokens",
+      "program": "Privacy",
+      "totalTransactions": 1,
+      "successfulTransactions": 1,
+      "failedTransactions": 0,
+      "totalDuration": 476,
+      "averageDuration": 476,
+      "transactions": [
+        {
+          "program": "Privacy",
+          "operation": "unshieldTokens",
+          "keypair": "wallet-1",
+          "signature": "4agNvu7eefZ6q6BAzXb6zJGGwP4RyfJbzcwcbWXQcbH5N8ZtZn3d3NDbmLVeufSXMwhLb7FXxXJA9d2m7YeCZRck",
+          "success": true,
+          "duration": 476,
+          "timestamp": 1769147155697
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "totalScenarios": 5,
+    "totalTransactions": 6,
+    "successfulTransactions": 5,
+    "failedTransactions": 1,
+    "successRate": 83.33333333333334,
+    "averageTransactionDuration": 479.6666666666667,
+    "throughput": 1.199040767386091,
+    "programStats": {
+      "Privacy": {
+        "program": "Privacy",
+        "totalTransactions": 6,
+        "successfulTransactions": 5,
+        "failedTransactions": 1,
+        "averageDuration": 479.6666666666667,
+        "totalComputeUnits": 0
+      }
+    },
+    "keypairStats": {
+      "dev-wallet": {
+        "keypair": "dev-wallet",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 500
+      },
+      "wallet-1": {
+        "keypair": "wallet-1",
+        "totalTransactions": 4,
+        "successfulTransactions": 3,
+        "failedTransactions": 1,
+        "averageDuration": 365
+      },
+      "wallet-2": {
+        "keypair": "wallet-2",
+        "totalTransactions": 1,
+        "successfulTransactions": 1,
+        "failedTransactions": 0,
+        "averageDuration": 918
+      }
+    }
+  }
+}
