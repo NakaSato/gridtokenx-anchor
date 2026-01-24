@@ -1,0 +1,210 @@
+{
+  "exportedAt": "2026-01-17T09:42:14.157Z",
+  "platform": "Solana (GridTokenX)",
+  "environment": "LiteSVM",
+  "totalBenchmarks": 11,
+  "results": [
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "DoNothing",
+      "category": "BLOCKBENCH-Micro",
+      "throughput": 225,
+      "throughputUnit": "TPS",
+      "avgLatencyMs": 2.515,
+      "p50LatencyMs": 2.428,
+      "p95LatencyMs": 3.107,
+      "p99LatencyMs": 3.927,
+      "successRate": 100,
+      "totalOperations": 1000,
+      "notes": "Consensus layer baseline"
+    },
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "CPUHeavy-Sort",
+      "category": "BLOCKBENCH-Micro",
+      "throughput": 231,
+      "throughputUnit": "TPS",
+      "avgLatencyMs": 2.455,
+      "p50LatencyMs": 2.424,
+      "p95LatencyMs": 2.674,
+      "p99LatencyMs": 2.841,
+      "successRate": 100,
+      "totalOperations": 500,
+      "notes": "Execution layer - sorting"
+    },
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "IOHeavy-Write",
+      "category": "BLOCKBENCH-Micro",
+      "throughput": 192,
+      "throughputUnit": "TPS",
+      "avgLatencyMs": 3.019,
+      "p50LatencyMs": 2.977,
+      "p95LatencyMs": 3.486,
+      "p99LatencyMs": 4.333,
+      "successRate": 100,
+      "totalOperations": 500,
+      "notes": "Data model layer - writes"
+    },
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "IOHeavy-Mixed",
+      "category": "BLOCKBENCH-Micro",
+      "throughput": 192,
+      "throughputUnit": "TPS",
+      "avgLatencyMs": 3.025,
+      "p50LatencyMs": 2.821,
+      "p95LatencyMs": 3.338,
+      "p99LatencyMs": 4.949,
+      "successRate": 100,
+      "totalOperations": 500,
+      "notes": "Data model layer - mixed"
+    },
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "YCSB-A",
+      "category": "BLOCKBENCH-Macro",
+      "throughput": 290,
+      "throughputUnit": "ops/s",
+      "avgLatencyMs": 2.663,
+      "p50LatencyMs": 2.326,
+      "p95LatencyMs": 4.591,
+      "p99LatencyMs": 4.717,
+      "successRate": 99.9,
+      "totalOperations": 1000,
+      "notes": "50% read, 50% update"
+    },
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "YCSB-B",
+      "category": "BLOCKBENCH-Macro",
+      "throughput": 442,
+      "throughputUnit": "ops/s",
+      "avgLatencyMs": 1.805,
+      "p50LatencyMs": 2.039,
+      "p95LatencyMs": 2.552,
+      "p99LatencyMs": 4.573,
+      "successRate": 99.9,
+      "totalOperations": 1000,
+      "notes": "95% read, 5% update"
+    },
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "YCSB-C",
+      "category": "BLOCKBENCH-Macro",
+      "throughput": 391,
+      "throughputUnit": "ops/s",
+      "avgLatencyMs": 1.756,
+      "p50LatencyMs": 2.041,
+      "p95LatencyMs": 2.351,
+      "p99LatencyMs": 2.724,
+      "successRate": 99.9,
+      "totalOperations": 1000,
+      "notes": "100% read"
+    },
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "Smallbank",
+      "category": "BLOCKBENCH-Macro",
+      "throughput": 1714,
+      "throughputUnit": "TPS",
+      "avgLatencyMs": 5.81,
+      "p50LatencyMs": 6,
+      "p95LatencyMs": 9,
+      "p99LatencyMs": 11,
+      "successRate": 99.8,
+      "totalOperations": 51470,
+      "notes": "OLTP banking workload"
+    },
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "TPC-C",
+      "category": "TPC",
+      "throughput": 2111,
+      "throughputUnit": "tpmC",
+      "avgLatencyMs": 117,
+      "p50LatencyMs": 113.5,
+      "p95LatencyMs": 182.1,
+      "p99LatencyMs": 219.7,
+      "successRate": 99.8,
+      "totalOperations": 4618,
+      "notes": "New-Order transaction mix"
+    },
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "TPC-E",
+      "category": "TPC",
+      "throughput": 306,
+      "throughputUnit": "tpsE",
+      "avgLatencyMs": 7.88,
+      "p50LatencyMs": 8,
+      "p95LatencyMs": 15,
+      "p99LatencyMs": 17,
+      "successRate": 99,
+      "totalOperations": 37800,
+      "notes": "Trade execution workload"
+    },
+    {
+      "timestamp": "2026-01-17T09:42:14.156Z",
+      "benchmark": "TPC-H",
+      "category": "TPC",
+      "throughput": 250486,
+      "throughputUnit": "QphH",
+      "avgLatencyMs": 71.08,
+      "p50LatencyMs": 66,
+      "p95LatencyMs": 134,
+      "p99LatencyMs": 147,
+      "successRate": 100,
+      "totalOperations": 2110,
+      "notes": "Analytics queries"
+    }
+  ],
+  "summary": {
+    "microBenchmarks": {
+      "consensusLayer": {
+        "benchmark": "DoNothing",
+        "tps": 225
+      },
+      "executionLayer": {
+        "benchmark": "CPUHeavy",
+        "tps": 231
+      },
+      "dataModelLayer": {
+        "benchmark": "IOHeavy",
+        "tps": 192
+      }
+    },
+    "macroBenchmarks": {
+      "ycsbA": {
+        "throughput": 290,
+        "unit": "ops/s"
+      },
+      "ycsbB": {
+        "throughput": 442,
+        "unit": "ops/s"
+      },
+      "ycsbC": {
+        "throughput": 391,
+        "unit": "ops/s"
+      },
+      "smallbank": {
+        "throughput": 1714,
+        "unit": "TPS"
+      }
+    },
+    "tpcBenchmarks": {
+      "tpcC": {
+        "throughput": 2111,
+        "unit": "tpmC"
+      },
+      "tpcE": {
+        "throughput": 306,
+        "unit": "tpsE"
+      },
+      "tpcH": {
+        "throughput": 250486,
+        "unit": "QphH"
+      }
+    }
+  }
+}

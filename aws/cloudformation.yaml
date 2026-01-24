@@ -28,7 +28,7 @@ Parameters:
     Type: String
     Default: m5.2xlarge
     AllowedValues:
-      - m5.2xlarge    # 8 vCPU, 32GB RAM - Research Specification matching Intel Xeon E5-1650 v4
+      - m5.2xlarge
     Description: EC2 instance type for Solana validator
 
   KeyPairName:
@@ -37,8 +37,8 @@ Parameters:
 
   AmiId:
     Type: String
-    Default: ami-0c55b159cbfafe1f0
-    Description: Ubuntu 20.04 LTS AMI (update for your region)
+    Default: ami-0fb0b230890ccd1e6
+    Description: Ubuntu 20.04 LTS AMI (us-east-1)
 
 Resources:
   # ============================================
@@ -235,8 +235,6 @@ Resources:
           Ebs:
             VolumeSize: 100
             VolumeType: gp3
-            Iops: 3000
-            Throughput: 125
             Encrypted: true
       UserData:
         Fn::Base64: !Sub |

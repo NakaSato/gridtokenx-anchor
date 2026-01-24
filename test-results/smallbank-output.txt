@@ -1,0 +1,70 @@
+
+> gridtokenx-anchor@0.1.2 benchmark:smallbank /Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor
+> npx tsx tests/performance/benchmarks/smallbank-workload.ts
+
+
+╔════════════════════════════════════════════════════════════╗
+║     Smallbank Benchmark for GridTokenX                     ║
+║     Baseline Consensus Stress Test                         ║
+╚════════════════════════════════════════════════════════════╝
+
+Configuration:
+  Accounts: 10000
+  Hotspot: 10% accounts, 90% traffic
+  Concurrency: 10
+  Duration: 30000ms
+
+🚀 Running Smallbank workload...
+
+  Completed: 200 transactions  Completed: 400 transactions  Completed: 600 transactions  Completed: 800 transactions  Completed: 1000 transactions  Completed: 1200 transactions  Completed: 1400 transactions  Completed: 1600 transactions  Completed: 1800 transactions  Completed: 2000 transactions  Completed: 2200 transactions  Completed: 2400 transactions  Completed: 2600 transactions  Completed: 2800 transactions  Completed: 3000 transactions  Completed: 3200 transactions  Completed: 3400 transactions  Completed: 3600 transactions  Completed: 3800 transactions  Completed: 4000 transactions  Completed: 4200 transactions  Completed: 4400 transactions  Completed: 4600 transactions  Completed: 4800 transactions  Completed: 5000 transactions  Completed: 5200 transactions  Completed: 5400 transactions  Completed: 5600 transactions  Completed: 5800 transactions  Completed: 6000 transactions  Completed: 6200 transactions  Completed: 6400 transactions  Completed: 6600 transactions  Completed: 6800 transactions  Completed: 7000 transactions  Completed: 7200 transactions  Completed: 7400 transactions  Completed: 7600 transactions  Completed: 7800 transactions  Completed: 8000 transactions  Completed: 8200 transactions  Completed: 8400 transactions  Completed: 8600 transactions  Completed: 8800 transactions  Completed: 9000 transactions  Completed: 9200 transactions  Completed: 9400 transactions  Completed: 9600 transactions  Completed: 9800 transactions  Completed: 10000 transactions  Completed: 10200 transactions  Completed: 10400 transactions  Completed: 10600 transactions  Completed: 10800 transactions  Completed: 11000 transactions  Completed: 11200 transactions  Completed: 11400 transactions  Completed: 11600 transactions  Completed: 11800 transactions  Completed: 12000 transactions  Completed: 12200 transactions  Completed: 12400 transactions  Completed: 12600 transactions  Completed: 12800 transactions  Completed: 13000 transactions  Completed: 13200 transactions  Completed: 13400 transactions  Completed: 13600 transactions  Completed: 13800 transactions  Completed: 14000 transactions  Completed: 14200 transactions  Completed: 14400 transactions  Completed: 14600 transactions  Completed: 14800 transactions  Completed: 15000 transactions  Completed: 15200 transactions  Completed: 15400 transactions  Completed: 15600 transactions  Completed: 15800 transactions  Completed: 16000 transactions  Completed: 16200 transactions  Completed: 16400 transactions  Completed: 16600 transactions  Completed: 16800 transactions  Completed: 17000 transactions  Completed: 17200 transactions  Completed: 17400 transactions  Completed: 17600 transactions  Completed: 17800 transactions  Completed: 18000 transactions  Completed: 18200 transactions  Completed: 18400 transactions  Completed: 18600 transactions  Completed: 18800 transactions  Completed: 19000 transactions  Completed: 19200 transactions  Completed: 19400 transactions  Completed: 19600 transactions  Completed: 19800 transactions  Completed: 20000 transactions  Completed: 20200 transactions  Completed: 20400 transactions  Completed: 20600 transactions  Completed: 20800 transactions  Completed: 21000 transactions  Completed: 21200 transactions  Completed: 21400 transactions  Completed: 21600 transactions  Completed: 21800 transactions  Completed: 22000 transactions  Completed: 22200 transactions  Completed: 22400 transactions  Completed: 22600 transactions  Completed: 22800 transactions  Completed: 23000 transactions  Completed: 23200 transactions  Completed: 23400 transactions  Completed: 23600 transactions  Completed: 23800 transactions  Completed: 24000 transactions  Completed: 24200 transactions  Completed: 24400 transactions  Completed: 24600 transactions  Completed: 24800 transactions  Completed: 25000 transactions  Completed: 25200 transactions  Completed: 25400 transactions  Completed: 25600 transactions  Completed: 25800 transactions  Completed: 26000 transactions  Completed: 26200 transactions  Completed: 26400 transactions  Completed: 26600 transactions  Completed: 26800 transactions  Completed: 27000 transactions  Completed: 27200 transactions  Completed: 27400 transactions  Completed: 27600 transactions  Completed: 27800 transactions  Completed: 28000 transactions  Completed: 28200 transactions  Completed: 28400 transactions  Completed: 28600 transactions  Completed: 28800 transactions  Completed: 29000 transactions  Completed: 29200 transactions  Completed: 29400 transactions  Completed: 29600 transactions  Completed: 29800 transactions  Completed: 30000 transactions  Completed: 30200 transactions  Completed: 30400 transactions  Completed: 30600 transactions  Completed: 30800 transactions  Completed: 31000 transactions  Completed: 31200 transactions  Completed: 31400 transactions  Completed: 31600 transactions  Completed: 31800 transactions  Completed: 32000 transactions  Completed: 32200 transactions  Completed: 32400 transactions  Completed: 32600 transactions  Completed: 32800 transactions  Completed: 33000 transactions  Completed: 33200 transactions  Completed: 33400 transactions  Completed: 33600 transactions  Completed: 33800 transactions  Completed: 34000 transactions  Completed: 34200 transactions  Completed: 34400 transactions  Completed: 34600 transactions  Completed: 34800 transactions  Completed: 35000 transactions  Completed: 35200 transactions  Completed: 35400 transactions  Completed: 35600 transactions  Completed: 35800 transactions  Completed: 36000 transactions  Completed: 36200 transactions  Completed: 36400 transactions  Completed: 36600 transactions  Completed: 36800 transactions  Completed: 37000 transactions  Completed: 37200 transactions  Completed: 37400 transactions  Completed: 37600 transactions  Completed: 37800 transactions  Completed: 38000 transactions  Completed: 38200 transactions  Completed: 38400 transactions  Completed: 38600 transactions  Completed: 38800 transactions  Completed: 39000 transactions  Completed: 39200 transactions  Completed: 39400 transactions  Completed: 39600 transactions  Completed: 39800 transactions  Completed: 40000 transactions  Completed: 40200 transactions  Completed: 40400 transactions  Completed: 40600 transactions  Completed: 40800 transactions  Completed: 41000 transactions  Completed: 41200 transactions  Completed: 41400 transactions  Completed: 41600 transactions  Completed: 41800 transactions  Completed: 42000 transactions  Completed: 42200 transactions  Completed: 42400 transactions  Completed: 42600 transactions  Completed: 42800 transactions  Completed: 43000 transactions  Completed: 43200 transactions  Completed: 43400 transactions  Completed: 43600 transactions  Completed: 43800 transactions  Completed: 44000 transactions  Completed: 44200 transactions  Completed: 44400 transactions  Completed: 44600 transactions  Completed: 44800 transactions  Completed: 45000 transactions  Completed: 45200 transactions  Completed: 45400 transactions  Completed: 45600 transactions  Completed: 45800 transactions  Completed: 46000 transactions  Completed: 46200 transactions  Completed: 46400 transactions  Completed: 46600 transactions  Completed: 46800 transactions  Completed: 47000 transactions  Completed: 47200 transactions  Completed: 47400 transactions  Completed: 47600 transactions  Completed: 47800 transactions  Completed: 48000 transactions  Completed: 48200 transactions  Completed: 48400 transactions  Completed: 48600 transactions  Completed: 48800 transactions  Completed: 49000 transactions  Completed: 49200 transactions  Completed: 49400 transactions  Completed: 49600 transactions  Completed: 49800 transactions  Completed: 50000 transactions  Completed: 50200 transactions  Completed: 50400 transactions  Completed: 50600 transactions  Completed: 50800 transactions  Completed: 51000 transactions  Completed: 51200 transactions  Completed: 51400 transactions  Completed: 51600 transactions  Completed: 51800 transactions  Completed: 52000 transactions  Completed: 52200 transactions  Completed: 52400 transactions
+
+════════════════════════════════════════════════════════════
+  SMALLBANK BENCHMARK RESULTS
+════════════════════════════════════════════════════════════
+
+📊 Primary Metric:
+   TPS: 1744.85
+
+📈 Transaction Summary:
+   Total: 52454
+   Successful: 52377
+   Failed: 77
+   Conflict Rate: 0.77%
+
+⏱️  Latency:
+   Average: 5.72ms
+   p50: 6.00ms
+   p95: 9.00ms
+   p99: 10.00ms
+
+📋 Transaction Mix:
+   TRANSACT_SAVINGS: 7919 (15.1%)
+   WRITE_CHECK: 13177 (25.2%)
+   DEPOSIT_CHECKING: 7901 (15.1%)
+   AMALGAMATE: 5195 (9.9%)
+   SEND_PAYMENT: 12905 (24.6%)
+   BALANCE: 5280 (10.1%)
+
+
+✅ Smallbank Benchmark Complete
+{
+  "tps": 1744.85,
+  "totalTransactions": 52454,
+  "successfulTransactions": 52377,
+  "failedTransactions": 77,
+  "conflictRate": 0.7682922179433408,
+  "avgLatencyMs": 5.72,
+  "latencyPercentiles": {
+    "p50": 6,
+    "p95": 9,
+    "p99": 10
+  },
+  "transactionMix": {
+    "TRANSACT_SAVINGS": 7919,
+    "WRITE_CHECK": 13177,
+    "DEPOSIT_CHECKING": 7901,
+    "AMALGAMATE": 5195,
+    "SEND_PAYMENT": 12905,
+    "BALANCE": 5280
+  }
+}

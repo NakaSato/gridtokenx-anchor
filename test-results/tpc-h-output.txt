@@ -1,0 +1,65 @@
+
+> gridtokenx-anchor@0.1.2 benchmark:tpc-h /Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor
+> npx tsx tests/performance/benchmarks/tpc-h-workload.ts
+
+
+╔════════════════════════════════════════════════════════════╗
+║     TPC-H Style Benchmark for GridTokenX                   ║
+║     Blockchain Analytics / Decision Support                ║
+╚════════════════════════════════════════════════════════════╝
+
+Configuration:
+  Scale Factor: 0.1
+  Orders: 10,000
+  Line Items: 50,000
+  Concurrency: 5
+  Duration: 30000ms
+
+🚀 Running TPC-H queries...
+
+  Completed: 10 queries  Completed: 20 queries  Completed: 30 queries  Completed: 40 queries  Completed: 50 queries  Completed: 60 queries  Completed: 70 queries  Completed: 80 queries  Completed: 90 queries  Completed: 100 queries  Completed: 110 queries  Completed: 120 queries  Completed: 130 queries  Completed: 140 queries  Completed: 150 queries  Completed: 160 queries  Completed: 170 queries  Completed: 180 queries  Completed: 190 queries  Completed: 200 queries  Completed: 210 queries  Completed: 220 queries  Completed: 230 queries  Completed: 240 queries  Completed: 250 queries  Completed: 260 queries  Completed: 270 queries  Completed: 280 queries  Completed: 290 queries  Completed: 300 queries  Completed: 310 queries  Completed: 320 queries  Completed: 330 queries  Completed: 340 queries  Completed: 350 queries  Completed: 360 queries  Completed: 370 queries  Completed: 380 queries  Completed: 390 queries  Completed: 400 queries  Completed: 410 queries  Completed: 420 queries  Completed: 430 queries  Completed: 440 queries  Completed: 450 queries  Completed: 460 queries  Completed: 470 queries  Completed: 480 queries  Completed: 490 queries  Completed: 500 queries  Completed: 510 queries  Completed: 520 queries  Completed: 530 queries  Completed: 540 queries  Completed: 550 queries  Completed: 560 queries  Completed: 570 queries  Completed: 580 queries  Completed: 590 queries  Completed: 600 queries  Completed: 610 queries  Completed: 620 queries  Completed: 630 queries  Completed: 640 queries  Completed: 650 queries  Completed: 660 queries  Completed: 670 queries  Completed: 680 queries  Completed: 690 queries  Completed: 700 queries  Completed: 710 queries  Completed: 720 queries  Completed: 730 queries  Completed: 740 queries  Completed: 750 queries  Completed: 760 queries  Completed: 770 queries  Completed: 780 queries  Completed: 790 queries  Completed: 800 queries  Completed: 810 queries  Completed: 820 queries  Completed: 830 queries  Completed: 840 queries  Completed: 850 queries  Completed: 860 queries  Completed: 870 queries  Completed: 880 queries  Completed: 890 queries  Completed: 900 queries  Completed: 910 queries  Completed: 920 queries  Completed: 930 queries  Completed: 940 queries  Completed: 950 queries  Completed: 960 queries  Completed: 970 queries  Completed: 980 queries  Completed: 990 queries  Completed: 1000 queries  Completed: 1010 queries  Completed: 1020 queries  Completed: 1030 queries  Completed: 1040 queries  Completed: 1050 queries  Completed: 1060 queries  Completed: 1070 queries  Completed: 1080 queries  Completed: 1090 queries  Completed: 1100 queries  Completed: 1110 queries  Completed: 1120 queries  Completed: 1130 queries  Completed: 1140 queries  Completed: 1150 queries  Completed: 1160 queries  Completed: 1170 queries  Completed: 1180 queries  Completed: 1190 queries  Completed: 1200 queries  Completed: 1210 queries  Completed: 1220 queries  Completed: 1230 queries  Completed: 1240 queries  Completed: 1250 queries  Completed: 1260 queries  Completed: 1270 queries  Completed: 1280 queries  Completed: 1290 queries  Completed: 1300 queries  Completed: 1310 queries  Completed: 1320 queries  Completed: 1330 queries  Completed: 1340 queries  Completed: 1350 queries  Completed: 1360 queries  Completed: 1370 queries  Completed: 1380 queries  Completed: 1390 queries  Completed: 1400 queries  Completed: 1410 queries  Completed: 1420 queries  Completed: 1430 queries  Completed: 1440 queries  Completed: 1450 queries  Completed: 1460 queries  Completed: 1470 queries  Completed: 1480 queries  Completed: 1490 queries  Completed: 1500 queries  Completed: 1510 queries  Completed: 1520 queries  Completed: 1530 queries  Completed: 1540 queries  Completed: 1550 queries  Completed: 1560 queries  Completed: 1570 queries  Completed: 1580 queries  Completed: 1590 queries  Completed: 1600 queries  Completed: 1610 queries  Completed: 1620 queries  Completed: 1630 queries  Completed: 1640 queries  Completed: 1650 queries  Completed: 1660 queries  Completed: 1670 queries  Completed: 1680 queries  Completed: 1690 queries  Completed: 1700 queries  Completed: 1710 queries  Completed: 1720 queries  Completed: 1730 queries  Completed: 1740 queries  Completed: 1750 queries  Completed: 1760 queries  Completed: 1770 queries  Completed: 1780 queries  Completed: 1790 queries  Completed: 1800 queries  Completed: 1810 queries  Completed: 1820 queries  Completed: 1830 queries  Completed: 1840 queries  Completed: 1850 queries  Completed: 1860 queries  Completed: 1870 queries  Completed: 1880 queries  Completed: 1890 queries  Completed: 1900 queries  Completed: 1910 queries  Completed: 1920 queries  Completed: 1930 queries  Completed: 1940 queries  Completed: 1950 queries  Completed: 1960 queries  Completed: 1970 queries  Completed: 1980 queries  Completed: 1990 queries  Completed: 2000 queries  Completed: 2010 queries  Completed: 2020 queries  Completed: 2030 queries  Completed: 2040 queries  Completed: 2050 queries  Completed: 2060 queries  Completed: 2070 queries  Completed: 2080 queries  Completed: 2090 queries  Completed: 2100 queries
+
+════════════════════════════════════════════════════════════
+  TPC-H BENCHMARK RESULTS
+════════════════════════════════════════════════════════════
+
+📊 Primary Metric:
+   QphH (Queries/hour): 248,911
+
+⏱️  Query Latency:
+   Average: 71.56ms
+   p50: 66ms
+   p95: 135ms
+   p99: 148ms
+
+📋 Per-Query Latency:
+   Q1_AGGREGATION: 101.40ms
+   Q3_SHIPPING: 65.15ms
+   Q6_REVENUE: 45.22ms
+   Q14_PROMO: 55.12ms
+   Q19_DISCOUNT: 80.29ms
+
+📈 I/O Metrics:
+   Throughput: 133.47 MB/s
+   Scan Efficiency: 0.0600%
+
+
+✅ TPC-H Benchmark Complete
+{
+  "qphH": 248911,
+  "avgQueryLatencyMs": 71.56,
+  "queryLatencies": {
+    "Q1_AGGREGATION": 101.40124416796267,
+    "Q3_SHIPPING": 65.14651162790697,
+    "Q6_REVENUE": 45.22011385199241,
+    "Q14_PROMO": 55.11940298507463,
+    "Q19_DISCOUNT": 80.29245283018868
+  },
+  "throughputMBps": 133.47,
+  "scanEfficiency": 0.0006,
+  "latencyPercentiles": {
+    "p50": 66,
+    "p95": 135,
+    "p99": 148
+  }
+}

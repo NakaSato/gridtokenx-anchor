@@ -94,12 +94,16 @@ This documentation is prepared for thesis research on blockchain-based peer-to-p
 
 | Metric | Value |
 |--------|-------|
-| Smart Contract Programs | 5 |
-| Total Instructions | 43 |
+| Smart Contract Programs | 7 |
+| Total Instructions | 43+ |
+| TPC-C Throughput | 21,136 tpmC |
+| SmallBank TPS | 1,745 TPS |
 | Transaction Latency (p99) | ~20ms |
-| Transaction Success Rate | 99.9% |
+| Transaction Success Rate | 99.8% |
 | Token Precision | 9 decimals |
 | Test Coverage | 85%+ |
+
+> 📈 **Latest Benchmark Results**: See [benchmark-results-2026-01-17.md](./benchmark-results-2026-01-17.md) for comprehensive performance analysis including TPC-C, TPC-E, TPC-H, SmallBank, and BLOCKBENCH layer analysis.
 
 ---
 
@@ -114,6 +118,6 @@ See individual chapters for detailed references. Key academic sources include:
 
 ---
 
-*Last Updated: December 2025*  
-*Document Version: 2.0*  
+*Last Updated: January 2026*  
+*Document Version: 2.1*  
 *For technical implementation details, see [Technical Documentation](../technical/)*

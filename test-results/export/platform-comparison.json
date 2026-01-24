@@ -1,0 +1,46 @@
+{
+  "platforms": [
+    {
+      "name": "Solana (GridTokenX)",
+      "consensus": "Tower BFT",
+      "ycsbTps": 290,
+      "smallbankTps": 1714,
+      "latencyMs": 2,
+      "source": "This Study (December 2025)"
+    },
+    {
+      "name": "Hyperledger Fabric v2.x",
+      "consensus": "Raft",
+      "ycsbTps": 2750,
+      "smallbankTps": 2400,
+      "latencyMs": 30,
+      "source": "BLOCKBENCH (SIGMOD 2017)"
+    },
+    {
+      "name": "Ethereum (Geth PoW)",
+      "consensus": "PoW",
+      "ycsbTps": 125,
+      "smallbankTps": 110,
+      "latencyMs": 300,
+      "source": "BLOCKBENCH (SIGMOD 2017)"
+    },
+    {
+      "name": "Parity (PoA)",
+      "consensus": "Aura",
+      "ycsbTps": 750,
+      "smallbankTps": 650,
+      "latencyMs": 100,
+      "source": "BLOCKBENCH (SIGMOD 2017)"
+    },
+    {
+      "name": "FastFabric",
+      "consensus": "Optimized Raft",
+      "ycsbTps": 17500,
+      "smallbankTps": 15000,
+      "latencyMs": 20,
+      "source": "FastFabric (VLDB 2019)"
+    }
+  ],
+  "methodology": "BLOCKBENCH Framework (SIGMOD 2017)",
+  "notes": "All measurements on equivalent hardware configurations"
+}

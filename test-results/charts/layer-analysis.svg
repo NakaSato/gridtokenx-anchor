@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <style>
+    .title { font: bold 18px sans-serif; fill: #1F2937; }
+    .axis-label { font: 12px sans-serif; fill: #4B5563; }
+    .axis-title { font: 14px sans-serif; fill: #374151; }
+    .legend-text { font: 12px sans-serif; fill: #4B5563; }
+    .grid-line { stroke: #E5E7EB; stroke-width: 1; }
+    .bar { transition: opacity 0.2s; }
+    .bar:hover { opacity: 0.8; }
+  </style>
+  
+  <!-- Background -->
+  <rect width="800" height="500" fill="#FAFAFA"/>
+  
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" class="title">Solana Layer-wise Performance Analysis</text>
+  
+  <!-- Chart area -->
+  <g transform="translate(80, 60)">
+    <!-- Grid lines -->
+    <line x1="0" y1="360" x2="600" y2="360" class="grid-line"/>
+    <text x="-10" y="364" text-anchor="end" class="axis-label">0</text>
+    <line x1="0" y1="288" x2="600" y2="288" class="grid-line"/>
+    <text x="-10" y="292" text-anchor="end" class="axis-label">63</text>
+    <line x1="0" y1="216" x2="600" y2="216" class="grid-line"/>
+    <text x="-10" y="220" text-anchor="end" class="axis-label">126</text>
+    <line x1="0" y1="144" x2="600" y2="144" class="grid-line"/>
+    <text x="-10" y="148" text-anchor="end" class="axis-label">189</text>
+    <line x1="0" y1="72" x2="600" y2="72" class="grid-line"/>
+    <text x="-10" y="76" text-anchor="end" class="axis-label">252</text>
+    <line x1="0" y1="0" x2="600" y2="0" class="grid-line"/>
+    <text x="-10" y="4" text-anchor="end" class="axis-label">315</text>
+    <rect class="bar" x="20" y="32.72727272727275" width="90" height="327.27272727272725" fill="#8B5CF6" rx="2"/>
+    <text x="70" y="380" text-anchor="middle" class="axis-label" transform="rotate(-30, 70, 380)">Consensus</text>
+    <rect class="bar" x="220" y="104.81881754609029" width="90" height="255.1811824539097" fill="#8B5CF6" rx="2"/>
+    <text x="270" y="380" text-anchor="middle" class="axis-label" transform="rotate(-30, 270, 380)">Execution</text>
+    <rect class="bar" x="420" y="91.08709472345834" width="90" height="268.91290527654166" fill="#8B5CF6" rx="2"/>
+    <text x="470" y="380" text-anchor="middle" class="axis-label" transform="rotate(-30, 470, 380)">Data Model</text>
+    <text x="-180" y="-50" transform="rotate(-90)" text-anchor="middle" class="axis-title">Throughput (TPS)</text>
+  </g>
+  
+  <!-- Legend -->
+  <g transform="translate(690, 60)">
+    <rect x="0" y="0" width="15" height="15" fill="#8B5CF6" rx="2"/>
+    <text x="20" y="12" class="legend-text">Baseline TPS</text>
+  </g>
+</svg>

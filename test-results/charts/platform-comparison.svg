@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <style>
+    .title { font: bold 18px sans-serif; fill: #1F2937; }
+    .axis-label { font: 12px sans-serif; fill: #4B5563; }
+    .axis-title { font: 14px sans-serif; fill: #374151; }
+    .legend-text { font: 12px sans-serif; fill: #4B5563; }
+    .grid-line { stroke: #E5E7EB; stroke-width: 1; }
+    .bar { transition: opacity 0.2s; }
+    .bar:hover { opacity: 0.8; }
+  </style>
+  
+  <!-- Background -->
+  <rect width="800" height="500" fill="#FAFAFA"/>
+  
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" class="title">Platform Throughput Comparison (BLOCKBENCH)</text>
+  
+  <!-- Chart area -->
+  <g transform="translate(80, 60)">
+    <!-- Grid lines -->
+    <line x1="0" y1="360" x2="600" y2="360" class="grid-line"/>
+    <text x="-10" y="364" text-anchor="end" class="axis-label">0</text>
+    <line x1="0" y1="288" x2="600" y2="288" class="grid-line"/>
+    <text x="-10" y="292" text-anchor="end" class="axis-label">3850</text>
+    <line x1="0" y1="216" x2="600" y2="216" class="grid-line"/>
+    <text x="-10" y="220" text-anchor="end" class="axis-label">7700</text>
+    <line x1="0" y1="144" x2="600" y2="144" class="grid-line"/>
+    <text x="-10" y="148" text-anchor="end" class="axis-label">11550</text>
+    <line x1="0" y1="72" x2="600" y2="72" class="grid-line"/>
+    <text x="-10" y="76" text-anchor="end" class="axis-label">15400</text>
+    <line x1="0" y1="0" x2="600" y2="0" class="grid-line"/>
+    <text x="-10" y="4" text-anchor="end" class="axis-label">19250</text>
+    <rect class="bar" x="12" y="354.0342857142857" width="36" height="5.965714285714285" fill="#3B82F6" rx="2"/>
+    <rect class="bar" x="52" y="343.8794805194805" width="36" height="16.12051948051948" fill="#10B981" rx="2"/>
+    <text x="52" y="380" text-anchor="middle" class="axis-label" transform="rotate(-30, 52, 380)">Solana (GridTokenX)</text>
+    <rect class="bar" x="132" y="308.57142857142856" width="36" height="51.42857142857142" fill="#3B82F6" rx="2"/>
+    <rect class="bar" x="172" y="315.1168831168831" width="36" height="44.883116883116884" fill="#10B981" rx="2"/>
+    <text x="172" y="380" text-anchor="middle" class="axis-label" transform="rotate(-30, 172, 380)">Hyperledger Fabric v1.x</text>
+    <rect class="bar" x="252" y="357.6623376623377" width="36" height="2.337662337662338" fill="#3B82F6" rx="2"/>
+    <rect class="bar" x="292" y="357.9428571428571" width="36" height="2.057142857142857" fill="#10B981" rx="2"/>
+    <text x="292" y="380" text-anchor="middle" class="axis-label" transform="rotate(-30, 292, 380)">Ethereum (Geth PoW)</text>
+    <rect class="bar" x="372" y="345.97402597402595" width="36" height="14.025974025974026" fill="#3B82F6" rx="2"/>
+    <rect class="bar" x="412" y="347.84415584415586" width="36" height="12.155844155844155" fill="#10B981" rx="2"/>
+    <text x="412" y="380" text-anchor="middle" class="axis-label" transform="rotate(-30, 412, 380)">Parity (PoA)</text>
+    <rect class="bar" x="492" y="32.72727272727275" width="36" height="327.27272727272725" fill="#3B82F6" rx="2"/>
+    <rect class="bar" x="532" y="79.48051948051949" width="36" height="280.5194805194805" fill="#10B981" rx="2"/>
+    <text x="532" y="380" text-anchor="middle" class="axis-label" transform="rotate(-30, 532, 380)">FastFabric</text>
+    <text x="-180" y="-50" transform="rotate(-90)" text-anchor="middle" class="axis-title">Transactions per Second</text>
+  </g>
+  
+  <!-- Legend -->
+  <g transform="translate(690, 60)">
+    <rect x="0" y="0" width="15" height="15" fill="#3B82F6" rx="2"/>
+    <text x="20" y="12" class="legend-text">YCSB TPS</text>
+    <rect x="0" y="25" width="15" height="15" fill="#10B981" rx="2"/>
+    <text x="20" y="37" class="legend-text">Smallbank TPS</text>
+  </g>
+</svg>
