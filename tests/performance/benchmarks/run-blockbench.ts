@@ -413,10 +413,11 @@ async function main(): Promise<void> {
   console.log("████████████████████████████████████████████████████████████████████\n");
 
   const startTime = Date.now();
+  const useReal = process.argv.includes("--real");
 
   // Initialize engine
   const engine = new BlockbenchEngine();
-  await engine.initialize(100);
+  await engine.initialize(100, useReal);
 
   // Run benchmarks
   const microResults = await runMicroBenchmarks(engine);
@@ -445,17 +446,17 @@ async function main(): Promise<void> {
 
   const filename = `blockbench-suite-${Date.now()}.json`;
   const filepath = path.join(resultsDir, filename);
-  
+
   fs.writeFileSync(filepath, JSON.stringify(suiteResults, null, 2));
   console.log(`📁 Full results saved to: ${filepath}`);
-  
+
   const totalDuration = (Date.now() - startTime) / 1000;
   console.log(`\n⏱️  Total execution time: ${totalDuration.toFixed(2)} seconds\n`);
 }
 
 // Run if executed directly
 const isMainModule = import.meta.url === `file://${process.argv[1]}` ||
-    process.argv[1]?.endsWith('run-blockbench.ts');
+  process.argv[1]?.endsWith('run-blockbench.ts');
 
 if (isMainModule) {
   main().catch(console.error);

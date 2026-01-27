@@ -22,8 +22,14 @@ localnet = ["compute-debug/localnet"]
 
 [dependencies]
 anchor-lang = { workspace = true, features = ["init-if-needed"] }
-anchor-spl = { version = "0.32.1" }
+anchor-spl = { workspace = true }
 spl-token = { workspace = true }
+
+constant_time_eq = "^0.3.1"
+blake3 = "^1.5.0"
+proc-macro-crate = "^3.2.0"
+indexmap = "^2.2.6"
+borsh_pinned = { package = "borsh", version = "^1.5.1" }
 
 sha2 = "0.10"
 hmac = "0.12"

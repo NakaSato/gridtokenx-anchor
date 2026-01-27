@@ -13,7 +13,7 @@ pub fn issue(
 ) -> Result<()> {
     let poa_config = &mut ctx.accounts.poa_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
-    let mut meter_data = ctx.accounts.meter_account.try_borrow_data()?;
+    let meter_data = ctx.accounts.meter_account.try_borrow_data()?;
     let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
     let clock = Clock::get()?;
 

@@ -4,6 +4,11 @@ use anchor_lang::prelude::*;
 // Use absolute path for governance crate if needed, or ensure it's mapped correctly
 pub use ::governance::{ErcCertificate, ErcStatus};
 
+// Core modules
+pub mod error;
+pub mod events;
+pub mod state;
+
 // Stablecoin and Cross-chain modules
 pub mod stablecoin;
 pub mod wormhole;
@@ -18,9 +23,15 @@ pub mod pricing;
 pub mod meter_verification;
 pub mod carbon;
 pub mod amm;
+pub mod auction;
 
+// Re-export core modules
+pub use error::*;
+pub use events::*;
+pub use state::*;
+
+// Features modules
 #[allow(ambiguous_glob_reexports)]
-
 pub use stablecoin::*;
 pub use wormhole::*;
 pub use payments::*;
@@ -30,6 +41,7 @@ pub use pricing::*;
 pub use meter_verification::*;
 pub use carbon::*;
 pub use amm::*;
+pub use auction::*;
 
 // Import compute_fn! macro when localnet feature is enabled
 #[cfg(feature = "localnet")]
@@ -100,12 +112,13 @@ pub mod trading {
     /// Validates that the seller has a valid ERC certificate before allowing the order
     pub fn create_sell_order(
         ctx: Context<CreateSellOrder>,
+        order_id: u64,
         energy_amount: u64,
         price_per_kwh: u64,
     ) -> Result<()> {
         compute_fn!("create_sell_order" => {
-            require!(energy_amount > 0, ErrorCode::InvalidAmount);
-            require!(price_per_kwh > 0, ErrorCode::InvalidPrice);
+            require!(energy_amount > 0, TradingError::InvalidAmount);
+            require!(price_per_kwh > 0, TradingError::InvalidPrice);
 
             // === ERC VALIDATION ===
             if let Some(erc_certificate) = &ctx.accounts.erc_certificate {
@@ -113,24 +126,24 @@ pub mod trading {
 
                 require!(
                     erc_certificate.status == ErcStatus::Valid,
-                    ErrorCode::InvalidErcCertificate
+                    TradingError::InvalidErcCertificate
                 );
 
                 if let Some(expires_at) = erc_certificate.expires_at {
                     require!(
                         clock.unix_timestamp < expires_at,
-                        ErrorCode::ErcCertificateExpired
+                        TradingError::ErcCertificateExpired
                     );
                 }
 
                 require!(
                     erc_certificate.validated_for_trading,
-                    ErrorCode::ErcNotValidatedForTrading
+                    TradingError::ErcNotValidatedForTrading
                 );
 
                 require!(
                     energy_amount <= erc_certificate.energy_amount,
-                    ErrorCode::ExceedsErcAmount
+                    TradingError::ExceedsErcAmount
                 );
             }
 
@@ -141,6 +154,7 @@ pub mod trading {
             // Initialize order
             order.seller = ctx.accounts.authority.key();
             order.buyer = Pubkey::default();
+            order.order_id = order_id;
             order.amount = energy_amount;
             order.filled_amount = 0;
             order.price_per_kwh = price_per_kwh;
@@ -177,12 +191,13 @@ pub mod trading {
     /// Create a buy order for energy
     pub fn create_buy_order(
         ctx: Context<CreateBuyOrder>,
+        order_id: u64,
         energy_amount: u64,
         max_price_per_kwh: u64,
     ) -> Result<()> {
         compute_fn!("create_buy_order" => {
-            require!(energy_amount > 0, ErrorCode::InvalidAmount);
-            require!(max_price_per_kwh > 0, ErrorCode::InvalidPrice);
+            require!(energy_amount > 0, TradingError::InvalidAmount);
+            require!(max_price_per_kwh > 0, TradingError::InvalidPrice);
 
             let mut market = ctx.accounts.market.load_mut()?;
             let mut order = ctx.accounts.order.load_init()?;
@@ -191,6 +206,7 @@ pub mod trading {
             // Initialize order
             order.buyer = ctx.accounts.authority.key();
             order.seller = Pubkey::default();
+            order.order_id = order_id;
             order.amount = energy_amount;
             order.filled_amount = 0;
             order.price_per_kwh = max_price_per_kwh;
@@ -223,7 +239,7 @@ pub mod trading {
     /// Match a buy order with a sell order
     pub fn match_orders(ctx: Context<MatchOrders>, match_amount: u64) -> Result<()> {
         compute_fn!("match_orders" => {
-            require!(match_amount > 0, ErrorCode::InvalidAmount);
+            require!(match_amount > 0, TradingError::InvalidAmount);
 
             let mut market = ctx.accounts.market.load_mut()?;
             let mut buy_order = ctx.accounts.buy_order.load_mut()?;
@@ -235,16 +251,16 @@ pub mod trading {
             require!(
                 buy_order.status == OrderStatus::Active as u8
                     || buy_order.status == OrderStatus::PartiallyFilled as u8,
-                ErrorCode::InactiveBuyOrder
+                TradingError::InactiveBuyOrder
             );
             require!(
                 sell_order.status == OrderStatus::Active as u8
                     || sell_order.status == OrderStatus::PartiallyFilled as u8,
-                ErrorCode::InactiveSellOrder
+                TradingError::InactiveSellOrder
             );
             require!(
                 buy_order.price_per_kwh >= sell_order.price_per_kwh,
-                ErrorCode::PriceMismatch
+                TradingError::PriceMismatch
             );
 
             // Calculate match details
@@ -252,13 +268,9 @@ pub mod trading {
             let sell_remaining = sell_order.amount - sell_order.filled_amount;
             let actual_match_amount = match_amount.min(buy_remaining).min(sell_remaining);
 
-            // Enhanced price discovery: Volume-weighted average price
-            let clearing_price = calculate_volume_weighted_price(
-                &market,
-                buy_order.price_per_kwh,
-                sell_order.price_per_kwh,
-                actual_match_amount,
-            );
+            // Fix value at matching order (GRX Token Standard)
+            // Use the seller's asking price as the clearing price (Pay-as-Seller)
+            let clearing_price = sell_order.price_per_kwh;
             let total_value = actual_match_amount * clearing_price;
             let fee_amount = (total_value * market.market_fee_bps as u64) / 10000;
 
@@ -335,13 +347,13 @@ pub mod trading {
 
             require!(
                 ctx.accounts.authority.key() == order_owner,
-                ErrorCode::UnauthorizedAuthority
+                TradingError::UnauthorizedAuthority
             );
 
             // Validate order can be cancelled
             require!(
                 order.status == OrderStatus::Active as u8 || order.status == OrderStatus::PartiallyFilled as u8,
-                ErrorCode::OrderNotCancellable
+                TradingError::OrderNotCancellable
             );
 
             // Update order status
@@ -371,7 +383,7 @@ pub mod trading {
 
             require!(
                 ctx.accounts.authority.key() == market.authority,
-                ErrorCode::UnauthorizedAuthority
+                TradingError::UnauthorizedAuthority
             );
 
             market.market_fee_bps = market_fee_bps;
@@ -403,20 +415,20 @@ pub mod trading {
             let mut market = ctx.accounts.market.load_mut()?;
             require!(
                 market.batch_config.enabled == 1,
-                ErrorCode::BatchProcessingDisabled
+                TradingError::BatchProcessingDisabled
             );
             
             let num_matches = amount.len();
             // Limit batch size to prevent hitting account limits (max ~20-25 accounts)
-            require!(num_matches > 0 && num_matches <= 4, ErrorCode::BatchSizeExceeded);
-            require!(price.len() == num_matches, ErrorCode::InvalidAmount);
-            require!(wheeling_charge.len() == num_matches, ErrorCode::InvalidAmount);
+            require!(num_matches > 0 && num_matches <= 4, TradingError::BatchSizeExceeded);
+            require!(price.len() == num_matches, TradingError::InvalidAmount);
+            require!(wheeling_charge.len() == num_matches, TradingError::InvalidAmount);
 
             // Remaining accounts check: 6 accounts per match
             let expected_accounts = num_matches * 6;
             require!(
                 ctx.remaining_accounts.len() >= expected_accounts,
-                ErrorCode::InsufficientEscrowBalance // Or a more specific error
+                TradingError::InsufficientEscrowBalance // Or a more specific error
             );
 
             let clock = Clock::get()?;
@@ -495,22 +507,22 @@ pub mod trading {
             msg!("Token Program: {}", ctx.accounts.token_program.key());
 
             // 1. Validation
-            require!(amount > 0, ErrorCode::InvalidAmount);
+            require!(amount > 0, TradingError::InvalidAmount);
             require!(
                 buy_order.status == OrderStatus::Active as u8 || 
                 buy_order.status == OrderStatus::PartiallyFilled as u8,
-                ErrorCode::InactiveBuyOrder
+                TradingError::InactiveBuyOrder
             );
             require!(
                 sell_order.status == OrderStatus::Active as u8 || 
                 sell_order.status == OrderStatus::PartiallyFilled as u8,
-                ErrorCode::InactiveSellOrder
+                TradingError::InactiveSellOrder
             );
             
             // Check limits
             let buy_rem = buy_order.amount.saturating_sub(buy_order.filled_amount);
             let sell_rem = sell_order.amount.saturating_sub(sell_order.filled_amount);
-            require!(amount <= buy_rem && amount <= sell_rem, ErrorCode::InvalidAmount);
+            require!(amount <= buy_rem && amount <= sell_rem, TradingError::InvalidAmount);
             
             // Note: price is already matched by Gateway
             
@@ -627,7 +639,7 @@ pub mod trading {
         amount: u64,
     ) -> Result<()> {
         compute_fn!("transfer_carbon_credits" => {
-            require!(amount > 0, ErrorCode::InvalidAmount);
+            require!(amount > 0, TradingError::InvalidAmount);
             let clock = Clock::get()?;
 
             // Transfer REC tokens from sender to receiver
@@ -666,7 +678,7 @@ pub mod trading {
         min_order_size: u64,
         max_price_deviation_bps: u16,
     ) -> Result<()> {
-        payments::configure_payment_token(ctx, token_type, min_order_size, max_price_deviation_bps)
+        payments::process_configure_payment_token(ctx, token_type, min_order_size, max_price_deviation_bps)
     }
 
     /// Create a sell order with stablecoin payment option
@@ -676,7 +688,17 @@ pub mod trading {
         price_per_kwh: u64,
         payment_token: u8,
     ) -> Result<()> {
-        payments::create_stablecoin_sell_order(ctx, energy_amount, price_per_kwh, payment_token)
+        payments::process_create_stablecoin_sell_order(ctx, energy_amount, price_per_kwh, payment_token)
+    }
+
+    /// Create a buy order with stablecoin payment option
+    pub fn create_stablecoin_buy_order(
+        ctx: Context<CreateStablecoinOrder>,
+        energy_amount: u64,
+        max_price_per_kwh: u64,
+        payment_token: u8,
+    ) -> Result<()> {
+        payments::process_create_stablecoin_buy_order(ctx, energy_amount, max_price_per_kwh, payment_token)
     }
 
     /// Execute atomic settlement with stablecoin payment
@@ -685,7 +707,7 @@ pub mod trading {
         amount: u64,
         exchange_rate: u64,
     ) -> Result<()> {
-        payments::execute_stablecoin_settlement(ctx, amount, exchange_rate)
+        payments::process_execute_stablecoin_settlement(ctx, amount, exchange_rate)
     }
 
     // ============================================
@@ -699,7 +721,7 @@ pub mod trading {
         bridge_fee_bps: u16,
         relayer_fee: u64,
     ) -> Result<()> {
-        payments::initialize_bridge(ctx, min_bridge_amount, bridge_fee_bps, relayer_fee)
+        payments::process_initialize_bridge(ctx, min_bridge_amount, bridge_fee_bps, relayer_fee)
     }
 
     /// Initiate a bridge transfer to another chain
@@ -710,7 +732,7 @@ pub mod trading {
         amount: u64,
         timestamp: u64,
     ) -> Result<()> {
-        payments::initiate_bridge_transfer(ctx, destination_chain, destination_address, amount, timestamp)
+        payments::process_initiate_bridge_transfer(ctx, destination_chain, destination_address, amount, timestamp)
     }
 
     /// Complete a bridge transfer from another chain
@@ -718,7 +740,7 @@ pub mod trading {
         ctx: Context<CompleteBridgeTransfer>,
         vaa_hash: [u8; 32],
     ) -> Result<()> {
-        payments::complete_bridge_transfer(ctx, vaa_hash)
+        payments::process_complete_bridge_transfer(ctx, vaa_hash)
     }
 
     /// Create a cross-chain order record
@@ -731,7 +753,7 @@ pub mod trading {
         price: u64,
         payment_token: [u8; 32],
     ) -> Result<()> {
-        payments::create_cross_chain_order(ctx, origin_chain, origin_order_id, origin_user, energy_amount, price, payment_token)
+        payments::process_create_cross_chain_order(ctx, origin_chain, origin_order_id, origin_user, energy_amount, price, payment_token)
     }
 
     /// Match a local order with a cross-chain order
@@ -739,7 +761,7 @@ pub mod trading {
         ctx: Context<MatchCrossChainOrder>,
         amount: u64,
     ) -> Result<()> {
-        payments::match_cross_chain_order(ctx, amount)
+        payments::process_match_cross_chain_order(ctx, amount)
     }
 
     // ============================================
@@ -750,7 +772,7 @@ pub mod trading {
     pub fn initialize_confidential_balance(
         ctx: Context<InitializeConfidentialBalance>,
     ) -> Result<()> {
-        confidential::initialize_confidential_balance(ctx)
+        confidential::process_initialize_confidential_balance(ctx)
     }
 
     /// Shield energy - convert public tokens to confidential balance
@@ -760,7 +782,7 @@ pub mod trading {
         encrypted_amount: ElGamalCiphertext,
         proof: RangeProof,
     ) -> Result<()> {
-        confidential::shield_energy(ctx, amount, encrypted_amount, proof)
+        confidential::process_shield_energy(ctx, amount, encrypted_amount, proof)
     }
 
     /// Unshield energy - convert confidential balance to public tokens
@@ -770,8 +792,297 @@ pub mod trading {
         new_encrypted_amount: ElGamalCiphertext,
         proof: TransferProof,
     ) -> Result<()> {
-        confidential::unshield_energy(ctx, amount, new_encrypted_amount, proof)
+        confidential::process_unshield_energy(ctx, amount, new_encrypted_amount, proof)
     }
+
+    // ============================================
+    // Phase 3: Periodic Double Auction
+    // ============================================
+
+    /// Initialize a new auction batch
+    pub fn initialize_auction(ctx: Context<InitializeAuction>, batch_id: u64, duration: i64) -> Result<()> {
+        let batch = &mut ctx.accounts.batch;
+        batch.market = ctx.accounts.market.key();
+        batch.batch_id = batch_id;
+        batch.state = AuctionState::Open as u8;
+        batch.start_time = Clock::get()?.unix_timestamp;
+        batch.end_time = batch.start_time + duration;
+        batch.bump = ctx.bumps.batch;
+        batch.orders = Vec::new();
+        
+        msg!("Auction Batch {} Initialized. Ends at {}", batch_id, batch.end_time);
+        Ok(())
+    }
+
+    /// Submit an order to the current auction
+    pub fn submit_auction_order(
+        ctx: Context<SubmitAuctionOrder>,
+        price: u64,
+        amount: u64,
+        is_bid: bool,
+    ) -> Result<()> {
+        let batch = &mut ctx.accounts.batch;
+        let clock = Clock::get()?;
+
+        // Checks
+        require!(batch.state == AuctionState::Open as u8, AuctionError::AuctionNotOpen);
+        require!(clock.unix_timestamp < batch.end_time, AuctionError::AuctionNotOpen);
+        require!(batch.orders.len() < 50, AuctionError::BatchFull);
+
+        // LOCK ASSETS (Escrow)
+        // Transfer from user to batch vault
+        // Amount to lock:
+        // - Bid: price * amount (Currency)
+        // - Ask: amount (Energy)
+        
+        let lock_amount = if is_bid {
+            price.checked_mul(amount).ok_or(TradingError::InvalidAmount)?
+        } else {
+            amount
+        };
+
+        if lock_amount > 0 {
+            let cpi_accounts = anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.user_token_account.to_account_info(),
+                mint: ctx.accounts.token_mint.to_account_info(),
+                to: ctx.accounts.vault.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            anchor_spl::token_interface::transfer_checked(
+                CpiContext::new(cpi_program, cpi_accounts),
+                lock_amount,
+                ctx.accounts.token_mint.decimals,
+            )?;
+        }
+
+        let order = AuctionOrder {
+            order_id: ctx.accounts.authority.key(),
+            price,
+            amount,
+            is_bid,
+            timestamp: clock.unix_timestamp,
+        };
+        
+        batch.orders.push(order);
+        
+        emit!(AuctionOrderSubmitted {
+            batch_id: batch.batch_id,
+            order_id: ctx.accounts.authority.key(),
+            price,
+            amount,
+            is_bid,
+            timestamp: clock.unix_timestamp,
+        });
+        
+        Ok(())
+    }
+
+    /// Resolve the auction by calculating the uniform clearing price
+    pub fn resolve_auction(ctx: Context<ResolveAuction>) -> Result<()> {
+        let batch = &mut ctx.accounts.batch;
+        let clock = Clock::get()?;
+
+        // Checks
+        require!(
+            clock.unix_timestamp >= batch.end_time || batch.state == AuctionState::Locked as u8, 
+            AuctionError::AuctionNotReady
+        );
+        require!(batch.state != AuctionState::Cleared as u8, AuctionError::AuctionAlreadyResolved);
+
+        // Lock if not already
+        batch.state = AuctionState::Locked as u8;
+
+        // Calculate Clearing Price
+        let (clearing_price, clearing_volume) = auction::calculate_clearing_price(&batch.orders);
+        
+        batch.clearing_price = clearing_price;
+        batch.clearing_volume = clearing_volume;
+        batch.state = AuctionState::Cleared as u8;
+
+        emit!(AuctionResolved {
+            batch_id: batch.batch_id,
+            clearing_price,
+            clearing_volume,
+            timestamp: clock.unix_timestamp,
+        });
+        
+        Ok(())
+    }
+
+    /// Execute settlement for specific orders in a cleared auction
+    /// This is a permissionless crank instruction.
+    /// It matches a Bid (buyer) and an Ask (seller) at the Uniform Clearing Price.
+    pub fn execute_settlement(
+        ctx: Context<ExecuteSettlement>, 
+        bid_order_idx: u32,
+        ask_order_idx: u32,
+        settle_amount: u64
+    ) -> Result<()> {
+        let batch = &mut ctx.accounts.batch;
+
+        // Checks
+        require!(batch.state == AuctionState::Cleared as u8, AuctionError::AuctionNotReady);
+        let clearing_price = batch.clearing_price;
+        require!(clearing_price > 0, AuctionError::AuctionNotReady);
+
+        // Access Orders (Mutable because we need to update filled amount if we track it, 
+        // essentially we are removing them or marking them settled.
+        // For MVP, since we don't have per-order state in the vector efficiently accessible for modification without cloning cost,
+        // we realistically would just verify requirements and perform transfer.
+        // In production, we'd mark them as filled in a separate bitmap or localized state.)
+        
+        let bid_order = batch.orders[bid_order_idx as usize];
+        let ask_order = batch.orders[ask_order_idx as usize];
+
+        // Validation
+        require!(bid_order.is_bid, AuctionError::PriceMismatch);
+        require!(!ask_order.is_bid, AuctionError::PriceMismatch);
+        require!(bid_order.price >= clearing_price, AuctionError::PriceMismatch); // Buyer willing to pay >= MCP
+        require!(ask_order.price <= clearing_price, AuctionError::PriceMismatch); // Seller willing to accept <= MCP
+        require!(ctx.accounts.buyer_authority.key() == bid_order.order_id, TradingError::UnauthorizedAuthority);
+        require!(ctx.accounts.seller_authority.key() == ask_order.order_id, TradingError::UnauthorizedAuthority);
+
+        // Transfer Logic (Vault -> Destination)
+        let transfer_value = settle_amount.checked_mul(clearing_price).unwrap();
+        let _batch_key = batch.key();
+        
+        // 1. Transfer Currency: Vault -> Seller
+        {
+            let _mint_key = ctx.accounts.currency_mint.key();
+            // Note: Context bumps don't strictly auto-populate non-init accounts in older anchor? 
+            // We can use find_program_address to get bump or store it.
+            // For simplicity in MVP, assume standard bump derivation works in seeds constraint.
+            // Actually, to sign, we need the seeds.
+            // Seeds: [b"auction", market, batch_id] -> No this is Batch PDA seeds.
+            // Vault Seeds: [b"batch_vault", batch_key, mint_key]
+            // Wait, `batch` is the authority of the vault. 
+            // Does `batch` sign? Yes. The vault authority is `batch`.
+            // So we need `batch` seeds to sign.
+            
+            let batch_id_bytes = batch.batch_id.to_le_bytes();
+            let market_key = batch.market;
+            let batch_seeds = &[
+                b"auction",
+                market_key.as_ref(),
+                batch_id_bytes.as_ref(),
+                &[batch.bump],
+            ];
+            let signer_seeds = &[&batch_seeds[..]];
+
+            let cpi_accounts_curr = anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.buyer_currency_vault.to_account_info(),
+                mint: ctx.accounts.currency_mint.to_account_info(),
+                to: ctx.accounts.seller_currency.to_account_info(),
+                authority: batch.to_account_info(),
+            };
+            let cpi_ctx_curr = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(), 
+                cpi_accounts_curr,
+                signer_seeds
+            );
+            anchor_spl::token_interface::transfer_checked(cpi_ctx_curr, transfer_value, ctx.accounts.currency_mint.decimals)?;
+        }
+
+        // 2. Transfer Energy: Vault -> Buyer
+        {
+             let batch_id_bytes = batch.batch_id.to_le_bytes();
+            let market_key = batch.market;
+             let batch_seeds = &[
+                b"auction",
+                market_key.as_ref(),
+                batch_id_bytes.as_ref(),
+                &[batch.bump],
+            ];
+            let signer_seeds = &[&batch_seeds[..]];
+
+            let cpi_accounts_energy = anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.seller_energy_vault.to_account_info(),
+                mint: ctx.accounts.energy_mint.to_account_info(),
+                to: ctx.accounts.buyer_energy.to_account_info(),
+                authority: batch.to_account_info(),
+            };
+            let cpi_ctx_energy = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(), 
+                cpi_accounts_energy,
+                signer_seeds
+            );
+            anchor_spl::token_interface::transfer_checked(cpi_ctx_energy, settle_amount, ctx.accounts.energy_mint.decimals)?;
+        }
+
+        emit!(AuctionSettled {
+            batch_id: batch.batch_id,
+            buyer: ctx.accounts.buyer_authority.key(),
+            seller: ctx.accounts.seller_authority.key(),
+            amount: settle_amount,
+            price: clearing_price,
+            total_value: transfer_value,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    /// Cancel an order in an Open auction batch and refund assets
+    pub fn cancel_auction_order(
+        ctx: Context<CancelAuctionOrder>,
+        order_idx: u32
+    ) -> Result<()> {
+        let batch = &mut ctx.accounts.batch;
+        let clock = Clock::get()?;
+
+        // Checks
+        require!(batch.state == AuctionState::Open as u8, AuctionError::AuctionNotOpen);
+        // Ensure index is valid
+        require!((order_idx as usize) < batch.orders.len(), TradingError::InvalidAmount); // Generic error for index
+
+        // Check authority
+        let order = &batch.orders[order_idx as usize];
+        require!(order.order_id == ctx.accounts.authority.key(), TradingError::UnauthorizedAuthority);
+
+        // Calculate Refund Amount
+        let refund_amount = if order.is_bid {
+            order.price.checked_mul(order.amount).unwrap()
+        } else {
+            order.amount
+        };
+
+        // Remove order (swap_remove is efficient)
+        batch.orders.swap_remove(order_idx as usize);
+
+        // REFUND ASSETS (Vault -> User)
+        if refund_amount > 0 {
+             let batch_id_bytes = batch.batch_id.to_le_bytes();
+             let market_key = batch.market;
+             let batch_seeds = &[
+                b"auction",
+                market_key.as_ref(),
+                batch_id_bytes.as_ref(),
+                &[batch.bump],
+            ];
+            let signer_seeds = &[&batch_seeds[..]];
+
+            let cpi_accounts = anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.vault.to_account_info(),
+                mint: ctx.accounts.token_mint.to_account_info(),
+                to: ctx.accounts.user_token_account.to_account_info(),
+                authority: ctx.accounts.batch.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+            anchor_spl::token_interface::transfer_checked(cpi_ctx, refund_amount, ctx.accounts.token_mint.decimals)?;
+        }
+
+        emit!(OrderCancelled {
+             order_id: ctx.accounts.authority.key(), // Reuse event or create AuctionOrderCancelled
+             user: ctx.accounts.authority.key(),
+             timestamp: clock.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+
 
     // ============================================
     // Enhanced Features
@@ -785,7 +1096,7 @@ pub mod trading {
         max_price: u64,
         timezone_offset: i16,
     ) -> Result<()> {
-        pricing::initialize_pricing_config(ctx, base_price, min_price, max_price, timezone_offset)
+        pricing::process_initialize_pricing_config(ctx, base_price, min_price, max_price, timezone_offset)
     }
 
     /// Update market data for dynamic pricing
@@ -795,7 +1106,7 @@ pub mod trading {
         demand: u64,
         congestion_factor: u16,
     ) -> Result<()> {
-        pricing::update_market_data(ctx, supply, demand, congestion_factor)
+        pricing::process_update_market_data(ctx, supply, demand, congestion_factor)
     }
 
     /// CREATE a price snapshot for history
@@ -803,7 +1114,7 @@ pub mod trading {
         ctx: Context<CreatePriceSnapshot>,
         timestamp: i64,
     ) -> Result<()> {
-        pricing::create_price_snapshot(ctx, timestamp)
+        pricing::process_create_price_snapshot(ctx, timestamp)
     }
 
     /// Initialize meter verification configuration
@@ -812,7 +1123,7 @@ pub mod trading {
         max_delta_per_hour: u64,
         min_interval: u32,
     ) -> Result<()> {
-        meter_verification::initialize_meter_config(ctx, max_delta_per_hour, min_interval)
+        meter_verification::process_initialize_meter_config(ctx, max_delta_per_hour, min_interval)
     }
 
     /// Authorize a new oracle for meter verification
@@ -820,14 +1131,14 @@ pub mod trading {
         ctx: Context<AuthorizeOracle>,
         oracle: Pubkey,
     ) -> Result<()> {
-        meter_verification::authorize_oracle(ctx, oracle)
+        meter_verification::process_authorize_oracle(ctx, oracle)
     }
 
     /// Initialize meter history for a specific meter
     pub fn initialize_meter_history(
         ctx: Context<InitializeMeterHistory>,
     ) -> Result<()> {
-        meter_verification::initialize_meter_history(ctx)
+        meter_verification::process_initialize_meter_history(ctx)
     }
 
     /// Verify a meter reading with signature and ZK checks
@@ -836,7 +1147,7 @@ pub mod trading {
         reading_proof: MeterReadingProof,
         timestamp: i64,
     ) -> Result<()> {
-        meter_verification::verify_meter_reading(ctx, reading_proof, timestamp)
+        meter_verification::process_verify_meter_reading(ctx, reading_proof, timestamp)
     }
 
     /// Initialize the carbon marketplace
@@ -847,7 +1158,7 @@ pub mod trading {
         kwh_to_rec_rate: u32,
         carbon_intensity: u32,
     ) -> Result<()> {
-        carbon::initialize_carbon_marketplace(ctx, minting_fee_bps, trading_fee_bps, kwh_to_rec_rate, carbon_intensity)
+        carbon::process_initialize_carbon_marketplace(ctx, minting_fee_bps, trading_fee_bps, kwh_to_rec_rate, carbon_intensity)
     }
 
     /// Mint a new REC certificate based on verified production
@@ -856,7 +1167,7 @@ pub mod trading {
         generation_start: i64,
         generation_end: i64,
     ) -> Result<()> {
-        carbon::mint_rec_certificate(ctx, generation_start, generation_end)
+        carbon::process_mint_rec_certificate(ctx, generation_start, generation_end)
     }
 
     /// Update the batch processing configuration for the market
@@ -930,6 +1241,7 @@ fn update_market_depth(market: &mut Market, order: &Order, is_sell: bool) -> Res
 }
 
 /// Optimized VWAP calculation using integer math only
+#[allow(dead_code)]
 fn calculate_volume_weighted_price(
     market: &Market,
     buy_price: u64,
@@ -1025,6 +1337,7 @@ pub struct InitializeMarket<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(order_id: u64, energy_amount: u64, price_per_kwh: u64)]
 pub struct CreateSellOrder<'info> {
     #[account(mut)]
     pub market: AccountLoader<'info, Market>,
@@ -1033,7 +1346,7 @@ pub struct CreateSellOrder<'info> {
         init,
         payer = authority,
         space = 8 + std::mem::size_of::<Order>(),
-        seeds = [b"order", authority.key().as_ref(), market.load()?.active_orders.to_le_bytes().as_ref()],
+        seeds = [b"order", authority.key().as_ref(), order_id.to_le_bytes().as_ref()],
         bump
     )]
     pub order: AccountLoader<'info, Order>,
@@ -1048,6 +1361,7 @@ pub struct CreateSellOrder<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(order_id: u64, energy_amount: u64, max_price_per_kwh: u64)]
 pub struct CreateBuyOrder<'info> {
     #[account(mut)]
     pub market: AccountLoader<'info, Market>,
@@ -1056,7 +1370,7 @@ pub struct CreateBuyOrder<'info> {
         init,
         payer = authority,
         space = 8 + std::mem::size_of::<Order>(),
-        seeds = [b"order", authority.key().as_ref(), market.load()?.active_orders.to_le_bytes().as_ref()],
+        seeds = [b"order", authority.key().as_ref(), order_id.to_le_bytes().as_ref()],
         bump
     )]
     pub order: AccountLoader<'info, Order>,
@@ -1106,7 +1420,7 @@ pub struct CancelOrder<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateMarketParams<'info> {
-    #[account(mut, has_one = authority @ ErrorCode::UnauthorizedAuthority)]
+    #[account(mut, has_one = authority @ TradingError::UnauthorizedAuthority)]
     pub market: AccountLoader<'info, Market>,
 
     pub authority: Signer<'info>,
@@ -1190,255 +1504,124 @@ pub struct TransferCarbonCredits<'info> {
     pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
 }
 
-// Data structs
-/// Market account for order and trade management
-#[account(zero_copy)]
-#[repr(C)]
-pub struct Market {
-    pub authority: Pubkey,              // 32
-    pub total_volume: u64,              // 8
-    pub created_at: i64,                // 8
-    pub last_clearing_price: u64,       // 8
-    pub volume_weighted_price: u64,     // 8
-    pub active_orders: u32,             // 4
-    pub total_trades: u32,              // 4
-    pub market_fee_bps: u16,            // 2
-    pub clearing_enabled: u8,           // 1
-    pub _padding1: [u8; 5],             // 5 -> 80
-
-    // === BATCH PROCESSING ===
-    pub batch_config: BatchConfig,      // 24
-    pub current_batch: BatchInfo,       // 1640
-    pub has_current_batch: u8,
-    pub _padding_batch: [u8; 7],
-
-    // === MARKET DEPTH ===
-    pub buy_side_depth: [PriceLevel; 20],   // 480
-    pub sell_side_depth: [PriceLevel; 20],  // 480
-    pub buy_side_depth_count: u8,
-    pub sell_side_depth_count: u8,
-    pub price_history_count: u8,
-    pub _padding_depth: [u8; 5],
-
-    // === PRICE DISCOVERY ===
-    pub price_history: [PricePoint; 24],    // 576
-    pub _padding_history: [u8; 0],          // Already aligned
-}
-
-/// Batch configuration for batch processing
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, InitSpace, bytemuck::Zeroable, bytemuck::Pod)]
-#[repr(C)]
-pub struct BatchConfig {
-    pub enabled: u8,
-    pub _padding1: [u8; 3],
-    pub max_batch_size: u32,
-    pub batch_timeout_seconds: u32,
-    pub min_batch_size: u32,
-    pub price_improvement_threshold: u16,
-    pub _padding2: [u8; 6],             // 1+3+4+4+4+2+6 = 24. 24 is 8x3. Good.
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, InitSpace, bytemuck::Zeroable, bytemuck::Pod)]
-#[repr(C)]
-pub struct BatchInfo {
-    pub batch_id: u64,
-    pub order_count: u32,
-    pub _padding1: [u8; 4],
-    pub total_volume: u64,
-    pub created_at: i64,
-    pub expires_at: i64,
-    pub order_ids: [Pubkey; 32],      // Reduced from 50 to 32 for bytemuck::Pod support
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, InitSpace, Default, bytemuck::Zeroable, bytemuck::Pod)]
-#[repr(C)]
-pub struct PriceLevel {
-    pub price: u64,
-    pub total_amount: u64,
-    pub order_count: u16,
-    pub _padding: [u8; 6],              // Alignment
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, InitSpace, Default, bytemuck::Zeroable, bytemuck::Pod)]
-#[repr(C)]
-pub struct PricePoint {
-    pub price: u64,
-    pub volume: u64,
-    pub timestamp: i64,
-}
-
-/// Sharded market statistics for reduced contention
-/// Each shard tracks independent volume/order counts that can be aggregated
-/// This allows parallel writes without MVCC conflicts on the main Market account
-/// Sharded market statistics for high-frequency updates
-#[account]
-#[derive(InitSpace)]
-pub struct MarketShard {
-    pub shard_id: u8,                    // 0-255 shard identifier
-    pub market: Pubkey,                  // Parent market
-    pub volume_accumulated: u64,         // Volume in this shard
-    pub order_count: u32,                // Changed from u64 - order count fits in u32
-    pub last_update: i64,                // Last update timestamp
-}
-
-/// Helper to determine shard from authority pubkey
-/// Distributes load across shards based on user's pubkey
-pub fn get_shard_id(authority: &Pubkey, num_shards: u8) -> u8 {
-    // Use first byte of pubkey for simple sharding
-    authority.to_bytes()[0] % num_shards
-}
-/// Order account for trading
-#[account(zero_copy)]
-#[repr(C)]
-pub struct Order {
-    pub seller: Pubkey,         // 32
-    pub buyer: Pubkey,          // 32
-    pub amount: u64,            // 8
-    pub filled_amount: u64,     // 8
-    pub price_per_kwh: u64,     // 8
-    pub order_type: u8,         // 1 (OrderType)
-    pub status: u8,             // 1 (OrderStatus)
-    pub _padding: [u8; 6],      // 6
-    pub created_at: i64,        // 8
-    pub expires_at: i64,        // 8
-}
-
-#[account]
-#[derive(InitSpace)]
-pub struct TradeRecord {
-    pub sell_order: Pubkey,
-    pub buy_order: Pubkey,
-    pub seller: Pubkey,
-    pub buyer: Pubkey,
-    pub amount: u64,
-    pub price_per_kwh: u64,
-    pub total_value: u64,
-    pub fee_amount: u64,
-    pub executed_at: i64,
-}
-
-// Enums (keep for logic, but don't put in zero_copy directly if Pod errors persist)
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, InitSpace)]
-pub enum OrderType {
-    Sell,
-    Buy,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Eq, InitSpace)]
-pub enum OrderStatus {
-    Active,
-    PartiallyFilled,
-    Completed,
-    Cancelled,
-    Expired,
-}
-
-// Events
-#[event]
-pub struct MarketInitialized {
-    pub authority: Pubkey,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct SellOrderCreated {
-    pub seller: Pubkey,
-    pub order_id: Pubkey,
-    pub amount: u64,
-    pub price_per_kwh: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct BuyOrderCreated {
-    pub buyer: Pubkey,
-    pub order_id: Pubkey,
-    pub amount: u64,
-    pub price_per_kwh: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct OrderMatched {
-    pub sell_order: Pubkey,
-    pub buy_order: Pubkey,
-    pub seller: Pubkey,
-    pub buyer: Pubkey,
-    pub amount: u64,
-    pub price: u64,
-    pub total_value: u64,
-    pub fee_amount: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct OrderCancelled {
-    pub order_id: Pubkey,
-    pub user: Pubkey,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct MarketParamsUpdated {
-    pub authority: Pubkey,
-    pub market_fee_bps: u16,
-    pub clearing_enabled: bool,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct BatchExecuted {
-    pub authority: Pubkey,
-    pub batch_id: u64,
-    pub order_count: u32,
-    pub total_volume: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct CarbonCreditTransferred {
-    pub sender: Pubkey,
-    pub receiver: Pubkey,
-    pub amount: u64,
-    pub timestamp: i64,
-}
-
-// Errors
-#[error_code]
-pub enum ErrorCode {
-    #[msg("Unauthorized authority")]
-    UnauthorizedAuthority,
-    #[msg("Invalid amount")]
-    InvalidAmount,
-    #[msg("Invalid price")]
-    InvalidPrice,
-    #[msg("Inactive sell order")]
-    InactiveSellOrder,
-    #[msg("Inactive buy order")]
-    InactiveBuyOrder,
-    #[msg("Price mismatch")]
-    PriceMismatch,
-    #[msg("Order not cancellable")]
-    OrderNotCancellable,
-    #[msg("Insufficient escrow balance")]
-    InsufficientEscrowBalance,
-    #[msg("Invalid ERC certificate status")]
-    InvalidErcCertificate,
-    #[msg("ERC certificate has expired")]
-    ErcCertificateExpired,
-    #[msg("ERC certificate not validated for trading")]
-    ErcNotValidatedForTrading,
-    #[msg("Order amount exceeds available ERC certificate amount")]
-    ExceedsErcAmount,
-    #[msg("Batch processing is disabled")]
-    BatchProcessingDisabled,
-    #[msg("Batch size exceeded")]
-    BatchSizeExceeded,
-}
-
 #[derive(Accounts)]
 pub struct UpdateBatchConfig<'info> {
     #[account(mut, has_one = authority)]
     pub market: AccountLoader<'info, Market>,
     pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(batch_id: u64)]
+pub struct InitializeAuction<'info> {
+    #[account(
+        init,
+        payer = authority,
+        space = AuctionBatch::LEN,
+        seeds = [b"auction", market.key().as_ref(), &batch_id.to_le_bytes()],
+        bump
+    )]
+    pub batch: Account<'info, AuctionBatch>,
+    
+    /// CHECK: Market verification
+    pub market: AccountInfo<'info>,
+    
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SubmitAuctionOrder<'info> {
+    #[account(mut)]
+    pub batch: Account<'info, AuctionBatch>,
+    
+    #[account(mut)]
+    pub user_token_account: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+
+    #[account(
+        init_if_needed,
+        payer = authority,
+        token::mint = token_mint,
+        token::authority = batch,
+        seeds = [b"batch_vault", batch.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub vault: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+
+    pub token_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    
+    pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ResolveAuction<'info> {
+    #[account(mut)]
+    pub batch: Account<'info, AuctionBatch>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ExecuteSettlement<'info> {
+    #[account(mut)]
+    pub batch: Account<'info, AuctionBatch>,
+
+    /// CHECK: Vault for Buyer's Currency (Source of payment)
+    #[account(mut,
+        seeds = [b"batch_vault", batch.key().as_ref(), currency_mint.key().as_ref()],
+        bump
+    )]
+    pub buyer_currency_vault: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+
+    /// CHECK: Vault for Seller's Energy (Source of energy)
+    #[account(mut,
+        seeds = [b"batch_vault", batch.key().as_ref(), energy_mint.key().as_ref()],
+        bump
+    )]
+    pub seller_energy_vault: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+
+    /// CHECK: Seller's Currency Account (Destination for payment)
+    #[account(mut)]
+    pub seller_currency: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+    
+    /// CHECK: Buyer's Energy Account (Destination for energy)
+    #[account(mut)]
+    pub buyer_energy: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+
+    pub currency_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
+    pub energy_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
+
+    /// CHECK: Buyer (Authority corresponding to order) - No signer needed for settlement
+    pub buyer_authority: AccountInfo<'info>,
+    /// CHECK: Seller (Authority corresponding to order) - No signer needed for settlement
+    pub seller_authority: AccountInfo<'info>,
+
+    pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct CancelAuctionOrder<'info> {
+    #[account(mut)]
+    pub batch: Account<'info, AuctionBatch>,
+    
+    #[account(mut)]
+    pub user_token_account: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+
+    #[account(mut,
+        seeds = [b"batch_vault", batch.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub vault: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+
+    pub token_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    
+    pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
 }

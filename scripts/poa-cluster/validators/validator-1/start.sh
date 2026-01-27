@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Start script for Validator 1
+
+set -euo pipefail
+
+VALIDATOR_PATH="/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/validators/validator-1"
+GENESIS_LEDGER="/tmp/gridtokenx-poa/genesis/ledger"
+VALIDATOR_LEDGER="/tmp/gridtokenx-poa/validators/validator-1/ledger"
+RPC_PORT=8899
+GOSSIP_PORT=8001
+LOG_DIR="/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/logs"
+LEDGER_LIMIT=50000000
+export PATH="/Users/chanthawat/.local/share/solana/install/active_release/bin:$PATH"
+
+# Copy genesis ledger if not exists
+if [[ ! -d "${VALIDATOR_LEDGER}" ]]; then
+    mkdir -p "${VALIDATOR_LEDGER}"
+    cp -r "${GENESIS_LEDGER}/" "${VALIDATOR_LEDGER}/"
+fi
+
+# Build entrypoint list (all other validators)
+ENTRYPOINTS=""
+
+# Start validator
+exec solana-validator \
+    --identity "${VALIDATOR_PATH}/identity.json" \
+    --vote-account "${VALIDATOR_PATH}/vote-account.json" \
+    --authorized-voter "${VALIDATOR_PATH}/vote-account.json" \
+    --ledger "${VALIDATOR_LEDGER}" \
+    --rpc-port ${RPC_PORT} \
+    --gossip-port ${GOSSIP_PORT} \
+    --dynamic-port-range 8100-8200 \
+    --log "${LOG_DIR}/validator-${VALIDATOR_PATH##*/}.log" \
+    --limit-ledger-size ${LEDGER_LIMIT} \
+    --enable-rpc-transaction-history \
+    --full-rpc-api \
+    --no-wait-for-vote-to-start-leader \
+    --no-port-check \
+    --allow-private-addr \
+    ${ENTRYPOINTS} \
+    "$@"

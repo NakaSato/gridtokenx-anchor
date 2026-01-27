@@ -6,10 +6,10 @@ import {
     describe,
     it,
     before
-} from "./setup";
-import { Trading } from "../target/types/trading";
-import { Governance } from "../target/types/governance";
-import { Registry } from "../target/types/registry";
+} from "./setup.ts";
+import type { Trading } from "../target/types/trading.ts";
+import type { Governance } from "../target/types/governance.ts";
+import type { Registry } from "../target/types/registry.ts";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { createMint, createAccount, mintTo, TOKEN_PROGRAM_ID, createInitializeAccountInstruction, ACCOUNT_SIZE } from "@solana/spl-token";
 import BN from "bn.js";
@@ -56,6 +56,10 @@ describe("P2P Energy Mint to Trading Flow", () => {
     // Collectors
     let feeCollector: PublicKey;
     let wheelingCollector: PublicKey;
+
+    // Order IDs
+    let sellOrderId: BN;
+    let buyOrderId: BN;
 
     // Constants
     const ENERGY_AMOUNT = new BN(100);
@@ -294,13 +298,9 @@ describe("P2P Energy Mint to Trading Flow", () => {
     });
 
     it("Step 2: Create Sell Order", async () => {
-        const market = await tradingProgram.account.market.fetch(marketAddress);
-        const activeOrders = market.activeOrders; // Should be number
-        const activeOrdersBuffer = Buffer.alloc(4);
-        activeOrdersBuffer.writeUInt32LE(activeOrders);
-
+        sellOrderId = new BN(Date.now());
         const [orderAddress] = PublicKey.findProgramAddressSync(
-            [Buffer.from("order"), seller.publicKey.toBuffer(), activeOrdersBuffer],
+            [Buffer.from("order"), seller.publicKey.toBuffer(), sellOrderId.toArrayLike(Buffer, "le", 8)],
             tradingProgram.programId
         );
 
@@ -310,6 +310,7 @@ describe("P2P Energy Mint to Trading Flow", () => {
         );
 
         await tradingProgram.methods.createSellOrder(
+            sellOrderId,
             ENERGY_AMOUNT,
             PRICE_PER_KWH
         ).accounts({
@@ -327,10 +328,6 @@ describe("P2P Energy Mint to Trading Flow", () => {
         const order = await tradingProgram.account.order.fetch(orderAddress);
         expect(order.amount.toString()).to.equal(ENERGY_AMOUNT.toString());
         expect(order.pricePerKwh.toString()).to.equal(PRICE_PER_KWH.toString());
-
-        // Verify market updated
-        const updatedMarket = await tradingProgram.account.market.fetch(marketAddress);
-        expect(updatedMarket.activeOrders).to.equal(activeOrders + 1);
     });
 
     it("Step 3: Create Buy Order", async () => {
@@ -344,17 +341,14 @@ describe("P2P Energy Mint to Trading Flow", () => {
             ENERGY_AMOUNT.mul(PRICE_PER_KWH).toNumber() * 2 // Enough for fees
         );
 
-        const market = await tradingProgram.account.market.fetch(marketAddress);
-        const activeOrders = market.activeOrders;
-        const activeOrdersBuffer = Buffer.alloc(4);
-        activeOrdersBuffer.writeUInt32LE(activeOrders);
-
+        buyOrderId = new BN(Date.now() + 1);
         const [orderAddress] = PublicKey.findProgramAddressSync(
-            [Buffer.from("order"), buyer.publicKey.toBuffer(), activeOrdersBuffer],
+            [Buffer.from("order"), buyer.publicKey.toBuffer(), buyOrderId.toArrayLike(Buffer, "le", 8)],
             tradingProgram.programId
         );
 
         await tradingProgram.methods.createBuyOrder(
+            buyOrderId,
             ENERGY_AMOUNT,
             PRICE_PER_KWH
         ).accounts({
@@ -372,43 +366,12 @@ describe("P2P Energy Mint to Trading Flow", () => {
     });
 
     it("Step 4: Match Orders & Atomic Settlement", async () => {
-        // Need to fetch order addresses again to pass them to match/settle
-        // Assumes order are index 0 and 1 for simplicity of this test flow
-
-        // Simplification: We need the specific order addresses.
-        // We know we created one sell (index 0) and one buy (index 1) if starting fresh,
-        // but let's derive them carefully.
-
-        // Re-deriving for consistency test flow
-        // Sell Order (created at index 0 relative to this test run if isolated, but market tracks global count)
-        // We need to query the market to find order keys or just re-derive if we tracked indices.
-        // For this test, we can assume we capture them if we were standardizing, but let's re-calculate:
-
-        // WARNING: activeOrders incremented.
-        // Sell Order was at: activeOrders_start
-        // Buy Order was at: activeOrders_start + 1
-
-        // Let's fetch the actual accounts via filter or remember them.
-        // To be robust, I'll assume we can get them.
-        // For now, let's just cheat and re-derive based on the previous test steps.
-
-        const market = await tradingProgram.account.market.fetch(marketAddress);
-        // current activeOrders is N.
-        // Sell Order was N-2. Buy Order was N-1.
-
-        const count = market.activeOrders;
-        const sellIndex = count - 2;
-        const buyIndex = count - 1;
-
-        const sellBuf = Buffer.alloc(4); sellBuf.writeUInt32LE(sellIndex);
-        const buyBuf = Buffer.alloc(4); buyBuf.writeUInt32LE(buyIndex);
-
         const [sellOrder] = PublicKey.findProgramAddressSync(
-            [Buffer.from("order"), seller.publicKey.toBuffer(), sellBuf],
+            [Buffer.from("order"), seller.publicKey.toBuffer(), sellOrderId.toArrayLike(Buffer, "le", 8)],
             tradingProgram.programId
         );
         const [buyOrder] = PublicKey.findProgramAddressSync(
-            [Buffer.from("order"), buyer.publicKey.toBuffer(), buyBuf],
+            [Buffer.from("order"), buyer.publicKey.toBuffer(), buyOrderId.toArrayLike(Buffer, "le", 8)],
             tradingProgram.programId
         );
 

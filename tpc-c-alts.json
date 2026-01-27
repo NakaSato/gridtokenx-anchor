@@ -1,12 +1,15 @@
 {
   "itemAlts": [
-    "6a98uvTmMuQyW5U1QKvdorS7UurbuxQhs3hN5K2LsNZx"
+    "4pucvTf1qMF6TaU7zU2y8ftKcpt6xDhhsNPAnJGF8XaH"
   ],
   "stockAlts": [
-    "5VjJCfQzXLrYZtajvQboxaVMcsMHRyJbqzdoRpC2XUXN"
+    "FpJ2H1micfE5WsCbLNeGF7MJ9S7uubVhTQPMhnssC3jo",
+    "AB2PJBhN2jdfvat8Dy9gRhm1YDMXTStTGXxaEkeLD3Zq",
+    "5kZfze1bcYDR4srHiS4Er7VVcHyUx9hgZgiKgu34oCgk",
+    "EQ9KxTufikx3k1qBu31oLDGsFyAm57ffUGj4shQAU6qn"
   ],
   "config": {
     "itemCount": 100,
-    "warehouseCount": 1
+    "warehouseCount": 10
   }
 }

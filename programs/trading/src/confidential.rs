@@ -2,13 +2,13 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, Burn, MintTo};
 
 use crate::privacy::*;
-use crate::ErrorCode;
+use crate::TradingError;
 
 /// Confidential Trading Instructions
 /// Enables private energy trading with zero-knowledge proofs
 
 /// Initialize a confidential balance account for a user
-pub fn initialize_confidential_balance(
+pub fn process_initialize_confidential_balance(
     ctx: Context<InitializeConfidentialBalance>,
 ) -> Result<()> {
     let balance = &mut ctx.accounts.confidential_balance;
@@ -23,13 +23,13 @@ pub fn initialize_confidential_balance(
 }
 
 /// Shield energy - convert public tokens to confidential balance
-pub fn shield_energy(
+pub fn process_shield_energy(
     ctx: Context<ShieldEnergy>,
     amount: u64,
     encrypted_amount: ElGamalCiphertext,
     _proof: RangeProof, // Proves that amount matches encrypted_amount
 ) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
+    require!(amount > 0, TradingError::InvalidAmount);
     
     // In production, we would verify a proof that encrypted_amount 
     // is a valid encryption of 'amount' under the user's public key.
@@ -57,13 +57,13 @@ pub fn shield_energy(
 }
 
 /// Unshield energy - convert confidential balance back to public tokens
-pub fn unshield_energy(
+pub fn process_unshield_energy(
     ctx: Context<UnshieldEnergy>,
     amount: u64,
     _new_encrypted_amount: ElGamalCiphertext,
     _proof: TransferProof, // Proves: old_encrypted - amount = new_encrypted
 ) -> Result<()> {
-    require!(amount > 0, ErrorCode::InvalidAmount);
+    require!(amount > 0, TradingError::InvalidAmount);
     
     // Verification would happen here
     

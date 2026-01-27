@@ -7,6 +7,7 @@ import {
     before
 } from "./setup";
 import { BN } from "bn.js";
+import { TOKEN_PROGRAM_ID, createMint, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
 
 describe("VPP IoT Verification & REC Minting", () => {
     let env: TestEnvironment;
@@ -15,11 +16,50 @@ describe("VPP IoT Verification & REC Minting", () => {
     let meterHistoryPda: anchor.web3.PublicKey;
     let oracle: anchor.web3.Keypair;
     let meter: anchor.web3.PublicKey;
+    let tokenMint: anchor.web3.PublicKey;
+    let userTokenAccount: anchor.web3.PublicKey;
 
     before(async () => {
         env = await TestEnvironment.create();
         oracle = env.authority; // Reuse authority as oracle for simplicity
         meter = anchor.web3.Keypair.generate().publicKey;
+
+        // 1. Calculate Meter Config PDA first (needed for token mint authority)
+        [meterConfigPda] = anchor.web3.PublicKey.findProgramAddressSync(
+            [Buffer.from("meter_config"), env.authority.publicKey.toBuffer()],
+            env.tradingProgram.programId
+        );
+
+        try {
+            await (env.tradingProgram.methods as any).initializeMeterConfig(
+                new BN(5000), // Max 5kWh change per hour
+                60           // Min 1 min between readings
+            ).accounts({
+                config: meterConfigPda,
+                authority: env.authority.publicKey,
+            }).signers([env.authority]).rpc();
+            console.log("✅ Meter Config initialized");
+        } catch (e: any) {
+            console.log("⚠️ Meter Config already initialized or failed:", e.message);
+        }
+
+        // 2. Create token mint with meterConfigPda as mint authority
+        tokenMint = await createMint(
+            env.provider.connection,
+            env.authority,
+            meterConfigPda, // Use meterConfigPda as mint authority (program will sign via CPI)
+            null,
+            6 // decimals
+        );
+
+        // 3. Create user token account
+        const ata = await getOrCreateAssociatedTokenAccount(
+            env.provider.connection,
+            env.authority,
+            tokenMint,
+            env.authority.publicKey
+        );
+        userTokenAccount = ata.address;
 
         // 1. Initialize Carbon Marketplace
         [marketplacePda] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -45,26 +85,7 @@ describe("VPP IoT Verification & REC Minting", () => {
             console.log("⚠️ Carbon Marketplace already initialized or failed:", e.message);
         }
 
-        // 2. Initialize Meter Verification Config
-        [meterConfigPda] = anchor.web3.PublicKey.findProgramAddressSync(
-            [Buffer.from("meter_config"), env.authority.publicKey.toBuffer()],
-            env.tradingProgram.programId
-        );
-
-        try {
-            await (env.tradingProgram.methods as any).initializeMeterConfig(
-                new BN(5000), // Max 5kWh change per hour
-                60           // Min 1 min between readings
-            ).accounts({
-                config: meterConfigPda,
-                authority: env.authority.publicKey,
-            }).signers([env.authority]).rpc();
-            console.log("✅ Meter Config initialized");
-        } catch (e: any) {
-            console.log("⚠️ Meter Config already initialized or failed:", e.message);
-        }
-
-        // 2.5 Authorize Oracle
+        // 2. Authorize Oracle
         await (env.tradingProgram.methods as any).authorizeOracle(oracle.publicKey).accounts({
             config: meterConfigPda,
             authority: env.authority.publicKey,
@@ -106,12 +127,16 @@ describe("VPP IoT Verification & REC Minting", () => {
             env.tradingProgram.programId
         );
 
-        // 1. Verify Reading
+        // 1. Verify Reading - now with all required accounts
         await (env.tradingProgram.methods as any).verifyMeterReading(proof, timestamp).accounts({
             config: meterConfigPda,
             history: meterHistoryPda,
             verifiedReading: readingPda,
             authority: env.authority.publicKey,
+            tokenMint: tokenMint,
+            userTokenAccount: userTokenAccount,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
         }).signers([env.authority]).rpc();
 
         const readingData = await env.tradingProgram.account.verifiedReading.fetch(readingPda);
@@ -133,6 +158,7 @@ describe("VPP IoT Verification & REC Minting", () => {
             issuer: env.testUser.publicKey,
             verifiedReading: readingPda,
             authority: env.authority.publicKey,
+            systemProgram: anchor.web3.SystemProgram.programId,
         }).signers([env.testUser, env.authority]).rpc();
 
         const certData = await env.tradingProgram.account.recCertificate.fetch(certPda);

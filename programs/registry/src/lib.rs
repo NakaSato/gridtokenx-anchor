@@ -1,7 +1,15 @@
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
-use base64::{engine::general_purpose, Engine as _};
+
+// Core modules
+pub mod error;
+pub mod events;
+pub mod state;
+
+pub use error::RegistryError;
+pub use events::*;
+pub use state::*;
 
 declare_id!("3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye");
 
@@ -13,6 +21,7 @@ macro_rules! compute_fn {
     ($name:expr => $block:block) => { $block };
 }
 #[cfg(not(feature = "localnet"))]
+#[allow(unused_macros)]
 macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
@@ -65,7 +74,7 @@ pub mod registry {
             require_keys_eq!(
                 registry.authority,
                 ctx.accounts.authority.key(),
-                ErrorCode::UnauthorizedAuthority
+                RegistryError::UnauthorizedAuthority
             );
 
             let old_oracle = if registry.has_oracle_authority == 1 {
@@ -145,7 +154,7 @@ pub mod registry {
             require_keys_eq!(
                 owner,
                 user_account.authority,
-                ErrorCode::UnauthorizedUser
+                RegistryError::UnauthorizedUser
             );
 
             meter_account.meter_id = string_to_bytes32(&meter_id);
@@ -192,7 +201,7 @@ pub mod registry {
             require_keys_eq!(
                 ctx.accounts.authority.key(),
                 registry.authority,
-                ErrorCode::UnauthorizedAuthority
+                RegistryError::UnauthorizedAuthority
             );
 
             let old_status = user_account.status;
@@ -220,31 +229,31 @@ pub mod registry {
             let registry = ctx.accounts.registry.load()?;
             let mut meter_account = ctx.accounts.meter_account.load_mut()?;
             
-            require!(registry.has_oracle_authority == 1, ErrorCode::OracleNotConfigured);
+            require!(registry.has_oracle_authority == 1, RegistryError::OracleNotConfigured);
             require_keys_eq!(
                 ctx.accounts.oracle_authority.key(),
                 registry.oracle_authority,
-                ErrorCode::UnauthorizedOracle
+                RegistryError::UnauthorizedOracle
             );
             
             require!(
                 meter_account.status == MeterStatus::Active,
-                ErrorCode::InvalidMeterStatus
+                RegistryError::InvalidMeterStatus
             );
             
             require!(
                 reading_timestamp > meter_account.last_reading_at,
-                ErrorCode::StaleReading
+                RegistryError::StaleReading
             );
             
             const MAX_READING_DELTA: u64 = 1_000_000_000_000;
             require!(
                 energy_generated <= MAX_READING_DELTA,
-                ErrorCode::ReadingTooHigh
+                RegistryError::ReadingTooHigh
             );
             require!(
                 energy_consumed <= MAX_READING_DELTA,
-                ErrorCode::ReadingTooHigh
+                RegistryError::ReadingTooHigh
             );
 
             meter_account.last_reading_at = reading_timestamp;
@@ -273,7 +282,7 @@ pub mod registry {
             
             let is_owner = ctx.accounts.authority.key() == meter.owner;
             let is_admin = ctx.accounts.authority.key() == registry.authority;
-            require!(is_owner || is_admin, ErrorCode::UnauthorizedUser);
+            require!(is_owner || is_admin, RegistryError::UnauthorizedUser);
             
             let old_status = meter.status;
             
@@ -306,12 +315,12 @@ pub mod registry {
             require_keys_eq!(
                 ctx.accounts.owner.key(),
                 meter.owner,
-                ErrorCode::UnauthorizedUser
+                RegistryError::UnauthorizedUser
             );
             
             require!(
                 meter.status != MeterStatus::Inactive,
-                ErrorCode::AlreadyInactive
+                RegistryError::AlreadyInactive
             );
             
             if meter.status == MeterStatus::Active {
@@ -369,13 +378,13 @@ pub mod registry {
 
             require!(
                 meter.status == MeterStatus::Active,
-                ErrorCode::InvalidMeterStatus
+                RegistryError::InvalidMeterStatus
             );
 
             require_keys_eq!(
                 ctx.accounts.meter_owner.key(),
                 meter.owner,
-                ErrorCode::UnauthorizedUser
+                RegistryError::UnauthorizedUser
             );
 
             let current_net_gen = meter
@@ -384,7 +393,7 @@ pub mod registry {
 
             let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
 
-            require!(new_tokens_to_mint > 0, ErrorCode::NoUnsettledBalance);
+            require!(new_tokens_to_mint > 0, RegistryError::NoUnsettledBalance);
 
             meter.settled_net_generation = current_net_gen;
 
@@ -410,13 +419,13 @@ pub mod registry {
 
             require!(
                 meter.status == MeterStatus::Active,
-                ErrorCode::InvalidMeterStatus
+                RegistryError::InvalidMeterStatus
             );
 
             require_keys_eq!(
                 ctx.accounts.meter_owner.key(),
                 meter.owner,
-                ErrorCode::UnauthorizedUser
+                RegistryError::UnauthorizedUser
             );
 
             let current_net_gen = meter
@@ -425,7 +434,7 @@ pub mod registry {
 
             let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
 
-            require!(new_tokens_to_mint > 0, ErrorCode::NoUnsettledBalance);
+            require!(new_tokens_to_mint > 0, RegistryError::NoUnsettledBalance);
 
             meter.settled_net_generation = current_net_gen;
 
@@ -629,202 +638,3 @@ pub struct SettleAndMintTokens<'info> {
     pub token_program: AccountInfo<'info>,
 }
 
-// Data structs
-/// Registry account for metadata storage
-#[account(zero_copy)]
-#[repr(C)]
-pub struct Registry {
-    pub authority: Pubkey,
-    pub oracle_authority: Pubkey,  // Authorized oracle (Option -> Pubkey for ZeroCopy)
-    pub has_oracle_authority: u8,   // Track if oracle_authority is valid (u8 for Pod)
-    pub _padding: [u8; 7],          // Alignment
-    pub user_count: u64,
-    pub meter_count: u64,
-    pub active_meter_count: u64,    // Track active meters separately
-    pub created_at: i64,
-}
-
-/// User account for frequent lookups
-#[account(zero_copy)]
-#[repr(C)]
-pub struct UserAccount {
-    pub authority: Pubkey,   // Wallet address that owns this account
-    pub user_type: UserType, // Prosumer or Consumer
-    pub _padding1: [u8; 7],
-    pub lat: f64,            // Latitude coordinate
-    pub long: f64,           // Longitude coordinate
-    pub status: UserStatus,  // Active, Suspended, or Inactive
-    pub _padding2: [u8; 7],
-    pub registered_at: i64,  // Unix timestamp of registration
-    pub meter_count: u32,    // Number of meters owned
-    pub _padding3: [u8; 4],
-    pub created_at: i64,     // Backward compatibility field
-}
-
-/// Meter account for reading updates
-#[account(zero_copy)]
-#[repr(C)]
-pub struct MeterAccount {
-    pub meter_id: [u8; 32],     // Unique meter identifier (fixed size for ZeroCopy)
-    pub owner: Pubkey,          // User who owns this meter
-    pub meter_type: MeterType,  // Solar, Wind, Battery, or Grid
-    pub status: MeterStatus,    // Active, Inactive, or Maintenance
-    pub _padding: [u8; 6],      // Alignment
-    pub registered_at: i64,     // When meter was registered
-    pub last_reading_at: i64,   // Last time reading was updated
-    pub total_generation: u64,  // Cumulative energy generated (in smallest units)
-    pub total_consumption: u64, // Cumulative energy consumed (in smallest units)
-
-    // --- TOKENIZATION TRACKING ---
-    pub settled_net_generation: u64,
-    pub claimed_erc_generation: u64,
-}
-
-// Enums
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
-#[repr(u8)]
-pub enum UserType {
-    Prosumer,
-    Consumer,
-}
-
-unsafe impl bytemuck::Zeroable for UserType {}
-unsafe impl bytemuck::Pod for UserType {}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
-#[repr(u8)]
-pub enum UserStatus {
-    Active,
-    Suspended,
-    Inactive,
-}
-
-unsafe impl bytemuck::Zeroable for UserStatus {}
-unsafe impl bytemuck::Pod for UserStatus {}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
-#[repr(u8)]
-pub enum MeterType {
-    Solar,
-    Wind,
-    Battery,
-    Grid,
-}
-
-unsafe impl bytemuck::Zeroable for MeterType {}
-unsafe impl bytemuck::Pod for MeterType {}
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
-#[repr(u8)]
-pub enum MeterStatus {
-    Active,
-    Inactive,
-    Maintenance,
-}
-
-unsafe impl bytemuck::Zeroable for MeterStatus {}
-unsafe impl bytemuck::Pod for MeterStatus {}
-
-// Events
-#[event]
-pub struct RegistryInitialized {
-    pub authority: Pubkey,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct UserRegistered {
-    pub user: Pubkey,
-    pub user_type: UserType,
-    pub lat: f64,
-    pub long: f64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct MeterRegistered {
-    pub meter_id: String,
-    pub owner: Pubkey,
-    pub meter_type: MeterType,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct UserStatusUpdated {
-    pub user: Pubkey,
-    pub old_status: UserStatus,
-    pub new_status: UserStatus,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct MeterReadingUpdated {
-    pub meter_id: String,
-    pub owner: Pubkey,
-    pub energy_generated: u64,
-    pub energy_consumed: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct MeterBalanceSettled {
-    pub meter_id: String,
-    pub owner: Pubkey,
-    pub tokens_to_mint: u64,
-    pub total_settled: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct OracleAuthoritySet {
-    pub old_oracle: Option<Pubkey>,
-    pub new_oracle: Pubkey,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct MeterStatusUpdated {
-    pub meter_id: String,
-    pub owner: Pubkey,
-    pub old_status: MeterStatus,
-    pub new_status: MeterStatus,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct MeterDeactivated {
-    pub meter_id: String,
-    pub owner: Pubkey,
-    pub final_generation: u64,
-    pub final_consumption: u64,
-    pub timestamp: i64,
-}
-
-// Errors
-#[error_code]
-pub enum ErrorCode {
-    #[msg("Unauthorized user")]
-    UnauthorizedUser,
-    #[msg("Unauthorized authority")]
-    UnauthorizedAuthority,
-    #[msg("Invalid user status")]
-    InvalidUserStatus,
-    #[msg("Invalid meter status")]
-    InvalidMeterStatus,
-    #[msg("User not found")]
-    UserNotFound,
-    #[msg("Meter not found")]
-    MeterNotFound,
-    #[msg("No unsettled balance to tokenize")]
-    NoUnsettledBalance,
-    #[msg("Oracle authority not configured")]
-    OracleNotConfigured,
-    #[msg("Unauthorized oracle - signer is not the configured oracle")]
-    UnauthorizedOracle,
-    #[msg("Stale reading - timestamp must be newer than last reading")]
-    StaleReading,
-    #[msg("Reading too high - exceeds maximum delta limit")]
-    ReadingTooHigh,
-    #[msg("Meter is already inactive")]
-    AlreadyInactive,
-}

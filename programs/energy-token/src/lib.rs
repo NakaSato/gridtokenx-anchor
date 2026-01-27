@@ -13,6 +13,15 @@ use anchor_spl::{
 use mpl_token_metadata::instructions::CreateV1CpiBuilder;
 use mpl_token_metadata::types::{PrintSupply, TokenStandard};
 
+// Core modules
+pub mod error;
+pub mod events;
+pub mod state;
+
+pub use error::EnergyTokenError;
+pub use events::*;
+pub use state::*;
+
 // Import compute_fn! macro when localnet feature is enabled
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};
@@ -88,7 +97,7 @@ pub mod energy_token {
             let token_info = ctx.accounts.token_info.load()?;
             require!(
                 token_info.authority == ctx.accounts.authority.key(),
-                ErrorCode::UnauthorizedAuthority
+                EnergyTokenError::UnauthorizedAuthority
             );
             // Logging disabled to save CU
 
@@ -154,14 +163,14 @@ pub mod energy_token {
             // Check that it does not exceed the specified number
             require!(
                 token_info.rec_validators_count < 5,
-                ErrorCode::MaxValidatorsReached
+                EnergyTokenError::MaxValidatorsReached
             );
 
             // Check if it already exists
             for i in 0..token_info.rec_validators_count as usize {
                 require!(
                     token_info.rec_validators[i] != validator_pubkey,
-                    ErrorCode::ValidatorAlreadyExists
+                    EnergyTokenError::ValidatorAlreadyExists
                 );
             }
 
@@ -234,7 +243,7 @@ pub mod energy_token {
             
                 // Note: In real deployment, CPI caller verification can be added
                 // By using invoke_signed context or checking instruction data
-                require!(is_admin, ErrorCode::UnauthorizedAuthority);
+                require!(is_admin, EnergyTokenError::UnauthorizedAuthority);
             }
 
             // Mint tokens using token_info PDA as authority
@@ -312,7 +321,7 @@ pub struct MintToWallet<'info> {
     #[account(
         seeds = [b"token_info_2022"],
         bump,
-        constraint = token_info.load()?.authority == authority.key() @ ErrorCode::UnauthorizedAuthority,
+        constraint = token_info.load()?.authority == authority.key() @ EnergyTokenError::UnauthorizedAuthority,
     )]
     pub token_info: AccountLoader<'info, TokenInfo>,
 
@@ -369,7 +378,7 @@ pub struct InitializeToken<'info> {
 
 #[derive(Accounts)]
 pub struct AddRecValidator<'info> {
-    #[account(mut, has_one = authority @ ErrorCode::UnauthorizedAuthority)]
+    #[account(mut, has_one = authority @ EnergyTokenError::UnauthorizedAuthority)]
     pub token_info: AccountLoader<'info, TokenInfo>,
 
     pub authority: Signer<'info>,
@@ -426,59 +435,3 @@ pub struct MintTokensDirect<'info> {
     pub token_program: Interface<'info, TokenInterface>,
 }
 
-// Data structs
-#[account(zero_copy)]
-#[repr(C)]
-pub struct TokenInfo {
-    pub authority: Pubkey,        // 32
-    pub registry_program: Pubkey, // 32
-    pub mint: Pubkey,             // 32
-    pub total_supply: u64,        // 8
-    pub created_at: i64,          // 8
-    pub rec_validators: [Pubkey; 5], // 32 * 5 = 160
-    pub rec_validators_count: u8, // 1
-    pub _padding: [u8; 7],        // 7
-}
-
-// Events
-#[event]
-pub struct GridTokensMinted {
-    pub meter_owner: Pubkey,
-    pub amount: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct TokensMintedDirect {
-    pub recipient: Pubkey,
-    pub amount: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct TokensMinted {
-    pub recipient: Pubkey,
-    pub amount: u64,
-    pub timestamp: i64,
-}
-
-// Errors
-#[error_code]
-pub enum ErrorCode {
-    #[msg("Unauthorized authority")]
-    UnauthorizedAuthority,
-    #[msg("Invalid meter")]
-    InvalidMeter,
-    #[msg("Insufficient token balance")]
-    InsufficientBalance,
-    #[msg("Invalid metadata account")]
-    InvalidMetadataAccount,
-    #[msg("No unsettled balance")]
-    NoUnsettledBalance,
-    #[msg("Unauthorized registry program")]
-    UnauthorizedRegistry,
-    #[msg("Validator already exists in the list")]
-    ValidatorAlreadyExists,
-    #[msg("Maximum number of validators reached")]
-    MaxValidatorsReached,
-}

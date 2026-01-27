@@ -1,4 +1,6 @@
-#!/usr/bin/env bash
+# Set environment variables to prevent MacOS metadata files from breaking solana-test-validator
+export COPYFILE_DISABLE=1
+export DOT_CLEAN_DISABLE=1
 # ==============================================================================
 # Solana Permissioned Environment (SPE) Setup Script
 # 
@@ -17,8 +19,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 POA_DIR="${SCRIPT_DIR}/poa-cluster"
+POA_LEDGER_BASE_DIR="/tmp/gridtokenx-poa"
 GENESIS_DIR="${POA_DIR}/genesis"
+GENESIS_LEDGER_DIR="${POA_LEDGER_BASE_DIR}/genesis/ledger"
 VALIDATOR_DIR="${POA_DIR}/validators"
+VALIDATOR_LEDGER_BASE_DIR="${POA_LEDGER_BASE_DIR}/validators"
 LOG_DIR="${POA_DIR}/logs"
 
 # Configuration
@@ -54,12 +59,14 @@ setup_directories() {
     
     mkdir -p "${GENESIS_DIR}"
     mkdir -p "${LOG_DIR}"
+    mkdir -p "${GENESIS_LEDGER_DIR}"
     
     for i in $(seq 1 $NUM_VALIDATORS); do
         mkdir -p "${VALIDATOR_DIR}/validator-${i}"
+        mkdir -p "${VALIDATOR_LEDGER_BASE_DIR}/validator-${i}"
     done
     
-    log_info "Directories created at ${POA_DIR}"
+    log_info "Directories created at ${POA_DIR} and ${POA_LEDGER_BASE_DIR}"
 }
 
 # ==============================================================================
@@ -104,64 +111,59 @@ generate_keypairs() {
 # ==============================================================================
 
 create_genesis() {
-    log_info "Creating genesis configuration for PoA cluster..."
+    log_info "Creating genesis configuration using solana-test-validator..."
     
-    # Calculate stake per validator (equal distribution for PoA)
-    TOTAL_STAKE=$((1000000000 * 1000000000))  # 1 billion SOL in lamports
-    STAKE_PER_VALIDATOR=$((TOTAL_STAKE / NUM_VALIDATORS))
+    rm -rf "${GENESIS_LEDGER_DIR}"
     
-    # Build primordial accounts list
-    PRIMORDIAL_ARGS=""
+    # Use solana-test-validator to bootstrap the ledger
+    # We use the generated faucet keypair as the mint account
+    FAUCET_KEYPAIR="${GENESIS_DIR}/faucet-keypair.json"
+    FAUCET_PUBKEY=$(solana-keygen pubkey "${FAUCET_KEYPAIR}")
     
-    # Add faucet with initial balance
-    FAUCET_PUBKEY=$(solana-keygen pubkey "${GENESIS_DIR}/faucet-keypair.json")
-    PRIMORDIAL_ARGS+=" --bootstrap-validator-lamports ${STAKE_PER_VALIDATOR}"
-    PRIMORDIAL_ARGS+=" --faucet-lamports $((FAUCET_SOL * 1000000000))"
-    PRIMORDIAL_ARGS+=" --faucet-pubkey ${FAUCET_PUBKEY}"
+    log_info "Starting bootstrap validator to generate genesis..."
+    solana-test-validator \
+        --ledger "${GENESIS_LEDGER_DIR}" \
+        --mint "${FAUCET_PUBKEY}" \
+        --reset \
+        --slots-per-epoch 8192 \
+        --limit-ledger-size ${LEDGER_LIMIT} \
+        --quiet &
     
-    # Build bootstrap validator arguments
-    BOOTSTRAP_ARGS=""
-    for i in $(seq 1 $NUM_VALIDATORS); do
-        VALIDATOR_PATH="${VALIDATOR_DIR}/validator-${i}"
-        
-        IDENTITY=$(solana-keygen pubkey "${VALIDATOR_PATH}/identity.json")
-        VOTE_ACCOUNT=$(solana-keygen pubkey "${VALIDATOR_PATH}/vote-account.json")
-        STAKE_ACCOUNT=$(solana-keygen pubkey "${VALIDATOR_PATH}/stake-account.json")
-        
-        if [[ $i -eq 1 ]]; then
-            # First validator is the bootstrap validator
-            BOOTSTRAP_ARGS+=" --bootstrap-validator ${IDENTITY} ${VOTE_ACCOUNT} ${STAKE_ACCOUNT}"
-        else
-            # Additional validators added as primordial accounts
-            PRIMORDIAL_ARGS+=" --primordial-account-for-stake ${STAKE_ACCOUNT}:${STAKE_PER_VALIDATOR}"
+    STV_PID=$!
+    
+    # Wait for genesis creation
+    RETRIES=0
+    while [[ ! -f "${GENESIS_LEDGER_DIR}/genesis.bin" ]]; do
+        sleep 1
+        RETRIES=$((RETRIES+1))
+        if [[ $RETRIES -gt 30 ]]; then
+            log_error "Genesis generation timed out"
+            kill ${STV_PID} || true
+            exit 1
         fi
     done
     
-    # Genesis configuration for PoA:
-    # - Disable inflation (no new tokens minted)
-    # - Disable rent collection (optional, for simpler testing)
-    # - Set high transaction fee to prevent spam
-    log_info "Generating genesis block..."
+    log_info "Genesis block detected. Waiting for initialization..."
+    sleep 5
     
-    rm -rf "${GENESIS_DIR}/ledger"
+    log_info "Stopping bootstrap validator..."
+    kill ${STV_PID} || true
+    wait ${STV_PID} || true
     
-    solana-genesis \
-        --cluster-type mainnet-beta \
-        --ledger "${GENESIS_DIR}/ledger" \
-        --hashes-per-tick auto \
-        --target-tick-duration 400 \
-        --slots-per-epoch 32 \
-        --enable-warmup-epochs \
-        --max-genesis-archive-unpacked-size 1073741824 \
-        --inflation none \
-        ${BOOTSTRAP_ARGS} \
-        ${PRIMORDIAL_ARGS} \
-        2>&1 | tee "${LOG_DIR}/genesis.log"
+    log_info "Genesis created at ${GENESIS_LEDGER_DIR}"
     
-    log_info "Genesis block created at ${GENESIS_DIR}/ledger"
+    # Update Validator 1 keys to match the bootstrap validator
+    # solana-test-validator generates these in the ledger directory
+    log_info "Updating Validator 1 identity to match bootstrap..."
+    cp "${GENESIS_LEDGER_DIR}/validator-keypair.json" "${VALIDATOR_DIR}/validator-1/identity.json"
+    cp "${GENESIS_LEDGER_DIR}/vote-account-keypair.json" "${VALIDATOR_DIR}/validator-1/vote-account.json"
     
     # Export genesis hash
-    GENESIS_HASH=$(solana-ledger-tool genesis-hash --ledger "${GENESIS_DIR}/ledger")
+    if command -v agave-ledger-tool &> /dev/null; then
+        GENESIS_HASH=$(agave-ledger-tool genesis-hash --ledger "${GENESIS_LEDGER_DIR}")
+    else
+        GENESIS_HASH=$(solana-ledger-tool genesis-hash --ledger "${GENESIS_LEDGER_DIR}")
+    fi
     echo "${GENESIS_HASH}" > "${GENESIS_DIR}/genesis-hash.txt"
     log_info "Genesis hash: ${GENESIS_HASH}"
 }
@@ -175,6 +177,7 @@ generate_validator_configs() {
     
     for i in $(seq 1 $NUM_VALIDATORS); do
         VALIDATOR_PATH="${VALIDATOR_DIR}/validator-${i}"
+        VALIDATOR_LEDGER_DIR="${VALIDATOR_LEDGER_BASE_DIR}/validator-${i}/ledger"
         RPC_PORT=$((BASE_PORT + (i - 1) * 100))
         GOSSIP_PORT=$((8001 + (i - 1) * 10))
         TPU_PORT=$((8003 + (i - 1) * 10))
@@ -187,7 +190,7 @@ generate_validator_configs() {
 [validator]
 identity = "${VALIDATOR_PATH}/identity.json"
 vote_account = "${VALIDATOR_PATH}/vote-account.json"
-ledger = "${VALIDATOR_PATH}/ledger"
+ledger = "${VALIDATOR_LEDGER_DIR}"
 log_path = "${LOG_DIR}/validator-${i}.log"
 
 # RPC Configuration
@@ -207,7 +210,7 @@ skip_poh_verify = false
 no_voting = false
 
 # PoA-specific: Disable features not needed for permissioned networks
-no_ip_address_check = true
+no_port_check = true
 allow_private_addr = true
 EOF
 
@@ -219,26 +222,28 @@ EOF
 set -euo pipefail
 
 VALIDATOR_PATH="${VALIDATOR_PATH}"
-GENESIS_LEDGER="${GENESIS_DIR}/ledger"
+GENESIS_LEDGER="${GENESIS_LEDGER_DIR}"
+VALIDATOR_LEDGER="${VALIDATOR_LEDGER_DIR}"
 RPC_PORT=${RPC_PORT}
 GOSSIP_PORT=${GOSSIP_PORT}
+LOG_DIR="${LOG_DIR}"
+LEDGER_LIMIT=${LEDGER_LIMIT}
+export PATH="/Users/chanthawat/.local/share/solana/install/active_release/bin:\$PATH"
 
 # Copy genesis ledger if not exists
-if [[ ! -d "\${VALIDATOR_PATH}/ledger" ]]; then
-    cp -r "\${GENESIS_LEDGER}" "\${VALIDATOR_PATH}/ledger"
+if [[ ! -d "\${VALIDATOR_LEDGER}" ]]; then
+    mkdir -p "\${VALIDATOR_LEDGER}"
+    cp -r "\${GENESIS_LEDGER}/" "\${VALIDATOR_LEDGER}/"
 fi
 
 # Build entrypoint list (all other validators)
 ENTRYPOINTS=""
 EOF
 
-        # Add entrypoints (connect to other validators)
-        for j in $(seq 1 $NUM_VALIDATORS); do
-            if [[ $j -ne $i ]]; then
-                OTHER_GOSSIP=$((8001 + (j - 1) * 10))
-                echo "ENTRYPOINTS+=\"--entrypoint 127.0.0.1:${OTHER_GOSSIP} \"" >> "${VALIDATOR_PATH}/start.sh"
-            fi
-        done
+        # Add entrypoints (connect to Validator 1 as the bootstrap node)
+        if [[ $i -ne 1 ]]; then
+            echo "ENTRYPOINTS+=\"--entrypoint 127.0.0.1:8001 \"" >> "${VALIDATOR_PATH}/start.sh"
+        fi
 
         cat >> "${VALIDATOR_PATH}/start.sh" << 'EOF'
 
@@ -246,7 +251,8 @@ EOF
 exec solana-validator \
     --identity "${VALIDATOR_PATH}/identity.json" \
     --vote-account "${VALIDATOR_PATH}/vote-account.json" \
-    --ledger "${VALIDATOR_PATH}/ledger" \
+    --authorized-voter "${VALIDATOR_PATH}/vote-account.json" \
+    --ledger "${VALIDATOR_LEDGER}" \
     --rpc-port ${RPC_PORT} \
     --gossip-port ${GOSSIP_PORT} \
     --dynamic-port-range 8100-8200 \
@@ -255,7 +261,7 @@ exec solana-validator \
     --enable-rpc-transaction-history \
     --full-rpc-api \
     --no-wait-for-vote-to-start-leader \
-    --no-ip-address-check \
+    --no-port-check \
     --allow-private-addr \
     ${ENTRYPOINTS} \
     "$@"
@@ -355,7 +361,7 @@ anchor_version = "0.32.1"
 resolution = true
 skip-lint = false
 
-[programs.poa]
+[programs.localnet]
 tpc_benchmark = "TpcC1111111111111111111111111111111111111111"
 energy_token = "AZBstnPmUeRJnwv55128awdfi2tmCFzcK4W6NPXbTkWA"
 governance = "2GprryNp7j7yxGuPNNjpJLHELfCdXH8UPfKSxXCvisjL"
@@ -364,7 +370,7 @@ registry = "9wvMT6f2Y7A37LB8y5LEQRSJxbnwLYqw1Bqq1RBtD3oM"
 trading = "e7rS5sykWMXtciUEgUZ6xByqo6VqwNRNeAmQQn3Sbj2"
 
 [provider]
-cluster = "http://127.0.0.1:${BASE_PORT}"
+cluster = "localnet"
 wallet = "${GENESIS_DIR}/faucet-keypair.json"
 
 [scripts]
@@ -377,10 +383,13 @@ shutdown_wait = 5000
 upgradeable = false
 
 # PoA-specific test configuration
-[test.genesis]
-# Use local PoA cluster instead of test validator
-use_local_cluster = true
-cluster_url = "http://127.0.0.1:${BASE_PORT}"
+# [test.genesis] is an array in Anchor 0.32+, so we use [[test.genesis]] if needed, 
+# but for local PoA cluster we just point to it via provider.cluster.
+[[test.genesis]]
+address = "AZBstnPmUeRJnwv55128awdfi2tmCFzcK4W6NPXbTkWA"
+program = "target/deploy/energy_token.so"
+# ... other programs can be added here if needed for 'anchor test'
+# But for 'anchor deploy' we don't need this section.
 EOF
 
     log_info "Anchor configuration created at ${POA_DIR}/Anchor.poa.toml"

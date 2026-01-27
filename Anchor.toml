@@ -1,3 +1,4 @@
+# Anchor.toml configuration for PoA Cluster
 [toolchain]
 anchor_version = "0.32.1"
 package_manager = "pnpm"
@@ -7,57 +8,28 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-blockbench = "B5aDPT9bM692E63ZtBVLQuJhsoJsPdyjn6ATqqgWpbTg"
+tpc_benchmark = "BcXcPzZHpBJ82RwDSuVY2eVCXj3enda8R3AxUTjXwFgu"
 energy_token = "8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq"
 governance = "51d3SDcs5coxkiwvcjMzPrKeajTPF9yikw66WezipTva"
 oracle = "ACeKwdMK1sma3EPnxy7bvgC5yMwy8tg7ZUJvaogC9YfR"
 registry = "3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye"
-tpc_benchmark = "BcXcPzZHpBJ82RwDSuVY2eVCXj3enda8R3AxUTjXwFgu"
 trading = "GTuRUUwCfvmqW7knqQtzQLMCy61p4UKUrdT5ssVgZbat"
-
-[registry]
-url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "keypairs/dev-wallet.json"
+wallet = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/genesis/faucet-keypair.json"
 
 [scripts]
-benchmark-tpcc = "npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts"
-bootstrap = "npx ts-node scripts/bootstrap.ts"
-init-market = "npx ts-node scripts/init_market.ts"
-setup-poa = "bash scripts/setup-poa-cluster.sh"
-test = "npx tsx tests/performance/benchmarks/tpc-c-benchmark.ts"
-upgrade-program = "npx tsx scripts/upgrade-program.ts"
-show-program-info = "npx tsx scripts/show-program-info.ts"
+benchmark-tpcc = "npx ts-node tests/performance/benchmarks/tpc-c-anchor.ts"
+init-tpcc-schema = "npx ts-node scripts/bootstrap.ts"
+test = "npx tsx scripts/run-all-tests.ts"
 
 [test]
-startup_wait = 5000
-shutdown_wait = 2000
-upgradeable = true
+startup_wait = 10000
+shutdown_wait = 5000
+upgradeable = false
 
-# Upgrade authority configuration for production deployments
-[upgrade_authority]
-# Default upgrade authority is the provider wallet
-# For production, use a multisig or hardware wallet
-authority = "keypairs/dev-wallet.json"
-
-[[test.genesis]]
-address = "8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq"
-program = "target/deploy/energy_token.so"
-
-[[test.genesis]]
-address = "51d3SDcs5coxkiwvcjMzPrKeajTPF9yikw66WezipTva"
-program = "target/deploy/governance.so"
-
-[[test.genesis]]
-address = "ACeKwdMK1sma3EPnxy7bvgC5yMwy8tg7ZUJvaogC9YfR"
-program = "target/deploy/oracle.so"
-
-[[test.genesis]]
-address = "3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye"
-program = "target/deploy/registry.so"
-
-[[test.genesis]]
-address = "GTuRUUwCfvmqW7knqQtzQLMCy61p4UKUrdT5ssVgZbat"
-program = "target/deploy/trading.so"
+# PoA-specific test configuration
+# [[test.genesis]]
+# address = "8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq"
+# program = "target/deploy/energy_token.so"

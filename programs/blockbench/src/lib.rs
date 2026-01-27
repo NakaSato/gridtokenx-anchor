@@ -45,6 +45,7 @@ macro_rules! compute_fn {
     ($name:expr => $block:block) => { $block };
 }
 #[cfg(not(feature = "localnet"))]
+#[allow(unused_macros)]
 macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }

@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+
 
 /// Carbon Credit Marketplace for GridTokenX
 /// 
@@ -111,7 +111,7 @@ pub struct CarbonMarketplace {
 }
 
 /// Instructions
-pub fn initialize_carbon_marketplace(
+pub fn process_initialize_carbon_marketplace(
     ctx: Context<InitializeCarbonMarketplace>,
     minting_fee_bps: u16,
     trading_fee_bps: u16,
@@ -133,7 +133,7 @@ pub fn initialize_carbon_marketplace(
     Ok(())
 }
 
-pub fn mint_rec_certificate(
+pub fn process_mint_rec_certificate(
     ctx: Context<MintRecCertificate>,
     generation_start: i64,
     generation_end: i64,

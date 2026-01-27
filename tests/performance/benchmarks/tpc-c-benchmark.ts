@@ -82,6 +82,10 @@ export interface TPCCBenchmarkConfig {
     thinkTimeMs?: number;
     /** Maximum compute units to request */
     maxComputeUnits?: number;
+    districtsPerWarehouse?: number;
+    customersPerDistrict?: number;
+    items?: number;
+    maxErrors?: number;
 }
 
 export interface TransactionResult {
@@ -245,7 +249,7 @@ export class TPCCBenchmarkEngine {
             warmupPercent: config.warmupPercent || 10,
             useRealPrograms: config.useRealPrograms ?? false,
             rpcUrl: config.rpcUrl || "http://127.0.0.1:8899",
-            walletPath: config.walletPath || "./keypairs/dev-wallet.json",
+            walletPath: config.walletPath || process.env.ANCHOR_WALLET || "./keypairs/dev-wallet.json",
             thinkTimeMs: config.thinkTimeMs || 0,
             maxComputeUnits: config.maxComputeUnits || 400000,
         };
@@ -355,7 +359,7 @@ export class TPCCBenchmarkEngine {
 
     private getProgramId(): PublicKey {
         // Updated to match Anchor.toml program ID for tpc_benchmark
-        return new PublicKey("CKLCEJhsxMu1NNEu9oVuyDqpkXcR9dMr769XSuh2WAjC");
+        return new PublicKey("BcXcPzZHpBJ82RwDSuVY2eVCXj3enda8R3AxUTjXwFgu");
     }
 
     private u64ToBuffer(num: number): Buffer {
@@ -433,6 +437,15 @@ export class TPCCBenchmarkEngine {
         } catch (e: any) {
             success = false;
             error = e.message;
+
+            // Log first few errors for debugging
+            if (this.results.length < 50 && !e.message?.includes("already in use")) {
+                console.error(`  ❌ Transaction Error (${txType}): ${e.message}`);
+                if (e.logs) {
+                    console.error("  Logs:");
+                    e.logs.slice(-10).forEach((l: string) => console.error(`    ${l}`));
+                }
+            }
 
             // Detect MVCC-like conflicts
             if (e.message?.includes("already in use") ||
@@ -544,12 +557,8 @@ export class TPCCBenchmarkEngine {
             this.program!.programId
         );
 
-        // Fetch District to get next_o_id (Simulated Client-Side Prediction or fetch)
-        // In a real high-perf client, we might track this or optimistic concurrency.
-        // For simplicity, we assume the client blindly tries. BUT, we need next_o_id for PDA.
-        // We MUST fetch the district account to get the current next_o_id.
-        const districtAccount = await this.program!.account.district.fetch(districtPda);
-        const next_o_id = districtAccount.nextOId;
+        // Generate unique o_id to avoid seed collisions under high concurrency
+        const o_id = new BN(Date.now()).mul(new BN(1000)).add(new BN(Math.floor(Math.random() * 1000)));
 
         // Order PDA
         const [orderPda] = PublicKey.findProgramAddressSync(
@@ -557,7 +566,7 @@ export class TPCCBenchmarkEngine {
                 Buffer.from("order"),
                 this.u64ToBuffer(w_id),
                 this.u64ToBuffer(d_id),
-                next_o_id.toArrayLike(Buffer, "le", 8)
+                o_id.toArrayLike(Buffer, "le", 8)
             ],
             this.program!.programId
         );
@@ -568,7 +577,7 @@ export class TPCCBenchmarkEngine {
                 Buffer.from("new_order"),
                 this.u64ToBuffer(w_id),
                 this.u64ToBuffer(d_id),
-                next_o_id.toArrayLike(Buffer, "le", 8)
+                o_id.toArrayLike(Buffer, "le", 8)
             ],
             this.program!.programId
         );
@@ -615,6 +624,7 @@ export class TPCCBenchmarkEngine {
                 new BN(w_id),
                 new BN(d_id),
                 new BN(c_id),
+                o_id,
                 orderLines
             )
             .accounts({
@@ -635,7 +645,10 @@ export class TPCCBenchmarkEngine {
             const messageV0 = new anchor.web3.TransactionMessage({
                 payerKey: this.authority!.publicKey,
                 recentBlockhash: latestBlockhash.blockhash,
-                instructions: [ix],
+                instructions: [
+                    ComputeBudgetProgram.setComputeUnitLimit({ units: this.config.maxComputeUnits || 400000 }),
+                    ix
+                ],
             }).compileToV0Message([...this.itemAlts, ...this.stockAlts]);
 
             const tx = new anchor.web3.VersionedTransaction(messageV0);
@@ -720,7 +733,7 @@ export class TPCCBenchmarkEngine {
                 district: districtPda,
                 customer: customerPda,
                 history: historyPda,
-                customerIndex: null,
+                customerIndex: null as any,
                 payer: this.authority!.publicKey,
                 systemProgram: SystemProgram.programId,
             })
@@ -743,7 +756,7 @@ export class TPCCBenchmarkEngine {
             this.program!.programId
         );
         // Just fetch the account to simulate read
-        await this.program!.account.customer.fetch(customerPda);
+        await (this.program!.account as any).customer.fetch(customerPda);
     }
 
     private async executeDelivery(w_id: number): Promise<string> {
@@ -788,7 +801,7 @@ export class TPCCBenchmarkEngine {
             [Buffer.from("warehouse"), this.u64ToBuffer(w_id)],
             this.program!.programId
         );
-        await this.program!.account.warehouse.fetch(warehousePda);
+        await (this.program!.account as any).warehouse.fetch(warehousePda);
 
         return "simulated-delivery";
     }
@@ -809,7 +822,7 @@ export class TPCCBenchmarkEngine {
                 ],
                 this.program!.programId
             );
-            promises.push(this.program!.account.stock.fetch(stockPda));
+            promises.push((this.program!.account as any).stock.fetch(stockPda));
         }
         await Promise.all(promises);
     }

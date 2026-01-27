@@ -128,7 +128,7 @@ pub struct PricingConfig {
 }
 
 /// Instructions
-pub fn initialize_pricing_config(
+pub fn process_initialize_pricing_config(
     ctx: Context<InitializePricingConfig>,
     base_price: u64,
     min_price: u64,
@@ -163,7 +163,7 @@ pub fn initialize_pricing_config(
     Ok(())
 }
 
-pub fn update_market_data(
+pub fn process_update_market_data(
     ctx: Context<UpdateMarketData>,
     supply: u64,
     demand: u64,
@@ -194,7 +194,7 @@ pub fn update_market_data(
     Ok(())
 }
 
-pub fn create_price_snapshot(
+pub fn process_create_price_snapshot(
     ctx: Context<CreatePriceSnapshot>,
     timestamp: i64,
 ) -> Result<()> {

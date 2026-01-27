@@ -1,10 +1,10 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { Trading } from "../target/types/trading";
-import { EnergyToken } from "../target/types/energy_token";
-import { Governance } from "../target/types/governance";
-import { Oracle } from "../target/types/oracle";
-import { Registry } from "../target/types/registry";
+import type { Trading } from "../target/types/trading.ts";
+import type { EnergyToken } from "../target/types/energy_token.ts";
+import type { Governance } from "../target/types/governance.ts";
+import type { Oracle } from "../target/types/oracle.ts";
+import type { Registry } from "../target/types/registry.ts";
 import * as fs from "fs";
 
 /**
@@ -47,8 +47,8 @@ export class TestEnvironment {
     this.tradingProgram = anchor.workspace.Trading as Program<Trading>;
 
     // Generate test keypairs
-    // Load authority from dev-wallet.json
-    const walletPath = "./keypairs/dev-wallet.json";
+    // Load authority from ANCHOR_WALLET if available, else dev-wallet.json
+    const walletPath = process.env.ANCHOR_WALLET || "./keypairs/dev-wallet.json";
     const walletData = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
     this.authority = anchor.web3.Keypair.fromSecretKey(new Uint8Array(walletData));
     this.testUser = anchor.web3.Keypair.generate();
@@ -59,11 +59,15 @@ export class TestEnvironment {
     const env = new TestEnvironment();
 
     // Airdrop to authority and test user
-    const airdropAuth = await env.connection.requestAirdrop(env.authority.publicKey, 100 * anchor.web3.LAMPORTS_PER_SOL);
-    await env.connection.confirmTransaction(airdropAuth);
+    try {
+      const airdropAuth = await env.connection.requestAirdrop(env.authority.publicKey, 100 * anchor.web3.LAMPORTS_PER_SOL);
+      await env.connection.confirmTransaction(airdropAuth);
 
-    const airdropUser = await env.connection.requestAirdrop(env.testUser.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
-    await env.connection.confirmTransaction(airdropUser);
+      const airdropUser = await env.connection.requestAirdrop(env.testUser.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
+      await env.connection.confirmTransaction(airdropUser);
+    } catch (e: any) {
+      console.warn(`  ⚠️  Airdrop failed, continuing assuming accounts have funds: ${e.message}`);
+    }
 
     return env;
   }

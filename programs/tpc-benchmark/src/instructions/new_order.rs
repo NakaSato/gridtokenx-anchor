@@ -37,7 +37,7 @@ use crate::error::TpcError;
 /// Uses `remaining_accounts` pattern for variable number of Stock/Item accounts
 /// since order can have 5-15 items.
 #[derive(Accounts)]
-#[instruction(w_id: u64, d_id: u64, c_id: u64)]
+#[instruction(w_id: u64, d_id: u64, c_id: u64, o_id: u64)]
 pub struct NewOrder<'info> {
     // ═══════════════════════════════════════════════════════════════════
     // STATIC ACCOUNTS (always present)
@@ -81,7 +81,7 @@ pub struct NewOrder<'info> {
             b"order",
             w_id.to_le_bytes().as_ref(),
             d_id.to_le_bytes().as_ref(),
-            district.next_o_id.to_le_bytes().as_ref()
+            o_id.to_le_bytes().as_ref()
         ],
         bump
     )]
@@ -96,7 +96,7 @@ pub struct NewOrder<'info> {
             b"new_order",
             w_id.to_le_bytes().as_ref(),
             d_id.to_le_bytes().as_ref(),
-            district.next_o_id.to_le_bytes().as_ref()
+            o_id.to_le_bytes().as_ref()
         ],
         bump
     )]
@@ -138,6 +138,7 @@ pub fn new_order<'info>(
     w_id: u64,
     d_id: u64,
     c_id: u64,
+    o_id: u64,
     order_lines: Vec<OrderLineInput>,
 ) -> Result<()> {
     // ═══════════════════════════════════════════════════════════════════
@@ -180,7 +181,9 @@ pub fn new_order<'info>(
     // CRITICAL SECTION: Assign Order ID
     // ═══════════════════════════════════════════════════════════════════
     
-    let o_id = district.next_o_id;
+    // We used to use district.next_o_id, but now we use client-provided o_id
+    // for PDA seeds. We still increment district.next_o_id for legacy state
+    // tracking, but the collision is resolved by unique o_ids.
     
     // Increment next_o_id - THIS IS THE SERIALIZATION POINT
     district.next_o_id = district.next_o_id

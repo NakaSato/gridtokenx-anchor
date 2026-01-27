@@ -169,7 +169,7 @@ pub struct MeterVerificationConfig {
 }
 
 /// Instructions
-pub fn initialize_meter_config(
+pub fn process_initialize_meter_config(
     ctx: Context<InitializeMeterConfig>,
     max_delta_per_hour: u64,
     min_interval: u32,
@@ -187,7 +187,7 @@ pub fn initialize_meter_config(
     Ok(())
 }
 
-pub fn authorize_oracle(
+pub fn process_authorize_oracle(
     ctx: Context<AuthorizeOracle>,
     oracle: Pubkey,
 ) -> Result<()> {
@@ -214,7 +214,7 @@ pub fn authorize_oracle(
     Ok(())
 }
 
-pub fn initialize_meter_history(
+pub fn process_initialize_meter_history(
     ctx: Context<InitializeMeterHistory>,
 ) -> Result<()> {
     let history = &mut ctx.accounts.history;
@@ -228,33 +228,33 @@ pub fn initialize_meter_history(
     Ok(())
 }
 
-pub fn verify_meter_reading(
-    ctx: Context<VerifyMeterReading>,
-    reading_proof: MeterReadingProof,
-    _timestamp: i64,
-) -> Result<()> {
-    let config = &ctx.accounts.config;
-    let history = &mut ctx.accounts.history;
-    let verified_reading = &mut ctx.accounts.verified_reading;
-    let clock = Clock::get()?;
-    
-    // 1. Verify oracle signature using Solana Sysvar instructions
-    // In production, we'd use the Ed25519 program. Here we simulate the logic.
-    let is_authorized = config.authorized_oracles[..config.oracle_count as usize]
-        .iter()
-        .any(|o| *o == reading_proof.oracle_pubkey);
-    
-    require!(is_authorized, VerificationError::UnauthorizedOracle);
-    
-    // Validate the signature (simulation for localnet stability)
-    require!(
-        reading_proof.oracle_signature.iter().any(|&b| b != 0),
-        VerificationError::InvalidSignature
-    );
+    pub fn process_verify_meter_reading(
+        ctx: Context<VerifyMeterReading>,
+        reading_proof: MeterReadingProof,
+        _timestamp: i64,
+    ) -> Result<()> {
+        let config = &ctx.accounts.config;
+        let history = &mut ctx.accounts.history;
+        let verified_reading = &mut ctx.accounts.verified_reading;
+        let clock = Clock::get()?;
+        
+        // 1. Verify oracle signature using Solana Sysvar instructions
+        // In production, we'd use the Ed25519 program. Here we simulate the logic.
+        let is_authorized = config.authorized_oracles[..config.oracle_count as usize]
+            .iter()
+            .any(|o| *o == reading_proof.oracle_pubkey);
+        
+        require!(is_authorized, VerificationError::UnauthorizedOracle);
+        
+        // Validate the signature (simulation for localnet stability)
+        require!(
+            reading_proof.oracle_signature.iter().any(|&b| b != 0),
+            VerificationError::InvalidSignature
+        );
 
-    // 2. Extract reading value from commitment
-    // In a real ZK setup, this would be a public input or decrypted from the proof
-    let new_reading = reading_proof.commitment.hash.iter().fold(0u64, |acc, &x| acc + x as u64);
+        // 2. Extract reading value from commitment
+        // In a real ZK setup, this would be a public input or decrypted from the proof
+        let new_reading = reading_proof.commitment.hash.iter().fold(0u64, |acc, &x| acc + x as u64);
 
     // 3. Monotonic check (cumulative meters must only increase)
     if history.total_readings > 0 {
@@ -300,6 +300,7 @@ pub fn verify_meter_reading(
         oracle: verified_reading.verified_by,
     });
     
+    
     if anomaly_flags != anomaly_flags::NONE {
         emit!(AnomalyDetected {
             meter: history.meter,
@@ -311,6 +312,37 @@ pub fn verify_meter_reading(
             anomaly_type: anomaly_flags,
             timestamp: clock.unix_timestamp,
         });
+    }
+
+    // 7. Mint Energy Tokens (REC) to User
+    // Calculate amount: verified_reading.value is kWh * 1000. 
+    // If Mint has 6 decimals, and 1 Token = 1 kWh.
+    // We want to mint (value / 1000) * 10^6 = value * 1000.
+    // Only mint if NO anomalies found.
+    if anomaly_flags == anomaly_flags::NONE {
+        let seeds = &[
+            b"meter_config".as_ref(), 
+            config.authority.as_ref(), 
+            &[config.bump]
+        ];
+        let signer = &[&seeds[..]];
+
+        let mint_amount = verified_reading.value.checked_mul(1000).unwrap_or(0); // Assuming 6 decimals vs 3 decimals adjustment
+
+        if mint_amount > 0 {
+            anchor_spl::token_interface::mint_to(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    anchor_spl::token_interface::MintTo {
+                        mint: ctx.accounts.token_mint.to_account_info(),
+                        to: ctx.accounts.user_token_account.to_account_info(),
+                        authority: ctx.accounts.config.to_account_info(),
+                    },
+                    signer
+                ),
+                mint_amount,
+            )?;
+        }
     }
     
     Ok(())
@@ -363,6 +395,7 @@ pub struct InitializeMeterHistory<'info> {
 #[derive(Accounts)]
 #[instruction(reading_proof: MeterReadingProof, timestamp: i64)]
 pub struct VerifyMeterReading<'info> {
+    #[account(mut)]
     pub config: Account<'info, MeterVerificationConfig>,
     
     #[account(mut)]
@@ -379,6 +412,15 @@ pub struct VerifyMeterReading<'info> {
     
     #[account(mut)]
     pub authority: Signer<'info>,
+
+    /// CHECK: Token Mint authority (PDA)
+    #[account(mut)]
+    pub token_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
+
+    #[account(mut)]
+    pub user_token_account: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+
+    pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
     
     pub system_program: Program<'info, System>,
 }

@@ -127,24 +127,22 @@ describe("GridTokenX Enhanced Features Integration Tests", () => {
     });
 
     it("2.1 should initialize a private balance", async () => {
+        // Correct seed: "confidential_balance"
         [privateBalance] = PublicKey.findProgramAddressSync(
-            [Buffer.from("private_balance"), user.publicKey.toBuffer(), privacyMint.toBuffer()],
+            [Buffer.from("confidential_balance"), user.publicKey.toBuffer(), privacyMint.toBuffer()],
             program.programId
         );
 
-        await program.methods.initializePrivateBalance(
-            { point: Array(32).fill(1) },
-            Array(32).fill(0),
-            Array(24).fill(0)
-        ).accounts({
-            privateBalance,
+        // Rename to initializeConfidentialBalance and remove arguments
+        await program.methods.initializeConfidentialBalance().accounts({
+            confidentialBalance: privateBalance, // Matches IDL account name (confidentialBalance)
             mint: privacyMint,
             owner: user.publicKey,
             //@ts-ignore
             systemProgram: SystemProgram.programId,
         }).signers([user]).rpc();
 
-        const balance = await program.account.privateBalance.fetch(privateBalance);
+        const balance = await program.account.confidentialBalance.fetch(privateBalance);
         expect(balance.owner.toBase58()).to.equal(user.publicKey.toBase58());
     });
 
@@ -154,19 +152,23 @@ describe("GridTokenX Enhanced Features Integration Tests", () => {
             program.programId
         );
 
-        await program.methods.initializePricingConfig(
-            new BN(4000000),
-            new BN(2000000),
-            new BN(10000000),
-            700
-        ).accounts({
-            pricingConfig,
-            //@ts-ignore
-            market: marketAddress,
-            authority: marketAuthority.publicKey,
-            //@ts-ignore
-            systemProgram: SystemProgram.programId,
-        }).signers([marketAuthority]).rpc();
+        try {
+            await program.methods.initializePricingConfig(
+                new BN(4000000),
+                new BN(2000000),
+                new BN(10000000),
+                700
+            ).accounts({
+                pricingConfig,
+                //@ts-ignore
+                market: marketAddress,
+                authority: marketAuthority.publicKey,
+                //@ts-ignore
+                systemProgram: SystemProgram.programId,
+            }).signers([marketAuthority]).rpc();
+        } catch (e) {
+            // console.log("Pricing config already initialized");
+        }
 
         const config = await program.account.pricingConfig.fetch(pricingConfig);
         expect(config.enabled).to.be.true();

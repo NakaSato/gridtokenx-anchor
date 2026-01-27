@@ -9,10 +9,10 @@ import * as crypto from "crypto";
 
 // TPC-C Constants
 const ITEMS = 100; // Reduced for dev environment verification
-const WAREHOUSES = 1;
+const WAREHOUSES = 10;
 const DISTRICTS_PER_WAREHOUSE = 10;
 const CUSTOMERS_PER_DISTRICT = 30; // Reduced for dev environment verification
-const BATCH_SIZE = 10; // Batch size for parallel processing
+const BATCH_SIZE = 50; // Batch size for parallel processing
 
 // NURand Constants
 const NURAND_A_C_LAST = 255;
@@ -69,7 +69,7 @@ export class TpcClassLoader {
         );
 
         try {
-            await this.program.methods
+            await (this.program.methods as any)
                 .initializeBenchmark({
                     warehouses: new BN(WAREHOUSES),
                     districtsPerWarehouse: DISTRICTS_PER_WAREHOUSE,
@@ -115,7 +115,7 @@ export class TpcClassLoader {
             const imId = new BN(this.randomNumber(1, 10000));
 
             promises.push(
-                this.program.methods
+                (this.program.methods as any)
                     .initializeItem(
                         new BN(i),
                         imId,
@@ -132,7 +132,7 @@ export class TpcClassLoader {
                     .then(() => {
                         if (i % 100 === 0) process.stdout.write(".");
                     })
-                    .catch((e) => {
+                    .catch((e: any) => {
                         if (!e.message.includes("already in use")) {
                             console.error(`Error loading Item ${i}:`, e);
                         }
@@ -166,7 +166,7 @@ export class TpcClassLoader {
             const tax = new BN(this.randomNumber(0, 2000)); // 0-20%
 
             try {
-                await this.program.methods
+                await (this.program.methods as any)
                     .initializeWarehouse(
                         new BN(w),
                         name,
@@ -226,7 +226,7 @@ export class TpcClassLoader {
             const tax = new BN(this.randomNumber(0, 2000));
 
             try {
-                await this.program.methods
+                await (this.program.methods as any)
                     .initializeDistrict(
                         new BN(w_id),
                         new BN(d),
@@ -302,7 +302,7 @@ export class TpcClassLoader {
             // initialize_customer_index takes last_name_hash.
 
             promises.push(
-                this.program.methods
+                (this.program.methods as any)
                     .initializeCustomer(
                         new BN(w_id),
                         new BN(d_id),
@@ -327,7 +327,7 @@ export class TpcClassLoader {
                         systemProgram: SystemProgram.programId,
                     })
                     .rpc()
-                    .catch((e) => {
+                    .catch((e: any) => {
                         if (!e.message.includes("already in use")) {
                             console.error(`Error loading Customer ${w_id}-${d_id}-${c}:`, e);
                         }
@@ -377,7 +377,7 @@ export class TpcClassLoader {
             }
 
             promises.push(
-                this.program.methods
+                (this.program.methods as any)
                     .initializeStock(
                         new BN(w_id),
                         new BN(i),
@@ -394,7 +394,7 @@ export class TpcClassLoader {
                         systemProgram: SystemProgram.programId,
                     })
                     .rpc()
-                    .catch((e) => {
+                    .catch((e: any) => {
                         if (!e.message.includes("already in use")) {
                             console.error(`Error loading Stock ${w_id}-${i}:`, e);
                         }
@@ -552,10 +552,13 @@ async function main() {
     anchor.setProvider(provider);
 
     // 2. Load Program
-    const program = anchor.workspace.TpcBenchmark as Program<TpcBenchmark>;
+    // 2. Load Program Manually
+    const idl = JSON.parse(fs.readFileSync("target/idl/tpc_benchmark.json", "utf-8"));
+    const programId = new PublicKey("BcXcPzZHpBJ82RwDSuVY2eVCXj3enda8R3AxUTjXwFgu");
+    const program = new Program(idl, provider) as Program<TpcBenchmark>;
 
     if (!program) {
-        console.error("Program not found. Make sure to build and deploy first.");
+        console.error("Program not found.");
         return;
     }
 

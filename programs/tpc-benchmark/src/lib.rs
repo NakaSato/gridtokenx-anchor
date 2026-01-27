@@ -57,6 +57,7 @@ macro_rules! compute_fn {
     ($name:expr => $block:block) => { $block };
 }
 #[cfg(not(feature = "localnet"))]
+#[allow(unused_macros)]
 macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
@@ -225,10 +226,11 @@ pub mod tpc_benchmark {
         w_id: u64,
         d_id: u64,
         c_id: u64,
+        o_id: u64,
         order_lines: Vec<OrderLineInput>,
     ) -> Result<()> {
         compute_fn!("new_order" => {
-            instructions::new_order(ctx, w_id, d_id, c_id, order_lines)
+            instructions::new_order(ctx, w_id, d_id, c_id, o_id, order_lines)
         })
     }
 

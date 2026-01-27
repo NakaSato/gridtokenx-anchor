@@ -80,7 +80,7 @@ async function main() {
         // 3. Initialize Energy Token (Mint)
         console.log("\n⚡ Initializing Energy Token Mint...");
         const [mintPda] = await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("mint")],
+            [Buffer.from("mint_2022")],
             env.energyTokenProgram.programId
         );
 
@@ -98,12 +98,12 @@ async function main() {
                 // NOT 'initialize' which does nothing.
 
                 const [tokenInfoPda] = await anchor.web3.PublicKey.findProgramAddress(
-                    [Buffer.from("token_info")],
+                    [Buffer.from("token_info_2022")],
                     env.energyTokenProgram.programId
                 );
 
                 await env.energyTokenProgram.methods
-                    .initializeToken()
+                    .initializeToken(env.registryProgram.programId)
                     .accounts({
                         tokenInfo: tokenInfoPda,
                         mint: mintPda,

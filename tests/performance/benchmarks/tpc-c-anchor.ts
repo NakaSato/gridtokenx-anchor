@@ -18,7 +18,12 @@
 
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+    TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+    getAssociatedTokenAddressSync,
+    createAssociatedTokenAccountInstruction
+} from "@solana/spl-token";
 import BN from "bn.js";
 
 // TPC-C Transaction Mix (per spec)
@@ -108,10 +113,12 @@ export class TPCCWorkloadReal {
     private provider: anchor.AnchorProvider | null = null;
     private energyTokenProgram: Program<any> | null = null;
     private tradingProgram: Program<any> | null = null;
+    private registryProgram: Program<any> | null = null;
     private authority: anchor.web3.Keypair | null = null;
     private mintPda: anchor.web3.PublicKey | null = null;
     private tokenInfoPda: anchor.web3.PublicKey | null = null;
     private traders: anchor.web3.Keypair[] = [];
+    private failureLogged: Record<string, boolean> = {};
 
     constructor(config: Partial<TPCConfig> = {}) {
         this.config = {
@@ -137,33 +144,95 @@ export class TPCCWorkloadReal {
             // Load programs from workspace
             this.energyTokenProgram = anchor.workspace.EnergyToken;
             this.tradingProgram = anchor.workspace.Trading;
+            this.registryProgram = anchor.workspace.Registry;
 
-            // Load authority keypair
+            // Load authority keypair from Anchor.toml config (faucet)
             const fs = await import('fs');
-            const walletPath = "./keypairs/dev-wallet.json";
+            const walletPath = this.provider.wallet.publicKey.toString() === "AfPVU1umftejsJaVaZA5RMLqX9RfkZQN23oD8LLJTWUS"
+                ? "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/genesis/faucet-keypair.json"
+                : "./keypairs/dev-wallet.json";
             const walletData = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
             this.authority = anchor.web3.Keypair.fromSecretKey(new Uint8Array(walletData));
 
             // Get PDAs
             [this.tokenInfoPda] = anchor.web3.PublicKey.findProgramAddressSync(
-                [Buffer.from("token_info")],
-                this.energyTokenProgram.programId
+                [Buffer.from("token_info_2022")],
+                this.energyTokenProgram!.programId
             );
             [this.mintPda] = anchor.web3.PublicKey.findProgramAddressSync(
-                [Buffer.from("mint")],
-                this.energyTokenProgram.programId
+                [Buffer.from("mint_2022")],
+                this.energyTokenProgram!.programId
             );
 
-            // Pre-generate trader keypairs
+            // Pre-generate trader keypairs and fund them manually
+            console.log('  💰 Funding trader accounts...');
             for (let i = 0; i < 10; i++) {
                 const trader = anchor.web3.Keypair.generate();
-                // Airdrop SOL
-                const sig = await this.provider.connection.requestAirdrop(
-                    trader.publicKey,
-                    2 * anchor.web3.LAMPORTS_PER_SOL
+
+                const tx = new anchor.web3.Transaction().add(
+                    anchor.web3.SystemProgram.transfer({
+                        fromPubkey: this.authority.publicKey,
+                        toPubkey: trader.publicKey,
+                        lamports: 10 * anchor.web3.LAMPORTS_PER_SOL,
+                    })
                 );
-                await this.provider.connection.confirmTransaction(sig);
+
+                const sig = await this.provider.sendAndConfirm(tx, [this.authority]);
                 this.traders.push(trader);
+            }
+
+            // Register traders in the Registry program
+            console.log('  👤 Registering traders in Registry...');
+            for (const trader of this.traders) {
+                const [userAccount] = anchor.web3.PublicKey.findProgramAddressSync(
+                    [Buffer.from("user"), trader.publicKey.toBuffer()],
+                    this.registryProgram!.programId
+                );
+
+                const [registryPda] = anchor.web3.PublicKey.findProgramAddressSync(
+                    [Buffer.from("registry")],
+                    this.registryProgram!.programId
+                );
+
+                try {
+                    await this.registryProgram!.methods
+                        .registerUser(
+                            { prosumer: {} }, // userType
+                            13.75,           // lat
+                            100.50           // long
+                        )
+                        .accounts({
+                            userAccount,
+                            registry: registryPda,
+                            authority: trader.publicKey,
+                        })
+                        .signers([trader])
+                        .rpc();
+                } catch (e: any) {
+                    if (!e.message.includes("already in use")) throw e;
+                }
+
+                // Initialize ATA for Energy Token
+                const ata = getAssociatedTokenAddressSync(
+                    this.mintPda!,
+                    trader.publicKey,
+                    false,
+                    TOKEN_PROGRAM_ID
+                );
+                const ataInfo = await this.provider.connection.getAccountInfo(ata);
+                if (!ataInfo) {
+                    console.log(`    📦 Creating ATA for trader ${trader.publicKey.toBase58()}...`);
+                    const createAtaTx = new anchor.web3.Transaction().add(
+                        createAssociatedTokenAccountInstruction(
+                            this.authority.publicKey,
+                            ata,
+                            trader.publicKey,
+                            this.mintPda!,
+                            TOKEN_PROGRAM_ID
+                        )
+                    );
+                    await this.provider.sendAndConfirm(createAtaTx, [this.authority]);
+                }
             }
 
             console.log('  ✅ Anchor programs initialized');
@@ -218,11 +287,17 @@ export class TPCCWorkloadReal {
                 case 'CREATE_ORDER':
                     // Create buy order via trading program
                     const [marketPda] = anchor.web3.PublicKey.findProgramAddressSync(
-                        [Buffer.from("market"), Buffer.from("ENERGY")],
+                        [Buffer.from("market")],
                         this.tradingProgram!.programId
                     );
+
+                    // Fetch market to get current active_orders for seed
+                    const marketAccount = await this.tradingProgram!.account.market.fetch(marketPda);
+                    const orderIndexBuffer = Buffer.alloc(4);
+                    orderIndexBuffer.writeUInt32LE(marketAccount.activeOrders);
+
                     const [orderPda] = anchor.web3.PublicKey.findProgramAddressSync(
-                        [Buffer.from("order"), trader.publicKey.toBuffer(), Buffer.from(tx.orderId!)],
+                        [Buffer.from("order"), trader.publicKey.toBuffer(), orderIndexBuffer],
                         this.tradingProgram!.programId
                     );
 
@@ -241,10 +316,12 @@ export class TPCCWorkloadReal {
                 case 'TOKEN_TRANSFER':
                     // Mint tokens via energy token program
                     const destinationOwner = this.traders[Math.floor(Math.random() * this.traders.length)];
-                    const destination = await anchor.utils.token.associatedAddress({
-                        mint: this.mintPda!,
-                        owner: destinationOwner.publicKey,
-                    });
+                    const destination = getAssociatedTokenAddressSync(
+                        this.mintPda!,
+                        destinationOwner.publicKey,
+                        false,
+                        TOKEN_PROGRAM_ID
+                    );
 
                     signature = await this.energyTokenProgram!.methods
                         .mintToWallet(new BN(tx.amount! * 1e6))
@@ -254,7 +331,7 @@ export class TPCCWorkloadReal {
                             destinationOwner: destinationOwner.publicKey,
                             authority: this.authority!.publicKey,
                             payer: this.provider!.wallet.publicKey,
-                            tokenProgram: TOKEN_2022_PROGRAM_ID,
+                            tokenProgram: TOKEN_PROGRAM_ID,
                             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
                             systemProgram: anchor.web3.SystemProgram.programId,
                         })
@@ -275,6 +352,13 @@ export class TPCCWorkloadReal {
             }
         } catch (error: any) {
             success = false;
+            // Log first failure of each type for debugging
+            if (!this.failureLogged?.[tx.type]) {
+                console.error(`  ❌ [DEBUG] ${tx.type} failed: ${error.message || error}`);
+                if (error.logs) console.error(`     Logs: ${error.logs.slice(-3).join('\n')}`);
+                if (!this.failureLogged) this.failureLogged = {};
+                this.failureLogged[tx.type] = true;
+            }
             if (error.message?.includes('already in use') || error.logs?.some((l: string) => l.includes('constraint'))) {
                 mvccConflict = true;
                 retryCount = 1;

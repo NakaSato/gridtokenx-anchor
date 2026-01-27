@@ -10,34 +10,38 @@
   - [Table of Contents](#table-of-contents)
   - [1. Trading Algorithms](#1-trading-algorithms)
     - [1.1 Market Price Clearing](#11-market-price-clearing)
-    - [1.2 Order Matching **Algorithm**](#12-order-matching-algorithm)
+    - [1.2 Order Matching Algorithm](#12-order-matching-algorithm)
     - [1.3 Volume-Weighted Average Price (VWAP)](#13-volume-weighted-average-price-vwap)
     - [1.4 Price Discovery Mechanism](#14-price-discovery-mechanism)
+    - [1.5 AMM Bonding Curves](#15-amm-bonding-curves)
   - [2. Oracle Algorithms](#2-oracle-algorithms)
     - [2.1 Meter Reading Validation](#21-meter-reading-validation)
     - [2.2 Anomaly Detection](#22-anomaly-detection)
     - [2.3 Quality Scoring](#23-quality-scoring)
     - [2.4 Rate Limiting](#24-rate-limiting)
+    - [2.5 Byzantine Fault Tolerance](#25-byzantine-fault-tolerance)
   - [3. Energy Token Algorithms](#3-energy-token-algorithms)
     - [3.1 Token Minting Calculation](#31-token-minting-calculation)
     - [3.2 Token Burning Mechanism](#32-token-burning-mechanism)
-  - [4. Governance Algorithms](#4-governance-algorithms)
-    - [4.1 ERC Certificate Validation](#41-erc-certificate-validation)
-    - [4.2 Proof of Authority (PoA)](#42-proof-of-authority-poa)
-  - [5. Performance Optimizations](#5-performance-optimizations)
-    - [5.1 Compute Unit (CU) Optimization](#51-compute-unit-cu-optimization)
-      - [1. Lazy Updates](#1-lazy-updates)
-      - [2. Disable Logging](#2-disable-logging)
-      - [3. Saturation Math](#3-saturation-math)
-      - [4. Integer-Only Math](#4-integer-only-math)
-    - [5.2 Zero-Copy Data Access](#52-zero-copy-data-access)
+    - [3.3 PDA Authority Pattern](#33-pda-authority-pattern)
+  - [4. Registry Algorithms](#4-registry-algorithms)
+    - [4.1 Dual High-Water Mark System](#41-dual-high-water-mark-system)
+    - [4.2 Settlement Calculation](#42-settlement-calculation)
+    - [4.3 Temporal Monotonicity Enforcement](#43-temporal-monotonicity-enforcement)
+  - [5. Governance Algorithms](#5-governance-algorithms)
+    - [5.1 ERC Certificate Lifecycle](#51-erc-certificate-lifecycle)
+    - [5.2 Double-Claim Prevention](#52-double-claim-prevention)
+    - [5.3 Multi-Signature Authority Transfer](#53-multi-signature-authority-transfer)
+  - [6. Benchmark Algorithms](#6-benchmark-algorithms)
+    - [6.1 YCSB Workload Generation](#61-ycsb-workload-generation)
+    - [6.2 TPC-C Transaction Mix](#62-tpc-c-transaction-mix)
+    - [6.3 Concurrency Bottleneck Analysis](#63-concurrency-bottleneck-analysis)
+  - [7. Performance Optimizations](#7-performance-optimizations)
+    - [7.1 Compute Unit (CU) Optimization](#71-compute-unit-cu-optimization)
+    - [7.2 Zero-Copy Data Access](#72-zero-copy-data-access)
   - [Appendix A: Algorithm Complexity Analysis](#appendix-a-algorithm-complexity-analysis)
-    - [Trading Algorithms](#trading-algorithms)
-    - [Oracle Algorithms](#oracle-algorithms)
   - [Appendix B: Security Considerations](#appendix-b-security-considerations)
-    - [Algorithm Security Features](#algorithm-security-features)
   - [Appendix C: Future Algorithm Enhancements](#appendix-c-future-algorithm-enhancements)
-    - [Planned Improvements](#planned-improvements)
   - [References](#references)
 
 ---
@@ -120,7 +124,7 @@ clearing_price = 5.00 + 0.005 = 5.005 ≈ 5.00 THB/kWh
 
 ---
 
-### 1.2 Order Matching **Algorithm**
+### 1.2 Order Matching Algorithm
 
 **Purpose:** Match buy and sell orders efficiently using Price-Time Priority with Pro-Rata allocation.
 
@@ -356,6 +360,77 @@ VWAP = 1,550 / 300 = 5.167 THB/kWh
 
 ---
 
+### 1.5 AMM Bonding Curves
+
+**Purpose:** Provide instant liquidity for energy tokens using automated market maker curves tailored to energy source characteristics.
+
+**Algorithm:** Source-Specific Bonding Curves
+
+```rust
+pub enum CurveType {
+    LinearSolar,      // Constant rate during sunlight hours
+    SteepWind,        // Variable rate based on wind patterns
+    FlatBattery,      // Stable pricing for storage
+}
+
+fn calculate_amm_price(
+    curve_type: CurveType,
+    reserve_energy: u64,
+    reserve_tokens: u64,
+    trade_amount: u64,
+) -> u64 {
+    match curve_type {
+        CurveType::LinearSolar => {
+            // y = mx + b (linear pricing)
+            let slope = reserve_tokens / reserve_energy;
+            slope * trade_amount
+        },
+        CurveType::SteepWind => {
+            // Constant product: x * y = k
+            let k = reserve_energy * reserve_tokens;
+            let new_energy = reserve_energy - trade_amount;
+            let new_tokens = k / new_energy;
+            new_tokens - reserve_tokens  // Token output
+        },
+        CurveType::FlatBattery => {
+            // Stablecoin-like curve: y = x
+            trade_amount  // 1:1 exchange
+        }
+    }
+}
+```
+
+**Curve Characteristics:**
+
+| Curve Type | Formula | Slippage | Use Case |
+|------------|---------|----------|----------|
+| **LinearSolar** | y = mx + b | Low | Solar production (predictable) |
+| **SteepWind** | xy = k | High | Wind production (volatile) |
+| **FlatBattery** | y = x | None | Battery storage (stable) |
+
+**Example:**
+```
+Solar AMM Pool:
+- Reserve: 10,000 kWh energy
+- Reserve: 50,000 GRX tokens
+- Curve: LinearSolar
+
+Trade: Buy 100 kWh
+Price = (50,000 / 10,000) × 100 = 500 GRX
+
+Wind AMM Pool:
+- Reserve: 5,000 kWh energy  
+- Reserve: 25,000 GRX tokens
+- k = 5,000 × 25,000 = 125,000,000
+
+Trade: Buy 100 kWh
+New energy = 5,000 - 100 = 4,900 kWh
+New tokens = 125,000,000 / 4,900 = 25,510 GRX
+Price = 25,510 - 25,000 = 510 GRX (2% premium for instant liquidity)
+```
+
+---
+
 ## 2. Oracle Algorithms
 
 ### 2.1 Meter Reading Validation
@@ -585,6 +660,96 @@ fn update_reading_interval(
 
 ---
 
+### 2.5 Byzantine Fault Tolerance
+
+**Purpose:** Achieve consensus among multiple oracle nodes to prevent single point of failure and detect malicious data.
+
+**Algorithm:** Median-Based Consensus with Threshold
+
+```rust
+pub fn submit_meter_reading_consensus(
+    ctx: Context<SubmitMeterReadingConsensus>,
+    readings: Vec<OracleReading>,  // From multiple backup oracles
+) -> Result<()> {
+    let oracle_data = ctx.accounts.oracle_data.load()?;
+    
+    // Step 1: Verify minimum consensus threshold
+    require!(
+        readings.len() >= oracle_data.consensus_threshold as usize,
+        ErrorCode::InsufficientConsensus
+    );
+    
+    // Step 2: Verify all oracles are authorized
+    for reading in &readings {
+        require!(
+            is_backup_oracle(&oracle_data, reading.oracle_pubkey),
+            ErrorCode::UnauthorizedOracle
+        );
+    }
+    
+    // Step 3: Calculate median values (Byzantine-resistant)
+    let median_produced = calculate_median(
+        readings.iter().map(|r| r.energy_produced).collect()
+    );
+    let median_consumed = calculate_median(
+        readings.iter().map(|r| r.energy_consumed).collect()
+    );
+    
+    // Step 4: Accept median as ground truth
+    process_validated_reading(
+        median_produced,
+        median_consumed,
+        Clock::get()?.unix_timestamp
+    )?;
+    
+    Ok(())
+}
+
+fn calculate_median(mut values: Vec<u64>) -> u64 {
+    values.sort();
+    let mid = values.len() / 2;
+    
+    if values.len() % 2 == 0 {
+        (values[mid - 1] + values[mid]) / 2
+    } else {
+        values[mid]
+    }
+}
+```
+
+**BFT Configuration:**
+
+| Total Oracles (n) | Threshold | Max Faulty Nodes (f) | Fault Tolerance |
+|-------------------|-----------|----------------------|-----------------|
+| 3 | 2 | 1 | 33% |
+| 10 | 7 | 3 | 30% |
+| 15 | 11 | 4 | 27% |
+
+**BFT Formula:**
+```
+f = max faulty nodes
+n = total nodes  
+threshold = n - f
+
+Byzantine tolerance: f < (n / 3)
+```
+
+**Example Consensus:**
+```
+Meter Reading Submissions:
+Oracle 1: 100 kWh produced
+Oracle 2: 102 kWh produced  
+Oracle 3: 98 kWh produced
+Oracle 4: 250 kWh produced (malicious/faulty)
+
+Sorted: [98, 100, 102, 250]
+Median: (100 + 102) / 2 = 101 kWh
+
+Accepted value: 101 kWh (outlier 250 kWh rejected)
+```
+
+---
+
 ## 3. Energy Token Algorithms
 
 ### 3.1 Token Minting Calculation
@@ -697,86 +862,594 @@ pub fn burn_tokens(
 
 ---
 
-## 4. Governance Algorithms
+### 3.3 PDA Authority Pattern
 
-### 4.1 ERC Certificate Validation
+**Purpose:** Programmable mint authority using Program Derived Address to enforce on-chain minting rules.
 
-**Purpose:** Validate Renewable Energy Certificates (RECs) for clean energy trading.
-
-**Algorithm:** Multi-Factor Certificate Validation
+**Algorithm:** PDA-Controlled Minting
 
 ```rust
-// In trading/lib.rs - create_sell_order
-pub fn create_sell_order(
-    ctx: Context<CreateSellOrder>,
-    amount: u64,
-    price_per_kwh: u64,
-    expires_at: i64,
-    erc_certificate_id: Option<String>,
+// Derive PDA mint authority
+let (token_info_pda, bump) = Pubkey::find_program_address(
+    &[b"token_info_2022"],
+    &energy_token::ID
+);
+
+// Initialize mint with PDA authority
+pub fn initialize_token(
+    ctx: Context<InitializeToken>,
+    registry_program_id: Pubkey,
 ) -> Result<()> {
-    // If ERC certificate provided, validate it
-    if let Some(ref cert_id) = erc_certificate_id {
-        if let Some(erc_cert) = &ctx.accounts.erc_certificate {
-            // Validation 1: Certificate Status
-            require!(
-                erc_cert.status == ErcStatus::Validated as u8,
-                ErrorCode::InvalidErcCertificate
-            );
-            
-            // Validation 2: Not Expired
-            let current_time = Clock::get()?.unix_timestamp;
-            require!(
-                current_time <= erc_cert.expiry_date,
-                ErrorCode::ErcCertificateExpired
-            );
-            
-            // Validation 3: Sufficient Energy Amount
-            require!(
-                amount <= erc_cert.energy_amount,
-                ErrorCode::ExceedsErcAmount
-            );
-            
-            // Validation 4: Owner Match
-            require!(
-                ctx.accounts.authority.key() == erc_cert.owner,
-                ErrorCode::UnauthorizedAuthority
-            );
-        }
-    }
+    // Step 1: Initialize TokenInfo PDA
+    let mut token_info = ctx.accounts.token_info.load_init()?;
+    token_info.authority = ctx.accounts.authority.key();
+    token_info.registry_program = registry_program_id;
+    token_info.mint = ctx.accounts.mint.key();
     
-    // ... create order logic
+    // Step 2: Mint initialized with PDA as authority
+    // No keypair can mint outside program logic
+    // Mint authority = token_info PDA
+    
+    Ok(())
+}
+
+// Mint using PDA signature
+pub fn mint_tokens_direct(
+    ctx: Context<MintTokensDirect>,
+    amount: u64
+) -> Result<()> {
+    // Verify authorization
+    let token_info = ctx.accounts.token_info.load()?;
+    require!(
+        ctx.accounts.authority.key() == token_info.authority,
+        ErrorCode::UnauthorizedAuthority
+    );
+    
+    // Generate PDA signature
+    let seeds = &[b"token_info_2022".as_ref(), &[ctx.bumps.token_info]];
+    let signer_seeds = &[&seeds[..]];
+    
+    // CPI to Token program with PDA signer
+    let cpi_ctx = CpiContext::new_with_signer(
+        ctx.accounts.token_program.to_account_info(),
+        MintTo {
+            mint: ctx.accounts.mint.to_account_info(),
+            to: ctx.accounts.user_token_account.to_account_info(),
+            authority: ctx.accounts.token_info.to_account_info(),
+        },
+        signer_seeds
+    );
+    
+    token_interface::mint_to(cpi_ctx, amount)?;
+    
+    Ok(())
 }
 ```
 
-**Certificate Lifecycle:**
+**Security Properties:**
+1. **No Private Key Exposure:** PDA has no corresponding private key
+2. **Program-Enforced Rules:** Only program logic can generate valid signatures
+3. **Immutable Authority:** Cannot be changed after initialization (by design)
+4. **Transparent Minting:** All mints recorded on-chain with events
 
+---
+
+## 4. Registry Algorithms
+
+### 4.1 Dual High-Water Mark System
+
+**Purpose:** Track cumulative energy production with separate counters for token settlement and REC certificate claims.
+
+**Algorithm:** Monotonic Counter Advancement
+
+```rust
+pub struct MeterAccount {
+    pub total_generation: u64,           // Lifetime production
+    pub settled_net_generation: u64,     // High-water mark for token minting
+    pub claimed_erc_generation: u64,     // High-water mark for REC certificates
+    // ... other fields
+}
+
+pub fn settle_energy(
+    ctx: Context<SettleEnergy>,
+    new_generation: u64,
+) -> Result<()> {
+    let mut meter = ctx.accounts.meter_account.load_mut()?;
+    
+    // Step 1: Update total generation
+    meter.total_generation = meter.total_generation.saturating_add(new_generation);
+    
+    // Step 2: Calculate unsettled amount
+    let unsettled = meter.total_generation - meter.settled_net_generation;
+    
+    // Step 3: Advance high-water mark
+    meter.settled_net_generation = meter.total_generation;
+    
+    // Step 4: Mint tokens for unsettled amount
+    mint_grx_tokens(unsettled)?;
+    
+    emit!(EnergySettled {
+        meter_id: meter.meter_id,
+        amount: unsettled,
+        new_high_water_mark: meter.settled_net_generation,
+    });
+    
+    Ok(())
+}
 ```
-1. Issue (Governance Program)
-   ├─ REC Authority validates renewable source
-   ├─ Creates ErcCertificate account
-   └─ Status: Pending
 
-2. Validate (Governance Program)
-   ├─ Verify validation_data
-   ├─ Check renewable source authenticity
-   └─ Status: Validated
+**High-Water Mark Invariants:**
+```
+INVARIANT 1: settled_net_generation ≤ total_generation
+INVARIANT 2: claimed_erc_generation ≤ total_generation
+INVARIANT 3: settled_net_generation and claimed_erc_generation are monotonically increasing
+INVARIANT 4: settled_net_generation + claimed_erc_generation ≤ 2 × total_generation
+```
 
-3. Use in Trading
-   ├─ Link to sell order
-   ├─ Verify not expired
-   └─ Verify sufficient amount
+**Example:**
+```
+Initial state:
+- total_generation: 1000 kWh
+- settled_net_generation: 800 kWh
+- claimed_erc_generation: 700 kWh
 
-4. Revoke (if fraudulent)
-   └─ Status: Revoked
+New reading: +200 kWh
+
+Step 1: total_generation = 1000 + 200 = 1200 kWh
+Step 2: unsettled = 1200 - 800 = 400 kWh
+Step 3: settled_net_generation = 1200 kWh
+Step 4: Mint 400 GRX tokens
+
+Final state:
+- total_generation: 1200 kWh
+- settled_net_generation: 1200 kWh (advanced)
+- claimed_erc_generation: 700 kWh (unchanged - independent counter)
 ```
 
 ---
 
-### 4.2 Proof of Authority (PoA)
+### 4.2 Settlement Calculation
+
+**Purpose:** Calculate net energy balance for token issuance.
+
+**Algorithm:** Production - Consumption Delta
+
+```rust
+fn calculate_settlement_amount(
+    meter: &MeterAccount,
+    new_production: u64,
+    new_consumption: u64,
+) -> u64 {
+    // Step 1: Update cumulative values
+    let total_produced = meter.total_generation.saturating_add(new_production);
+    let total_consumed = meter.total_consumption.saturating_add(new_consumption);
+    
+    // Step 2: Calculate net production
+    let net_production = if total_produced > total_consumed {
+        total_produced - total_consumed
+    } else {
+        0  // Consumer, no tokens minted
+    };
+    
+    // Step 3: Subtract already settled amount
+    let unsettled = net_production.saturating_sub(meter.settled_net_generation);
+    
+    unsettled
+}
+```
+
+**Settlement Matrix:**
+
+| Scenario | Production | Consumption | Net | Tokens Minted |
+|----------|------------|-------------|-----|---------------|
+| **Producer** | 1000 kWh | 200 kWh | +800 kWh | 800 GRX |
+| **Consumer** | 100 kWh | 500 kWh | -400 kWh | 0 GRX |
+| **Prosumer** | 800 kWh | 600 kWh | +200 kWh | 200 GRX |
+| **Balanced** | 500 kWh | 500 kWh | 0 kWh | 0 GRX |
+
+---
+
+### 4.3 Temporal Monotonicity Enforcement
+
+**Purpose:** Prevent replay attacks and ensure chronological ordering of meter readings.
+
+**Algorithm:** Timestamp Validation with Tolerance
+
+```rust
+pub fn update_meter_reading(
+    ctx: Context<UpdateMeterReading>,
+    reading_timestamp: i64,
+    energy_produced: u64,
+) -> Result<()> {
+    let mut meter = ctx.accounts.meter_account.load_mut()?;
+    let current_time = Clock::get()?.unix_timestamp;
+    
+    // Validation 1: Prevent backdating
+    require!(
+        reading_timestamp > meter.last_reading_timestamp,
+        ErrorCode::OutdatedReading
+    );
+    
+    // Validation 2: Prevent future readings (with 60s clock skew tolerance)
+    require!(
+        reading_timestamp <= current_time + 60,
+        ErrorCode::FutureReading
+    );
+    
+    // Validation 3: Maximum gap detection (prevent stale data)
+    let max_gap = 86400;  // 24 hours
+    if meter.last_reading_timestamp > 0 {
+        let gap = reading_timestamp - meter.last_reading_timestamp;
+        require!(gap <= max_gap, ErrorCode::StaleReading);
+    }
+    
+    // Update state
+    meter.last_reading_timestamp = reading_timestamp;
+    meter.total_generation = meter.total_generation.saturating_add(energy_produced);
+    meter.reading_count += 1;
+    
+    Ok(())
+}
+```
+
+**Timeline Example:**
+```
+T0 (09:00): Reading #1 - 100 kWh ✓ Accepted
+T1 (09:05): Reading #2 - 120 kWh ✓ Accepted (5 min gap)
+T2 (09:03): Reading #3 - 110 kWh ✗ Rejected (backdated, T2 < T1)
+T3 (09:10): Reading #4 - 140 kWh ✓ Accepted
+T4 (10:15): Reading #5 - 160 kWh ✗ Rejected (65 min gap > 60 min future tolerance)
+```
+
+---
+
+## 5. Governance Algorithms
+
+### 5.1 ERC Certificate Lifecycle
+
+### 5.1 ERC Certificate Lifecycle
+
+**Purpose:** Manage the full lifecycle of Renewable Energy Certificates from issuance to retirement.
+
+**Algorithm:** State Machine with Validation Gates
+
+```rust
+pub enum ErcStatus {
+    Pending = 0,      // Issued, awaiting validation
+    Validated = 1,    // Approved for trading
+    Transferred = 2,  // Ownership transferred
+    Revoked = 3,      // Invalidated (fraud detected)
+}
+
+// State transition: Issue
+pub fn issue_erc(
+    ctx: Context<IssueErc>,
+    certificate_id: String,
+    energy_amount: u64,
+    renewable_source: String,
+) -> Result<()> {
+    let mut erc_cert = ctx.accounts.erc_certificate.load_init()?;
+    
+    // Initialize certificate
+    erc_cert.certificate_id = certificate_id;
+    erc_cert.owner = ctx.accounts.owner.key();
+    erc_cert.energy_amount = energy_amount;
+    erc_cert.renewable_source = renewable_source;
+    erc_cert.status = ErcStatus::Pending as u8;
+    erc_cert.issued_at = Clock::get()?.unix_timestamp;
+    erc_cert.expiry_date = erc_cert.issued_at + (365 * 86400);  // 1 year validity
+    
+    emit!(ErcIssued {
+        certificate_id: erc_cert.certificate_id.clone(),
+        owner: erc_cert.owner,
+        amount: energy_amount,
+    });
+    
+    Ok(())
+}
+
+// State transition: Validate
+pub fn validate_erc(
+    ctx: Context<ValidateErc>,
+    validation_data: String,
+) -> Result<()> {
+    let mut erc_cert = ctx.accounts.erc_certificate.load_mut()?;
+    
+    // Check current status
+    require!(
+        erc_cert.status == ErcStatus::Pending as u8,
+        ErrorCode::InvalidErcStatus
+    );
+    
+    // Perform validation (off-chain verification)
+    // validation_data contains cryptographic proof of renewable source
+    
+    // Update status
+    erc_cert.status = ErcStatus::Validated as u8;
+    erc_cert.validated_at = Clock::get()?.unix_timestamp;
+    erc_cert.validation_data = validation_data;
+    
+    emit!(ErcValidated {
+        certificate_id: erc_cert.certificate_id.clone(),
+        validator: ctx.accounts.validator.key(),
+    });
+    
+    Ok(())
+}
+
+// State transition: Transfer
+pub fn transfer_erc(
+    ctx: Context<TransferErc>,
+    new_owner: Pubkey,
+) -> Result<()> {
+    let mut erc_cert = ctx.accounts.erc_certificate.load_mut()?;
+    
+    // Validation checks
+    require!(
+        erc_cert.status == ErcStatus::Validated as u8,
+        ErrorCode::InvalidErcStatus
+    );
+    require!(
+        ctx.accounts.current_owner.key() == erc_cert.owner,
+        ErrorCode::UnauthorizedOwner
+    );
+    
+    // Transfer ownership
+    let old_owner = erc_cert.owner;
+    erc_cert.owner = new_owner;
+    erc_cert.status = ErcStatus::Transferred as u8;
+    
+    emit!(ErcTransferred {
+        certificate_id: erc_cert.certificate_id.clone(),
+        from: old_owner,
+        to: new_owner,
+    });
+    
+    Ok(())
+}
+```
+
+**State Transition Diagram:**
+```
+         issue_erc()
+              │
+              ▼
+        ┌─────────┐
+        │ Pending │◄──────┐
+        └─────────┘       │
+              │           │ revoke_erc()
+   validate_erc()         │
+              │           │
+              ▼           │
+        ┌───────────┐     │
+        │ Validated │─────┤
+        └───────────┘     │
+              │           │
+   transfer_erc()         │
+              │           │
+              ▼           │
+        ┌─────────────┐   │
+        │ Transferred │───┘
+        └─────────────┘
+              │
+              ▼
+         ┌─────────┐
+         │ Revoked │ (terminal state)
+         └─────────┘
+```
+
+---
+
+### 5.2 Double-Claim Prevention
+
+**Purpose:** Ensure energy cannot be claimed for both tokens AND certificates (prevents double-spending of environmental attributes).
+
+**Algorithm:** Cross-Program High-Water Mark Verification
+
+```rust
+pub fn issue_erc_with_verification(
+    ctx: Context<IssueErcWithVerification>,
+    energy_amount: u64,
+) -> Result<()> {
+    // Step 1: Load meter account from Registry (CPI)
+    let meter = ctx.accounts.meter_account.load()?;
+    
+    // Step 2: Calculate available unclaimed generation
+    let total_generation = meter.total_generation;
+    let already_claimed = meter.claimed_erc_generation;
+    let available = total_generation.saturating_sub(already_claimed);
+    
+    // Step 3: Verify sufficient unclaimed energy
+    require!(
+        energy_amount <= available,
+        ErrorCode::InsufficientUnclaimedEnergy
+    );
+    
+    // Step 4: Issue certificate
+    let mut erc_cert = ctx.accounts.erc_certificate.load_init()?;
+    erc_cert.energy_amount = energy_amount;
+    erc_cert.status = ErcStatus::Pending as u8;
+    
+    // Step 5: Update Registry high-water mark (via CPI)
+    registry::cpi::update_claimed_erc_generation(
+        CpiContext::new(
+            ctx.accounts.registry_program.to_account_info(),
+            registry::cpi::accounts::UpdateClaimedGeneration {
+                meter_account: ctx.accounts.meter_account.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
+            }
+        ),
+        energy_amount,
+    )?;
+    
+    Ok(())
+}
+```
+
+**Invariant Enforcement:**
+```
+Let:
+- T = total_generation (from meter)
+- S = settled_net_generation (for tokens)
+- C = claimed_erc_generation (for certificates)
+
+INVARIANT: S + C ≤ 2T
+
+Rationale:
+- User can mint tokens for all production: S ≤ T
+- User can claim certificates for all production: C ≤ T
+- But each kWh counted only ONCE per purpose
+```
+
+**Example:**
+```
+Meter Reading:
+- total_generation: 1000 kWh
+- settled_net_generation: 600 kWh (600 GRX already minted)
+- claimed_erc_generation: 200 kWh (200 kWh certificates issued)
+
+Attempt 1: Issue certificate for 300 kWh
+Available = 1000 - 200 = 800 kWh
+300 ≤ 800 ✓ APPROVED
+New claimed_erc_generation = 500 kWh
+
+Attempt 2: Issue certificate for 600 kWh
+Available = 1000 - 500 = 500 kWh
+600 > 500 ✗ REJECTED (InsufficientUnclaimedEnergy)
+```
+
+---
+
+### 5.3 Multi-Signature Authority Transfer
+
+**Purpose:** Securely transfer governance authority using two-step commit-reveal pattern.
+
+**Algorithm:** Time-Locked Transfer with Cancellation
+
+```rust
+pub struct AuthorityTransfer {
+    pub current_authority: Pubkey,
+    pub pending_authority: Pubkey,
+    pub initiated_at: i64,
+    pub expiry: i64,             // 48-hour window
+    pub status: TransferStatus,
+}
+
+pub enum TransferStatus {
+    None = 0,
+    Pending = 1,
+    Completed = 2,
+    Cancelled = 3,
+}
+
+// Step 1: Initiate transfer
+pub fn initiate_authority_transfer(
+    ctx: Context<InitiateTransfer>,
+    new_authority: Pubkey,
+) -> Result<()> {
+    let poa_config = &mut ctx.accounts.poa_config;
+    
+    require!(
+        ctx.accounts.current_authority.key() == poa_config.rec_authority,
+        ErrorCode::UnauthorizedAuthority
+    );
+    
+    let current_time = Clock::get()?.unix_timestamp;
+    
+    poa_config.authority_transfer = AuthorityTransfer {
+        current_authority: poa_config.rec_authority,
+        pending_authority: new_authority,
+        initiated_at: current_time,
+        expiry: current_time + (48 * 3600),  // 48 hours
+        status: TransferStatus::Pending,
+    };
+    
+    emit!(AuthorityTransferInitiated {
+        from: poa_config.rec_authority,
+        to: new_authority,
+        expiry: poa_config.authority_transfer.expiry,
+    });
+    
+    Ok(())
+}
+
+// Step 2: Accept transfer (by new authority)
+pub fn accept_authority_transfer(
+    ctx: Context<AcceptTransfer>,
+) -> Result<()> {
+    let poa_config = &mut ctx.accounts.poa_config;
+    let transfer = &poa_config.authority_transfer;
+    let current_time = Clock::get()?.unix_timestamp;
+    
+    // Validation 1: Transfer is pending
+    require!(
+        transfer.status == TransferStatus::Pending as u8,
+        ErrorCode::NoActiveTransfer
+    );
+    
+    // Validation 2: Called by pending authority
+    require!(
+        ctx.accounts.new_authority.key() == transfer.pending_authority,
+        ErrorCode::UnauthorizedAuthority
+    );
+    
+    // Validation 3: Not expired
+    require!(
+        current_time <= transfer.expiry,
+        ErrorCode::TransferExpired
+    );
+    
+    // Execute transfer
+    poa_config.rec_authority = transfer.pending_authority;
+    poa_config.authority_transfer.status = TransferStatus::Completed as u8;
+    
+    emit!(AuthorityTransferCompleted {
+        old_authority: transfer.current_authority,
+        new_authority: transfer.pending_authority,
+    });
+    
+    Ok(())
+}
+
+// Step 3: Cancel transfer (emergency)
+pub fn cancel_authority_transfer(
+    ctx: Context<CancelTransfer>,
+) -> Result<()> {
+    let poa_config = &mut ctx.accounts.poa_config;
+    
+    require!(
+        ctx.accounts.current_authority.key() == poa_config.rec_authority,
+        ErrorCode::UnauthorizedAuthority
+    );
+    
+    poa_config.authority_transfer.status = TransferStatus::Cancelled as u8;
+    
+    Ok(())
+}
+```
+
+**Timeline Example:**
+```
+T0 (Monday 10:00): initiate_authority_transfer(new_authority: Bob)
+                    Status: Pending
+                    Expiry: Wednesday 10:00
+
+T1 (Monday 14:00): accept_authority_transfer() by Bob
+                    Status: Completed
+                    Authority transferred
+
+Alternate Timeline (Expiry):
+T0 (Monday 10:00): initiate_authority_transfer(new_authority: Bob)
+T1 (Wednesday 11:00): accept_authority_transfer() by Bob
+                       ✗ REJECTED (TransferExpired)
+                       Status: Pending (but unusable)
+```
+
+---
+
+### 5.4 Proof of Authority (PoA)
 
 **Purpose:** Centralized governance by trusted REC authority for certificate issuance.
-
-**Algorithm:** Single Authority with Emergency Controls
 
 ```rust
 #[account]
@@ -820,15 +1493,271 @@ pub fn emergency_pause(ctx: Context<EmergencyControl>) -> Result<()> {
 
 ---
 
-## 5. Performance Optimizations
+## 6. Benchmark Algorithms
 
-### 5.1 Compute Unit (CU) Optimization
+### 6.1 YCSB Workload Generation
+
+**Purpose:** Generate Yahoo! Cloud Serving Benchmark workloads to test blockchain performance under different access patterns.
+
+**Algorithm:** Probabilistic Workload Mix
+
+```rust
+pub enum YcsbWorkload {
+    WorkloadA,  // 50% Read, 50% Update
+    WorkloadB,  // 95% Read, 5% Update
+    WorkloadC,  // 100% Read
+    WorkloadD,  // 95% Read, 5% Insert (latest)
+    WorkloadE,  // 95% Scan, 5% Insert
+    WorkloadF,  // 50% Read, 50% Read-Modify-Write
+}
+
+pub fn execute_ycsb_operation(
+    ctx: Context<YcsbOperation>,
+    workload: YcsbWorkload,
+    key: String,
+) -> Result<()> {
+    let random = Clock::get()?.unix_timestamp % 100;
+    
+    match workload {
+        YcsbWorkload::WorkloadA => {
+            if random < 50 {
+                read_operation(ctx, key)?;  // 50%
+            } else {
+                update_operation(ctx, key)?;  // 50%
+            }
+        },
+        YcsbWorkload::WorkloadB => {
+            if random < 95 {
+                read_operation(ctx, key)?;  // 95%
+            } else {
+                update_operation(ctx, key)?;  // 5%
+            }
+        },
+        YcsbWorkload::WorkloadC => {
+            read_operation(ctx, key)?;  // 100%
+        },
+        // ... other workloads
+    }
+    
+    Ok(())
+}
+
+fn read_operation(ctx: Context<YcsbOperation>, key: String) -> Result<()> {
+    let kv_store = &ctx.accounts.kv_store;
+    let value = kv_store.get(&key)?;
+    
+    emit!(YcsbRead { key, value });
+    Ok(())
+}
+
+fn update_operation(ctx: Context<YcsbOperation>, key: String) -> Result<()> {
+    let kv_store = &mut ctx.accounts.kv_store;
+    let new_value = generate_random_value();
+    kv_store.set(key.clone(), new_value.clone())?;
+    
+    emit!(YcsbUpdate { key, value: new_value });
+    Ok(())
+}
+```
+
+**Workload Characteristics:**
+
+| Workload | Read% | Update% | Insert% | Scan% | Use Case |
+|----------|-------|---------|---------|-------|----------|
+| A | 50 | 50 | 0 | 0 | Update heavy (session store) |
+| B | 95 | 5 | 0 | 0 | Read heavy (photo tagging) |
+| C | 100 | 0 | 0 | 0 | Read only (user profile cache) |
+| D | 95 | 0 | 5 | 0 | Read latest (status updates) |
+| E | 5 | 0 | 5 | 95 | Range scan (threaded conversations) |
+| F | 50 | 0 | 0 | 0 | Read-modify-write (user database) |
+
+---
+
+### 6.2 TPC-C Transaction Mix
+
+**Purpose:** Execute TPC-C (Transaction Processing Performance Council - Benchmark C) transaction mix to measure OLTP performance.
+
+**Algorithm:** Weighted Transaction Scheduling
+
+```rust
+pub struct TpcBenchmarkState {
+    pub total_transactions: u64,
+    pub new_order_count: u64,     // 45% of mix
+    pub payment_count: u64,       // 43% of mix
+    pub order_status_count: u64,  // 4% of mix
+    pub delivery_count: u64,      // 4% of mix
+    pub stock_level_count: u64,   // 4% of mix
+}
+
+pub fn execute_tpc_transaction(
+    ctx: Context<TpcTransaction>,
+) -> Result<()> {
+    let state = &mut ctx.accounts.benchmark_state;
+    let random = (Clock::get()?.unix_timestamp % 100) as u8;
+    
+    // Transaction mix based on TPC-C specification
+    match random {
+        0..=44 => {  // 45% - New-Order
+            execute_new_order(ctx)?;
+            state.new_order_count += 1;
+        },
+        45..=87 => {  // 43% - Payment
+            execute_payment(ctx)?;
+            state.payment_count += 1;
+        },
+        88..=91 => {  // 4% - Order-Status
+            execute_order_status(ctx)?;
+            state.order_status_count += 1;
+        },
+        92..=95 => {  // 4% - Delivery
+            execute_delivery(ctx)?;
+            state.delivery_count += 1;
+        },
+        96..=99 => {  // 4% - Stock-Level
+            execute_stock_level(ctx)?;
+            state.stock_level_count += 1;
+        },
+    }
+    
+    state.total_transactions += 1;
+    Ok(())
+}
+```
+
+**Transaction Mix Specification:**
+
+| Transaction | Mix% | Accounts Accessed | Write Locks | Complexity |
+|-------------|------|-------------------|-------------|------------|
+| **New-Order** | 45% | 6-21 (variable) | 2-16 | HIGH |
+| **Payment** | 43% | 4 | 3 | MEDIUM |
+| **Order-Status** | 4% | 2-3 | 0 (read-only) | LOW |
+| **Delivery** | 4% | 40 (10 districts) | 30 | HIGH |
+| **Stock-Level** | 4% | 21-41 | 0 (read-only) | MEDIUM |
+
+**Performance Metric: tpmC**
+```
+tpmC (transactions per minute - C) = New-Order transactions / minute
+
+Example calculation:
+Total transactions in 10 minutes: 10,000
+New-Order count: 4,500 (45%)
+tpmC = 4,500 / 10 = 450 tpmC
+```
+
+---
+
+### 6.3 Concurrency Bottleneck Analysis
+
+**Purpose:** Identify serialization points that limit parallel transaction execution.
+
+**Algorithm:** Account Lock Contention Detection
+
+```rust
+pub struct ContentionProfile {
+    pub account_address: Pubkey,
+    pub access_count: u64,
+    pub conflict_count: u64,
+    pub contention_level: ContentionLevel,
+}
+
+pub enum ContentionLevel {
+    None = 0,       // 0% conflicts
+    Low = 1,        // <10% conflicts
+    Moderate = 2,   // 10-30% conflicts
+    High = 3,       // 30-50% conflicts
+    Critical = 4,   // >50% conflicts
+}
+
+// TPC-C New-Order transaction analysis
+pub fn analyze_new_order_contention() -> Vec<ContentionProfile> {
+    vec![
+        ContentionProfile {
+            account_address: district_account,
+            access_count: 4500,  // 45% of 10,000 transactions
+            conflict_count: 4500,  // ALL serialize on District.next_o_id
+            contention_level: ContentionLevel::Critical,
+        },
+        ContentionProfile {
+            account_address: warehouse_account,
+            access_count: 4500,
+            conflict_count: 450,  // ~10% conflict (read w_tax)
+            contention_level: ContentionLevel::Low,
+        },
+        ContentionProfile {
+            account_address: stock_accounts[popular_item],
+            access_count: 1200,  // Popular items
+            conflict_count: 600,  // ~50% conflict
+            contention_level: ContentionLevel::Critical,
+        },
+    ]
+}
+
+// Critical section identification
+fn identify_critical_section(
+    instruction: &str,
+    accounts: &[AccountInfo],
+) -> CriticalSection {
+    match instruction {
+        "new_order" => {
+            CriticalSection {
+                name: "District.next_o_id increment",
+                account: accounts[1],  // District account
+                operation: "read-modify-write",
+                parallelism: "NONE (serializes per district)",
+                mitigation: "Scale across 10 districts per warehouse",
+            }
+        },
+        "payment" => {
+            CriticalSection {
+                name: "District.ytd update",
+                account: accounts[1],  // District account
+                operation: "accumulate",
+                parallelism: "NONE",
+                mitigation: "Eventual consistency with batch updates",
+            }
+        },
+        _ => CriticalSection::default(),
+    }
+}
+```
+
+**Bottleneck Analysis Results:**
+
+```
+TPC-C Concurrency Profile:
+
+┌─────────────────────────────────────────────────┐
+│ Account: District                                │
+│ Field: next_o_id                                 │
+│ Contention: CRITICAL (100% serialization)        │
+│ Impact: Limits parallelism to 10 txs/warehouse   │
+│ Mitigation: Shard across warehouses              │
+└─────────────────────────────────────────────────┘
+
+Parallelism Calculation:
+- 1 warehouse × 10 districts = max 10 concurrent New-Orders
+- 10 warehouses × 10 districts = max 100 concurrent New-Orders
+- 100 warehouses × 10 districts = max 1,000 concurrent New-Orders
+
+Theoretical throughput:
+- Single warehouse: ~200 tpmC (limited by District serialization)
+- 10 warehouses: ~2,000 tpmC (10× parallelism)
+- 100 warehouses: ~20,000 tpmC (100× parallelism)
+```
+
+---
+
+## 7. Performance Optimizations
+
+### 7.1 Compute Unit (CU) Optimization
 
 **Purpose:** Minimize Solana transaction costs by reducing compute unit usage.
 
 **Techniques:**
 
-#### 1. Lazy Updates
+**Techniques:**
+
+**1. Lazy Updates**
 ```rust
 // Only update price history every 10 orders or 60 seconds
 let should_update = 
@@ -840,20 +1769,20 @@ if !should_update {
 }
 ```
 
-#### 2. Disable Logging
+**2. Disable Logging**
 ```rust
 // Logging disabled to save CU - use events instead
 // msg!("Order created"); ❌ Expensive
 emit!(OrderCreated { ... }); // ✅ Cheaper and indexed
 ```
 
-#### 3. Saturation Math
+**3. Saturation Math**
 ```rust
 // Prevents overflow panics (which cost extra CU)
 total_supply = total_supply.saturating_add(amount);
 ```
 
-#### 4. Integer-Only Math
+**4. Integer-Only Math**
 ```rust
 // ❌ Floating point (expensive and non-deterministic)
 let price = (buy_price as f64 + sell_price as f64) / 2.0;
@@ -874,7 +1803,7 @@ let price = (buy_price.saturating_add(sell_price)) / 2;
 
 ---
 
-### 5.2 Zero-Copy Data Access
+### 7.2 Zero-Copy Data Access
 
 **Purpose:** Access account data directly from memory without deserialization overhead.
 
@@ -923,22 +1852,49 @@ let mut market = ctx.accounts.market.load_mut()?; // Mutable
 
 ## Appendix A: Algorithm Complexity Analysis
 
-### Trading Algorithms
+**Trading Algorithms**
 
-| Algorithm                       | Time Complexity | Space Complexity | Notes                   |
-| ------------------------------- | --------------- | ---------------- | ----------------------- |
-| calculate_volume_weighted_price | O(1)            | O(1)             | Integer arithmetic only |
-| update_price_history            | O(n)            | O(1)             | n = 24 (fixed)          |
-| match_orders                    | O(1)            | O(1)             | Single order pair       |
-| Batch matching                  | O(n log n)      | O(n)             | n = batch size          |
+| Algorithm | Time Complexity | Space Complexity | Notes |
+|-----------|-----------------|------------------|-------|
+| calculate_volume_weighted_price | O(1) | O(1) | Integer arithmetic only |
+| update_price_history | O(n) | O(1) | n = 24 (fixed circular buffer) |
+| match_orders | O(1) | O(1) | Single order pair |
+| Batch matching | O(n log n) | O(n) | n = batch size, sorting orders |
+| AMM bonding curves | O(1) | O(1) | Constant product formula |
 
-### Oracle Algorithms
+**Oracle Algorithms**
 
-| Algorithm               | Time Complexity | Space Complexity | Notes             |
-| ----------------------- | --------------- | ---------------- | ----------------- |
-| validate_meter_reading  | O(1)            | O(1)             | Fixed validations |
-| update_quality_score    | O(1)            | O(1)             | Simple division   |
-| update_reading_interval | O(1)            | O(1)             | Moving average    |
+| Algorithm | Time Complexity | Space Complexity | Notes |
+|-----------|-----------------|------------------|-------|
+| validate_meter_reading | O(1) | O(1) | Fixed validation rules |
+| update_quality_score | O(1) | O(1) | Simple division |
+| update_reading_interval | O(1) | O(1) | Exponential moving average |
+| calculate_median (BFT) | O(n log n) | O(n) | n = backup oracle count, sorting |
+
+**Registry Algorithms**
+
+| Algorithm | Time Complexity | Space Complexity | Notes |
+|-----------|-----------------|------------------|-------|
+| settle_energy | O(1) | O(1) | High-water mark update |
+| calculate_settlement_amount | O(1) | O(1) | Subtraction operations |
+| temporal_monotonicity_check | O(1) | O(1) | Timestamp comparison |
+
+**Governance Algorithms**
+
+| Algorithm | Time Complexity | Space Complexity | Notes |
+|-----------|-----------------|------------------|-------|
+| issue_erc | O(1) | O(1) | Account initialization |
+| validate_erc | O(1) | O(1) | State transition |
+| double_claim_prevention | O(1) | O(1) | Cross-program verification |
+| authority_transfer | O(1) | O(1) | Time-locked state update |
+
+**Benchmark Algorithms**
+
+| Algorithm | Time Complexity | Space Complexity | Notes |
+|-----------|-----------------|------------------|-------|
+| execute_ycsb_operation | O(1) | O(1) | Random operation selection |
+| execute_tpc_transaction | O(n) | O(1) | n = order lines (max 15) |
+| contention_analysis | O(m) | O(m) | m = account count |
 
 ---
 
@@ -1009,6 +1965,15 @@ let mut market = ctx.accounts.market.load_mut()?; // Mutable
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** January 10, 2026  
+**Document Version:** 2.0  
+**Last Updated:** January 25, 2026  
 **Maintainer:** GridTokenX Development Team
+
+**Related Documentation:**
+- [Energy Token Program](./programs/energy-token.md)
+- [Oracle Program](./programs/oracle.md)
+- [Registry Program](./programs/registry.md)
+- [Trading Program](./programs/trading.md)
+- [Governance Program](./programs/governance.md)
+- [Blockbench Program](./programs/blockbench.md)
+- [TPC-Benchmark Program](./programs/tpc-benchmark.md)

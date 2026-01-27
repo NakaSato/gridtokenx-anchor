@@ -1,0 +1,39 @@
+# Anchor.toml configuration for PoA Cluster
+# Copy this to your project root as Anchor.toml for PoA testing
+
+[toolchain]
+anchor_version = "0.32.1"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+tpc_benchmark = "TpcC1111111111111111111111111111111111111111"
+energy_token = "AZBstnPmUeRJnwv55128awdfi2tmCFzcK4W6NPXbTkWA"
+governance = "2GprryNp7j7yxGuPNNjpJLHELfCdXH8UPfKSxXCvisjL"
+oracle = "69e8LaTfPnFycbD1kAhStfkyJxe1LnN323k3NQAMYBHr"
+registry = "9wvMT6f2Y7A37LB8y5LEQRSJxbnwLYqw1Bqq1RBtD3oM"
+trading = "e7rS5sykWMXtciUEgUZ6xByqo6VqwNRNeAmQQn3Sbj2"
+
+[provider]
+cluster = "localnet"
+wallet = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/genesis/faucet-keypair.json"
+
+[scripts]
+benchmark-tpcc = "npx ts-node tests/performance/benchmarks/tpc-c-anchor.ts"
+init-tpcc-schema = "npx ts-node scripts/init-tpcc-schema.ts"
+
+[test]
+startup_wait = 10000
+shutdown_wait = 5000
+upgradeable = false
+
+# PoA-specific test configuration
+# [test.genesis] is an array in Anchor 0.32+, so we use [[test.genesis]] if needed, 
+# but for local PoA cluster we just point to it via provider.cluster.
+[[test.genesis]]
+address = "AZBstnPmUeRJnwv55128awdfi2tmCFzcK4W6NPXbTkWA"
+program = "target/deploy/energy_token.so"
+# ... other programs can be added here if needed for 'anchor test'
+# But for 'anchor deploy' we don't need this section.

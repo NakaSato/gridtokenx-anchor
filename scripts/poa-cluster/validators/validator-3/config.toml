@@ -1,0 +1,28 @@
+# Solana Validator Configuration for PoA Cluster
+# Validator 3 of 3
+
+[validator]
+identity = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/validators/validator-3/identity.json"
+vote_account = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/validators/validator-3/vote-account.json"
+ledger = "/tmp/gridtokenx-poa/validators/validator-3/ledger"
+log_path = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/logs/validator-3.log"
+
+# RPC Configuration
+rpc_port = 9099
+enable_rpc_transaction_history = true
+full_rpc_api = true
+
+# Gossip Configuration (for peer discovery in PoA)
+gossip_port = 8021
+
+# TPU Configuration (Transaction Processing Unit)
+tpu_port = 8023
+
+# Performance Tuning for Benchmarks
+limit_ledger_size = 50000000
+skip_poh_verify = false
+no_voting = false
+
+# PoA-specific: Disable features not needed for permissioned networks
+no_port_check = true
+allow_private_addr = true

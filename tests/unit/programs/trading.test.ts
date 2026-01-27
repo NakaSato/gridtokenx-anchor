@@ -29,20 +29,20 @@ describe("Trading Program Tests", () => {
     it("should create a buy order", async () => {
       const amount = new anchor.BN(100);
       const price = new anchor.BN(10);
-      const orderId = TestUtils.generateTestId("order");
+      const orderId = new anchor.BN(Date.now());
 
       // Placeholder PDAs
       const [marketPda] = anchor.web3.PublicKey.findProgramAddressSync(
-        [Buffer.from("market"), Buffer.from("TEST_MARKET")],
+        [Buffer.from("market")],
         env.tradingProgram.programId
       );
       const [orderPda] = anchor.web3.PublicKey.findProgramAddressSync(
-        [Buffer.from("order"), trader.publicKey.toBuffer(), Buffer.from(orderId)],
+        [Buffer.from("order"), trader.publicKey.toBuffer(), orderId.toArrayLike(Buffer, "le", 8)],
         env.tradingProgram.programId
       );
 
       const tx = await env.tradingProgram.methods
-        .createBuyOrder(amount, price)
+        .createBuyOrder(orderId, amount, price)
         .accounts({
           market: marketPda,
           // @ts-ignore
@@ -58,20 +58,20 @@ describe("Trading Program Tests", () => {
     it("should create a sell order", async () => {
       const amount = new anchor.BN(100);
       const price = new anchor.BN(10);
-      const orderId = TestUtils.generateTestId("order");
+      const orderId = new anchor.BN(Date.now() + 1);
 
       // Placeholder PDAs
       const [marketPda] = anchor.web3.PublicKey.findProgramAddressSync(
-        [Buffer.from("market"), Buffer.from("TEST_MARKET")],
+        [Buffer.from("market")],
         env.tradingProgram.programId
       );
       const [orderPda] = anchor.web3.PublicKey.findProgramAddressSync(
-        [Buffer.from("order"), trader.publicKey.toBuffer(), Buffer.from(orderId)],
+        [Buffer.from("order"), trader.publicKey.toBuffer(), orderId.toArrayLike(Buffer, "le", 8)],
         env.tradingProgram.programId
       );
 
       const tx = await env.tradingProgram.methods
-        .createSellOrder(amount, price)
+        .createSellOrder(orderId, amount, price)
         .accounts({
           market: marketPda,
           // @ts-ignore

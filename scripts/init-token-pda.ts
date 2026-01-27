@@ -6,26 +6,34 @@ async function main() {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  const programId = new PublicKey("5FVExLSAC94gSWH6TJa1TmBDWXuqFe5obZaC5DkqJihU");
-  const idl = await Program.fetchIdl(programId, provider);
-  const program = new Program(idl!, provider);
+  // Load program from workspace (requires anchor keys sync/build)
+  const program = anchor.workspace.EnergyToken;
+  const programId = program.programId;
 
-  const mintAddress = new PublicKey("HqiAnhHSTabxhWpi9Dg68Tsf2DnytVJESKwDbnUU6HEg");
-  
+  // Derive PDAs consistent with tpc-c-anchor.ts
   const [tokenInfo] = PublicKey.findProgramAddressSync(
-    [Buffer.from("token_info")],
+    [Buffer.from("token_info_2022")],
     programId
   );
 
+  const [mintAddress] = PublicKey.findProgramAddressSync(
+    [Buffer.from("mint_2022")],
+    programId
+  );
+
+  console.log("Program ID:", programId.toString());
   console.log("Initializing token_info PDA:", tokenInfo.toString());
-  console.log("Mint:", mintAddress.toString());
+  console.log("Mint PDA:", mintAddress.toString());
   console.log("Authority:", provider.wallet.publicKey.toString());
+
+  // Load registry program to get its ID
+  const registryProgram = anchor.workspace.Registry;
 
   try {
     const tx = await program.methods
-      .initializeToken()
+      .initializeToken(registryProgram.programId)
       .accounts({
-        tokenInfo: tokenInfo,
+        token_info: tokenInfo,
         mint: mintAddress,
         authority: provider.wallet.publicKey,
       })
