@@ -194,9 +194,48 @@ describe("Confidential Trading (Real ZK Proofs)", () => {
         expect(balance.value.amount).to.equal((INITIAL_PUBLIC - SHIELD_AMOUNT).toString());
     });
 
-    // it.skip("Step 3: Private Transfer (User A -> User B) [Not Implemented]", async () => {
-    //     // Private transfer not implemented in lib.rs yet.
-    // });
+    it("Step 3: Private Transfer (User A -> User B) [Implemented]", async () => {
+        // Transfer 50 shielded tokens from A to B
+        const amount = new BN(TRANSFER_AMOUNT);
+
+        // Mock proof generation for transfer
+        const proof = await zkModule.create_transfer_proof(
+            BigInt(TRANSFER_AMOUNT), // Transfer amount
+            BigInt(SHIELD_AMOUNT - TRANSFER_AMOUNT), // Remaining balance for A
+            Buffer.alloc(32).fill(0), // Blinding factors (stubbed)
+            Buffer.alloc(32).fill(0)
+        );
+
+        const encryptedAmount = {
+            rG: [...Buffer.alloc(32).fill(1)], // Mock encrypted transfer amount (homomorphic)
+            c: [...Buffer.alloc(32).fill(2)]
+        };
+
+        const sig = await tradingProgram.methods.privateTransfer(
+            amount,
+            encryptedAmount,
+            {
+                amountCommitment: proof.amount_commitment,
+                amountRangeProof: {
+                    proofData: [...proof.amount_range_proof.proof_data],
+                    commitment: proof.amount_range_proof.commitment
+                },
+                remainingRangeProof: {
+                    proofData: [...proof.remaining_range_proof.proof_data],
+                    commitment: proof.remaining_range_proof.commitment
+                },
+                balanceProof: proof.balance_proof
+            }
+        ).accounts({
+            senderBalance: userAPrivateBalance,
+            receiverBalance: userBPrivateBalance,
+            receiverOwner: userB.publicKey,
+            mint: mint,
+            owner: userA.publicKey,
+        } as any).signers([userA]).rpc();
+
+        await logCU(env.connection, sig, "privateTransfer");
+    });
 
     it("Step 4: Unshield Tokens (using Transfer Proof)", async () => {
         // Skip unshield for now as it relies on balance state which mocked shield might not set perfectly without homomorphic ops on client

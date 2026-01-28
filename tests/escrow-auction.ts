@@ -39,9 +39,12 @@ describe("Auction Escrow & Settlement", () => {
 
     it("Setup Environment", async () => {
         // Airdrop
-        await provider.connection.requestAirdrop(marketAuth.publicKey, 10e9);
-        await provider.connection.requestAirdrop(buyer.publicKey, 10e9);
-        await provider.connection.requestAirdrop(seller.publicKey, 10e9);
+        const sig1 = await provider.connection.requestAirdrop(marketAuth.publicKey, 10e9);
+        await provider.connection.confirmTransaction(sig1);
+        const sig2 = await provider.connection.requestAirdrop(buyer.publicKey, 10e9);
+        await provider.connection.confirmTransaction(sig2);
+        const sig3 = await provider.connection.requestAirdrop(seller.publicKey, 10e9);
+        await provider.connection.confirmTransaction(sig3);
 
         // Mints
         currencyMint = await createMint(provider.connection, marketAuth, marketAuth.publicKey, null, 6);

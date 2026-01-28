@@ -354,14 +354,20 @@ describe("Advanced P2P Trading: Mint-from-Meter & Dynamic Pricing", () => {
         }).signers([marketAuthority]).rpc();
 
         // Check Event or fetch Snapshot? 
-        // We can just create a price snapshot to verify the calculation
-        const now = Math.floor(Date.now() / 1000);
+        // We simulate a Mid-Peak timestamp (e.g., 14:00 Local) to avoid Off-Peak (0.7x) reduction
+        // masking the supply/demand increase.
+        // 14:00 Local (+7 UTC) = 07:00 UTC.
+        // We use start of today UTC + 7 hours.
+        const currentMs = Date.now();
+        const startOfDay = currentMs - (currentMs % 86400000);
+        const midPeakTime = Math.floor((startOfDay + (7 * 3600 * 1000)) / 1000);
+
         const [snapshotAddress] = PublicKey.findProgramAddressSync(
-            [Buffer.from("price_snapshot"), marketAddress.toBuffer(), new BN(now).toArrayLike(Buffer, "le", 8)],
+            [Buffer.from("price_snapshot"), marketAddress.toBuffer(), new BN(midPeakTime).toArrayLike(Buffer, "le", 8)],
             tradingProgram.programId
         );
 
-        await tradingProgram.methods.createPriceSnapshot(new BN(now))
+        await tradingProgram.methods.createPriceSnapshot(new BN(midPeakTime))
             .accounts({
                 pricingConfig: pricingConfig,
                 snapshot: snapshotAddress,
@@ -419,17 +425,14 @@ describe("Advanced P2P Trading: Mint-from-Meter & Dynamic Pricing", () => {
 
 
         // 2. Create Orders
-        // We need to fetch 'activeOrders' count to derive addresses
-        const market = await tradingProgram.account.market.fetch(marketAddress);
-        let activeOrders = market.activeOrders; // number
-
-        const sellBuf = Buffer.alloc(4); sellBuf.writeUInt32LE(activeOrders);
+        const sellOrderId = new BN(Date.now());
         const [sellOrder] = PublicKey.findProgramAddressSync(
-            [Buffer.from("order"), seller.publicKey.toBuffer(), sellBuf],
+            [Buffer.from("order"), seller.publicKey.toBuffer(), sellOrderId.toArrayLike(Buffer, "le", 8)],
             tradingProgram.programId
         );
 
         await tradingProgram.methods.createSellOrder(
+            sellOrderId,
             tradeAmount,
             tradePrice
         ).accounts({
@@ -440,15 +443,15 @@ describe("Advanced P2P Trading: Mint-from-Meter & Dynamic Pricing", () => {
             systemProgram: SystemProgram.programId
         }).signers([seller]).rpc();
 
-        // Increment for buy order
-        activeOrders++;
-        const buyBuf = Buffer.alloc(4); buyBuf.writeUInt32LE(activeOrders);
+        // Create Buy Order
+        const buyOrderId = new BN(Date.now() + 1);
         const [buyOrder] = PublicKey.findProgramAddressSync(
-            [Buffer.from("order"), buyer.publicKey.toBuffer(), buyBuf],
+            [Buffer.from("order"), buyer.publicKey.toBuffer(), buyOrderId.toArrayLike(Buffer, "le", 8)],
             tradingProgram.programId
         );
 
         await tradingProgram.methods.createBuyOrder(
+            buyOrderId,
             tradeAmount,
             tradePrice // Max price matches
         ).accounts({

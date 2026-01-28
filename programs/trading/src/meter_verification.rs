@@ -229,7 +229,7 @@ pub fn process_initialize_meter_history(
 }
 
     pub fn process_verify_meter_reading(
-        ctx: Context<VerifyMeterReading>,
+        ctx: Context<VerifyReading>,
         reading_proof: MeterReadingProof,
         _timestamp: i64,
     ) -> Result<()> {
@@ -394,7 +394,7 @@ pub struct InitializeMeterHistory<'info> {
 
 #[derive(Accounts)]
 #[instruction(reading_proof: MeterReadingProof, timestamp: i64)]
-pub struct VerifyMeterReading<'info> {
+pub struct VerifyReading<'info> {
     #[account(mut)]
     pub config: Account<'info, MeterVerificationConfig>,
     

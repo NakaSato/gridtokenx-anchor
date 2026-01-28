@@ -108,6 +108,8 @@ pub mod trading {
         Ok(())
     }
 
+
+
     /// Create a sell order for energy
     /// Validates that the seller has a valid ERC certificate before allowing the order
     pub fn create_sell_order(
@@ -795,6 +797,16 @@ pub mod trading {
         confidential::process_unshield_energy(ctx, amount, new_encrypted_amount, proof)
     }
 
+    /// Private Transfer - Send encrypted tokens between confidential accounts
+    pub fn private_transfer(
+        ctx: Context<PrivateTransfer>,
+        amount: u64,
+        encrypted_amount: ElGamalCiphertext,
+        proof: TransferProof,
+    ) -> Result<()> {
+        confidential::process_private_transfer(ctx, amount, encrypted_amount, proof)
+    }
+
     // ============================================
     // Phase 3: Periodic Double Auction
     // ============================================
@@ -1143,7 +1155,7 @@ pub mod trading {
 
     /// Verify a meter reading with signature and ZK checks
     pub fn verify_meter_reading(
-        ctx: Context<VerifyMeterReading>,
+        ctx: Context<VerifyReading>,
         reading_proof: MeterReadingProof,
         timestamp: i64,
     ) -> Result<()> {

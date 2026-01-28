@@ -114,6 +114,14 @@ impl Commitment {
         }
         Commitment { point: result }
     }
+
+    pub fn sub(&self, other: &Commitment) -> Commitment {
+        let mut result = [0u8; 32];
+        unsafe {
+            syscalls::sol_curve_group_op(0, 2, self.point.as_ptr(), other.point.as_ptr(), result.as_mut_ptr());
+        }
+        Commitment { point: result }
+    }
 }
 
 /// ElGamal Ciphertext: (R, C) = (rG, rPk + vG)
@@ -132,6 +140,16 @@ impl ElGamalCiphertext {
         unsafe {
             syscalls::sol_curve_group_op(0, 1, self.r_g.as_ptr(), other.r_g.as_ptr(), r_result.as_mut_ptr());
             syscalls::sol_curve_group_op(0, 1, self.c.as_ptr(), other.c.as_ptr(), c_result.as_mut_ptr());
+        }
+        Self { r_g: r_result, c: c_result }
+    }
+
+    pub fn sub(&self, other: &ElGamalCiphertext) -> Self {
+        let mut r_result = [0u8; 32];
+        let mut c_result = [0u8; 32];
+        unsafe {
+            syscalls::sol_curve_group_op(0, 2, self.r_g.as_ptr(), other.r_g.as_ptr(), r_result.as_mut_ptr());
+            syscalls::sol_curve_group_op(0, 2, self.c.as_ptr(), other.c.as_ptr(), c_result.as_mut_ptr());
         }
         Self { r_g: r_result, c: c_result }
     }

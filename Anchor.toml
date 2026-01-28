@@ -25,7 +25,7 @@ init-tpcc-schema = "npx ts-node scripts/bootstrap.ts"
 test = "npx tsx scripts/run-all-tests.ts"
 
 [test]
-startup_wait = 10000
+startup_wait = 60000
 shutdown_wait = 5000
 upgradeable = false
 

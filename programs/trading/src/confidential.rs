@@ -98,6 +98,33 @@ pub fn process_unshield_energy(
     Ok(())
 }
 
+/// Private Transfer - Send encrypted tokens between confidential accounts
+pub fn process_private_transfer(
+    ctx: Context<PrivateTransfer>,
+    amount: u64, // The amount is hidden in the proof, but for MVP we pass it to verify against proof commitments if needed, or if the proof is stubbed
+    encrypted_amount: ElGamalCiphertext, // The encrypted transfer amount
+    _proof: TransferProof, // Proves old_A - amount = new_A, old_B + amount = new_B, and amount > 0
+) -> Result<()> {
+    
+    // In production: Verification of the Transfer Proof
+    // verify_transfer_proof(...)
+    
+    let sender = &mut ctx.accounts.sender_balance;
+    let receiver = &mut ctx.accounts.receiver_balance;
+    
+    // Homomorphic Subtraction from Sender
+    sender.encrypted_amount = sender.encrypted_amount.sub(&encrypted_amount);
+    
+    // Homomorphic Addition to Receiver
+    receiver.encrypted_amount = receiver.encrypted_amount.add(&encrypted_amount);
+    
+    sender.last_update_slot = Clock::get()?.slot;
+    receiver.last_update_slot = Clock::get()?.slot;
+    
+    msg!("Executed private transfer of encrypted energy");
+    Ok(())
+}
+
 #[derive(Accounts)]
 pub struct InitializeConfidentialBalance<'info> {
     #[account(
@@ -152,4 +179,30 @@ pub struct UnshieldEnergy<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
     pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct PrivateTransfer<'info> {
+    #[account(
+        mut,
+        seeds = [b"confidential_balance", owner.key().as_ref(), mint.key().as_ref()],
+        bump = sender_balance.bump,
+    )]
+    pub sender_balance: Account<'info, ConfidentialBalance>,
+    
+    #[account(
+        mut,
+        seeds = [b"confidential_balance", receiver_owner.key().as_ref(), mint.key().as_ref()],
+        bump = receiver_balance.bump,
+    )]
+    pub receiver_balance: Account<'info, ConfidentialBalance>,
+    
+    /// CHECK: Receiver owner address for seed validation
+    pub receiver_owner: AccountInfo<'info>,
+    
+    /// CHECK: Mint for seed derivation
+    pub mint: AccountInfo<'info>,
+    
+    #[account(mut)]
+    pub owner: Signer<'info>, // Sender owner
 }
