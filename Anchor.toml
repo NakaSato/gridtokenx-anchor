@@ -23,6 +23,7 @@ wallet = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anc
 benchmark-tpcc = "npx ts-node tests/performance/benchmarks/tpc-c-anchor.ts"
 init-tpcc-schema = "npx ts-node scripts/bootstrap.ts"
 test = "npx tsx scripts/run-all-tests.ts"
+verify-p2p = "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/verify_p2p_settlement_collection.ts"
 
 [test]
 startup_wait = 60000

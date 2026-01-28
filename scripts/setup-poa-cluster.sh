@@ -27,7 +27,7 @@ VALIDATOR_LEDGER_BASE_DIR="${POA_LEDGER_BASE_DIR}/validators"
 LOG_DIR="${POA_DIR}/logs"
 
 # Configuration
-NUM_VALIDATORS=${NUM_VALIDATORS:-3}
+NUM_VALIDATORS=${NUM_VALIDATORS:-1}
 LEDGER_LIMIT=${LEDGER_LIMIT:-50000000}  # 50GB limit
 BASE_PORT=${BASE_PORT:-8899}
 FAUCET_SOL=${FAUCET_SOL:-1000000}
@@ -112,6 +112,10 @@ generate_keypairs() {
 
 create_genesis() {
     log_info "Creating genesis configuration using solana-test-validator..."
+    
+    # Ensure no old validators are running
+    pkill -9 solana-validator || true
+    pkill -9 solana-test-validator || true
     
     rm -rf "${GENESIS_LEDGER_DIR}"
     

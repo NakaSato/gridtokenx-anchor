@@ -44,12 +44,12 @@ pub mod energy_token {
 
     pub fn initialize(_ctx: Context<Initialize>) -> Result<()> {
         compute_fn!("initialize" => {
-            msg!("Energy token program initialized");
         });
         Ok(())
     }
 
-    /// Create a new GRX token mint with Token 2022 compatibility
+    /// Add metadata to an existing GRX token mint via Metaplex
+    /// Must be called after initialize_token with the same mint address
     pub fn create_token_mint(
         ctx: Context<CreateTokenMint>,
         name: String,
@@ -83,9 +83,6 @@ pub mod energy_token {
                     .invoke()?;
 
                 compute_checkpoint!("after_metaplex_cpi");
-                msg!("GRX token mint created successfully with metadata");
-            } else {
-                msg!("Metaplex program not available, creating token mint without metadata");
             }
         });
         Ok(())
@@ -100,7 +97,6 @@ pub mod energy_token {
                 EnergyTokenError::UnauthorizedAuthority
             );
             // Logging disabled to save CU
-
             let cpi_accounts = token_interface::MintTo {
                 mint: ctx.accounts.mint.to_account_info(),
                 to: ctx.accounts.destination.to_account_info(),
@@ -144,9 +140,6 @@ pub mod energy_token {
             token_info.created_at = clock.unix_timestamp;
             token_info.rec_validators_count = 0;
             token_info.rec_validators = [Pubkey::default(); 5];
-
-            #[cfg(feature = "localnet")]
-            msg!("Token initialized with registry program: {}", registry_program_id);
         });
         Ok(())
     }
@@ -177,9 +170,6 @@ pub mod energy_token {
             let index = token_info.rec_validators_count as usize;
             token_info.rec_validators[index] = validator_pubkey;
             token_info.rec_validators_count += 1;
-            
-            #[cfg(feature = "localnet")]
-            msg!("REC Validator added: {} ({})", validator_pubkey, _authority_name);
         });
         Ok(())
     }
@@ -287,12 +277,16 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 pub struct CreateTokenMint<'info> {
     #[account(
-        init,
-        payer = payer,
-        mint::decimals = 9,
-        mint::authority = authority,
+        mut,
+        constraint = mint.key() == token_info.load()?.mint @ EnergyTokenError::UnauthorizedAuthority,
     )]
     pub mint: Box<InterfaceAccount<'info, MintInterface>>,
+
+    #[account(
+        seeds = [b"token_info_2022"],
+        bump,
+    )]
+    pub token_info: AccountLoader<'info, TokenInfo>,
 
     /// CHECK: Validated by Metaplex metadata program (optional)
     #[account(mut)]
@@ -315,7 +309,10 @@ pub struct CreateTokenMint<'info> {
 
 #[derive(Accounts)]
 pub struct MintToWallet<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = mint.key() == token_info.load()?.mint @ EnergyTokenError::UnauthorizedAuthority,
+    )]
     pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(
@@ -424,7 +421,10 @@ pub struct MintTokensDirect<'info> {
     )]
     pub token_info: AccountLoader<'info, TokenInfo>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = mint.key() == token_info.load()?.mint @ EnergyTokenError::UnauthorizedAuthority,
+    )]
     pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(mut)]

@@ -26,11 +26,11 @@ ENTRYPOINTS+="--entrypoint 127.0.0.1:8001 "
 exec solana-validator \
     --identity "${VALIDATOR_PATH}/identity.json" \
     --vote-account "${VALIDATOR_PATH}/vote-account.json" \
-    --authorized-voter "${VALIDATOR_PATH}/vote-account.json" \
+    --authorized-voter "${VALIDATOR_PATH}/identity.json" \
     --ledger "${VALIDATOR_LEDGER}" \
     --rpc-port ${RPC_PORT} \
     --gossip-port ${GOSSIP_PORT} \
-    --dynamic-port-range 8100-8200 \
+    --dynamic-port-range 8600-8650 \
     --log "${LOG_DIR}/validator-${VALIDATOR_PATH##*/}.log" \
     --limit-ledger-size ${LEDGER_LIMIT} \
     --enable-rpc-transaction-history \
@@ -38,5 +38,6 @@ exec solana-validator \
     --no-wait-for-vote-to-start-leader \
     --no-port-check \
     --allow-private-addr \
+    --no-snapshot-fetch \
     ${ENTRYPOINTS} \
     "$@"

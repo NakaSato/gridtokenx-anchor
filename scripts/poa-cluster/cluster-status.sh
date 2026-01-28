@@ -4,7 +4,7 @@
 echo "PoA Cluster Status"
 echo "=================="
 
-for i in $(seq 1 3); do
+for i in $(seq 1 1); do
     RPC_PORT=$((8899 + ($i - 1) * 100))
     echo ""
     echo "Validator ${i} (RPC: http://127.0.0.1:${RPC_PORT})"

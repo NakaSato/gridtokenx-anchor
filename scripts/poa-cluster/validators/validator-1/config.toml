@@ -1,5 +1,5 @@
 # Solana Validator Configuration for PoA Cluster
-# Validator 1 of 3
+# Validator 1 of 1
 
 [validator]
 identity = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/validators/validator-1/identity.json"
