@@ -1,6 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { BN } from "bn.js";
-import { Keypair } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
+import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import * as fs from "fs";
 import { TestEnvironment } from "../tests/setup.ts";
 
@@ -109,7 +110,7 @@ async function main() {
                         mint: mintPda,
                         authority: env.authority.publicKey,
                         systemProgram: anchor.web3.SystemProgram.programId,
-                        tokenProgram: anchor.utils.token.TOKEN_PROGRAM_ID,
+                        tokenProgram: TOKEN_2022_PROGRAM_ID,
                         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
                     })
                     .signers([env.authority])

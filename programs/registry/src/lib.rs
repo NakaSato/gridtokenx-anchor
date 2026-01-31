@@ -11,7 +11,7 @@ pub use error::RegistryError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye");
+declare_id!("CXXRVpEwyd2ch7eo425mtaBfr2Yi1825Nm6yik2NEWqR");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};
@@ -57,9 +57,6 @@ pub mod registry {
             registry.user_count = 0;
             registry.meter_count = 0;
             registry.active_meter_count = 0;
-            registry.created_at = Clock::get()?.unix_timestamp;
-
-            msg!("Registry initialized with authority: {}", registry.authority);
         });
         Ok(())
     }
@@ -91,8 +88,6 @@ pub mod registry {
                 new_oracle: oracle,
                 timestamp: Clock::get()?.unix_timestamp,
             });
-
-            msg!("Oracle authority set to: {}", oracle);
         });
         Ok(())
     }
@@ -115,7 +110,6 @@ pub mod registry {
             user_account.long = long;
             user_account.status = UserStatus::Active;
             user_account.registered_at = Clock::get()?.unix_timestamp;
-            user_account.created_at = user_account.registered_at;
             user_account.meter_count = 0;
 
             registry.user_count += 1;
@@ -127,13 +121,6 @@ pub mod registry {
                 long,
                 timestamp: user_account.registered_at,
             });
-
-            msg!(
-                "User registered: {}. Type: {:?}. Count: {}",
-                user_authority,
-                user_type,
-                registry.user_count
-            );
         });
         Ok(())
     }
@@ -166,7 +153,6 @@ pub mod registry {
             meter_account.total_generation = 0;
             meter_account.total_consumption = 0;
             meter_account.settled_net_generation = 0;
-            meter_account.claimed_erc_generation = 0;
 
             user_account.meter_count += 1;
             registry.meter_count += 1;
@@ -178,13 +164,6 @@ pub mod registry {
                 meter_type,
                 timestamp: meter_account.registered_at,
             });
-
-            msg!(
-                "Meter registered: {}. Type: {:?}. Total Registry Meters: {}",
-                meter_id,
-                meter_type,
-                registry.meter_count
-            );
         });
         Ok(())
     }

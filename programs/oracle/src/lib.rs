@@ -11,7 +11,7 @@ pub use error::OracleError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("ACeKwdMK1sma3EPnxy7bvgC5yMwy8tg7ZUJvaogC9YfR");
+declare_id!("EkcPD2YEXhpo1J73UX9EJNnjV2uuFS8KXMVLx9ybqnhU");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};
@@ -46,6 +46,7 @@ pub mod oracle {
             oracle_data.anomaly_detection_enabled = 1;
             oracle_data.max_reading_deviation_percent = 50;
             oracle_data.require_consensus = 0;
+            oracle_data.max_production_consumption_ratio = 1000; // Default: 10x (for solar farms)
 
             oracle_data.total_valid_readings = 0;
             oracle_data.total_rejected_readings = 0;
@@ -223,6 +224,36 @@ pub mod oracle {
         Ok(())
     }
 
+    /// Update production/consumption ratio validation threshold (admin only)
+    /// Allows adjustment for different deployment scenarios (residential vs. large solar farms)
+    pub fn update_production_ratio_config(
+        ctx: Context<UpdateValidationConfig>,
+        max_production_consumption_ratio: u16,
+    ) -> Result<()> {
+        compute_fn!("update_production_ratio_config" => {
+            let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
+
+            require!(
+                ctx.accounts.authority.key() == oracle_data.authority,
+                OracleError::UnauthorizedAuthority
+            );
+
+            require!(
+                max_production_consumption_ratio > 0,
+                OracleError::InvalidConfiguration
+            );
+
+            oracle_data.max_production_consumption_ratio = max_production_consumption_ratio;
+
+            emit!(ProductionRatioConfigUpdated {
+                authority: ctx.accounts.authority.key(),
+                max_production_consumption_ratio,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
+        });
+        Ok(())
+    }
+
     /// Update validation configuration (admin only)
     pub fn update_validation_config(
         ctx: Context<UpdateValidationConfig>,
@@ -358,8 +389,11 @@ fn validate_meter_reading(
             0.0
         };
 
-        // Allow production to be up to 10x consumption (for solar producers)
-        require!(ratio <= 1000.0, OracleError::AnomalousReading);
+        // Allow production up to configured ratio (default 10x for solar producers, adjustable via config)
+        require!(
+            ratio <= oracle_data.max_production_consumption_ratio as f64,
+            OracleError::AnomalousReading
+        );
     }
 
     Ok(())
@@ -378,13 +412,25 @@ fn update_quality_score(oracle_data: &mut OracleData, _is_valid: bool) -> Result
 }
 
 fn update_reading_interval(oracle_data: &mut OracleData, new_interval: u32) -> Result<()> {
-    // Calculate moving average of reading interval
-    // Use weighted average: 80% old + 20% new
+    // Weighted Moving Average (WMA) for reading interval stability
+    // 
+    // Formula: WMA = (old_average × 0.8) + (new_interval × 0.2)
+    // Purpose: Smooth out fluctuations in meter reading intervals
+    // - 80% weight on historical average → prevents oscillation from recent spikes
+    // - 20% weight on new reading → responsive to gradual trend changes
+    // 
+    // Example:
+    // - If average was 300s and new reading is 600s (double):
+    //   WMA = (300 × 0.8) + (600 × 0.2) = 240 + 120 = 360s
+    //   (gradual adjustment, not sudden jump to 600s)
+    
     if oracle_data.average_reading_interval > 0 {
-        let old_weight = (oracle_data.average_reading_interval as f64 * 0.8) as u32;
-        let new_weight = (new_interval as f64 * 0.2) as u32;
-        oracle_data.average_reading_interval = old_weight + new_weight;
+        let weighted_sum = (oracle_data.average_reading_interval as f64 * 0.8) 
+                          + (new_interval as f64 * 0.2);
+        // Use round() for better numerical stability instead of truncation
+        oracle_data.average_reading_interval = weighted_sum.round() as u32;
     } else {
+        // Initialize with first reading
         oracle_data.average_reading_interval = new_interval;
     }
     Ok(())

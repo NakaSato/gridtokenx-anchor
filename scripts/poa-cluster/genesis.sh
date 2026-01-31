@@ -52,8 +52,6 @@ echo "Generating new genesis block..."
 solana-genesis \
     --cluster-type development \
     --bootstrap-validator "${VAL1_ID_PUB}" "${VAL1_VOTE_PUB}" "${VAL1_STAKE_PUB}" \
-    --bootstrap-validator "${VAL2_ID_PUB}" "${VAL2_VOTE_PUB}" "${VAL2_STAKE_PUB}" \
-    --bootstrap-validator "${VAL3_ID_PUB}" "${VAL3_VOTE_PUB}" "${VAL3_STAKE_PUB}" \
     --faucet-pubkey "${FAUCET_PUB}" \
     --faucet-lamports 500000000000000000 \
     --hashes-per-tick sleep \

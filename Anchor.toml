@@ -1,6 +1,6 @@
 # Anchor.toml configuration for PoA Cluster
 [toolchain]
-anchor_version = "0.32.1"
+anchor_version = "0.30.1"
 package_manager = "pnpm"
 
 [features]
@@ -8,12 +8,13 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-tpc_benchmark = "BcXcPzZHpBJ82RwDSuVY2eVCXj3enda8R3AxUTjXwFgu"
-energy_token = "8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq"
-governance = "51d3SDcs5coxkiwvcjMzPrKeajTPF9yikw66WezipTva"
-oracle = "ACeKwdMK1sma3EPnxy7bvgC5yMwy8tg7ZUJvaogC9YfR"
-registry = "3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye"
-trading = "GTuRUUwCfvmqW7knqQtzQLMCy61p4UKUrdT5ssVgZbat"
+tpc_benchmark = "Gn99qZgnpwNXsQaBB7zvyycnRJmMGaQ4UaG5PpvBsmEu"
+energy_token = "5DJCWKo5cXt3PXRsrpH1xixra4wXWbNzxZ1p4FHqSxvi"
+governance = "8bNpJqZoqqUWKu55VWhR8LWS66BX7NPpwgYBAKhBzu2L"
+oracle = "EkcPD2YEXhpo1J73UX9EJNnjV2uuFS8KXMVLx9ybqnhU"
+registry = "CXXRVpEwyd2ch7eo425mtaBfr2Yi1825Nm6yik2NEWqR"
+trading = "8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND"
+blockbench = "9sz5rrCnWTLqPeQVuyJgyQ1hqLGXrT94GLfVVoWUKpxz"
 
 [provider]
 cluster = "localnet"

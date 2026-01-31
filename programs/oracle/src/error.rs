@@ -30,4 +30,6 @@ pub enum OracleError {
     BackupOracleAlreadyExists,
     #[msg("Backup oracle not found")]
     BackupOracleNotFound,
+    #[msg("Invalid configuration parameter")]
+    InvalidConfiguration,
 }

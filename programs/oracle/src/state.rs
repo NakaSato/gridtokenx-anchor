@@ -33,6 +33,7 @@ pub struct OracleData {
     
     // === 2-byte aligned field ===
     pub max_reading_deviation_percent: u16,     // 2 bytes
+    pub max_production_consumption_ratio: u16,  // 2 bytes (e.g., 1000 = 10x, 500 = 5x)
     
     // === 1-byte fields ===
     pub active: u8,                             // 1 byte (1 = active, 0 = inactive)
@@ -43,7 +44,7 @@ pub struct OracleData {
     pub consensus_threshold: u8,                // 1 byte
     
     // Explicit padding to reach 8-byte alignment
-    // u32(4) + u16(2) + u8*6(6) = 12 bytes
-    // To align to 8 bytes: need 4 more bytes (12 + 4 = 16, which is divisible by 8)
-    pub _padding: [u8; 4],                      // 4 bytes explicit padding
+    // u32(4) + u16*2(4) + u8*6(6) = 14 bytes
+    // To align to 8 bytes: need 2 more bytes (14 + 2 = 16, which is divisible by 8)
+    pub _padding: [u8; 2],                      // 2 bytes explicit padding
 }

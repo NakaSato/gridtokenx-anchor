@@ -53,7 +53,7 @@ macro_rules! compute_fn {
     ($name:expr => $block:block) => { $block };
 }
 
-declare_id!("GTuRUUwCfvmqW7knqQtzQLMCy61p4UKUrdT5ssVgZbat");
+declare_id!("8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND");
 
 #[program]
 pub mod trading {

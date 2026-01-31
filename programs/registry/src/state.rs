@@ -13,7 +13,6 @@ pub struct Registry {
     pub user_count: u64,
     pub meter_count: u64,
     pub active_meter_count: u64,    // Track active meters separately
-    pub created_at: i64,
 }
 
 /// User account for frequent lookups
@@ -23,14 +22,13 @@ pub struct UserAccount {
     pub authority: Pubkey,   // Wallet address that owns this account
     pub user_type: UserType, // Prosumer or Consumer
     pub _padding1: [u8; 7],
-    pub lat: f64,            // Latitude coordinate
-    pub long: f64,           // Longitude coordinate
+    pub lat: f64,            // Latitude coordinate (for geographic proximity queries)
+    pub long: f64,           // Longitude coordinate (for geographic proximity queries)
     pub status: UserStatus,  // Active, Suspended, or Inactive
     pub _padding2: [u8; 7],
     pub registered_at: i64,  // Unix timestamp of registration
-    pub meter_count: u32,    // Number of meters owned
+    pub meter_count: u32,    // Number of meters owned (cached for performance)
     pub _padding3: [u8; 4],
-    pub created_at: i64,     // Backward compatibility field
 }
 
 /// Meter account for reading updates
@@ -49,7 +47,6 @@ pub struct MeterAccount {
 
     // --- TOKENIZATION TRACKING ---
     pub settled_net_generation: u64,
-    pub claimed_erc_generation: u64,
 }
 
 // Enums

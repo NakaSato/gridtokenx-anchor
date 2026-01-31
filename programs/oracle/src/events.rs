@@ -60,3 +60,10 @@ pub struct MeterReadingRejected {
     pub timestamp: i64,
     pub reason: String,
 }
+
+#[event]
+pub struct ProductionRatioConfigUpdated {
+    pub authority: Pubkey,
+    pub max_production_consumption_ratio: u16,
+    pub timestamp: i64,
+}
