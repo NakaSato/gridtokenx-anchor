@@ -38,6 +38,8 @@ macro_rules! compute_checkpoint {
 
 declare_id!("5DJCWKo5cXt3PXRsrpH1xixra4wXWbNzxZ1p4FHqSxvi");
 
+pub const DECIMALS: u8 = 9;
+
 #[program]
 pub mod energy_token {
     use super::*;
@@ -91,11 +93,13 @@ pub mod energy_token {
     /// Mint GRX tokens to a wallet using Token interface
     pub fn mint_to_wallet(ctx: Context<MintToWallet>, amount: u64) -> Result<()> {
         compute_fn!("mint_to_wallet" => {
-            let token_info = ctx.accounts.token_info.load()?;
-            require!(
-                token_info.authority == ctx.accounts.authority.key(),
-                EnergyTokenError::UnauthorizedAuthority
-            );
+            {
+                let token_info = ctx.accounts.token_info.load()?;
+                require!(
+                    token_info.authority == ctx.accounts.authority.key(),
+                    EnergyTokenError::UnauthorizedAuthority
+                );
+            }
             // Logging disabled to save CU
             let cpi_accounts = token_interface::MintTo {
                 mint: ctx.accounts.mint.to_account_info(),
@@ -113,6 +117,10 @@ pub mod energy_token {
             compute_checkpoint!("before_mint_cpi");
             token_interface::mint_to(cpi_ctx, amount)?;
             compute_checkpoint!("after_mint_cpi");
+
+            // Update total supply
+            let mut token_info = ctx.accounts.token_info.load_mut()?;
+            token_info.total_supply = token_info.total_supply.saturating_add(amount);
 
             // Logging disabled to save CU
 
@@ -188,7 +196,7 @@ pub mod energy_token {
             let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
 
             compute_checkpoint!("before_transfer_cpi");
-            token_interface::transfer_checked(cpi_ctx, amount, 9)?;
+            token_interface::transfer_checked(cpi_ctx, amount, DECIMALS)?;
             compute_checkpoint!("after_transfer_cpi");
 
             // Logging disabled to save CU
@@ -230,10 +238,19 @@ pub mod energy_token {
             
                 // Check if caller has permission (Admin or Registry Program)
                 let is_admin = ctx.accounts.authority.key() == token_info.authority;
+                
+                // Check if caller is the Registry PDA
+                let (registry_pda, _bump) = Pubkey::find_program_address(&[b"registry"], &token_info.registry_program);
+                let is_registry = ctx.accounts.authority.key() == registry_pda;
+
+                msg!("Signer: {}", ctx.accounts.authority.key());
+                msg!("TokenInfo Auth: {}", token_info.authority);
+                msg!("Registry Prog: {}", token_info.registry_program);
+                msg!("Derived PDA: {}", registry_pda);
             
                 // Note: In real deployment, CPI caller verification can be added
                 // By using invoke_signed context or checking instruction data
-                require!(is_admin, EnergyTokenError::UnauthorizedAuthority);
+                require!(is_admin || is_registry, EnergyTokenError::UnauthorizedAuthority);
             }
 
             // Mint tokens using token_info PDA as authority
@@ -316,6 +333,7 @@ pub struct MintToWallet<'info> {
     pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(
+        mut,
         seeds = [b"token_info_2022"],
         bump,
         constraint = token_info.load()?.authority == authority.key() @ EnergyTokenError::UnauthorizedAuthority,
@@ -359,7 +377,7 @@ pub struct InitializeToken<'info> {
         payer = authority,
         seeds = [b"mint_2022"],
         bump,
-        mint::decimals = 9,
+        mint::decimals = DECIMALS,
         mint::authority = token_info,
         mint::token_program = token_program,
     )]

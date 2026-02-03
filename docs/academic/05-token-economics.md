@@ -2,7 +2,15 @@
 
 ## GridTokenX Token Economics Analysis
 
-> *January 2026 Edition - Research Paper Documentation*
+> *February 2026 Edition - Research Paper Documentation*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [Energy Token Program](../programs/energy-token.md) - GRX smart contract
+> - [AMM & Bonding Curves](../programs/deep-dive/amm-bonding-curves.md) - Price mechanics
+> - [Carbon Credit System](../programs/deep-dive/carbon-credits.md) - REC tokenization
 
 ---
 

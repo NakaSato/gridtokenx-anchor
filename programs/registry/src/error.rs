@@ -28,4 +28,6 @@ pub enum RegistryError {
     ReadingTooHigh,
     #[msg("Meter is already inactive")]
     AlreadyInactive,
+    #[msg("Invalid meter ID length (max 32 bytes)")]
+    InvalidMeterId,
 }

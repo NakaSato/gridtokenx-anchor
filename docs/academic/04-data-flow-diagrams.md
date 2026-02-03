@@ -2,7 +2,15 @@
 
 ## GridTokenX Complete Data Flow Documentation
 
-> *December 2025 Edition*
+> *February 2026 Edition*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [Process Flows](./06-process-flows.md) - Detailed swimlane diagrams
+> - [Settlement Architecture](../programs/deep-dive/settlement-architecture.md) - Trade settlement flows
+> - [Oracle Security](../programs/deep-dive/oracle-security.md) - Meter data flow
 
 ---
 

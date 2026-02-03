@@ -39,8 +39,9 @@ pub struct ErcCertificate {
 }
 
 impl ErcCertificate {
-    // Updated space: original + owner(32) + revocation_reason(1+128) + revoked_at(9) + transfer_count(1) + last_transferred_at(9)
-    pub const LEN: usize = 64 + 32 + 32 + 8 + 64 + 256 + 8 + 9 + 1 + 1 + 9 + 129 + 9 + 1 + 9;
+    // Updated space: original + string prefixes (4 bytes each)
+    // certificate_id (4+64), renewable_source (4+64), validation_data (4+256), revocation_reason (1+4+128)
+    pub const LEN: usize = (4 + 64) + 32 + 32 + 8 + (4 + 64) + (4 + 256) + 8 + 9 + 1 + 1 + 9 + (1 + 4 + 128) + 9 + 1 + 9;
     
     /// Check if certificate can be transferred
     pub fn can_transfer(&self) -> bool {

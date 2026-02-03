@@ -208,6 +208,16 @@ pub fn process_execute_stablecoin_settlement(
     
     let net_seller_amount = stablecoin_amount.saturating_sub(market_fee);
     
+    // Derived PDA signer for escrow authority
+    let market_key = ctx.accounts.market.key();
+    let bump = ctx.bumps.escrow_authority;
+    let signer_seeds = &[
+        b"escrow",
+        market_key.as_ref(),
+        &[bump],
+    ];
+    let signer = &[&signer_seeds[..]];
+
     // Transfer stablecoin from buyer to seller
     let cpi_accounts = TransferChecked {
         from: ctx.accounts.buyer_stablecoin.to_account_info(),
@@ -217,7 +227,7 @@ pub fn process_execute_stablecoin_settlement(
     };
     
     token_interface::transfer_checked(
-        CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts),
+        CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), cpi_accounts, signer),
         net_seller_amount,
         ctx.accounts.stablecoin_mint.decimals,
     )?;
@@ -232,7 +242,7 @@ pub fn process_execute_stablecoin_settlement(
         };
         
         token_interface::transfer_checked(
-            CpiContext::new(ctx.accounts.token_program.to_account_info(), fee_cpi),
+            CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(), fee_cpi, signer),
             market_fee,
             ctx.accounts.stablecoin_mint.decimals,
         )?;
@@ -247,7 +257,7 @@ pub fn process_execute_stablecoin_settlement(
     };
     
     token_interface::transfer_checked(
-        CpiContext::new(ctx.accounts.energy_token_program.to_account_info(), energy_cpi),
+        CpiContext::new_with_signer(ctx.accounts.energy_token_program.to_account_info(), energy_cpi, signer),
         amount,
         ctx.accounts.energy_mint.decimals,
     )?;
@@ -623,6 +633,10 @@ pub struct ExecuteStablecoinSettlement<'info> {
     #[account(mut)]
     pub fee_collector: InterfaceAccount<'info, TokenAccount>,
     
+    #[account(
+        seeds = [b"escrow", market.key().as_ref()],
+        bump
+    )]
     /// CHECK: Escrow authority PDA
     pub escrow_authority: AccountInfo<'info>,
     

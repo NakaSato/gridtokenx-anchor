@@ -1,8 +1,14 @@
 # BLOCKBENCH for Solana: Technical Reference
 
-**Program ID:** `B5aDPT9bM692E63ZtBVLQuJhsoJsPdyjn6ATqqgWpbTg`
+**Program ID:** `B5aDPT9bM692E63ZtBVLQuJhsoJsPdyjn6ATqqgWpbTg`  
+**Version:** 2.0.0  
+**Last Updated:** February 2, 2026
 
 This document details the implementation of the **BLOCKBENCH** framework for the Solana blockchain. Originally defined in "BLOCKBENCH: A Framework for Analyzing Private Blockchains" (SIGMOD 2017), this suite adapts the standard micro-benchmarks and YCSB workloads to measure the specific performance characteristics of Solana's Sealevel runtime (SVM) and Proof-of-History (PoH) consensus.
+
+> **Related Documentation:**
+> - [TPC-C Benchmark](./tpc-benchmark.md) - Industry-standard OLTP benchmark
+> - [Performance Analysis](../academic/performance-analysis.md) - Benchmark results and methodology
 
 ## 1. System Architecture
 
@@ -117,5 +123,25 @@ When citing this implementation for academic research:
 | `6003` | `YcsbRecordNotFound` | Key mismatch in PDA lookup. |
 | `6004` | `ValueTooLarge` | YCSB blob exceeds account data allocation. |
 
-## 6. References
+## 6. Related Programs
+
+| Program | Relationship | Description |
+|---------|--------------|-------------|
+| [TPC-C Benchmark](./tpc-benchmark.md) | Complementary | OLTP benchmark for enterprise workloads |
+| [Trading](./trading.md) | Test Target | Real-world energy trading for performance testing |
+| [Oracle](./oracle.md) | Test Target | Data ingestion layer for throughput testing |
+
+---
+
+## 7. References
+
 > Dinh, T. T. A., Wang, J., Chen, G., Liu, R., Ooi, B. C., & Tan, K. L. (2017). **BLOCKBENCH: A Framework for Analyzing Private Blockchains**. In Proceedings of the 2017 ACM International Conference on Management of Data (SIGMOD '17).
+
+---
+
+## 8. Document History
+
+| Version | Date | Changes |
+|---------|------|--------|
+| 2.0.0 | 2026-02-02 | Added related programs, updated formatting |
+| 1.0.0 | 2025-12-01 | Initial release |

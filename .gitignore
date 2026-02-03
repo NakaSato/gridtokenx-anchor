@@ -19,7 +19,12 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 *.tgz
-# test-results/
+
+# Test results
+test-results/
+tests/test-results/
+*.benchmark.json
+*.benchmark.csv
 
 # TypeScript
 *.tsbuildinfo

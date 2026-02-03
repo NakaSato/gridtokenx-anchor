@@ -47,6 +47,7 @@ pub struct MeterAccount {
 
     // --- TOKENIZATION TRACKING ---
     pub settled_net_generation: u64,
+    pub claimed_erc_generation: u64,
 }
 
 // Enums

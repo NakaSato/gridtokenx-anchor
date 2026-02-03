@@ -2,7 +2,15 @@
 
 ## GridTokenX Security Architecture Documentation
 
-> *December 2025 Edition*
+> *February 2026 Edition*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [Oracle Security Model](../programs/deep-dive/oracle-security.md) - BFT and data validation
+> - [Confidential Trading](../programs/deep-dive/confidential-trading.md) - ZK proofs and encryption
+> - [Cross-Chain Bridge](../programs/deep-dive/cross-chain-bridge.md) - Bridge security
 
 ---
 

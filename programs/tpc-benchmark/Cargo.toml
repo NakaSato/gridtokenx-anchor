@@ -1,6 +1,6 @@
 [package]
 name = "tpc-benchmark"
-version = "0.1.0"
+version = "0.1.1"
 description = "TPC-C/TPC-E Benchmark Implementation for Solana Anchor - PoA Environment"
 edition = "2021"
 license = "MIT"

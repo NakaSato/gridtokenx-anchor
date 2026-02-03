@@ -1,6 +1,16 @@
 # Trading Program: Technical Documentation for Research
 
-**Program ID:** `GTuRUUwCfvmqW7knqQtzQLMCy61p4UKUrdT5ssVgZbat`
+**Program ID:** `GTuRUUwCfvmqW7knqQtzQLMCy61p4UKUrdT5ssVgZbat`  
+**Version:** 2.0.0  
+**Last Updated:** February 2, 2026
+
+> **Deep Dive Documentation:**
+> - [AMM & Bonding Curves](./deep-dive/amm-bonding-curves.md) - Mathematical foundations for energy-specific AMMs
+> - [Periodic Auction System](./deep-dive/periodic-auction.md) - Batch clearing and uniform price discovery
+> - [Confidential Trading](./deep-dive/confidential-trading.md) - Privacy-preserving energy transactions
+> - [Dynamic Pricing Engine](./deep-dive/dynamic-pricing.md) - Time-of-use and demand-responsive pricing
+> - [Cross-Chain Bridge](./deep-dive/cross-chain-bridge.md) - Wormhole integration for multi-chain trading
+> - [Settlement Architecture](./deep-dive/settlement-architecture.md) - Atomic settlement and payment finality
 
 The **Trading** program implements a sophisticated multi-modal energy marketplace that combines traditional order book mechanics with automated market maker (AMM) liquidity pools, advanced pricing algorithms, and cross-chain settlement capabilities. This program represents a novel contribution to decentralized energy markets by integrating ERC validation, dynamic pricing, and privacy-preserving trading mechanisms.
 
@@ -462,3 +472,183 @@ For citation in academic papers:
 - Power Ledger (2016): Peer-to-peer energy trading (centralized oracle).
 - Energy Web Chain (2019): ERC-20 based RECs (no atomic settlement).
 - Solana DeFi Protocols: Serum, Orca (AMM reference implementations).
+
+---
+
+## Appendix A: Compute Unit (CU) Budget
+
+### A.1 Instruction CU Costs
+
+| Instruction | CU Cost | Accounts | Signers | Notes |
+|-------------|---------|----------|---------|-------|
+| `initialize_market` | ~25,000 | 4 | 1 | One-time setup |
+| `create_sell_order` | ~35,000 | 8 | 1 | +5k if ERC validation |
+| `create_buy_order` | ~30,000 | 7 | 1 | Market depth update |
+| `match_orders` | ~45,000 | 12 | 2 | Atomic settlement |
+| `cancel_order` | ~15,000 | 5 | 1 | Refund tokens |
+| `amm_swap_buy` | ~40,000 | 10 | 1 | Bonding curve calc |
+| `amm_swap_sell` | ~40,000 | 10 | 1 | Bonding curve calc |
+| `add_liquidity` | ~35,000 | 9 | 1 | LP token mint |
+| `remove_liquidity` | ~35,000 | 9 | 1 | LP token burn |
+| `submit_batch_order` | ~20,000 | 6 | 1 | Queue order |
+| `clear_batch` | ~80,000 | 15+ | 1 | Uniform price clearing |
+| `update_tou_config` | ~10,000 | 3 | 1 | Admin only |
+
+### A.2 CU Optimization Tips
+
+```
+Total CU Budget: 200,000 (default) / 1,400,000 (extended)
+
+Recommended Limits:
+- Simple order: request 50,000 CU
+- AMM swap: request 60,000 CU
+- Batch clear (10 orders): request 150,000 CU
+- Complex settlement: request extended budget
+```
+
+---
+
+## Appendix B: Account Size Calculations
+
+### B.1 Account Sizes
+
+| Account | Size (bytes) | Rent (SOL) | Formula |
+|---------|--------------|------------|---------|
+| `Market` | 2,048 | 0.01426 | 8 + 32 + 8×6 + (24×24) + (18×40) + 64 |
+| `Order` | 256 | 0.00178 | 8 + 32×2 + 8×4 + 1×4 + padding |
+| `AmmPool` | 512 | 0.00357 | 8 + 32×4 + 8×6 + 2 + padding |
+| `BatchOrder` | 128 | 0.00089 | 8 + 32 + 8×3 + 1×2 |
+| `SettlementBatch` | 4,488 | 0.03125 | 8 + 8×4 + 4 + 1 + (88×50) |
+| `PriceConfig` | 320 | 0.00223 | 8 + (16×18) + 8×2 |
+
+### B.2 Size Breakdown: Market Account
+
+```
+Field                    Type              Size
+─────────────────────────────────────────────────
+discriminator            [u8; 8]           8
+authority                Pubkey            32
+total_volume             u64               8
+total_trades             u32               4
+active_orders            u32               4
+market_fee_bps           u16               2
+clearing_enabled         u8                1
+_padding1                [u8; 1]           1
+last_clearing_price      u64               8
+volume_weighted_price    u64               8
+price_history            [PricePoint; 24]  576  (24 × 24)
+price_history_count      u8                1
+_padding2                [u8; 7]           7
+buy_side_depth           [PriceLevel; 20]  360  (20 × 18)
+sell_side_depth          [PriceLevel; 20]  360  (20 × 18)
+buy_side_depth_count     u8                1
+sell_side_depth_count    u8                1
+batch_config             BatchConfig       48
+current_batch            BatchInfo         32
+_reserved                [u8; 64]          64
+─────────────────────────────────────────────────
+TOTAL                                      ~1,526 (padded to 2,048)
+```
+
+---
+
+## Appendix C: CPI Dependency Graph
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           TRADING PROGRAM CPI GRAPH                             │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│                              ┌─────────────────┐                               │
+│                              │  TRADING        │                               │
+│                              │  PROGRAM        │                               │
+│                              └────────┬────────┘                               │
+│                                       │                                        │
+│          ┌────────────────────────────┼────────────────────────────┐          │
+│          │                            │                            │          │
+│          ▼                            ▼                            ▼          │
+│  ┌───────────────┐          ┌───────────────┐          ┌───────────────┐     │
+│  │   Token-2022  │          │   Governance  │          │   Registry    │     │
+│  │   Program     │          │   Program     │          │   Program     │     │
+│  ├───────────────┤          ├───────────────┤          ├───────────────┤     │
+│  │ • transfer    │          │ • validate_   │          │ • verify_     │     │
+│  │ • mint_to     │          │   erc_for_    │          │   user        │     │
+│  │ • burn        │          │   trading     │          │ • get_meter   │     │
+│  │ • approve     │          │               │          │   status      │     │
+│  └───────────────┘          └───────────────┘          └───────────────┘     │
+│          │                                                      │             │
+│          │                                                      │             │
+│          ▼                                                      ▼             │
+│  ┌───────────────┐                                    ┌───────────────┐      │
+│  │ Associated    │                                    │    Oracle     │      │
+│  │ Token Program │                                    │    Program    │      │
+│  ├───────────────┤                                    ├───────────────┤      │
+│  │ • create_ata  │                                    │ • get_price   │      │
+│  │               │                                    │ • get_tou     │      │
+│  └───────────────┘                                    └───────────────┘      │
+│                                                                               │
+│  OUTBOUND CPI CALLS:                                                         │
+│  ───────────────────                                                         │
+│  Trading → Token-2022:     transfer, mint_to, burn                          │
+│  Trading → Governance:     validate_erc_for_trading (read-only)             │
+│  Trading → Registry:       verify_user, get_meter_status (read-only)        │
+│  Trading → Oracle:         get_current_price, get_tou_multiplier            │
+│                                                                               │
+│  INBOUND CPI CALLS:                                                          │
+│  ──────────────────                                                          │
+│  Energy Token → Trading:   settlement_callback (future)                      │
+│                                                                               │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Appendix D: Network Requirements
+
+### D.1 RPC Endpoints
+
+| Network | Endpoint | Rate Limit | Use Case |
+|---------|----------|------------|----------|
+| Mainnet-Beta | `https://api.mainnet-beta.solana.com` | 100 req/10s | Production (limited) |
+| Mainnet RPC Provider | Helius, QuickNode, Triton | 500+ req/s | Production (recommended) |
+| Devnet | `https://api.devnet.solana.com` | 100 req/10s | Testing |
+| Localnet | `http://localhost:8899` | Unlimited | Development |
+
+### D.2 Validator Requirements (PoA Network)
+
+| Component | Minimum | Recommended | Notes |
+|-----------|---------|-------------|-------|
+| CPU | 12 cores | 32 cores | AMD EPYC / Intel Xeon |
+| RAM | 128 GB | 256 GB | ECC recommended |
+| Storage | 2 TB NVMe | 4 TB NVMe | PCIe 4.0 |
+| Network | 1 Gbps | 10 Gbps | Low latency (<10ms) |
+| OS | Ubuntu 20.04+ | Ubuntu 22.04 | Linux only |
+
+### D.3 Throughput Specifications
+
+| Metric | Value | Conditions |
+|--------|-------|------------|
+| Max TPS (theoretical) | 65,000 | Parallel non-conflicting |
+| Max TPS (trading) | 15,000 | Account contention |
+| Block Time | 400ms | PoH tick rate |
+| Finality | ~400ms | Optimistic confirmation |
+| Finality (guaranteed) | ~13s | 32 confirmations |
+
+### D.4 WebSocket Subscriptions
+
+```typescript
+// Recommended subscription pattern for trading
+const subscriptions = {
+  // Account updates for market state
+  market: connection.onAccountChange(marketPda, callback),
+  
+  // Program logs for trade events
+  trades: connection.onLogs(tradingProgramId, callback),
+  
+  // Slot updates for timing
+  slots: connection.onSlotChange(callback),
+};
+
+// Rate limits: 40 subscriptions per connection
+// Reconnect strategy: Exponential backoff (1s, 2s, 4s, 8s, max 30s)
+```

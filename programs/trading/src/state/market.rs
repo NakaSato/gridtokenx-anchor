@@ -15,7 +15,8 @@ pub struct Market {
     pub total_trades: u32,              // 4
     pub market_fee_bps: u16,            // 2
     pub clearing_enabled: u8,           // 1
-    pub _padding1: [u8; 5],             // 5 -> 80
+    pub locked: u8,                     // 1 (Re-entrancy Guard)
+    pub _padding1: [u8; 4],             // 4 -> 80
 
     // === BATCH PROCESSING ===
     pub batch_config: BatchConfig,      // 24

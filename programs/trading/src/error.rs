@@ -32,4 +32,6 @@ pub enum TradingError {
     BatchProcessingDisabled,
     #[msg("Batch size exceeded")]
     BatchSizeExceeded,
+    #[msg("Re-entrancy Guard Lock")]
+    ReentrancyLock,
 }

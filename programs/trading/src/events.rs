@@ -78,7 +78,6 @@ pub struct AuctionOrderSubmitted {
     pub price: u64,
     pub amount: u64,
     pub is_bid: bool,
-    pub timestamp: i64,
 }
 
 #[event]
@@ -86,7 +85,6 @@ pub struct AuctionResolved {
     pub batch_id: u64,
     pub clearing_price: u64,
     pub clearing_volume: u64,
-    pub timestamp: i64,
 }
 
 #[event]
@@ -96,6 +94,4 @@ pub struct AuctionSettled {
     pub seller: Pubkey,
     pub amount: u64,
     pub price: u64,
-    pub total_value: u64,
-    pub timestamp: i64,
 }

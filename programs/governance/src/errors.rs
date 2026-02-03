@@ -74,4 +74,8 @@ pub enum GovernanceError {
     OracleConfidenceTooLow,
     #[msg("Invalid oracle authority")]
     InvalidOracleAuthority,
+    #[msg("Validation data too long")]
+    ValidationDataTooLong,
+    #[msg("Invalid meter account")]
+    InvalidMeterAccount,
 }

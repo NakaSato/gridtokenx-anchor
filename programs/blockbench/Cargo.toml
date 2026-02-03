@@ -1,6 +1,6 @@
 [package]
 name = "blockbench"
-version = "0.1.0"
+version = "0.1.1"
 description = "BLOCKBENCH Micro-benchmarks for Solana/Anchor - Consensus, Execution, and Storage Layer Testing"
 edition = "2021"
 

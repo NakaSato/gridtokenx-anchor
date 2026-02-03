@@ -1,7 +1,15 @@
 # Chapter 10: Future Roadmap and Development Strategy
 
 > **GridTokenX Platform Strategic Development Plan**  
-> *January 2026 Edition*
+> *February 2026 Edition*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [Cross-Chain Bridge](../programs/deep-dive/cross-chain-bridge.md) - Multi-chain expansion
+> - [Business Model](./02-business-model.md) - Revenue strategy
+> - [Token Economics](./05-token-economics.md) - Token growth model
 
 ---
 

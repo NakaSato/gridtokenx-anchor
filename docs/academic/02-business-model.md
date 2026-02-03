@@ -2,7 +2,15 @@
 
 ## GridTokenX Platform Business Model Analysis
 
-> *January 2026 Edition - Research Paper Documentation*
+> *February 2026 Edition - Research Paper Documentation*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [Token Economics](./05-token-economics.md) - GRX token design and mechanisms
+> - [Carbon Credit System](../programs/deep-dive/carbon-credits.md) - REC revenue model
+> - [Dynamic Pricing](../programs/deep-dive/dynamic-pricing.md) - Pricing strategy
 
 ---
 

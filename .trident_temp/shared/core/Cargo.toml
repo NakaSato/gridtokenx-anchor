@@ -1,0 +1,13 @@
+[package]
+name = "gridtokenx-shared"
+version = "0.1.0"
+description = "Shared utilities and types for GridTokenX Anchor programs"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "gridtokenx_shared"
+
+[dependencies]
+anchor-lang = "0.32.0"

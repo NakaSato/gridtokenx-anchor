@@ -2,7 +2,15 @@
 
 ## GridTokenX Quality Assurance Framework
 
-> *January 2026 Edition*
+> *February 2026 Edition*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [BLOCKBENCH](../programs/blockbench.md) - Micro-benchmark implementation
+> - [TPC-C Benchmark](../programs/tpc-benchmark.md) - OLTP benchmark
+> - [Research Methodology](./08-research-methodology.md) - DSR framework
 
 ---
 

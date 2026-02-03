@@ -75,7 +75,7 @@ pub mod oracle {
         reading_timestamp: i64,
     ) -> Result<()> {
         compute_fn!("submit_meter_reading" => {
-            let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
+            let oracle_data = ctx.accounts.oracle_data.load()?;
 
             require!(oracle_data.active == 1, OracleError::OracleInactive);
 
@@ -86,26 +86,14 @@ pub mod oracle {
 
             let current_time = Clock::get()?.unix_timestamp;
             
-            require!(
-                reading_timestamp > oracle_data.last_reading_timestamp,
-                OracleError::OutdatedReading
-            );
-
+            // Validate timestamp sanity relative to current time only
+            // We removed the global `last_reading_timestamp` check to allow parallel readings
             require!(
                 reading_timestamp <= current_time + 60,
                 OracleError::FutureReading
             );
 
-            if oracle_data.last_reading_timestamp > 0 {
-                let time_since_last = reading_timestamp - oracle_data.last_reading_timestamp;
-                require!(
-                    time_since_last >= oracle_data.min_reading_interval as i64,
-                    OracleError::RateLimitExceeded
-                );
-                
-                update_reading_interval(&mut oracle_data, time_since_last as u32)?;
-            }
-
+            // Validation logic (stateless)
             let validation_result = validate_meter_reading(
                 energy_produced,
                 energy_consumed,
@@ -114,15 +102,7 @@ pub mod oracle {
 
             match validation_result {
                 Ok(_) => {
-                    oracle_data.total_readings += 1;
-                    oracle_data.last_reading_timestamp = reading_timestamp;
-                    oracle_data.total_valid_readings += 1;
-                    
-                    oracle_data.last_energy_produced = energy_produced;
-                    oracle_data.last_energy_consumed = energy_consumed;
-                    
-                    update_quality_score(&mut oracle_data, true)?;
-
+                    // We no longer update global counters to avoid write contention
                     emit!(MeterReadingSubmitted {
                         meter_id: meter_id.clone(),
                         energy_produced,
@@ -132,9 +112,6 @@ pub mod oracle {
                     });
                 },
                 Err(e) => {
-                    oracle_data.total_rejected_readings += 1;
-                    update_quality_score(&mut oracle_data, false)?;
-                    
                     emit!(MeterReadingRejected {
                         meter_id: meter_id.clone(),
                         energy_produced,
@@ -456,7 +433,7 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct SubmitMeterReading<'info> {
-    #[account(mut)]
+    #[account()]
     pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,

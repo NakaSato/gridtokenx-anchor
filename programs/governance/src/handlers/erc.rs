@@ -14,6 +14,7 @@ pub fn issue(
     let poa_config = &mut ctx.accounts.poa_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let meter_data = ctx.accounts.meter_account.try_borrow_data()?;
+    require!(meter_data.len() >= 8 + std::mem::size_of::<MeterAccount>(), GovernanceError::InvalidMeterAccount);
     let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
     let clock = Clock::get()?;
 
@@ -37,6 +38,10 @@ pub fn issue(
     require!(
         renewable_source.len() <= 64,
         GovernanceError::SourceNameTooLong
+    );
+    require!(
+        validation_data.len() <= 256,
+        GovernanceError::ValidationDataTooLong
     );
 
     // === CRITICAL: PREVENT DOUBLE-CLAIMING ===

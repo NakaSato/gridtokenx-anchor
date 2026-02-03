@@ -1,6 +1,12 @@
 # Governance Program: Technical Documentation for Research
 
-**Program ID:** `51d3SDcs5coxkiwvcjMzPrKeajTPF9yikw66WezipTva`
+**Program ID:** `51d3SDcs5coxkiwvcjMzPrKeajTPF9yikw66WezipTva`  
+**Version:** 2.0.0  
+**Last Updated:** February 2, 2026
+
+> **Deep Dive Documentation:**
+> - [Carbon Credit System](./deep-dive/carbon-credits.md) - REC tokenization and carbon offset tracking
+> - [Oracle Security Model](./deep-dive/oracle-security.md) - Data validation and BFT consensus
 
 This document provides a comprehensive technical analysis of the **Governance** program, which implements a **Proof of Authority (PoA)** consensus model coupled with **Renewable Energy Certificate (REC)** issuance and validation for decentralized energy trading systems. This is designed for inclusion in academic research papers examining blockchain-based energy grid management.
 
@@ -299,4 +305,223 @@ For citation in academic papers:
   booktitle={Proceedings of [Conference]},
   year={2026}
 }
+```
+
+---
+
+## Appendix A: Compute Unit (CU) Budget
+
+### A.1 Instruction CU Costs
+
+| Instruction | CU Cost | Accounts | Signers | Notes |
+|-------------|---------|----------|---------|-------|
+| `initialize` | ~10,000 | 3 | 1 | PoAConfig creation |
+| `issue_erc` | ~18,000 | 6 | 1 | Certificate creation + Registry read |
+| `validate_erc_for_trading` | ~5,000 | 3 | 1 | Status update |
+| `revoke_erc` | ~6,000 | 3 | 1 | Status + reason update |
+| `transfer_erc_ownership` | ~5,000 | 3 | 2 | Owner change |
+| `emergency_pause` | ~3,000 | 2 | 1 | Circuit breaker |
+| `emergency_resume` | ~3,000 | 2 | 1 | Circuit breaker |
+| `set_maintenance_mode` | ~3,000 | 2 | 1 | Soft pause |
+| `update_erc_config` | ~4,000 | 2 | 1 | Parameter update |
+| `update_oracle_config` | ~4,000 | 2 | 1 | Oracle settings |
+| `propose_authority_change` | ~5,000 | 2 | 1 | Multi-sig step 1 |
+| `approve_authority_change` | ~5,000 | 2 | 1 | Multi-sig step 2 |
+
+### A.2 ERC Lifecycle CU Analysis
+
+```
+Complete ERC Lifecycle:
+─────────────────────────────────────────────────
+1. issue_erc              18,000 CU
+2. validate_erc_for_trading 5,000 CU
+3. (Trading operations)       N/A (Trading Program)
+4. transfer_erc_ownership  5,000 CU (optional)
+5. revoke_erc (if needed)  6,000 CU
+─────────────────────────────────────────────────
+Total Lifecycle:          ~34,000 CU
+
+Certificate Issuance Throughput:
+- CU per certificate: 18,000
+- Max per block (200k): 11 certificates
+- Blocks/second: 2.5
+- Max throughput: ~27 certificates/second
+```
+
+---
+
+## Appendix B: Account Size Calculations
+
+### B.1 Account Sizes
+
+| Account | Size (bytes) | Rent (SOL) | Formula |
+|---------|--------------|------------|----------|
+| `PoAConfig` | ~650 | 0.00492 | Variable (strings) |
+| `ErcCertificate` | ~630 | 0.00478 | Variable (strings) |
+
+### B.2 Size Breakdown: PoAConfig
+
+```
+Field                        Type              Size (est.)
+─────────────────────────────────────────────────────────
+discriminator                [u8; 8]           8
+authority                    Pubkey            32
+authority_name               String            4 + 64 (max)
+contact_info                 String            4 + 128 (max)
+emergency_paused             bool              1
+emergency_timestamp          Option<i64>       1 + 8
+maintenance_mode             bool              1
+erc_validation_enabled       bool              1
+min_energy_amount            u64               8
+max_erc_amount               u64               8
+erc_validity_period          i64               8
+require_oracle_validation    bool              1
+total_ercs_issued            u64               8
+total_ercs_validated         u64               8
+total_ercs_revoked           u64               8
+total_energy_certified       u64               8
+pending_authority            Option<Pubkey>    1 + 32
+pending_authority_expires_at Option<i64>       1 + 8
+oracle_min_confidence        u8                1
+─────────────────────────────────────────────────────────
+TOTAL (estimated)                              ~650 bytes
+```
+
+### B.3 Size Breakdown: ErcCertificate
+
+```
+Field                        Type              Size (est.)
+─────────────────────────────────────────────────────────
+discriminator                [u8; 8]           8
+certificate_id               String            4 + 64 (max)
+authority                    Pubkey            32
+owner                        Pubkey            32
+energy_amount                u64               8
+renewable_source             String            4 + 32 (max)
+validation_data              String            4 + 256 (max)
+issued_at                    i64               8
+expires_at                   Option<i64>       1 + 8
+status                       ErcStatus         1
+validated_for_trading        bool              1
+revocation_reason            Option<String>    1 + 4 + 128
+transfer_count               u8                1
+meter_id                     [u8; 32]          32
+─────────────────────────────────────────────────────────
+TOTAL (estimated)                              ~630 bytes
+```
+
+### B.4 PDA Derivation Reference
+
+| PDA | Seeds | Bump Storage |
+|-----|-------|---------------|
+| `PoAConfig` | `["poa_config"]` | In account |
+| `ErcCertificate` | `["erc_certificate", certificate_id]` | In account |
+
+---
+
+## Appendix C: CPI Dependency Graph
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        GOVERNANCE PROGRAM CPI GRAPH                             │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   ┌─────────────────┐                                                          │
+│   │  POA AUTHORITY  │                                                          │
+│   │  (Admin Key)    │                                                          │
+│   └────────┬────────┘                                                          │
+│            │ issue_erc, validate_erc, emergency_pause                          │
+│            ▼                                                                    │
+│   ┌─────────────────┐         ┌─────────────────┐                              │
+│   │  GOVERNANCE     │────────►│  REGISTRY       │                              │
+│   │  PROGRAM        │  read   │  PROGRAM        │                              │
+│   │                 │ Meter   │                 │                              │
+│   │                 │ Account │                 │                              │
+│   └────────┬────────┘         └─────────────────┘                              │
+│            │                                                                    │
+│            │ (Future: CPI to update claimed_erc_generation)                    │
+│            │                                                                    │
+│   ┌────────┴────────┐                                                          │
+│   │  TRADING        │                                                          │
+│   │  PROGRAM        │                                                          │
+│   │  (reads ERC)    │                                                          │
+│   └─────────────────┘                                                          │
+│                                                                                 │
+│  OUTBOUND CPI CALLS:                                                           │
+│  ───────────────────                                                           │
+│  Governance → Registry:    read MeterAccount (verify unclaimed generation)     │
+│  Governance → Registry:    (future) update claimed_erc_generation              │
+│                                                                                 │
+│  INBOUND CPI CALLS:                                                            │
+│  ──────────────────                                                            │
+│  Trading → Governance:     read ErcCertificate (verify seller has valid REC)   │
+│  Oracle → Governance:      (optional) validate_with_oracle_data                │
+│                                                                                 │
+│  ERC LIFECYCLE FLOW:                                                           │
+│  ──────────────────                                                            │
+│  1. Prosumer generates energy → Meter records generation                       │
+│  2. Authority issues ERC → Certificate created, Registry.claimed updated       │
+│  3. Authority validates ERC → Certificate approved for trading                 │
+│  4. Prosumer lists for sale → Trading reads ERC validity                       │
+│  5. (Optional) Transfer ERC → New owner recorded                               │
+│  6. (Optional) Revoke ERC → Certificate invalidated                            │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Appendix D: Network Requirements
+
+### D.1 Governance-Specific Infrastructure
+
+| Component | Requirement | Notes |
+|-----------|-------------|-------|
+| Authority Server | 2 vCPU, 4 GB RAM | Certificate management |
+| HSM | AWS CloudHSM / YubiHSM | Authority key protection |
+| Audit Database | PostgreSQL 14+ | Certificate audit trail |
+| Monitoring | Prometheus + Grafana | Emergency alert system |
+| Backup Key | Cold storage | Authority recovery |
+
+### D.2 Certificate Throughput Analysis
+
+| Operation | Expected Volume | TPS Required | CU/sec |
+|-----------|-----------------|--------------|--------|
+| ERC Issuance | ~500/day | 0.006 | 108 |
+| ERC Validation | ~400/day | 0.005 | 25 |
+| ERC Transfer | ~100/day | 0.001 | 5 |
+| ERC Revocation | ~10/day | 0.0001 | 0.6 |
+| **Peak (burst)** | ~50/minute | **0.83** | **15,000** |
+
+### D.3 Latency Requirements
+
+| Operation | Max Latency | P99 Target |
+|-----------|-------------|------------|
+| ERC Issuance | 3s | 1s |
+| ERC Validation | 2s | 500ms |
+| Emergency Pause | 500ms | 200ms |
+| Authority Transfer (Step 1) | 2s | 1s |
+| Authority Transfer (Step 2) | 2s | 1s |
+
+### D.4 High Availability Considerations
+
+```
+Authority Key Security:
+────────────────────────────────────────────────
+- Primary: HSM-protected key (online)
+- Backup: Cold storage (offline)
+- Recovery: Multi-party key reconstruction
+
+Emergency Response:
+────────────────────────────────────────────────
+- Circuit breaker latency: <500ms
+- Alert propagation: <1 minute
+- Manual override capability: Required
+
+Audit & Compliance:
+────────────────────────────────────────────────
+- All certificate events → Immutable on-chain log
+- Off-chain backup → PostgreSQL with 7-year retention
+- Real-time monitoring → Grafana dashboards
+- Regulatory reporting → Automated quarterly exports
 ```

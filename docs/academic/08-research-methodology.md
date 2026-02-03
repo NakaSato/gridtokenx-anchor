@@ -2,7 +2,15 @@
 
 ## GridTokenX Academic Research Framework
 
-> *January 2026 Edition*
+> *February 2026 Edition*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [Software Testing](./11-software-testing.md) - Validation framework
+> - [Comparative Analysis](./09-comparative-analysis.md) - Platform comparison
+> - [BLOCKBENCH](../programs/blockbench.md) - Benchmark methodology
 
 ---
 

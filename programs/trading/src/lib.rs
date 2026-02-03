@@ -166,6 +166,18 @@ pub mod trading {
             order.expires_at = clock.unix_timestamp + 86400; // 24h default
 
             market.active_orders += 1;
+            
+            // Project Key
+            let order_key = ctx.accounts.order.key();
+
+            emit!(SellOrderCreated {
+                seller: ctx.accounts.authority.key(),
+                order_id: order_key,
+                amount: energy_amount,
+                price_per_kwh: price_per_kwh,
+                timestamp: clock.unix_timestamp,
+            });
+
             Ok(())
         })
     }
@@ -273,8 +285,11 @@ pub mod trading {
             // Fix value at matching order (GRX Token Standard)
             // Use the seller's asking price as the clearing price (Pay-as-Seller)
             let clearing_price = sell_order.price_per_kwh;
-            let total_value = actual_match_amount * clearing_price;
-            let fee_amount = (total_value * market.market_fee_bps as u64) / 10000;
+            let total_value = actual_match_amount.saturating_mul(clearing_price);
+            let fee_amount = total_value
+                .checked_mul(market.market_fee_bps as u64)
+                .map(|v| v / 10000)
+                .unwrap_or(0);
 
             // Update orders
             buy_order.filled_amount += actual_match_amount;
@@ -529,7 +544,10 @@ pub mod trading {
             // Note: price is already matched by Gateway
             
             let total_currency_value = amount.saturating_mul(price);
-            let market_fee = (total_currency_value * market.market_fee_bps as u64) / 10000;
+            let market_fee = total_currency_value
+                .checked_mul(market.market_fee_bps as u64)
+                .map(|v| v / 10000)
+                .unwrap_or(0);
             let net_seller_amount = total_currency_value
                 .saturating_sub(market_fee)
                 .saturating_sub(wheeling_charge);
@@ -813,14 +831,23 @@ pub mod trading {
 
     /// Initialize a new auction batch
     pub fn initialize_auction(ctx: Context<InitializeAuction>, batch_id: u64, duration: i64) -> Result<()> {
-        let batch = &mut ctx.accounts.batch;
+        let mut batch = ctx.accounts.batch.load_init()?;
+        let market = ctx.accounts.market.load()?;
+        
+        require_keys_eq!(
+            market.authority,
+            ctx.accounts.authority.key(),
+            TradingError::UnauthorizedAuthority
+        );
+
         batch.market = ctx.accounts.market.key();
         batch.batch_id = batch_id;
         batch.state = AuctionState::Open as u8;
         batch.start_time = Clock::get()?.unix_timestamp;
         batch.end_time = batch.start_time + duration;
         batch.bump = ctx.bumps.batch;
-        batch.orders = Vec::new();
+        batch.order_count = 0;
+        // orders array is zeroed by default in load_init
         
         msg!("Auction Batch {} Initialized. Ends at {}", batch_id, batch.end_time);
         Ok(())
@@ -833,20 +860,20 @@ pub mod trading {
         amount: u64,
         is_bid: bool,
     ) -> Result<()> {
-        let batch = &mut ctx.accounts.batch;
+        let mut batch = ctx.accounts.batch.load_mut()?;
         let clock = Clock::get()?;
+        let authority_key = ctx.accounts.authority.key();
 
         // Checks
         require!(batch.state == AuctionState::Open as u8, AuctionError::AuctionNotOpen);
         require!(clock.unix_timestamp < batch.end_time, AuctionError::AuctionNotOpen);
-        require!(batch.orders.len() < 50, AuctionError::BatchFull);
+        
+        // Check capacity
+        let current_count = batch.order_count as usize;
+        require!(current_count < 50, AuctionError::BatchFull);
 
         // LOCK ASSETS (Escrow)
         // Transfer from user to batch vault
-        // Amount to lock:
-        // - Bid: price * amount (Currency)
-        // - Ask: amount (Energy)
-        
         let lock_amount = if is_bid {
             price.checked_mul(amount).ok_or(TradingError::InvalidAmount)?
         } else {
@@ -869,14 +896,17 @@ pub mod trading {
         }
 
         let order = AuctionOrder {
-            order_id: ctx.accounts.authority.key(),
+            order_id: authority_key,
             price,
             amount,
-            is_bid,
+            is_bid: if is_bid { 1 } else { 0 },
             timestamp: clock.unix_timestamp,
+            _padding: [0; 7],
         };
         
-        batch.orders.push(order);
+        // Insert order
+        batch.orders[current_count] = order;
+        batch.order_count += 1;
         
         emit!(AuctionOrderSubmitted {
             batch_id: batch.batch_id,
@@ -884,7 +914,6 @@ pub mod trading {
             price,
             amount,
             is_bid,
-            timestamp: clock.unix_timestamp,
         });
         
         Ok(())
@@ -892,7 +921,7 @@ pub mod trading {
 
     /// Resolve the auction by calculating the uniform clearing price
     pub fn resolve_auction(ctx: Context<ResolveAuction>) -> Result<()> {
-        let batch = &mut ctx.accounts.batch;
+        let mut batch = ctx.accounts.batch.load_mut()?;
         let clock = Clock::get()?;
 
         // Checks
@@ -906,7 +935,8 @@ pub mod trading {
         batch.state = AuctionState::Locked as u8;
 
         // Calculate Clearing Price
-        let (clearing_price, clearing_volume) = auction::calculate_clearing_price(&batch.orders);
+        let count = batch.order_count as usize;
+        let (clearing_price, clearing_volume) = auction::calculate_clearing_price(&batch.orders[0..count]);
         
         batch.clearing_price = clearing_price;
         batch.clearing_volume = clearing_volume;
@@ -916,7 +946,6 @@ pub mod trading {
             batch_id: batch.batch_id,
             clearing_price,
             clearing_volume,
-            timestamp: clock.unix_timestamp,
         });
         
         Ok(())
@@ -931,25 +960,22 @@ pub mod trading {
         ask_order_idx: u32,
         settle_amount: u64
     ) -> Result<()> {
-        let batch = &mut ctx.accounts.batch;
+        let mut batch_guard = ctx.accounts.batch.load_mut()?;
 
         // Checks
-        require!(batch.state == AuctionState::Cleared as u8, AuctionError::AuctionNotReady);
-        let clearing_price = batch.clearing_price;
+        require!(batch_guard.state == AuctionState::Cleared as u8, AuctionError::AuctionNotReady);
+        let clearing_price = batch_guard.clearing_price;
         require!(clearing_price > 0, AuctionError::AuctionNotReady);
-
-        // Access Orders (Mutable because we need to update filled amount if we track it, 
-        // essentially we are removing them or marking them settled.
-        // For MVP, since we don't have per-order state in the vector efficiently accessible for modification without cloning cost,
-        // we realistically would just verify requirements and perform transfer.
-        // In production, we'd mark them as filled in a separate bitmap or localized state.)
         
-        let bid_order = batch.orders[bid_order_idx as usize];
-        let ask_order = batch.orders[ask_order_idx as usize];
+        require!((bid_order_idx as usize) < batch_guard.order_count as usize, AuctionError::InvalidOrderIndex);
+        require!((ask_order_idx as usize) < batch_guard.order_count as usize, AuctionError::InvalidOrderIndex);
+        
+        let bid_order = batch_guard.orders[bid_order_idx as usize];
+        let ask_order = batch_guard.orders[ask_order_idx as usize];
 
         // Validation
-        require!(bid_order.is_bid, AuctionError::PriceMismatch);
-        require!(!ask_order.is_bid, AuctionError::PriceMismatch);
+        require!(bid_order.is_bid == 1, AuctionError::PriceMismatch);
+        require!(ask_order.is_bid == 0, AuctionError::PriceMismatch);
         require!(bid_order.price >= clearing_price, AuctionError::PriceMismatch); // Buyer willing to pay >= MCP
         require!(ask_order.price <= clearing_price, AuctionError::PriceMismatch); // Seller willing to accept <= MCP
         require!(ctx.accounts.buyer_authority.key() == bid_order.order_id, TradingError::UnauthorizedAuthority);
@@ -957,28 +983,28 @@ pub mod trading {
 
         // Transfer Logic (Vault -> Destination)
         let transfer_value = settle_amount.checked_mul(clearing_price).unwrap();
-        let _batch_key = batch.key();
+        let _batch_key = ctx.accounts.batch.key();
         
+        // Re-entrancy Guard
+        require!(batch_guard.locked == 0, TradingError::ReentrancyLock);
+        batch_guard.locked = 1;
+
+        // Capture data needed for seeds before dropping the guard
+        let batch_id_bytes = batch_guard.batch_id.to_le_bytes();
+        let market_key = batch_guard.market;
+        let batch_bump = batch_guard.bump;
+        let batch_id_val = batch_guard.batch_id;
+
+        // Drop the RefMut to avoid "AccountBorrowFailed" during CPI
+        drop(batch_guard);
+
         // 1. Transfer Currency: Vault -> Seller
         {
-            let _mint_key = ctx.accounts.currency_mint.key();
-            // Note: Context bumps don't strictly auto-populate non-init accounts in older anchor? 
-            // We can use find_program_address to get bump or store it.
-            // For simplicity in MVP, assume standard bump derivation works in seeds constraint.
-            // Actually, to sign, we need the seeds.
-            // Seeds: [b"auction", market, batch_id] -> No this is Batch PDA seeds.
-            // Vault Seeds: [b"batch_vault", batch_key, mint_key]
-            // Wait, `batch` is the authority of the vault. 
-            // Does `batch` sign? Yes. The vault authority is `batch`.
-            // So we need `batch` seeds to sign.
-            
-            let batch_id_bytes = batch.batch_id.to_le_bytes();
-            let market_key = batch.market;
             let batch_seeds = &[
                 b"auction",
                 market_key.as_ref(),
                 batch_id_bytes.as_ref(),
-                &[batch.bump],
+                &[batch_bump],
             ];
             let signer_seeds = &[&batch_seeds[..]];
 
@@ -986,7 +1012,7 @@ pub mod trading {
                 from: ctx.accounts.buyer_currency_vault.to_account_info(),
                 mint: ctx.accounts.currency_mint.to_account_info(),
                 to: ctx.accounts.seller_currency.to_account_info(),
-                authority: batch.to_account_info(),
+                authority: ctx.accounts.batch.to_account_info(), 
             };
             let cpi_ctx_curr = CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(), 
@@ -998,13 +1024,11 @@ pub mod trading {
 
         // 2. Transfer Energy: Vault -> Buyer
         {
-             let batch_id_bytes = batch.batch_id.to_le_bytes();
-            let market_key = batch.market;
              let batch_seeds = &[
                 b"auction",
                 market_key.as_ref(),
                 batch_id_bytes.as_ref(),
-                &[batch.bump],
+                &[batch_bump],
             ];
             let signer_seeds = &[&batch_seeds[..]];
 
@@ -1012,7 +1036,7 @@ pub mod trading {
                 from: ctx.accounts.seller_energy_vault.to_account_info(),
                 mint: ctx.accounts.energy_mint.to_account_info(),
                 to: ctx.accounts.buyer_energy.to_account_info(),
-                authority: batch.to_account_info(),
+                authority: ctx.accounts.batch.to_account_info(),
             };
             let cpi_ctx_energy = CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(), 
@@ -1023,14 +1047,17 @@ pub mod trading {
         }
 
         emit!(AuctionSettled {
-            batch_id: batch.batch_id,
+            batch_id: batch_id_val,
             buyer: ctx.accounts.buyer_authority.key(),
             seller: ctx.accounts.seller_authority.key(),
             amount: settle_amount,
             price: clearing_price,
-            total_value: transfer_value,
-            timestamp: Clock::get()?.unix_timestamp,
         });
+
+        // Re-acquire lock to update state
+        let mut batch_guard = ctx.accounts.batch.load_mut()?;
+        // Release Lock
+        batch_guard.locked = 0;
 
         Ok(())
     }
@@ -1040,27 +1067,36 @@ pub mod trading {
         ctx: Context<CancelAuctionOrder>,
         order_idx: u32
     ) -> Result<()> {
-        let batch = &mut ctx.accounts.batch;
+        let mut batch = ctx.accounts.batch.load_mut()?;
         let clock = Clock::get()?;
 
         // Checks
         require!(batch.state == AuctionState::Open as u8, AuctionError::AuctionNotOpen);
         // Ensure index is valid
-        require!((order_idx as usize) < batch.orders.len(), TradingError::InvalidAmount); // Generic error for index
+        let current_count = batch.order_count as usize;
+        require!((order_idx as usize) < current_count, AuctionError::InvalidOrderIndex);
 
         // Check authority
-        let order = &batch.orders[order_idx as usize];
+        let order = batch.orders[order_idx as usize];
         require!(order.order_id == ctx.accounts.authority.key(), TradingError::UnauthorizedAuthority);
 
         // Calculate Refund Amount
-        let refund_amount = if order.is_bid {
+        let refund_amount = if order.is_bid == 1 {
             order.price.checked_mul(order.amount).unwrap()
         } else {
             order.amount
         };
 
-        // Remove order (swap_remove is efficient)
-        batch.orders.swap_remove(order_idx as usize);
+        // Remove order (swap remove)
+        let last_idx = current_count - 1;
+        if (order_idx as usize) != last_idx {
+            // Move last element to current position
+            batch.orders[order_idx as usize] = batch.orders[last_idx];
+        }
+        // Decrease count (effectively removing last element)
+        batch.order_count -= 1;
+        // Optional: clear memory of the removed item for hygiene, though not strictly needed as count is guard
+        // batch.orders[last_idx] = AuctionOrder::default();
 
         // REFUND ASSETS (Vault -> User)
         if refund_amount > 0 {
@@ -1182,11 +1218,29 @@ pub mod trading {
         carbon::process_mint_rec_certificate(ctx, generation_start, generation_end)
     }
 
+    /// Retire a REC certificate for compliance or voluntary offset
+    pub fn retire_rec_certificate(
+        ctx: Context<RetireRecCertificate>,
+        reason: u8,
+        beneficiary: [u8; 32],
+        compliance_period: [u8; 16],
+    ) -> Result<()> {
+        carbon::process_retire_rec_certificate(ctx, reason, beneficiary, compliance_period)
+    }
+
     /// Update the batch processing configuration for the market
     pub fn update_batch_config(ctx: Context<UpdateBatchConfig>, config: BatchConfig) -> Result<()> {
         let mut market = ctx.accounts.market.load_mut()?;
         market.batch_config = config;
         Ok(())
+    }
+
+    /// Prototype: Execute confidential settlement
+    pub fn prototype_confidential_settlement<'info>(
+        ctx: Context<'_, '_, '_, 'info, ConfidentialSettlement<'info>>,
+        encrypted_amount: ElGamalCiphertext,
+    ) -> Result<()> {
+        privacy::execute_confidential_settlement_prototype(ctx, encrypted_amount)
     }
 }
 
@@ -1529,14 +1583,13 @@ pub struct InitializeAuction<'info> {
     #[account(
         init,
         payer = authority,
-        space = AuctionBatch::LEN,
+        space = 8 + std::mem::size_of::<AuctionBatch>(),
         seeds = [b"auction", market.key().as_ref(), &batch_id.to_le_bytes()],
         bump
     )]
-    pub batch: Account<'info, AuctionBatch>,
+    pub batch: AccountLoader<'info, AuctionBatch>,
     
-    /// CHECK: Market verification
-    pub market: AccountInfo<'info>,
+    pub market: AccountLoader<'info, Market>,
     
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -1547,7 +1600,7 @@ pub struct InitializeAuction<'info> {
 #[derive(Accounts)]
 pub struct SubmitAuctionOrder<'info> {
     #[account(mut)]
-    pub batch: Account<'info, AuctionBatch>,
+    pub batch: AccountLoader<'info, AuctionBatch>,
     
     #[account(mut)]
     pub user_token_account: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
@@ -1574,14 +1627,14 @@ pub struct SubmitAuctionOrder<'info> {
 #[derive(Accounts)]
 pub struct ResolveAuction<'info> {
     #[account(mut)]
-    pub batch: Account<'info, AuctionBatch>,
+    pub batch: AccountLoader<'info, AuctionBatch>,
     pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct ExecuteSettlement<'info> {
     #[account(mut)]
-    pub batch: Account<'info, AuctionBatch>,
+    pub batch: AccountLoader<'info, AuctionBatch>,
 
     /// CHECK: Vault for Buyer's Currency (Source of payment)
     #[account(mut,
@@ -1598,11 +1651,11 @@ pub struct ExecuteSettlement<'info> {
     pub seller_energy_vault: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
 
     /// CHECK: Seller's Currency Account (Destination for payment)
-    #[account(mut)]
+    #[account(mut, constraint = seller_currency.owner == seller_authority.key() @ TradingError::UnauthorizedAuthority)]
     pub seller_currency: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
     
     /// CHECK: Buyer's Energy Account (Destination for energy)
-    #[account(mut)]
+    #[account(mut, constraint = buyer_energy.owner == buyer_authority.key() @ TradingError::UnauthorizedAuthority)]
     pub buyer_energy: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
 
     pub currency_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
@@ -1619,7 +1672,7 @@ pub struct ExecuteSettlement<'info> {
 #[derive(Accounts)]
 pub struct CancelAuctionOrder<'info> {
     #[account(mut)]
-    pub batch: Account<'info, AuctionBatch>,
+    pub batch: AccountLoader<'info, AuctionBatch>,
     
     #[account(mut)]
     pub user_token_account: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,

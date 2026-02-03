@@ -1,6 +1,6 @@
 [package]
 name = "energy-token"
-version = "0.1.0"
+version = "0.1.1"
 description = "Energy Token program for P2P Energy Trading - SPL token wrapper"
 edition = "2021"
 

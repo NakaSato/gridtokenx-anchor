@@ -1,6 +1,12 @@
 # TPC-C Benchmark for Solana: Technical Research Documentation
 
-**Program ID:** `BcXcPzZHpBJ82RwDSuVY2eVCXj3enda8R3AxUTjXwFgu`
+**Program ID:** `BcXcPzZHpBJ82RwDSuVY2eVCXj3enda8R3AxUTjXwFgu`  
+**Version:** 2.0.0  
+**Last Updated:** February 2, 2026
+
+> **Related Documentation:**
+> - [BLOCKBENCH](./blockbench.md) - Complementary micro-benchmark suite
+> - [Performance Analysis](../academic/performance-analysis.md) - Benchmark results and methodology
 
 This document provides a comprehensive academic analysis of the **TPC-C (Transaction Processing Performance Council - Benchmark C)** implementation for Solana blockchain. This is the first complete implementation of the industry-standard OLTP (Online Transaction Processing) benchmark on a blockchain platform, enabling rigorous comparative analysis with traditional database systems.
 

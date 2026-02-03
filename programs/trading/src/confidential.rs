@@ -101,7 +101,7 @@ pub fn process_unshield_energy(
 /// Private Transfer - Send encrypted tokens between confidential accounts
 pub fn process_private_transfer(
     ctx: Context<PrivateTransfer>,
-    amount: u64, // The amount is hidden in the proof, but for MVP we pass it to verify against proof commitments if needed, or if the proof is stubbed
+    _amount: u64, // The amount is hidden in the proof, but for MVP we pass it to verify against proof commitments if needed, or if the proof is stubbed
     encrypted_amount: ElGamalCiphertext, // The encrypted transfer amount
     _proof: TransferProof, // Proves old_A - amount = new_A, old_B + amount = new_B, and amount > 0
 ) -> Result<()> {
@@ -205,4 +205,43 @@ pub struct PrivateTransfer<'info> {
     
     #[account(mut)]
     pub owner: Signer<'info>, // Sender owner
+}
+#[account]
+pub struct ConfidentialBalance {
+    pub owner: Pubkey,
+    pub mint: Pubkey,
+    pub encrypted_amount: ElGamalCiphertext,
+    pub pending_amount: u64,
+    pub last_update_slot: u64,
+    pub bump: u8,
+}
+
+impl ConfidentialBalance {
+    pub const LEN: usize = 8 + 32 + 32 + 64 + 8 + 8 + 1;
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
+pub struct RangeProof {
+    pub proof: [u8; 64], // Simplified placeholder
+}
+
+impl Default for RangeProof {
+    fn default() -> Self {
+        Self {
+            proof: [0u8; 64],
+        }
+    }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
+pub struct TransferProof {
+    pub proof: [u8; 64], // Simplified placeholder
+}
+
+impl Default for TransferProof {
+    fn default() -> Self {
+        Self {
+            proof: [0u8; 64],
+        }
+    }
 }

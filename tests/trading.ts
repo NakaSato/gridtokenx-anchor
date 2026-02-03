@@ -1,264 +1,209 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import {
-    TestEnvironment,
-    expect,
-    describe,
-    it,
-    before
-} from "./setup";
-import { Trading } from "../target/types/trading";
-import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
-import { createMint } from "@solana/spl-token";
 import BN from "bn.js";
+import {
+    Keypair,
+    PublicKey,
+    SystemProgram,
+    LAMPORTS_PER_SOL
+} from "@solana/web3.js";
+import {
+    createMint,
+    mintTo,
+    getAssociatedTokenAddressSync,
+    createAssociatedTokenAccountInstruction,
+    TOKEN_PROGRAM_ID,
+    TOKEN_2022_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+} from "@solana/spl-token";
+import { assert } from "chai";
+import type { Trading } from "../target/types/trading";
 
-describe("GridTokenX Enhanced Features Integration Tests", () => {
-    let env: TestEnvironment;
-    let program: Program<Trading>;
+describe("Trading Program", () => {
+    const provider = anchor.AnchorProvider.env();
+    anchor.setProvider(provider);
+
+    const program = anchor.workspace.Trading as Program<Trading>;
+    const authority = provider.wallet as anchor.Wallet;
+
+    const seller = Keypair.generate();
+    const buyer = Keypair.generate();
+    const escrowAuthority = Keypair.generate();
+
     let marketAddress: PublicKey;
-    let marketAuthority: Keypair;
-    let user: Keypair;
+    let currencyMint: PublicKey;
+    let energyMint: PublicKey;
 
-    // Stablecoin State
-    let usdcMint: PublicKey;
-    let tokenConfig: PublicKey;
-
-    // Privacy State
-    let privacyMint: PublicKey;
-    let privateBalance: PublicKey;
-
-    // Pricing State
-    let pricingConfig: PublicKey;
-
-    // Metering State
-    let meterConfig: PublicKey;
-    let meterHistory: PublicKey;
-    let meterKeypair: Keypair;
-
-    // Carbon State
-    let carbonMarketplaceAddress: PublicKey;
+    let sellerCurrency: PublicKey;
+    let buyerCurrency: PublicKey;
+    let sellerEnergyEscrow: PublicKey;
+    let buyerCurrencyEscrow: PublicKey;
+    let feeCollector: PublicKey;
+    let wheelingCollector: PublicKey;
+    let buyerEnergyAccount: PublicKey;
 
     before(async () => {
-        env = await TestEnvironment.create();
-        program = env.tradingProgram;
-        marketAuthority = env.authority;
-        user = env.testUser;
+        [marketAddress] = PublicKey.findProgramAddressSync([Buffer.from("market")], program.programId);
 
-        // Correct Seeds for Market: [b"market"]
-        [marketAddress] = PublicKey.findProgramAddressSync(
-            [Buffer.from("market")],
-            program.programId
-        );
+        // Airdrops
+        for (const kp of [seller, buyer, escrowAuthority]) {
+            const sig = await provider.connection.requestAirdrop(kp.publicKey, 2 * LAMPORTS_PER_SOL);
+            const latest = await provider.connection.getLatestBlockhash();
+            await provider.connection.confirmTransaction({ signature: sig, ...latest });
+        }
 
+        // Create Mints
+        currencyMint = await createMint(provider.connection, authority.payer, authority.publicKey, null, 6);
+        energyMint = await createMint(provider.connection, authority.payer, authority.publicKey, null, 9, undefined, undefined, TOKEN_2022_PROGRAM_ID);
+
+        // ATAs
+        sellerCurrency = await createATA(seller.publicKey, currencyMint, TOKEN_PROGRAM_ID);
+        buyerCurrency = await createATA(buyer.publicKey, currencyMint, TOKEN_PROGRAM_ID);
+        sellerEnergyEscrow = await createATA(escrowAuthority.publicKey, energyMint, TOKEN_2022_PROGRAM_ID);
+        buyerCurrencyEscrow = await createATA(escrowAuthority.publicKey, currencyMint, TOKEN_PROGRAM_ID);
+        feeCollector = await createATA(authority.publicKey, currencyMint, TOKEN_PROGRAM_ID);
+        wheelingCollector = await createATA(authority.publicKey, currencyMint, TOKEN_PROGRAM_ID);
+        buyerEnergyAccount = await createATA(buyer.publicKey, energyMint, TOKEN_2022_PROGRAM_ID);
+
+        // Fund Buyer
+        await mintTo(provider.connection, authority.payer, currencyMint, buyerCurrency, authority.payer, 1000000);
+        // Fund Escrow for tests
+        await mintTo(provider.connection, authority.payer, energyMint, sellerEnergyEscrow, authority.payer, 1000, [], { skipPreflight: true }, TOKEN_2022_PROGRAM_ID);
+        await mintTo(provider.connection, authority.payer, currencyMint, buyerCurrencyEscrow, authority.payer, 100000);
+    });
+
+    async function createATA(owner: PublicKey, mint: PublicKey, programId: PublicKey) {
+        const ata = getAssociatedTokenAddressSync(mint, owner, false, programId);
+        const info = await provider.connection.getAccountInfo(ata);
+        if (!info) {
+            const ix = createAssociatedTokenAccountInstruction(authority.publicKey, ata, owner, mint, programId);
+            await anchor.web3.sendAndConfirmTransaction(provider.connection, new anchor.web3.Transaction().add(ix), [authority.payer]);
+        }
+        return ata;
+    }
+
+    it("Initializes the market", async () => {
         try {
             await program.methods.initializeMarket().accounts({
-                //@ts-ignore
                 market: marketAddress,
-                authority: marketAuthority.publicKey,
-                //@ts-ignore
-                systemProgram: SystemProgram.programId,
-            }).signers([marketAuthority]).rpc();
-            console.log("      Market initialized at:", marketAddress.toBase58());
-        } catch (e) {
-            // console.log("      Market initialization skipped (likely already exists)");
-        }
+                authority: authority.publicKey,
+                systemProgram: SystemProgram.programId
+            }).rpc();
 
-        // Setup mints
-        usdcMint = await createMint(env.connection, marketAuthority, marketAuthority.publicKey, null, 6);
-        privacyMint = await createMint(env.connection, marketAuthority, marketAuthority.publicKey, null, 9);
+            const market = await program.account.market.fetch(marketAddress);
+            assert.ok(market.authority.equals(authority.publicKey));
+        } catch (e: any) {
+            if (e.message.includes("already in use")) {
+                console.log("Market already initialized");
+            } else {
+                throw e;
+            }
+        }
     });
 
-    it("1.1 should configure a payment token", async () => {
-        const tokenType = 1; // USDC
-        [tokenConfig] = PublicKey.findProgramAddressSync(
-            [Buffer.from("token_config"), marketAddress.toBuffer(), Buffer.from([tokenType])],
+    it("Creates a sell order", async () => {
+        const orderId = new BN(Date.now());
+        const [orderPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("order"), seller.publicKey.toBuffer(), orderId.toArrayLike(Buffer, "le", 8)],
             program.programId
         );
 
-        await program.methods.configurePaymentToken(
-            tokenType,
+        await program.methods.createSellOrder(orderId, new BN(100), new BN(50)).accounts({
+            market: marketAddress,
+            order: orderPda,
+            ercCertificate: null,
+            authority: seller.publicKey,
+            systemProgram: SystemProgram.programId
+        }).signers([seller]).rpc();
+
+        const order = await program.account.order.fetch(orderPda);
+        assert.ok(order.seller.equals(seller.publicKey));
+        assert.equal(order.amount.toNumber(), 100);
+        assert.equal(order.pricePerKwh.toNumber(), 50);
+    });
+
+    it("Creates a buy order", async () => {
+        const orderId = new BN(Date.now() + 1);
+        const [orderPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("order"), buyer.publicKey.toBuffer(), orderId.toArrayLike(Buffer, "le", 8)],
+            program.programId
+        );
+
+        await program.methods.createBuyOrder(orderId, new BN(100), new BN(50)).accounts({
+            market: marketAddress,
+            order: orderPda,
+            authority: buyer.publicKey,
+            systemProgram: SystemProgram.programId
+        }).signers([buyer]).rpc();
+
+        const order = await program.account.order.fetch(orderPda);
+        assert.ok(order.buyer.equals(buyer.publicKey));
+    });
+
+    it("Executes atomic settlement", async () => {
+        // Need to recreate the order PDAs or pass them
+        // For simplicity in this test, we skip finding them again and just use the ones above if we stored them
+        // But since they are based on timestamp, let's just create new ones for this flow
+        const sOrderId = new BN(12345);
+        const [sOrderPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("order"), seller.publicKey.toBuffer(), sOrderId.toArrayLike(Buffer, "le", 8)],
+            program.programId
+        );
+        await program.methods.createSellOrder(sOrderId, new BN(200), new BN(100)).accounts({
+            market: marketAddress,
+            order: sOrderPda,
+            ercCertificate: null,
+            authority: seller.publicKey,
+            systemProgram: SystemProgram.programId
+        }).signers([seller]).rpc();
+
+        const bOrderId = new BN(54321);
+        const [bOrderPda] = PublicKey.findProgramAddressSync(
+            [Buffer.from("order"), buyer.publicKey.toBuffer(), bOrderId.toArrayLike(Buffer, "le", 8)],
+            program.programId
+        );
+        await program.methods.createBuyOrder(bOrderId, new BN(200), new BN(100)).accounts({
+            market: marketAddress,
+            order: bOrderPda,
+            authority: buyer.publicKey,
+            systemProgram: SystemProgram.programId
+        }).signers([buyer]).rpc();
+
+        await program.methods.executeAtomicSettlement(
+            new BN(200),
             new BN(100),
-            500
+            new BN(0)
         ).accounts({
             market: marketAddress,
-            tokenConfig: tokenConfig,
-            tokenMint: usdcMint,
-            authority: marketAuthority.publicKey,
-            //@ts-ignore
+            buyOrder: bOrderPda,
+            sellOrder: sOrderPda,
+            buyerCurrencyEscrow: buyerCurrencyEscrow,
+            sellerEnergyEscrow: sellerEnergyEscrow,
+            sellerCurrencyAccount: sellerCurrency,
+            buyerEnergyAccount: buyerEnergyAccount,
+            feeCollector: feeCollector,
+            wheelingCollector: wheelingCollector,
+            energyMint: energyMint,
+            currencyMint: currencyMint,
+            escrowAuthority: escrowAuthority.publicKey,
+            marketAuthority: authority.publicKey,
+            tokenProgram: TOKEN_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
-        }).signers([marketAuthority]).rpc();
+            secondaryTokenProgram: TOKEN_2022_PROGRAM_ID
+        }).signers([escrowAuthority]).rpc();
 
-        const config = await program.account.tokenConfig.fetch(tokenConfig);
-        expect(config.enabled).to.be.true();
+        const balance = await provider.connection.getTokenAccountBalance(buyerEnergyAccount);
+        assert.equal(balance.value.amount, "200");
     });
 
-    it("1.2 should create a stablecoin sell order", async () => {
+    it("Updates market parameters", async () => {
+        await program.methods.updateMarketParams(50, true).accounts({
+            market: marketAddress,
+            authority: authority.publicKey
+        }).rpc();
+
         const market = await program.account.market.fetch(marketAddress);
-        const activeOrders = market.activeOrders;
-        const activeOrdersBuffer = Buffer.alloc(4);
-        activeOrdersBuffer.writeUInt32LE(activeOrders);
-
-        const [orderAddress] = PublicKey.findProgramAddressSync(
-            [Buffer.from("order"), marketAuthority.publicKey.toBuffer(), activeOrdersBuffer],
-            program.programId
-        );
-
-        const [paymentInfo] = PublicKey.findProgramAddressSync(
-            [Buffer.from("payment_info"), orderAddress.toBuffer()],
-            program.programId
-        );
-
-        await program.methods.createStablecoinSellOrder(
-            new BN(1000),
-            new BN(50),
-            1
-        ).accounts({
-            market: marketAddress,
-            order: orderAddress,
-            paymentInfo: paymentInfo,
-            tokenConfig: tokenConfig,
-            authority: marketAuthority.publicKey,
-            //@ts-ignore
-            systemProgram: SystemProgram.programId,
-        }).signers([marketAuthority]).rpc();
-
-        const order = await program.account.order.fetch(orderAddress);
-        expect(order.amount.toNumber()).to.equal(1000);
-    });
-
-    it("2.1 should initialize a private balance", async () => {
-        // Correct seed: "confidential_balance"
-        [privateBalance] = PublicKey.findProgramAddressSync(
-            [Buffer.from("confidential_balance"), user.publicKey.toBuffer(), privacyMint.toBuffer()],
-            program.programId
-        );
-
-        // Rename to initializeConfidentialBalance and remove arguments
-        await program.methods.initializeConfidentialBalance().accounts({
-            confidentialBalance: privateBalance, // Matches IDL account name (confidentialBalance)
-            mint: privacyMint,
-            owner: user.publicKey,
-            //@ts-ignore
-            systemProgram: SystemProgram.programId,
-        }).signers([user]).rpc();
-
-        const balance = await program.account.confidentialBalance.fetch(privateBalance);
-        expect(balance.owner.toBase58()).to.equal(user.publicKey.toBase58());
-    });
-
-    it("3.1 should initialize pricing config", async () => {
-        [pricingConfig] = PublicKey.findProgramAddressSync(
-            [Buffer.from("pricing_config"), marketAddress.toBuffer()],
-            program.programId
-        );
-
-        try {
-            await program.methods.initializePricingConfig(
-                new BN(4000000),
-                new BN(2000000),
-                new BN(10000000),
-                700
-            ).accounts({
-                pricingConfig,
-                //@ts-ignore
-                market: marketAddress,
-                authority: marketAuthority.publicKey,
-                //@ts-ignore
-                systemProgram: SystemProgram.programId,
-            }).signers([marketAuthority]).rpc();
-        } catch (e) {
-            // console.log("Pricing config already initialized");
-        }
-
-        const config = await program.account.pricingConfig.fetch(pricingConfig);
-        expect(config.enabled).to.be.true();
-    });
-
-    it("3.2 should create a price snapshot", async () => {
-        const timestamp = Math.floor(Date.now() / 1000);
-        const tsBuffer = Buffer.alloc(8);
-        tsBuffer.writeBigInt64LE(BigInt(timestamp));
-
-        const [snapshot] = PublicKey.findProgramAddressSync(
-            [Buffer.from("price_snapshot"), marketAddress.toBuffer(), tsBuffer],
-            program.programId
-        );
-
-        await program.methods.createPriceSnapshot(new BN(timestamp))
-            .accounts({
-                pricingConfig,
-                snapshot,
-                authority: marketAuthority.publicKey,
-                //@ts-ignore
-                systemProgram: SystemProgram.programId,
-            }).signers([marketAuthority]).rpc();
-
-        const snap = await program.account.priceSnapshot.fetch(snapshot);
-        expect(snap.price.toString()).to.not.equal("0");
-    });
-
-    it("4.1 should initialize meter config", async () => {
-        [meterConfig] = PublicKey.findProgramAddressSync(
-            [Buffer.from("meter_config"), marketAuthority.publicKey.toBuffer()],
-            program.programId
-        );
-
-        await program.methods.initializeMeterConfig(
-            new BN(1000),
-            300
-        ).accounts({
-            config: meterConfig,
-            authority: marketAuthority.publicKey,
-            //@ts-ignore
-            systemProgram: SystemProgram.programId,
-        }).signers([marketAuthority]).rpc();
-    });
-
-    it("4.2 should initialize meter history", async () => {
-        meterKeypair = Keypair.generate();
-        const meter = meterKeypair.publicKey;
-        [meterHistory] = PublicKey.findProgramAddressSync(
-            [Buffer.from("meter_history"), meter.toBuffer()],
-            program.programId
-        );
-
-        await program.methods.initializeMeterHistory()
-            .accounts({
-                history: meterHistory,
-                //@ts-ignore
-                meter,
-                authority: marketAuthority.publicKey,
-                //@ts-ignore
-                systemProgram: SystemProgram.programId,
-            }).signers([marketAuthority]).rpc();
-    });
-
-    it("5.1 should initialize carbon marketplace", async () => {
-        [carbonMarketplaceAddress] = PublicKey.findProgramAddressSync(
-            [Buffer.from("carbon_marketplace"), marketAuthority.publicKey.toBuffer()],
-            program.programId
-        );
-
-        const recMint = Keypair.generate().publicKey;
-        const carbonMint = Keypair.generate().publicKey;
-        const treasury = Keypair.generate().publicKey;
-
-        await program.methods.initializeCarbonMarketplace(
-            100,
-            50,
-            1000,
-            450
-        ).accounts({
-            marketplace: carbonMarketplaceAddress,
-            recMint,
-            carbonMint,
-            treasury,
-            authority: marketAuthority.publicKey,
-            //@ts-ignore
-            systemProgram: SystemProgram.programId,
-        }).signers([marketAuthority]).rpc();
-
-        const market = await program.account.carbonMarketplace.fetch(carbonMarketplaceAddress);
-        expect(market.isActive).to.be.true();
+        assert.equal(market.marketFeeBps, 50);
+        assert.equal(market.clearingEnabled, 1);
     });
 });

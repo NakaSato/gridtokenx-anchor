@@ -86,7 +86,6 @@ pub mod registry {
             emit!(OracleAuthoritySet {
                 old_oracle,
                 new_oracle: oracle,
-                timestamp: Clock::get()?.unix_timestamp,
             });
         });
         Ok(())
@@ -119,7 +118,6 @@ pub mod registry {
                 user_type,
                 lat,
                 long,
-                timestamp: user_account.registered_at,
             });
         });
         Ok(())
@@ -137,12 +135,19 @@ pub mod registry {
             let mut user_account = ctx.accounts.user_account.load_mut()?;
             let mut registry = ctx.accounts.registry.load_mut()?;
 
+            require!(
+                user_account.status == UserStatus::Active,
+                RegistryError::UnauthorizedUser
+            );
+            
             // Basic owner-user validation (though PDA seeds also protect this)
             require_keys_eq!(
                 owner,
                 user_account.authority,
                 RegistryError::UnauthorizedUser
             );
+            
+            require!(meter_id.len() <= 32, RegistryError::InvalidMeterId);
 
             meter_account.meter_id = string_to_bytes32(&meter_id);
             meter_account.owner = owner;
@@ -153,6 +158,7 @@ pub mod registry {
             meter_account.total_generation = 0;
             meter_account.total_consumption = 0;
             meter_account.settled_net_generation = 0;
+            meter_account.claimed_erc_generation = 0;
 
             user_account.meter_count += 1;
             registry.meter_count += 1;
@@ -162,11 +168,12 @@ pub mod registry {
                 meter_id: meter_id.clone(),
                 owner,
                 meter_type,
-                timestamp: meter_account.registered_at,
             });
         });
         Ok(())
     }
+
+
 
     /// Update user status (admin only)
     pub fn update_user_status(
@@ -190,7 +197,6 @@ pub mod registry {
                 user: user_account.authority,
                 old_status,
                 new_status,
-                timestamp: Clock::get()?.unix_timestamp,
             });
         });
         Ok(())
@@ -244,7 +250,6 @@ pub mod registry {
                 owner: meter_account.owner,
                 energy_generated,
                 energy_consumed,
-                timestamp: reading_timestamp,
             });
         });
         Ok(())
@@ -278,7 +283,6 @@ pub mod registry {
                 owner: meter.owner,
                 old_status,
                 new_status,
-                timestamp: Clock::get()?.unix_timestamp,
             });
         });
         Ok(())
@@ -314,7 +318,6 @@ pub mod registry {
                 owner: meter.owner,
                 final_generation: meter.total_generation,
                 final_consumption: meter.total_consumption,
-                timestamp: Clock::get()?.unix_timestamp,
             });
         });
         Ok(())
@@ -381,7 +384,6 @@ pub mod registry {
                 owner: meter.owner,
                 tokens_to_mint: new_tokens_to_mint,
                 total_settled: current_net_gen,
-                timestamp: Clock::get()?.unix_timestamp,
             });
 
             new_tokens_to_mint
@@ -422,20 +424,57 @@ pub mod registry {
                 owner: meter.owner,
                 tokens_to_mint: new_tokens_to_mint,
                 total_settled: current_net_gen,
-                timestamp: Clock::get()?.unix_timestamp,
             });
+
+            // We need to sign as the Registry because the Registry is the authority of the Energy Token (TokenInfo)
+            let bump = ctx.bumps.registry;
+            let signer_seeds = &[
+                b"registry".as_ref(),
+                &[bump],
+            ];
+            let signer = &[&signer_seeds[..]];
 
             let cpi_program = ctx.accounts.energy_token_program.to_account_info();
             let cpi_accounts = energy_token::cpi::accounts::MintTokensDirect {
                 token_info: ctx.accounts.token_info.to_account_info(),
                 mint: ctx.accounts.mint.to_account_info(),
                 user_token_account: ctx.accounts.user_token_account.to_account_info(),
-                authority: ctx.accounts.authority.to_account_info(),
+                authority: ctx.accounts.registry.to_account_info(), // Registry signs
                 token_program: ctx.accounts.token_program.to_account_info(),
             };
 
-            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
             energy_token::cpi::mint_tokens_direct(cpi_ctx, new_tokens_to_mint)?;
+        });
+
+        Ok(())
+    }
+
+    /// Mark energy as claimed for ERC issuance (authorized by governance/oracle)
+    pub fn mark_erc_claimed(
+        ctx: Context<MarkErcClaimed>,
+        amount: u64,
+    ) -> Result<()> {
+        let mut meter = ctx.accounts.meter_account.load_mut()?;
+        
+        // Authorization check - usually either the registry authority or a specific governance program
+        let registry = ctx.accounts.registry.load()?;
+        require!(
+            ctx.accounts.authority.key() == registry.authority ||
+            ctx.accounts.authority.key() == registry.oracle_authority,
+            RegistryError::UnauthorizedAuthority
+        );
+
+        let unclaimed = meter.total_generation.saturating_sub(meter.claimed_erc_generation);
+        require!(amount <= unclaimed, RegistryError::NoUnsettledBalance);
+
+        meter.claimed_erc_generation = meter.claimed_erc_generation.saturating_add(amount);
+        
+        emit!(MeterReadingUpdated {
+            meter_id: bytes32_to_string(&meter.meter_id),
+            owner: meter.owner,
+            energy_generated: 0,
+            energy_consumed: 0,
         });
 
         Ok(())
@@ -607,7 +646,13 @@ pub struct SettleAndMintTokens<'info> {
     pub user_token_account: AccountInfo<'info>,
 
     /// CHECK: Authority that can mint tokens (usually program authority)
-    pub authority: AccountInfo<'info>,
+    /// We use the Registry account itself as the authority signer
+    #[account(
+        mut,
+        seeds = [b"registry"],
+        bump
+    )]
+    pub registry: AccountLoader<'info, Registry>,
 
     /// The energy token program
     /// CHECK: This is validated by the CPI call
@@ -616,4 +661,10 @@ pub struct SettleAndMintTokens<'info> {
     /// CHECK: SPL Token program
     pub token_program: AccountInfo<'info>,
 }
-
+#[derive(Accounts)]
+pub struct MarkErcClaimed<'info> {
+    #[account(mut)]
+    pub meter_account: AccountLoader<'info, MeterAccount>,
+    pub registry: AccountLoader<'info, Registry>,
+    pub authority: Signer<'info>,
+}

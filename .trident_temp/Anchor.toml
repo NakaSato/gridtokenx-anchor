@@ -1,0 +1,31 @@
+# Anchor.toml configuration for PoA Cluster
+[toolchain]
+anchor_version = "0.30.1"
+package_manager = "pnpm"
+
+[features]
+resolution = false
+skip-lint = false
+
+[programs.localnet]
+trading = "8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND"
+
+[provider]
+cluster = "localnet"
+wallet = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/genesis/faucet-keypair.json"
+
+[scripts]
+benchmark-tpcc = "npx ts-node tests/performance/benchmarks/tpc-c-anchor.ts"
+init-tpcc-schema = "npx ts-node scripts/bootstrap.ts"
+test = "npx tsx scripts/run-all-tests.ts"
+verify-p2p = "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/verify_p2p_settlement_collection.ts"
+
+[test]
+startup_wait = 60000
+shutdown_wait = 5000
+upgradeable = false
+
+# PoA-specific test configuration
+# [[test.genesis]]
+# address = "8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq"
+# program = "target/deploy/energy_token.so"

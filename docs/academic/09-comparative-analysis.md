@@ -2,7 +2,15 @@
 
 ## GridTokenX vs Existing Energy Trading Platforms
 
-> *January 2026 Edition*
+> *February 2026 Edition*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [System Architecture](./03-system-architecture.md) - GridTokenX technical design
+> - [TPC-C Benchmark](../programs/tpc-benchmark.md) - Performance comparison
+> - [BLOCKBENCH](../programs/blockbench.md) - Micro-benchmark suite
 
 ---
 

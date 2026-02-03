@@ -2,7 +2,15 @@
 
 ## GridTokenX: Blockchain-Based P2P Energy Trading Platform
 
-> *December 2025 Edition - Private Network (PoA) Design*
+> *February 2026 Edition - Private Network (PoA) Design*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [System Architecture](./03-system-architecture.md) - Technical architecture details
+> - [Trading Program](../programs/trading.md) - Smart contract implementation
+> - [Settlement Architecture](../programs/deep-dive/settlement-architecture.md) - Atomic settlement deep dive
 
 ---
 

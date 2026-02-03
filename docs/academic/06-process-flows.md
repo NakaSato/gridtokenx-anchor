@@ -2,7 +2,15 @@
 
 ## GridTokenX End-to-End Process Documentation
 
-> *December 2025 Edition*
+> *February 2026 Edition*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [Data Flow Diagrams](./04-data-flow-diagrams.md) - System DFD Level 0-2
+> - [Settlement Architecture](../programs/deep-dive/settlement-architecture.md) - Atomic settlement
+> - [Periodic Auction](../programs/deep-dive/periodic-auction.md) - Batch clearing process
 
 ---
 

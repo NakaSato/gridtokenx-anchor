@@ -1,6 +1,12 @@
 # Oracle Program: Technical Research Documentation
 
-**Program ID:** `ACeKwdMK1sma3EPnxy7bvgC5yMwy8tg7ZUJvaogC9YfR`
+**Program ID:** `ACeKwdMK1sma3EPnxy7bvgC5yMwy8tg7ZUJvaogC9YfR`  
+**Version:** 2.0.0  
+**Last Updated:** February 2, 2026
+
+> **Deep Dive Documentation:**
+> - [Oracle Security Model](./deep-dive/oracle-security.md) - Byzantine fault tolerance, data validation, anomaly detection
+> - [Dynamic Pricing Engine](./deep-dive/dynamic-pricing.md) - Real-time price determination
 
 The **Oracle Program** is the **trusted data ingestion layer** for the GridTokenX decentralized energy trading platform. It serves as the critical bridge between **Advanced Metering Infrastructure (AMI)** systems and the Solana blockchain, providing cryptographic attestation for real-world energy production and consumption measurements. This program implements a **permissioned oracle architecture** with multi-layered validation to ensure data integrity in a high-stakes financial settlement environment.
 
@@ -872,3 +878,198 @@ await program.methods
 - "Chainlink 2.0: Next Steps in the Evolution of Decentralized Oracle Networks" (Chainlink Labs, 2021)
 - "Band Protocol: A Cross-Chain Data Oracle Platform" (Band Protocol, 2020)
 - "UMA: A Decentralized Financial Contracts Platform" (UMA Project, 2020)
+
+---
+
+## Appendix A: Compute Unit (CU) Budget
+
+### A.1 Instruction CU Costs
+
+| Instruction | CU Cost | Accounts | Signers | Notes |
+|-------------|---------|----------|---------|-------|
+| `initialize` | ~15,000 | 4 | 1 | OracleData creation |
+| `submit_meter_reading` | ~12,000 | 3 | 1 | Core data ingestion |
+| `submit_meter_reading` (with anomaly) | ~15,000 | 3 | 1 | +validation logic |
+| `confirm_reading` | ~8,000 | 4 | 1 | Backup oracle vote |
+| `finalize_reading` | ~15,000 | 5 | 1 | Consensus check |
+| `update_oracle_status` | ~5,000 | 3 | 1 | Pause/unpause |
+| `update_api_gateway` | ~5,000 | 3 | 1 | Key rotation |
+| `add_backup_oracle` | ~6,000 | 3 | 1 | Array update |
+| `remove_backup_oracle` | ~6,000 | 3 | 1 | Array update |
+| `update_validation_config` | ~8,000 | 3 | 1 | Thresholds |
+| `trigger_market_clearing` | ~10,000 | 4 | 1 | CPI to Trading |
+
+### A.2 Throughput Analysis
+
+```
+Meter Reading Submission:
+- CU per reading: 12,000 (base) to 15,000 (with anomaly detection)
+- CU per block (200k): ~13-16 readings/block
+- Blocks per second: 2.5
+- Max throughput: ~40 readings/second
+
+With 10,000 meters submitting every 15 minutes:
+- Required: 10,000 / 900 = ~11 readings/second
+- Capacity utilization: 11/40 = 27.5% ✓ (comfortable margin)
+
+With backup oracle consensus (3 confirmations):
+- Additional CU: 3 × 8,000 = 24,000 per reading
+- Total CU: ~39,000 per confirmed reading
+- Max throughput: ~12 readings/second with consensus
+```
+
+---
+
+## Appendix B: Account Size Calculations
+
+### B.1 Account Sizes
+
+| Account | Size (bytes) | Rent (SOL) | Formula |
+|---------|--------------|------------|---------|
+| `OracleData` | 560 | 0.00390 | 8 + 32×12 + 8×13 + 4 + 2 + 6 + 4 |
+| `PendingReading` | 256 | 0.00178 | 8 + 8 + 32 + 8×2 + 32 + 8 + (24×10) + 1×2 |
+| `ReadingHistory` | 1,024 | 0.00713 | 8 + (100×10) + 4 |
+
+### B.2 Size Breakdown: OracleData Account
+
+```
+Field                        Type              Size
+─────────────────────────────────────────────────────────
+discriminator                [u8; 8]           8
+authority                    Pubkey            32
+api_gateway                  Pubkey            32
+backup_oracles               [Pubkey; 10]      320  (10 × 32)
+total_readings               u64               8
+last_reading_timestamp       i64               8
+last_clearing                i64               8
+created_at                   i64               8
+min_energy_value             u64               8
+max_energy_value             u64               8
+total_valid_readings         u64               8
+total_rejected_readings      u64               8
+quality_score_updated_at     i64               8
+last_consensus_timestamp     i64               8
+last_energy_produced         u64               8
+last_energy_consumed         u64               8
+min_reading_interval         u64               8
+average_reading_interval     u32               4
+max_reading_deviation_pct    u16               2
+active                       u8                1
+anomaly_detection_enabled    u8                1
+require_consensus            u8                1
+last_quality_score           u8                1
+backup_oracles_count         u8                1
+consensus_threshold          u8                1
+_padding                     [u8; 4]           4
+─────────────────────────────────────────────────────────
+TOTAL                                          552 (+ 8 discriminator = 560)
+```
+
+### B.3 PDA Derivation Reference
+
+| PDA | Seeds | Bump Storage |
+|-----|-------|--------------|
+| `OracleData` | `["oracle_data"]` | In account |
+| `PendingReading` | `["pending", reading_id.to_le_bytes()]` | In account |
+| `ReadingHistory` | `["history", meter_id]` | In account |
+
+---
+
+## Appendix C: CPI Dependency Graph
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          ORACLE PROGRAM CPI GRAPH                               │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   ┌─────────────────┐                                                          │
+│   │  API GATEWAY    │ (Off-chain)                                              │
+│   │  (Trusted)      │                                                          │
+│   └────────┬────────┘                                                          │
+│            │ submit_meter_reading                                               │
+│            ▼                                                                    │
+│   ┌─────────────────┐         ┌─────────────────┐                             │
+│   │  ORACLE         │◄────────│  BACKUP ORACLES │ (Up to 10)                  │
+│   │  PROGRAM        │         │  confirm_reading│                             │
+│   └────────┬────────┘         └─────────────────┘                             │
+│            │                                                                    │
+│            │ CPI: update_meter_reading                                         │
+│            ▼                                                                    │
+│   ┌─────────────────┐                                                          │
+│   │  REGISTRY       │                                                          │
+│   │  PROGRAM        │                                                          │
+│   └────────┬────────┘                                                          │
+│            │                                                                    │
+│            │ CPI: mint_tokens_direct (after settlement)                        │
+│            ▼                                                                    │
+│   ┌─────────────────┐                                                          │
+│   │  ENERGY TOKEN   │                                                          │
+│   │  PROGRAM        │                                                          │
+│   └─────────────────┘                                                          │
+│                                                                                 │
+│  OUTBOUND CPI CALLS:                                                           │
+│  ───────────────────                                                           │
+│  Oracle → Registry:       update_meter_reading (validated data)                │
+│  Oracle → Trading:        trigger_market_clearing (periodic)                   │
+│  Oracle → Trading:        update_price_feed (TOU multipliers)                  │
+│                                                                                 │
+│  INBOUND CPI CALLS:                                                            │
+│  ──────────────────                                                            │
+│  Trading → Oracle:        get_current_price (read-only)                        │
+│  Trading → Oracle:        get_tou_multiplier (read-only)                       │
+│                                                                                 │
+│  DATA FLOW:                                                                    │
+│  ──────────                                                                    │
+│  Smart Meter → AMI Gateway → API Gateway → Oracle → Registry → Token          │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Appendix D: Network Requirements
+
+### D.1 Oracle-Specific Infrastructure
+
+| Component | Requirement | Notes |
+|-----------|-------------|-------|
+| API Gateway Server | 4 vCPU, 8 GB RAM | Handles meter aggregation |
+| Gateway Redundancy | 2+ instances | Active-passive failover |
+| Database | PostgreSQL 14+ | Reading cache (pre-submission) |
+| Message Queue | Redis/NATS | Meter reading buffer |
+| HSM | AWS CloudHSM / YubiHSM | Gateway signing key |
+
+### D.2 Meter Data Ingestion Rates
+
+| Scenario | Meters | Interval | Readings/sec | CU/sec |
+|----------|--------|----------|--------------|--------|
+| Pilot | 100 | 15 min | 0.11 | 1,320 |
+| Phase 1 | 1,000 | 15 min | 1.1 | 13,200 |
+| Phase 2 | 10,000 | 15 min | 11.1 | 133,200 |
+| Phase 3 | 100,000 | 15 min | 111 | 1,332,000 |
+| Scale (batched) | 100,000 | 15 min | ~50 | 600,000 |
+
+### D.3 Latency Requirements
+
+| Stage | Max Latency | P99 Target |
+|-------|-------------|------------|
+| Meter → AMI Gateway | 5s | 2s |
+| AMI → API Gateway | 2s | 500ms |
+| API Gateway → Oracle TX | 500ms | 200ms |
+| Oracle TX Confirmation | 400ms | 400ms |
+| **End-to-End** | **8s** | **3.1s** |
+
+### D.4 Backup Oracle Network
+
+```
+Backup Oracle Requirements:
+- Minimum: 3 backup oracles for BFT (f=1 fault tolerance)
+- Recommended: 5-7 oracles (f=2 fault tolerance)
+- Geographic distribution: Different regions/providers
+- Independence: Different infrastructure, different operators
+
+Consensus Configuration:
+- consensus_threshold = 2 (default): 2-of-N must agree
+- consensus_threshold = ceil((N+1)/2): Majority required
+- consensus_threshold = ceil((2N+1)/3): BFT (tolerates N/3 Byzantine)
+```

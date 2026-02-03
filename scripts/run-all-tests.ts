@@ -43,8 +43,12 @@ for (const file of files) {
         // Check if the file imports from setup (Type A: Standalone script)
         // imports could be '"./setup"' or '"./setup.ts"' or "'./setup'"
         // We check for import of setup to determine if we should run with tsx directly or mocha
-        if (content.includes('from "./setup"') || content.includes("from './setup'") ||
-            content.includes('from "./setup.ts"') || content.includes("from './setup.ts'")) {
+        // Check if the file imports from setup (Type A: Standalone script)
+        // AND check if it does NOT invoke 'describe' (which implies it's a Mocha test)
+        const importsSetup = content.includes('from "./setup"') || content.includes("from './setup'") ||
+            content.includes('from "./setup.ts"') || content.includes("from './setup.ts'");
+
+        if (importsSetup && !content.includes('describe(')) {
             console.log(`TYPE: Standalone Script (using tsx)`);
             execSync(`npx tsx ${filePath}`, { stdio: 'inherit', env: process.env });
         } else {

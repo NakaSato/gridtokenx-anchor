@@ -1,9 +1,14 @@
 # Academic Documentation
 
 > **Research-oriented documentation for thesis and academic purposes**  
-> *December 2025 Edition*
+> *February 2026 Edition*  
+> **Version:** 2.0.0
 
 This section contains formal academic documentation covering theoretical foundations, system design rationale, comparative analysis, and research contributions of the GridTokenX platform—a blockchain-based peer-to-peer (P2P) energy trading ecosystem built on Solana.
+
+> **See Also:**
+> - [Program Documentation](../programs/) - Technical API references
+> - [Deep Dive Documentation](../programs/deep-dive/) - Advanced implementation details
 
 ---
 
@@ -27,16 +32,31 @@ This section contains formal academic documentation covering theoretical foundat
 
 ## 📋 Program Documentation
 
-Detailed academic documentation for each of the five interconnected Anchor smart contract programs:
+Detailed technical documentation for each of the seven interconnected Anchor smart contract programs:
 
 | Program | Document | Responsibility |
 |---------|----------|---------------|
-| Overview | [Programs Overview](./programs/README.md) | System architecture and CPI patterns |
-| Registry | [Registry Program](./programs/registry.md) | User/meter registration, dual-tracker system |
-| Oracle | [Oracle Program](./programs/oracle.md) | Smart meter data validation, anomaly detection |
-| Energy Token | [Energy Token Program](./programs/energy-token.md) | GRID token minting/burning, supply control |
-| Trading | [Trading Program](./programs/trading.md) | Order book, matching engine, settlement |
-| Governance | [Governance Program](./programs/governance.md) | ERC certification, PoA configuration |
+| Overview | [Programs Overview](../programs/README.md) | System architecture and CPI patterns |
+| Registry | [Registry Program](../programs/registry.md) | User/meter registration, dual-tracker system |
+| Oracle | [Oracle Program](../programs/oracle.md) | Smart meter data validation, anomaly detection |
+| Energy Token | [Energy Token Program](../programs/energy-token.md) | GRX token minting/burning, supply control |
+| Trading | [Trading Program](../programs/trading.md) | Order book, matching engine, settlement |
+| Governance | [Governance Program](../programs/governance.md) | ERC certification, PoA configuration |
+
+### Deep Dive Documentation
+
+Advanced technical documentation with detailed algorithms and security analysis:
+
+| Document | Focus Area |
+|----------|------------|
+| [AMM & Bonding Curves](../programs/deep-dive/amm-bonding-curves.md) | Mathematical foundations for energy-specific AMMs |
+| [Periodic Auction System](../programs/deep-dive/periodic-auction.md) | Batch clearing and uniform price discovery |
+| [Confidential Trading](../programs/deep-dive/confidential-trading.md) | ElGamal encryption and zero-knowledge proofs |
+| [Dynamic Pricing Engine](../programs/deep-dive/dynamic-pricing.md) | Time-of-use and demand-responsive pricing |
+| [Carbon Credit System](../programs/deep-dive/carbon-credits.md) | REC tokenization and carbon offset tracking |
+| [Cross-Chain Bridge](../programs/deep-dive/cross-chain-bridge.md) | Wormhole integration for multi-chain trading |
+| [Oracle Security Model](../programs/deep-dive/oracle-security.md) | Byzantine fault tolerance and data validation |
+| [Settlement Architecture](../programs/deep-dive/settlement-architecture.md) | Atomic settlement and payment finality |
 
 ---
 

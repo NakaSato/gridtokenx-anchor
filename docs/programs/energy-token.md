@@ -1,6 +1,12 @@
 # Energy Token Program: Technical Research Documentation
 
-**Program ID:** `8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq`
+**Program ID:** `8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq`  
+**Version:** 2.0.0  
+**Last Updated:** February 2, 2026
+
+> **Deep Dive Documentation:**
+> - [Confidential Trading](./deep-dive/confidential-trading.md) - ElGamal encryption and Token-2022 integration
+> - [Settlement Architecture](./deep-dive/settlement-architecture.md) - Atomic token transfers
 
 The **Energy Token** program is the core asset management layer of the GridTokenX decentralized energy trading platform. It implements a **Token-2022 wrapper** with **Program Derived Address (PDA) authority** to create a programmable mint where supply expansion is cryptographically governed by on-chain energy production verification, rather than traditional key-holder discretion.
 
@@ -667,3 +673,156 @@ await program.methods
 - SPL Token-2022 Specification: https://spl.solana.com/token-2022
 - Metaplex Token Metadata Standard: https://docs.metaplex.com/programs/token-metadata
 - I-REC Standard Foundation: https://www.irecstandard.org
+
+---
+
+## Appendix A: Compute Unit (CU) Budget
+
+### A.1 Instruction CU Costs
+
+| Instruction | CU Cost | Accounts | Signers | Notes |
+|-------------|---------|----------|---------|-------|
+| `initialize` | ~5,000 | 2 | 1 | Minimal setup |
+| `initialize_token` | ~45,000 | 6 | 1 | Mint + TokenInfo creation |
+| `create_token_mint` | ~50,000 | 8 | 1 | +Metaplex CPI |
+| `mint_to_wallet` | ~18,000 | 6 | 1 | Admin minting |
+| `mint_tokens_direct` | ~20,000 | 7 | 1 | CPI from Registry |
+| `burn_tokens` | ~15,000 | 5 | 1 | Token destruction |
+| `add_rec_validator` | ~8,000 | 3 | 1 | Array update |
+| `remove_rec_validator` | ~8,000 | 3 | 1 | Array update |
+| `update_authority` | ~5,000 | 3 | 1 | Admin transfer |
+
+### A.2 Theoretical Throughput
+
+```
+Mint Instruction:
+- CU per mint: 18,000
+- CU per block (200k): ~11 mints/block
+- CU per block (1.4M extended): ~77 mints/block
+- Blocks per second: 2.5
+- Max mint throughput: ~192 mints/second (extended budget)
+
+With parallel execution (non-conflicting accounts):
+- Theoretical: 6,665 mints/second
+- Practical (account contention): ~1,000 mints/second
+```
+
+---
+
+## Appendix B: Account Size Calculations
+
+### B.1 Account Sizes
+
+| Account | Size (bytes) | Rent (SOL) | Formula |
+|---------|--------------|------------|---------|
+| `TokenInfo` | 280 | 0.00195 | 8 + 32×3 + 8×2 + 160 + 1 + 7 |
+| `Mint` (Token-2022) | 82 | 0.00114 | SPL Token-2022 standard |
+| `TokenAccount` | 165 | 0.00203 | SPL Token-2022 standard |
+
+### B.2 Size Breakdown: TokenInfo Account
+
+```
+Field                    Type              Size
+─────────────────────────────────────────────────
+discriminator            [u8; 8]           8
+authority                Pubkey            32
+registry_program         Pubkey            32
+mint                     Pubkey            32
+total_supply             u64               8
+created_at               i64               8
+rec_validators           [Pubkey; 5]       160  (5 × 32)
+rec_validators_count     u8                1
+_padding                 [u8; 7]           7
+─────────────────────────────────────────────────
+TOTAL                                      288 (rounded to 280 + discriminator)
+```
+
+### B.3 PDA Derivation Reference
+
+| PDA | Seeds | Bump Storage |
+|-----|-------|--------------|
+| `TokenInfo` | `["token_info_2022"]` | In account |
+| `Mint` | `["mint_2022"]` | In TokenInfo |
+| `MintAuthority` | `["token_info_2022"]` | Same as TokenInfo |
+
+---
+
+## Appendix C: CPI Dependency Graph
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        ENERGY TOKEN PROGRAM CPI GRAPH                           │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│                              ┌─────────────────┐                               │
+│                              │  ENERGY TOKEN   │                               │
+│                              │  PROGRAM        │                               │
+│                              └────────┬────────┘                               │
+│                                       │                                        │
+│          ┌────────────────────────────┼────────────────────────────┐          │
+│          │                            │                            │          │
+│          ▼                            ▼                            ▼          │
+│  ┌───────────────┐          ┌───────────────┐          ┌───────────────┐     │
+│  │   Token-2022  │          │   Metaplex    │          │   System      │     │
+│  │   Program     │          │   Metadata    │          │   Program     │     │
+│  ├───────────────┤          ├───────────────┤          ├───────────────┤     │
+│  │ • initialize_ │          │ • create_     │          │ • create_     │     │
+│  │   mint2       │          │   metadata_   │          │   account     │     │
+│  │ • mint_to     │          │   v3          │          │ • transfer    │     │
+│  │ • burn        │          │ • update_     │          │               │     │
+│  │               │          │   metadata    │          │               │     │
+│  └───────────────┘          └───────────────┘          └───────────────┘     │
+│                                                                               │
+│  INBOUND CPI CALLS (other programs calling Energy Token):                    │
+│  ─────────────────────────────────────────────────────────                   │
+│  Registry → Energy Token:    mint_tokens_direct (after settlement)           │
+│  Trading → Energy Token:     (future) settlement_callback                    │
+│  Governance → Energy Token:  (future) freeze/unfreeze authority              │
+│                                                                               │
+│  OUTBOUND CPI CALLS:                                                         │
+│  ───────────────────                                                         │
+│  Energy Token → Token-2022:  initialize_mint2, mint_to, burn                │
+│  Energy Token → Metaplex:    create_metadata_v3 (optional)                  │
+│  Energy Token → System:      create_account (rent allocation)               │
+│                                                                               │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Appendix D: Network Requirements
+
+### D.1 Token Operations Bandwidth
+
+| Operation | Frequency | Bandwidth | Notes |
+|-----------|-----------|-----------|-------|
+| Mint (prosumer settlement) | ~1,000/min | 50 KB/min | Peak hours |
+| Transfer (trading) | ~5,000/min | 250 KB/min | Active market |
+| Burn (redemption) | ~100/min | 5 KB/min | Occasional |
+| Total Token Ops | ~6,100/min | ~305 KB/min | Aggregate |
+
+### D.2 RPC Requirements for Token Program
+
+```typescript
+// Minimum RPC calls per token operation
+const rpcCallsPerMint = {
+  getLatestBlockhash: 1,
+  simulateTransaction: 1,  // Optional but recommended
+  sendTransaction: 1,
+  confirmTransaction: 1,   // Or WebSocket subscription
+  // Total: 3-4 calls per mint
+};
+
+// Rate limit planning
+// 1,000 mints/min × 4 calls = 4,000 RPC calls/min = ~67 calls/sec
+// Recommended: RPC provider with 100+ req/sec tier
+```
+
+### D.3 Token-2022 Specific Requirements
+
+| Feature | Requirement | GridTokenX Usage |
+|---------|-------------|------------------|
+| Confidential Transfers | Compute budget 400k+ | Trading privacy |
+| Transfer Hooks | Hook program deployed | Future: compliance |
+| Transfer Fees | Fee config initialized | Future: revenue |
+| Permanent Delegate | Authority set | Emergency freeze |

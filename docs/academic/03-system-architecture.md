@@ -2,7 +2,15 @@
 
 ## GridTokenX Technical Architecture Documentation
 
-> *January 2026 Edition - Research Paper Documentation*
+> *February 2026 Edition - Research Paper Documentation*  
+> **Version:** 2.0.0
+
+---
+
+> **Related Documentation:**
+> - [Program Documentation](../programs/README.md) - Complete program index
+> - [Cross-Chain Bridge](../programs/deep-dive/cross-chain-bridge.md) - Wormhole integration
+> - [Oracle Security](../programs/deep-dive/oracle-security.md) - Data ingestion layer
 
 ---
 

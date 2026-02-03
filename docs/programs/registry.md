@@ -1,6 +1,12 @@
 # Registry Program: Technical Documentation for Research
 
-**Program ID:** `3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye`
+**Program ID:** `3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye`  
+**Version:** 2.0.0  
+**Last Updated:** February 2, 2026
+
+> **Deep Dive Documentation:**
+> - [Settlement Architecture](./deep-dive/settlement-architecture.md) - Account management and settlement flows
+> - [Oracle Security Model](./deep-dive/oracle-security.md) - Meter data validation
 
 The **Registry** program serves as the foundational identity and device management layer for the GridTokenX platform. It maintains the authoritative on-chain record of all system participants (users) and their associated metering infrastructure, providing a trusted source of truth for energy generation and consumption data that underpins the entire decentralized energy trading ecosystem.
 
@@ -367,4 +373,195 @@ For citation in academic papers:
   year={2026},
   note={Program ID: 3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye}
 }
+```
+
+---
+
+## Appendix A: Compute Unit (CU) Budget
+
+### A.1 Instruction CU Costs
+
+| Instruction | CU Cost | Accounts | Signers | Notes |
+|-------------|---------|----------|---------|-------|
+| `initialize` | ~8,000 | 3 | 1 | Registry singleton creation |
+| `register_user` | ~12,000 | 4 | 1 | UserAccount PDA creation |
+| `update_user` | ~5,000 | 3 | 1 | Geolocation/status update |
+| `register_meter` | ~15,000 | 5 | 1 | MeterAccount PDA creation |
+| `update_meter_status` | ~4,000 | 3 | 1 | Status toggle |
+| `update_meter_reading` | ~8,000 | 4 | 1 | Oracle-only reading update |
+| `settle_meter_balance` | ~10,000 | 4 | 1 | Calculate settlement |
+| `settle_and_mint_tokens` | ~25,000 | 8 | 1 | Settlement + CPI to Energy Token |
+| `set_oracle_authority` | ~5,000 | 3 | 1 | Admin configuration |
+| `deactivate_user` | ~4,000 | 3 | 1 | Status change |
+
+### A.2 Batch Operations Analysis
+
+```
+Meter Reading Update Flow (Oracle):
+- Single meter update: 8,000 CU
+- With validation checks: +2,000 CU
+- Total per reading: ~10,000 CU
+
+Settlement + Minting Flow:
+- settle_meter_balance: 10,000 CU
+- CPI to mint_tokens_direct: 15,000 CU
+- Total: ~25,000 CU per settlement
+
+Max operations per block (200k CU limit):
+- Pure readings: 20 meters/block
+- With settlement: 8 meters/block
+- Blocks/second: 2.5
+- Max throughput: 50 readings/sec or 20 settlements/sec
+```
+
+---
+
+## Appendix B: Account Size Calculations
+
+### B.1 Account Sizes
+
+| Account | Size (bytes) | Rent (SOL) | Formula |
+|---------|--------------|------------|----------|
+| `Registry` | 105 | 0.00144 | 8 + 32 + 32 + 1 + 8×3 + 8 |
+| `UserAccount` | 70 | 0.00113 | 8 + 32 + 1 + 8 + 8 + 1 + 8 + 4 |
+| `MeterAccount` | 138 | 0.00160 | 8 + 32 + 32 + 1 + 1 + 8×8 |
+
+### B.2 Size Breakdown: MeterAccount
+
+```
+Field                        Type              Size
+─────────────────────────────────────────────────────────
+discriminator                [u8; 8]           8
+meter_id                     [u8; 32]          32
+owner                        Pubkey            32
+meter_type                   MeterType         1
+status                       MeterStatus       1
+registered_at                i64               8
+last_reading_at              i64               8
+total_generation             u64               8
+total_consumption            u64               8
+net_generation               i64               8
+settled_net_generation       i64               8
+claimed_erc_generation       u64               8
+last_reading_value           u64               8
+─────────────────────────────────────────────────────────
+TOTAL                                          138 bytes
+```
+
+### B.3 PDA Derivation Reference
+
+| PDA | Seeds | Bump Storage |
+|-----|-------|---------------|
+| `Registry` | `["registry"]` | In account |
+| `UserAccount` | `["user", user_authority]` | In account |
+| `MeterAccount` | `["meter", owner, meter_id]` | In account |
+
+### B.4 Storage Projections
+
+| Scale | Users | Meters | Registry Storage | Total Rent |
+|-------|-------|--------|------------------|------------|
+| Pilot | 100 | 200 | 14.7 KB | 0.39 SOL |
+| Phase 1 | 1,000 | 3,000 | 417 KB | 5.1 SOL |
+| Phase 2 | 10,000 | 30,000 | 4.1 MB | 51 SOL |
+| Phase 3 | 100,000 | 300,000 | 41 MB | 510 SOL |
+
+---
+
+## Appendix C: CPI Dependency Graph
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         REGISTRY PROGRAM CPI GRAPH                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   ┌─────────────────┐                                                          │
+│   │  ADMIN/USER     │                                                          │
+│   │  (External)     │                                                          │
+│   └────────┬────────┘                                                          │
+│            │ register_user, register_meter                                      │
+│            ▼                                                                    │
+│   ┌─────────────────┐         ┌─────────────────┐                              │
+│   │  REGISTRY       │◄────────│  ORACLE         │                              │
+│   │  PROGRAM        │         │  PROGRAM        │                              │
+│   │                 │         │ update_meter_   │                              │
+│   │                 │         │ reading         │                              │
+│   └────────┬────────┘         └─────────────────┘                              │
+│            │                                                                    │
+│            │ CPI: mint_tokens_direct                                           │
+│            ▼                                                                    │
+│   ┌─────────────────┐                                                          │
+│   │  ENERGY TOKEN   │                                                          │
+│   │  PROGRAM        │                                                          │
+│   └─────────────────┘                                                          │
+│                                                                                 │
+│  OUTBOUND CPI CALLS:                                                           │
+│  ───────────────────                                                           │
+│  Registry → Energy Token:  mint_tokens_direct (settlement)                     │
+│                                                                                 │
+│  INBOUND CPI CALLS:                                                            │
+│  ──────────────────                                                            │
+│  Oracle → Registry:        update_meter_reading (validated data)               │
+│  Governance → Registry:    read MeterAccount (ERC verification)                │
+│  Trading → Registry:       read UserAccount (participant validation)           │
+│                                                                                 │
+│  DATA FLOW:                                                                    │
+│  ──────────                                                                    │
+│  User Registration:  Wallet → Registry → UserAccount PDA                       │
+│  Meter Registration: User → Registry → MeterAccount PDA                        │
+│  Reading Update:     Oracle → Registry → MeterAccount.total_generation         │
+│  Settlement:         Registry → Energy Token → Mint GRX Tokens                 │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Appendix D: Network Requirements
+
+### D.1 Registry-Specific Infrastructure
+
+| Component | Requirement | Notes |
+|-----------|-------------|-------|
+| RPC Node | Standard | Read-heavy workload |
+| Admin Server | 2 vCPU, 4 GB RAM | User/meter management |
+| Database | PostgreSQL 14+ | Off-chain user metadata |
+| Backup | Daily snapshots | Account state recovery |
+
+### D.2 Transaction Throughput by Operation
+
+| Operation | Frequency | TPS Required | CU/sec |
+|-----------|-----------|--------------|--------|
+| User Registration | ~100/day | 0.001 | 12 |
+| Meter Registration | ~200/day | 0.002 | 30 |
+| Meter Reading Update | 10,000/15min | 11.1 | 88,800 |
+| Settlement | ~1,000/hour | 0.28 | 7,000 |
+| **Peak Combined** | - | **~12** | **~96,000** |
+
+### D.3 Latency Requirements
+
+| Operation | Max Latency | P99 Target |
+|-----------|-------------|------------|
+| User Registration | 2s | 500ms |
+| Meter Registration | 2s | 500ms |
+| Reading Update | 1s | 400ms |
+| Settlement TX | 1s | 400ms |
+| Query User/Meter | 200ms | 50ms |
+
+### D.4 Scalability Considerations
+
+```
+Account Lookup Performance:
+- PDA derivation: O(1) with known seeds
+- UserAccount lookup: ~0.5ms (single hash)
+- MeterAccount lookup: ~0.5ms (single hash)
+
+Scaling Bottlenecks:
+1. Oracle throughput (meter readings)
+2. Settlement batch size (CPI overhead)
+3. RPC node connection limits
+
+Mitigation Strategies:
+- Batch oracle readings (10-50 per TX)
+- Parallel settlement processing
+- Multiple RPC endpoints with load balancing
 ```

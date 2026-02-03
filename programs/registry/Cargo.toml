@@ -1,6 +1,6 @@
 [package]
 name = "registry"
-version = "0.1.0"
+version = "0.1.1"
 description = "Registry program for P2P Energy Trading - User and meter management"
 edition = "2021"
 

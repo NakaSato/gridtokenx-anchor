@@ -226,6 +226,84 @@ pub struct MintRecCertificate<'info> {
     pub system_program: Program<'info, System>,
 }
 
+/// Retire a REC certificate for compliance/offset
+pub fn process_retire_rec_certificate(
+    ctx: Context<RetireRecCertificate>,
+    reason: u8,
+    beneficiary: [u8; 32],
+    compliance_period: [u8; 16],
+) -> Result<()> {
+    let marketplace = &mut ctx.accounts.marketplace;
+    let certificate = &mut ctx.accounts.certificate;
+    let retirement = &mut ctx.accounts.retirement;
+    let clock = Clock::get()?;
+
+    require!(marketplace.is_active, CarbonError::MarketplaceInactive);
+    require!(!certificate.is_retired, CarbonError::CertificateRetired);
+    require!(certificate.owner == ctx.accounts.owner.key(), CarbonError::UnauthorizedIssuance);
+
+    // Update certificate
+    certificate.is_retired = true;
+    certificate.retirement_reason = reason;
+    certificate.retired_at = clock.unix_timestamp;
+    certificate.retired_by = ctx.accounts.owner.key();
+    certificate.retirement_beneficiary = beneficiary;
+
+    // Create retirement record
+    retirement.retirement_id = marketplace.total_retired;
+    retirement.certificate = certificate.key();
+    retirement.amount = certificate.rec_amount;
+    retirement.carbon_offset = certificate.carbon_offset;
+    retirement.reason = reason;
+    retirement.retired_by = ctx.accounts.owner.key();
+    retirement.beneficiary = beneficiary;
+    retirement.compliance_period = compliance_period;
+    retirement.retired_at = clock.unix_timestamp;
+    retirement.tx_signature = [0u8; 32]; // Placeholder
+
+    // Update marketplace stats
+    marketplace.total_retired += 1;
+
+    emit!(RecRetired {
+        retirement_id: retirement.retirement_id,
+        certificate: certificate.key(),
+        amount: certificate.rec_amount,
+        carbon_offset: certificate.carbon_offset,
+        reason,
+        beneficiary,
+        timestamp: clock.unix_timestamp,
+    });
+
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct RetireRecCertificate<'info> {
+    #[account(mut)]
+    pub marketplace: Account<'info, CarbonMarketplace>,
+
+    #[account(
+        mut,
+        constraint = !certificate.is_retired @ CarbonError::CertificateRetired,
+        constraint = certificate.owner == owner.key() @ CarbonError::UnauthorizedIssuance
+    )]
+    pub certificate: Account<'info, RecCertificate>,
+
+    #[account(
+        init,
+        payer = owner,
+        space = RetirementRecord::LEN,
+        seeds = [b"retirement", certificate.key().as_ref()],
+        bump
+    )]
+    pub retirement: Account<'info, RetirementRecord>,
+
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
 impl CarbonMarketplace {
     pub const LEN: usize = 8 + // discriminator
         1 +   // bump
