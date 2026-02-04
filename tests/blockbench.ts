@@ -93,12 +93,20 @@ describe("Blockbench Program", () => {
             program.programId
         );
         const value = Buffer.from("test-value");
-        await program.methods.ycsbInsert(key, value).accounts({
-            ycsbStore: ycsbStore,
-            record: recordPda,
-            authority: authority.publicKey,
-            systemProgram: SystemProgram.programId
-        }).rpc();
+        try {
+            await program.methods.ycsbInsert(key, value).accounts({
+                ycsbStore: ycsbStore,
+                record: recordPda,
+                authority: authority.publicKey,
+                systemProgram: SystemProgram.programId
+            }).rpc();
+        } catch (e: any) {
+            if (e.message?.includes("already in use")) {
+                console.log("⚠️ YCSB record already inserted (previous run)");
+            } else {
+                throw e;
+            }
+        }
     });
 
     it("Performs YCSB read", async () => {

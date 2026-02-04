@@ -17,6 +17,8 @@ pub mod payments;
 // Privacy/ZK modules
 pub mod privacy;
 pub mod confidential;
+pub mod zk_proofs;
+pub mod confidential_ops;
 
 // Features modules
 pub mod pricing;
@@ -24,6 +26,7 @@ pub mod meter_verification;
 pub mod carbon;
 pub mod amm;
 pub mod auction;
+pub mod invariants;
 
 // Re-export core modules
 pub use error::*;

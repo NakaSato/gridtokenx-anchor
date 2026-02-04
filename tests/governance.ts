@@ -104,18 +104,26 @@ describe("Governance Program", () => {
             (anchor.workspace.Registry as Program).programId
         );
 
-        await program.methods.issueErc(
-            CERT_ID,
-            new BN(1000),
-            "Solar",
-            "Verified by Oracle"
-        ).accounts({
-            ercCertificate: ercCertificate,
-            poaConfig: poaConfig,
-            authority: authority.publicKey,
-            meterAccount: mockMeterPda, // CHECK: Manual validation
-            systemProgram: SystemProgram.programId
-        }).rpc();
+        try {
+            await program.methods.issueErc(
+                CERT_ID,
+                new BN(1000),
+                "Solar",
+                "Verified by Oracle"
+            ).accounts({
+                ercCertificate: ercCertificate,
+                poaConfig: poaConfig,
+                authority: authority.publicKey,
+                meterAccount: mockMeterPda, // CHECK: Manual validation
+                systemProgram: SystemProgram.programId
+            }).rpc();
+        } catch (e: any) {
+            if (e.message?.includes("already in use")) {
+                console.log("⚠️ ERC certificate already issued (previous run)");
+            } else {
+                throw e;
+            }
+        }
 
         const cert = await program.account.ercCertificate.fetch(ercCertificate);
         assert.equal(cert.certificateId, CERT_ID);

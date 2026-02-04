@@ -1,6 +1,6 @@
 # Fdb version 4
-["pdflatex"] 1769264906.52624 "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/docs/academic/performance_analysis_thai.tex" "performance_analysis_thai.pdf" "performance_analysis_thai" 1769264907.03305 2
-  "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/docs/academic/performance_analysis_thai.tex" 1769264905.67817 51121 70d2bb8c7853591998ec7c2246f9c399 ""
+["pdflatex"] 1770136981.60552 "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/docs/academic/performance_analysis_thai.tex" "performance_analysis_thai.pdf" "performance_analysis_thai" 1770136982.12184 2
+  "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/docs/academic/performance_analysis_thai.tex" 1769265076.51901 51462 f4dcc4d993b85ad8ce4959fc5b30f252 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/adobe/times/ptmb7t.tfm" 1136768653 2172 fd0c924230362ff848a33632ed45dc23 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/adobe/times/ptmbi7t.tfm" 1136768653 2228 e564491c42a4540b5ebb710a75ff306c ""
@@ -152,8 +152,8 @@
   "/usr/local/texlive/2025/texmf-dist/web2c/texmf.cnf" 1739380943 42148 61becc7c670cd061bb319c643c27fdd4 ""
   "/usr/local/texlive/2025/texmf-var/web2c/pdftex/pdflatex.fmt" 1768657376 3345739 ab985380a41af8dd150ccc316b104570 ""
   "/usr/local/texlive/2025/texmf.cnf" 1741450484 577 418a7058ec8e006d8704f60ecd22c938 ""
-  "performance_analysis_thai.aux" 1769264906.52488 32 3985256e7290058c681f74d7a3565a19 "pdflatex"
-  "performance_analysis_thai.tex" 1769264905.67817 51121 70d2bb8c7853591998ec7c2246f9c399 ""
+  "performance_analysis_thai.aux" 0 -1 0 "pdflatex"
+  "performance_analysis_thai.tex" 1769265076.51901 51462 f4dcc4d993b85ad8ce4959fc5b30f252 ""
   (generated)
   "performance_analysis_thai.aux"
   "performance_analysis_thai.log"

@@ -1,0 +1,84 @@
+# Prometheus Configuration for GridTokenX
+# ═══════════════════════════════════════════════════════════════════════════════
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'development'
+    cluster: 'gridtokenx-local'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Rule files
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Prometheus self-monitoring
+  # ─────────────────────────────────────────────────────────────────────────────
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # API Gateway metrics
+  # ─────────────────────────────────────────────────────────────────────────────
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+    metrics_path: '/metrics'
+    scheme: http
+    scrape_interval: 10s
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Smart Meter Simulator metrics
+  # ─────────────────────────────────────────────────────────────────────────────
+  - job_name: 'simulator'
+    static_configs:
+      - targets: ['host.docker.internal:8000']
+    metrics_path: '/metrics'
+    scheme: http
+    scrape_interval: 30s
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Kafka metrics (via JMX exporter if configured)
+  # ─────────────────────────────────────────────────────────────────────────────
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9404']
+    scrape_interval: 30s
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Benchmark metrics (file-based discovery)
+  # ─────────────────────────────────────────────────────────────────────────────
+  - job_name: 'benchmarks'
+    file_sd_configs:
+      - files:
+          - '/prometheus/benchmark-targets.json'
+        refresh_interval: 5m
+    honor_labels: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # InfluxDB metrics
+  # ─────────────────────────────────────────────────────────────────────────────
+  - job_name: 'influxdb'
+    static_configs:
+      - targets: ['influxdb:8086']
+    metrics_path: '/metrics'
+    scheme: http
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Node Exporter (system metrics) - if running
+  # ─────────────────────────────────────────────────────────────────────────────
+  - job_name: 'node'
+    static_configs:
+      - targets: ['host.docker.internal:9100']
+    scrape_interval: 60s
