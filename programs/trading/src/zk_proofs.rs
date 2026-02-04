@@ -26,20 +26,20 @@ const TRANSFER_PROOF_DOMAIN: &[u8] = b"GridTokenX:TransferProof:v1";
 pub const MAX_CONFIDENTIAL_AMOUNT: u64 = (1u64 << 48) - 1;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ENHANCED ELGAMAL CIPHERTEXT
+// ELGAMAL CIPHERTEXT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Enhanced ElGamal Ciphertext with proper structure
+/// ElGamal Ciphertext with proper structure
 /// In Solana's implementation, this uses curve25519-dalek
 #[derive(Clone, Copy, Debug, PartialEq, Eq, AnchorSerialize, AnchorDeserialize)]
-pub struct EnhancedElGamalCiphertext {
+pub struct ElGamalCiphertext {
     /// Ephemeral public key C1 = r*G (32 bytes compressed)
     pub c1: [u8; 32],
     /// Encrypted value C2 = m*H + r*P (32 bytes compressed)  
     pub c2: [u8; 32],
 }
 
-impl Default for EnhancedElGamalCiphertext {
+impl Default for ElGamalCiphertext {
     fn default() -> Self {
         Self {
             c1: [0u8; 32],
@@ -48,7 +48,7 @@ impl Default for EnhancedElGamalCiphertext {
     }
 }
 
-impl EnhancedElGamalCiphertext {
+impl ElGamalCiphertext {
     /// Create a new ciphertext (simulated encryption)
     /// In production, this would use proper curve operations
     pub fn encrypt(amount: u64, public_key: &[u8; 32], randomness: &[u8; 32]) -> Self {
@@ -163,7 +163,7 @@ impl PedersenCommitment {
 /// Range Proof: Proves 0 <= value < 2^48 without revealing value
 /// Based on Bulletproofs structure
 #[derive(Clone, Debug, AnchorSerialize, AnchorDeserialize)]
-pub struct EnhancedRangeProof {
+pub struct RangeProof {
     /// Commitment to the value
     pub commitment: PedersenCommitment,
     /// Proof data (simplified: hash-based in MVP)
@@ -172,7 +172,7 @@ pub struct EnhancedRangeProof {
     pub challenge: [u8; 32],
 }
 
-impl Default for EnhancedRangeProof {
+impl Default for RangeProof {
     fn default() -> Self {
         Self {
             commitment: PedersenCommitment::default(),
@@ -182,7 +182,7 @@ impl Default for EnhancedRangeProof {
     }
 }
 
-impl EnhancedRangeProof {
+impl RangeProof {
     /// Generate a range proof for a value
     pub fn prove(value: u64, blinding: &[u8; 32]) -> Result<Self> {
         // Verify value is in range
@@ -257,7 +257,7 @@ impl EnhancedRangeProof {
 /// Transfer Proof: Proves balance conservation without revealing amounts
 /// Proves: old_sender - amount = new_sender AND old_receiver + amount = new_receiver
 #[derive(Clone, Debug, AnchorSerialize, AnchorDeserialize)]
-pub struct EnhancedTransferProof {
+pub struct TransferProof {
     /// Commitment to transfer amount
     pub amount_commitment: PedersenCommitment,
     /// Proof that sender has sufficient balance
@@ -270,7 +270,7 @@ pub struct EnhancedTransferProof {
     pub challenge: [u8; 32],
 }
 
-impl Default for EnhancedTransferProof {
+impl Default for TransferProof {
     fn default() -> Self {
         Self {
             amount_commitment: PedersenCommitment::default(),
@@ -282,7 +282,7 @@ impl Default for EnhancedTransferProof {
     }
 }
 
-impl EnhancedTransferProof {
+impl TransferProof {
     /// Generate a transfer proof
     pub fn prove(
         amount: u64,
@@ -382,8 +382,8 @@ impl EnhancedTransferProof {
 
 /// Verify a range proof for a ciphertext
 pub fn verify_range_proof(
-    ciphertext: &EnhancedElGamalCiphertext,
-    proof: &EnhancedRangeProof,
+    ciphertext: &ElGamalCiphertext,
+    proof: &RangeProof,
 ) -> Result<()> {
     // Verify the proof internally
     proof.verify()?;
@@ -396,12 +396,12 @@ pub fn verify_range_proof(
 
 /// Verify a transfer proof for encrypted amounts
 pub fn verify_transfer_proof(
-    sender_old: &EnhancedElGamalCiphertext,
-    sender_new: &EnhancedElGamalCiphertext,
-    receiver_old: &EnhancedElGamalCiphertext,
-    receiver_new: &EnhancedElGamalCiphertext,
-    transfer_amount: &EnhancedElGamalCiphertext,
-    proof: &EnhancedTransferProof,
+    sender_old: &ElGamalCiphertext,
+    sender_new: &ElGamalCiphertext,
+    receiver_old: &ElGamalCiphertext,
+    receiver_new: &ElGamalCiphertext,
+    transfer_amount: &ElGamalCiphertext,
+    proof: &TransferProof,
 ) -> Result<()> {
     // Verify proof structure
     proof.verify()?;
@@ -473,7 +473,7 @@ mod tests {
         let pubkey = [1u8; 32];
         let randomness = [2u8; 32];
         
-        let ct = EnhancedElGamalCiphertext::encrypt(100, &pubkey, &randomness);
+        let ct = ElGamalCiphertext::encrypt(100, &pubkey, &randomness);
         assert!(!ct.is_empty());
         assert_ne!(ct.c1, [0u8; 32]);
         assert_ne!(ct.c2, [0u8; 32]);
@@ -482,8 +482,8 @@ mod tests {
     #[test]
     fn test_elgamal_homomorphic() {
         let pubkey = [1u8; 32];
-        let ct1 = EnhancedElGamalCiphertext::encrypt(50, &pubkey, &[1u8; 32]);
-        let ct2 = EnhancedElGamalCiphertext::encrypt(30, &pubkey, &[2u8; 32]);
+        let ct1 = ElGamalCiphertext::encrypt(50, &pubkey, &[1u8; 32]);
+        let ct2 = ElGamalCiphertext::encrypt(30, &pubkey, &[2u8; 32]);
         
         let sum = ct1.add(&ct2);
         assert!(!sum.is_empty());
@@ -504,7 +504,7 @@ mod tests {
         let value = 1000u64;
         let blinding = [1u8; 32];
         
-        let proof = EnhancedRangeProof::prove(value, &blinding).unwrap();
+        let proof = RangeProof::prove(value, &blinding).unwrap();
         assert!(proof.verify().is_ok());
     }
 
@@ -517,7 +517,7 @@ mod tests {
         let receiver_new = 80u64;
         let blinding = [1u8; 32];
         
-        let proof = EnhancedTransferProof::prove(
+        let proof = TransferProof::prove(
             amount,
             sender_old,
             sender_new,
@@ -535,7 +535,7 @@ mod tests {
         let sender_old = 100u64;
         let blinding = [1u8; 32];
         
-        let result = EnhancedTransferProof::prove(
+        let result = TransferProof::prove(
             amount,
             sender_old,
             0, // Would be negative
@@ -552,7 +552,7 @@ mod tests {
         let value = MAX_CONFIDENTIAL_AMOUNT;
         let blinding = [1u8; 32];
         
-        let proof = EnhancedRangeProof::prove(value, &blinding);
+        let proof = RangeProof::prove(value, &blinding);
         assert!(proof.is_ok());
     }
 }

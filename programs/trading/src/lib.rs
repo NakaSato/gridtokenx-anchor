@@ -1136,7 +1136,7 @@ pub mod trading {
 
 
     // ============================================
-    // Enhanced Features
+    // Pricing Features
     // ============================================
 
     /// Initialize dynamic pricing configuration

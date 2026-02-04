@@ -14,7 +14,7 @@ use crate::zk_proofs::{
 // CONFIDENTIAL STATE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Enhanced confidential balance with ZK proofs support
+/// Confidential balance with ZK proofs support
 #[account]
 pub struct ConfidentialBalance {
     /// Owner of this balance
