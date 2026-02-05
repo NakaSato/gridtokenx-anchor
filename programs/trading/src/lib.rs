@@ -3,6 +3,7 @@
 use anchor_lang::prelude::*;
 // Use absolute path for governance crate if needed, or ensure it's mapped correctly
 pub use ::governance::{ErcCertificate, ErcStatus};
+use crate::zk_proofs::{WrappedElGamalCiphertext, RangeProof, TransferProof};
 
 // Core modules
 pub mod error;
@@ -802,7 +803,7 @@ pub mod trading {
     pub fn shield_energy(
         ctx: Context<ShieldEnergy>,
         amount: u64,
-        encrypted_amount: ElGamalCiphertext,
+        encrypted_amount: WrappedElGamalCiphertext,
         proof: RangeProof,
     ) -> Result<()> {
         confidential::process_shield_energy(ctx, amount, encrypted_amount, proof)
@@ -812,7 +813,7 @@ pub mod trading {
     pub fn unshield_energy(
         ctx: Context<UnshieldEnergy>,
         amount: u64,
-        new_encrypted_amount: ElGamalCiphertext,
+        new_encrypted_amount: WrappedElGamalCiphertext,
         proof: TransferProof,
     ) -> Result<()> {
         confidential::process_unshield_energy(ctx, amount, new_encrypted_amount, proof)
@@ -822,10 +823,32 @@ pub mod trading {
     pub fn private_transfer(
         ctx: Context<PrivateTransfer>,
         amount: u64,
-        encrypted_amount: ElGamalCiphertext,
+        encrypted_amount: WrappedElGamalCiphertext,
         proof: TransferProof,
     ) -> Result<()> {
         confidential::process_private_transfer(ctx, amount, encrypted_amount, proof)
+    }
+
+    /// Execute confidential settlement between orders
+    pub fn execute_confidential_settlement(
+        ctx: Context<ExecuteConfidentialSettlement>,
+        amount: u64,
+        price: u64,
+        encrypted_amount: WrappedElGamalCiphertext,
+        proof: TransferProof,
+    ) -> Result<()> {
+        confidential::process_execute_confidential_settlement(ctx, amount, price, encrypted_amount, proof)
+    }
+
+    /// Execute confidential settlement for an auction trade
+    pub fn execute_confidential_auction_settlement(
+        ctx: Context<ExecuteConfidentialAuctionSettlement>,
+        amount: u64,
+        price: u64,
+        encrypted_amount: WrappedElGamalCiphertext,
+        proof: TransferProof,
+    ) -> Result<()> {
+        confidential::process_execute_confidential_auction_settlement(ctx, amount, price, encrypted_amount, proof)
     }
 
     // ============================================
@@ -1133,6 +1156,112 @@ pub mod trading {
         Ok(())
     }
 
+    /// Submit a confidential commitment (hash) to an auction
+    pub fn submit_confidential_bid(
+        ctx: Context<SubmitConfidentialBid>,
+        hash: [u8; 32],
+        collateral_amount: u64,
+    ) -> Result<()> {
+        let mut batch = ctx.accounts.batch.load_mut()?;
+        let clock = Clock::get()?;
+
+        require!(batch.state == AuctionState::Open as u8, AuctionError::AuctionNotOpen);
+        require!(clock.unix_timestamp < batch.end_time, AuctionError::AuctionNotOpen);
+        
+        // Lock Collateral
+        if collateral_amount > 0 {
+            let cpi_accounts = anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.user_token_account.to_account_info(),
+                mint: ctx.accounts.token_mint.to_account_info(),
+                to: ctx.accounts.vault.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
+            };
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            anchor_spl::token_interface::transfer_checked(
+                CpiContext::new(cpi_program, cpi_accounts),
+                collateral_amount,
+                ctx.accounts.token_mint.decimals,
+            )?;
+        }
+
+        // Store Commitment
+        let count = batch.commitment_count as usize;
+        require!(count < 32, AuctionError::BatchFull);
+
+        batch.commitments[count] = AuctionCommitment {
+            order_id: ctx.accounts.authority.key(),
+            hash,
+            collateral_locked: collateral_amount,
+            _padding: [0; 8],
+        };
+        batch.commitment_count += 1;
+
+        msg!("Confidential commitment submitted");
+        Ok(())
+    }
+
+    /// Reveal a previously submitted confidential bid
+    pub fn reveal_confidential_bid(
+        ctx: Context<RevealConfidentialBid>,
+        price: u64,
+        amount: u64,
+        salt: [u8; 32],
+    ) -> Result<()> {
+        let mut batch = ctx.accounts.batch.load_mut()?;
+        let clock = Clock::get()?;
+        let authority_key = ctx.accounts.authority.key();
+
+        // Reveal window: after end_time but before resolution
+        require!(clock.unix_timestamp >= batch.end_time, AuctionError::AuctionNotReady);
+        require!(batch.state == AuctionState::Open as u8 || batch.state == AuctionState::Locked as u8, AuctionError::AuctionAlreadyResolved);
+
+        // Find and verify commitment
+        let mut found = false;
+        let mut commitment_idx = 0;
+        for i in 0..batch.commitment_count as usize {
+            if batch.commitments[i].order_id == authority_key {
+                // Verify hash: keccak256(owner, price, amount, salt)
+                let mut data = Vec::with_capacity(32 + 8 + 8 + 32);
+                data.extend_from_slice(&authority_key.to_bytes());
+                data.extend_from_slice(&price.to_le_bytes());
+                data.extend_from_slice(&amount.to_le_bytes());
+                data.extend_from_slice(&salt);
+                
+                let hash = anchor_lang::solana_program::keccak::hash(&data).to_bytes();
+                require!(hash == batch.commitments[i].hash, TradingError::InvalidRevealHash);
+                
+                found = true;
+                commitment_idx = i;
+                break;
+            }
+        }
+        require!(found, TradingError::UnauthorizedAuthority);
+
+        // Insert as public order for clearing
+        let order_idx = batch.order_count as usize;
+        require!(order_idx < 32, AuctionError::BatchFull);
+
+        batch.orders[order_idx] = AuctionOrder {
+            order_id: authority_key,
+            price,
+            amount,
+            timestamp: clock.unix_timestamp,
+            is_bid: 1, // Assume bid for now, can be generalized
+            _padding: [0; 7],
+        };
+        batch.order_count += 1;
+
+        // Cleanup: Swap remove commitment
+        let last_idx = (batch.commitment_count - 1) as usize;
+        if commitment_idx != last_idx {
+            batch.commitments[commitment_idx] = batch.commitments[last_idx];
+        }
+        batch.commitment_count -= 1;
+
+        msg!("Confidential bid revealed and inserted into auction");
+        Ok(())
+    }
+
 
 
     // ============================================
@@ -1241,7 +1370,7 @@ pub mod trading {
     /// Prototype: Execute confidential settlement
     pub fn prototype_confidential_settlement<'info>(
         ctx: Context<'_, '_, '_, 'info, ConfidentialSettlement<'info>>,
-        encrypted_amount: ElGamalCiphertext,
+        encrypted_amount: WrappedElGamalCiphertext,
     ) -> Result<()> {
         privacy::execute_confidential_settlement_prototype(ctx, encrypted_amount)
     }
@@ -1692,4 +1821,34 @@ pub struct CancelAuctionOrder<'info> {
     pub authority: Signer<'info>,
     
     pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct SubmitConfidentialBid<'info> {
+    #[account(mut)]
+    pub batch: AccountLoader<'info, AuctionBatch>,
+    
+    #[account(
+        mut,
+        seeds = [b"batch_vault", batch.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
+    pub vault: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+    
+    #[account(mut)]
+    pub user_token_account: InterfaceAccount<'info, anchor_spl::token_interface::TokenAccount>,
+    pub token_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
+    
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RevealConfidentialBid<'info> {
+    #[account(mut)]
+    pub batch: AccountLoader<'info, AuctionBatch>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
 }

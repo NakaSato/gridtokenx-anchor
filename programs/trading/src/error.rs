@@ -34,4 +34,8 @@ pub enum TradingError {
     BatchSizeExceeded,
     #[msg("Re-entrancy Guard Lock")]
     ReentrancyLock,
+    #[msg("Invalid confidential commitment")]
+    InvalidCommitment,
+    #[msg("Invalid confidential reveal hash")]
+    InvalidRevealHash,
 }

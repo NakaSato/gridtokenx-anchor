@@ -1,5 +1,5 @@
 [workspace]
-members = ["programs/*"]
+members = ["programs/*", "scripts/gen-proof-tool"]
 resolver = "2"
 
 [workspace.dependencies]

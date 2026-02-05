@@ -4,52 +4,19 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 /// Prototype module for Confidential Transfers (SPL Token 2022)
 /// This module explores how encrypted amounts would be handled in settlement.
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, AnchorSerialize, AnchorDeserialize)]
-pub struct ElGamalCiphertext {
-    /// 64-byte ElGamal ciphertext
-    pub ciphertext: [u8; 64],
-}
-
-impl Default for ElGamalCiphertext {
-    fn default() -> Self {
-        Self {
-            ciphertext: [0u8; 64],
-        }
-    }
-}
-
-impl ElGamalCiphertext {
-    pub fn add(&self, _other: &ElGamalCiphertext) -> Self {
-        // Mock homomorphic addition: C = C1 * C2 (in group points)
-        // For MVP, we just return a copy or another mock
-        *self
-    }
-    pub fn sub(&self, _other: &ElGamalCiphertext) -> Self {
-        // Mock homomorphic subtraction: C = C1 * C2^-1
-        *self
-    }
-}
+use crate::zk_proofs::{WrappedElGamalCiphertext, ZkTokenProof};
 
 /// Interface for executing a confidential settlement
 /// In a real implementation, this would use `spl-token-2022` instructions with
 /// zk-proofs attached to the transaction context.
 pub fn execute_confidential_settlement_prototype<'info>(
     _ctx: Context<'_, '_, '_, 'info, ConfidentialSettlement<'info>>,
-    encrypted_amount: ElGamalCiphertext,
+    encrypted_amount: WrappedElGamalCiphertext,
 ) -> Result<()> {
     msg!("Executing Confidential Settlement Prototype");
-    msg!("Ciphertext: {:?}", encrypted_amount.ciphertext); // Log mock ciphertext
+    // Access inner pod ciphertext for logging
+    msg!("Ciphertext: {:?}", encrypted_amount.data);
 
-    // Mock verification: Check if mint supports confidential transfers
-    // In reality: Check extensions on the mint account
-    
-    // Transfer step (Mock):
-    // Standard transfer but logging that it would be encrypted
-    // spl_token_2022::instruction::transfer_checked_with_fee (with confidential extension)
-    
-    // For now, we perform a standard transfer of 0 to simulate the CPI call overhead
-    // assuming the amount is hidden.
-    
     Ok(())
 }
 
@@ -65,5 +32,6 @@ pub struct ConfidentialSettlement<'info> {
     #[account(mut)]
     pub receiver_token: InterfaceAccount<'info, TokenAccount>,
     pub mint: InterfaceAccount<'info, Mint>,
+    pub zk_token_proof_program: Program<'info, ZkTokenProof>,
     pub token_program: Interface<'info, TokenInterface>, // Must be Token2022
 }

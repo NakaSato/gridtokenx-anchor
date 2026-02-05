@@ -26,6 +26,15 @@ pub struct AuctionOrder {
     pub _padding: [u8; 7], // 7 -> Total 64
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, Pod, Zeroable)]
+#[repr(C)]
+pub struct AuctionCommitment {
+    pub order_id: Pubkey, // 32
+    pub hash: [u8; 32],   // 32
+    pub collateral_locked: u64, // 8
+    pub _padding: [u8; 8], // 8 -> Total 80
+}
+
 /// Represents a batch of orders for a specific time window
 /// Optimized for Zero-Copy access
 #[account(zero_copy)]
@@ -50,10 +59,14 @@ pub struct AuctionBatch {
     pub locked: u8,             // 1 (Re-entrancy Guard)
     pub _padding: [u8; 1],      // 1 -> Total 80
     
-    pub order_count: u32,       // 4 (Used u32 to aligning better than u16)
+    pub order_count: u32,       // 4 
+    pub commitment_count: u32,  // 4
+    pub _count_padding: [u8; 4], // 4 -> Align to 8-byte boundary
     
-    /// Storing fixed number of orders (32 max for MVP/Zeroable compatibility)
+    /// Storing fixed number of orders (32 max)
     pub orders: [AuctionOrder; 32], 
+    /// Storing fixed number of commitments (32 max)
+    pub commitments: [AuctionCommitment; 32],
 }
 
 #[error_code]
