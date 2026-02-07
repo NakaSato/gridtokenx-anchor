@@ -35,6 +35,30 @@ pub struct AuctionCommitment {
     pub _padding: [u8; 8], // 8 -> Total 80
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Pod, Zeroable)]
+#[repr(C)]
+pub struct ConfidentialAuctionOrder {
+    pub order_id: Pubkey,               // 32
+    pub encrypted_price: [u8; 64],      // 64 (ElGamal)
+    pub encrypted_amount: [u8; 64],     // 64 (ElGamal)
+    pub timestamp: i64,                 // 8
+    pub is_bid: u8,                     // 1 (0=Sell, 1=Buy)
+    pub _padding: [u8; 7],              // 7 -> Total 176
+}
+
+impl Default for ConfidentialAuctionOrder {
+    fn default() -> Self {
+        Self {
+            order_id: Pubkey::default(),
+            encrypted_price: [0u8; 64],
+            encrypted_amount: [0u8; 64],
+            timestamp: 0,
+            is_bid: 0,
+            _padding: [0u8; 7],
+        }
+    }
+}
+
 /// Represents a batch of orders for a specific time window
 /// Optimized for Zero-Copy access
 #[account(zero_copy)]
@@ -59,14 +83,16 @@ pub struct AuctionBatch {
     pub locked: u8,             // 1 (Re-entrancy Guard)
     pub _padding: [u8; 1],      // 1 -> Total 80
     
-    pub order_count: u32,       // 4 
-    pub commitment_count: u32,  // 4
-    pub _count_padding: [u8; 4], // 4 -> Align to 8-byte boundary
+    pub order_count: u32,              // 4 
+    pub commitment_count: u32,         // 4
+    pub confidential_order_count: u32, // 4
     
-    /// Storing fixed number of orders (32 max)
-    pub orders: [AuctionOrder; 32], 
-    /// Storing fixed number of commitments (32 max)
-    pub commitments: [AuctionCommitment; 32],
+    /// Storing fixed number of orders (20 max)
+    pub orders: [AuctionOrder; 20], 
+    /// Storing fixed number of commitments (20 max)
+    pub commitments: [AuctionCommitment; 20],
+    /// Storing fixed number of confidential orders (20 max)
+    pub confidential_orders: [ConfidentialAuctionOrder; 20],
 }
 
 #[error_code]

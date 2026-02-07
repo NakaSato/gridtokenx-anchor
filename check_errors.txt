@@ -1,0 +1,100 @@
+    Checking gridtokenx-wasm v0.1.1 (/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-wasm)
+error[E0433]: failed to resolve: could not find `ElGamalSecretKey` in `pod`
+  --> src/modules/zk.rs:49:31
+   |
+49 |         let secret_key = pod::ElGamalSecretKey::try_from(secret)
+   |                               ^^^^^^^^^^^^^^^^ could not find `ElGamalSecretKey` in `pod`
+   |
+help: consider importing this struct
+   |
+ 1 + use solana_zk_token_sdk::encryption::elgamal::ElGamalSecretKey;
+   |
+help: if you import `ElGamalSecretKey`, refer to it directly
+   |
+49 -         let secret_key = pod::ElGamalSecretKey::try_from(secret)
+49 +         let secret_key = ElGamalSecretKey::try_from(secret)
+   |
+
+error[E0433]: failed to resolve: could not find `ElGamalSecretKey` in `pod`
+  --> src/modules/zk.rs:61:31
+   |
+61 |         let pod_secret = pod::ElGamalSecretKey::from(self.inner.secret());
+   |                               ^^^^^^^^^^^^^^^^ could not find `ElGamalSecretKey` in `pod`
+   |
+help: consider importing this struct
+   |
+ 1 + use solana_zk_token_sdk::encryption::elgamal::ElGamalSecretKey;
+   |
+help: if you import `ElGamalSecretKey`, refer to it directly
+   |
+61 -         let pod_secret = pod::ElGamalSecretKey::from(self.inner.secret());
+61 +         let pod_secret = ElGamalSecretKey::from(self.inner.secret());
+   |
+
+error[E0425]: cannot find type `ElGamalSecretKey` in module `pod`
+  --> src/modules/zk.rs:91:33
+   |
+91 |     let sender_secret_pod: pod::ElGamalSecretKey = pod_read_unaligned(sender_secret);
+   |                                 ^^^^^^^^^^^^^^^^ not found in `pod`
+   |
+help: consider importing this struct
+   |
+ 1 + use solana_zk_token_sdk::encryption::elgamal::ElGamalSecretKey;
+   |
+help: if you import `ElGamalSecretKey`, refer to it directly
+   |
+91 -     let sender_secret_pod: pod::ElGamalSecretKey = pod_read_unaligned(sender_secret);
+91 +     let sender_secret_pod: ElGamalSecretKey = pod_read_unaligned(sender_secret);
+   |
+
+warning: unused imports: `ElGamalCiphertext` and `PedersenCommitment`
+ --> src/modules/zk.rs:5:34
+  |
+5 |         elgamal::{ElGamalPubkey, ElGamalCiphertext, ElGamalKeypair},
+  |                                  ^^^^^^^^^^^^^^^^^
+6 |         pedersen::{PedersenCommitment, Pedersen},
+  |                    ^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0599]: no function or associated item named `from_secret_key` found for struct `ElGamalKeypair` in the current scope
+   --> src/modules/zk.rs:51:37
+    |
+ 51 |         let inner = ElGamalKeypair::from_secret_key(&secret_key.try_into().unwrap());
+    |                                     ^^^^^^^^^^^^^^^ function or associated item not found in `ElGamalKeypair`
+    |
+note: if you're trying to build a new `ElGamalKeypair` consider using one of the following associated functions:
+      ElGamalKeypair::new_for_tests
+      ElGamalKeypair::new_from_signer
+      ElGamalKeypair::new_rand
+      ElGamalKeypair::from_bytes
+      and 2 others
+   --> /Users/chanthawat/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/solana-zk-token-sdk-1.18.26/src/encryption/elgamal.rs:195:5
+    |
+195 |       pub fn new_for_tests(public: ElGamalPubkey, secret: ElGamalSecretKey) -> Self {
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+213 | /     pub fn new_from_signer(
+214 | |         signer: &dyn Signer,
+215 | |         public_seed: &[u8],
+216 | |     ) -> Result<Self, Box<dyn error::Error>> {
+    | |____________________________________________^
+...
+226 |       pub fn new_rand() -> Self {
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+245 |       pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: there is an associated function `from_seed` with a similar name
+    |
+ 51 -         let inner = ElGamalKeypair::from_secret_key(&secret_key.try_into().unwrap());
+ 51 +         let inner = ElGamalKeypair::from_seed(&secret_key.try_into().unwrap());
+    |
+
+error[E0277]: the trait bound `ElGamalPubkey: From<&ElGamalPubkey>` is not satisfied
+  --> src/modules/zk.rs:56:26
+   |
+56 |         let pod_pubkey = pod::ElGamalPubkey::from(self.inner.pubkey());
+   |                          ^^^^^^^^^^^^^^^^^^ the trait `From<&solana_zk_token_sdk::encryption::elgamal::ElGamalPubkey>` is not implemented for `solana_zk_token_sdk::zk_token_elgamal::pod::ElGamalPubkey`
+   |
+help: the trait `From<&solana_zk_token_sdk::encryption::elgamal::ElGamalPubkey>` is not implemented for `solana_zk_token_sdk::zk_token_elgamal::pod::ElGamalPubkey`

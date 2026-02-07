@@ -1,5 +1,15 @@
 [workspace]
-members = ["programs/*", "scripts/gen-proof-tool"]
+members = [
+    "programs/blockbench",
+    "programs/energy-token",
+    "programs/governance",
+    "programs/oracle",
+    "programs/registry",
+    "programs/tpc-benchmark",
+    "programs/trading",
+    "scripts/gen-proof-tool",
+]
+exclude = ["programs/dependency-lock"]
 resolver = "2"
 
 [workspace.dependencies]

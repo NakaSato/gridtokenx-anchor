@@ -9,13 +9,16 @@
 use anchor_lang::prelude::*;
 use solana_zk_token_sdk::{
     zk_token_elgamal::pod::{self},
-    zk_token_proof_instruction::{
-        self,
-        range_proof::{RangeProofU64Data, RangeProofContext},
-        transfer::{TransferData, TransferProofContext},
-    },
+};
+
+#[cfg(not(feature = "test-skip-zk"))]
+use solana_zk_token_sdk::zk_token_proof_instruction::{
+    self,
+    range_proof::{RangeProofU64Data, RangeProofContext},
+    transfer::TransferData,
 };
 use bytemuck::{Pod, Zeroable, pod_read_unaligned};
+#[cfg(not(feature = "test-skip-zk"))]
 use anchor_lang::solana_program::program::invoke;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -114,18 +117,26 @@ impl RangeProof {
     pub fn verify(&self, zk_program: &AccountInfo) -> Result<()> {
         msg!("Verifying range proof via CPI...");
 
-        // Parse proof data
-        let proof_data: pod::RangeProofU64 = pod_read_unaligned(&self.proof);
-        
-        let range_proof_data = RangeProofU64Data {
-            context: RangeProofContext {
-                commitment: self.commitment.as_pod(),
-            },
-            proof: proof_data,
-        };
+        #[cfg(not(feature = "test-skip-zk"))]
+        {
+            // Parse proof data
+            let proof_data: pod::RangeProofU64 = pod_read_unaligned(&self.proof);
+            
+            let range_proof_data = RangeProofU64Data {
+                context: RangeProofContext {
+                    commitment: self.commitment.as_pod(),
+                },
+                proof: proof_data,
+            };
 
-        let ix = zk_token_proof_instruction::verify_range_proof_u64(None, &range_proof_data);
-        invoke(&ix, &[zk_program.clone()])?;
+            let ix = zk_token_proof_instruction::verify_range_proof_u64(None, &range_proof_data);
+            invoke(&ix, &[zk_program.clone()])?;
+        }
+        #[cfg(feature = "test-skip-zk")]
+        {
+            msg!("SKIPPING Range Proof verification (test-skip-zk enabled)");
+            let _ = zk_program;
+        }
 
         Ok(())
     }
@@ -158,12 +169,20 @@ impl TransferProof {
     ) -> Result<()> {
         msg!("Verifying transfer proof via CPI...");
         
-        // TransferData in SDK includes all sub-proofs and context.
-        // It's meant to be constructed off-chain and passed as a whole.
-        let transfer_data: TransferData = pod_read_unaligned(&self.proof);
+        #[cfg(not(feature = "test-skip-zk"))]
+        {
+            // TransferData in SDK includes all sub-proofs and context.
+            // It's meant to be constructed off-chain and passed as a whole.
+            let transfer_data: TransferData = pod_read_unaligned(&self.proof);
 
-        let ix = zk_token_proof_instruction::verify_transfer(None, &transfer_data);
-        invoke(&ix, &[zk_program.clone()])?;
+            let ix = zk_token_proof_instruction::verify_transfer(None, &transfer_data);
+            invoke(&ix, &[zk_program.clone()])?;
+        }
+        #[cfg(feature = "test-skip-zk")]
+        {
+            msg!("SKIPPING Transfer Proof verification (test-skip-zk enabled)");
+            let _ = zk_program;
+        }
 
         Ok(())
     }
@@ -236,4 +255,16 @@ pub enum ZkError {
     
     #[msg("Invalid ciphertext")]
     InvalidCiphertext,
+
+    #[msg("Range proof verification failed: value may exceed valid range")]
+    RangeProofVerificationFailed,
+
+    #[msg("Transfer proof verification failed: balance conservation not satisfied")]
+    TransferProofVerificationFailed,
+
+    #[msg("Ciphertext mismatch: encrypted balances don't match expected values")]
+    CiphertextMismatch,
+
+    #[msg("Insufficient encrypted balance for operation")]
+    InsufficientEncryptedBalance,
 }

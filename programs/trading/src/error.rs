@@ -38,4 +38,10 @@ pub enum TradingError {
     InvalidCommitment,
     #[msg("Invalid confidential reveal hash")]
     InvalidRevealHash,
+    #[msg("Batch is empty")]
+    EmptyBatch,
+    #[msg("Batch size exceeds maximum allowed (5)")]
+    BatchTooLarge,
+    #[msg("Arithmetic overflow")]
+    Overflow,
 }

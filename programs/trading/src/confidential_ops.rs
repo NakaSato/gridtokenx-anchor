@@ -48,6 +48,56 @@ impl ConfidentialBalance {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EVENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Event emitted when tokens are shielded (public → confidential)
+#[event]
+pub struct ShieldEvent {
+    pub owner: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+/// Event emitted when tokens are unshielded (confidential → public)  
+#[event]
+pub struct UnshieldEvent {
+    pub owner: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+/// Event emitted for private transfers between confidential accounts
+#[event]
+pub struct PrivateTransferEvent {
+    pub sender: Pubkey,
+    pub receiver: Pubkey,
+    pub mint: Pubkey,
+    /// Amount is NOT logged to preserve privacy - only participants know
+    pub timestamp: i64,
+}
+
+/// Event emitted for confidential settlements
+#[event]
+pub struct ConfidentialSettlementEvent {
+    pub buyer: Pubkey,
+    pub seller: Pubkey,
+    pub energy_amount: u64,  // Energy is public
+    /// Payment amount is NOT logged to preserve privacy
+    pub timestamp: i64,
+}
+
+/// Event emitted for batch confidential settlements
+#[event]
+pub struct BatchConfidentialSettlementEvent {
+    pub num_settlements: u8,
+    pub total_energy: u64,
+    pub timestamp: i64,
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // VERIFIED OPERATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -74,6 +124,14 @@ pub fn verified_shield(
     // Update slot
     balance.last_update_slot = Clock::get()?.slot;
     
+    // Emit event
+    emit!(ShieldEvent {
+        owner: balance.owner,
+        mint: balance.mint,
+        amount: _amount,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
+    
     msg!("Verified shield with ZK proof");
     Ok(())
 }
@@ -94,6 +152,14 @@ pub fn verified_unshield(
     
     // Update slot
     balance.last_update_slot = Clock::get()?.slot;
+    
+    // Emit event
+    emit!(UnshieldEvent {
+        owner: balance.owner,
+        mint: balance.mint,
+        amount,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
     
     msg!("Verified unshield of {} tokens with ZK proof", amount);
     Ok(())
@@ -128,6 +194,14 @@ pub fn verified_private_transfer(
     let slot = Clock::get()?.slot;
     sender.last_update_slot = slot;
     receiver.last_update_slot = slot;
+    
+    // Emit event (amount NOT included for privacy)
+    emit!(PrivateTransferEvent {
+        sender: sender.owner,
+        receiver: receiver.owner,
+        mint: sender.mint,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
     
     msg!("Verified private transfer with ZK proof");
     Ok(())

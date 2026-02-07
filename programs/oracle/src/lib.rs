@@ -376,6 +376,9 @@ fn validate_meter_reading(
     Ok(())
 }
 
+/// Helper function to update the oracle's quality score based on reading validity.
+/// Reserved for future batch processing optimization when we enable global counter updates.
+#[allow(dead_code)]
 fn update_quality_score(oracle_data: &mut OracleData, _is_valid: bool) -> Result<()> {
     let total_readings = oracle_data.total_valid_readings + oracle_data.total_rejected_readings;
 
@@ -388,6 +391,9 @@ fn update_quality_score(oracle_data: &mut OracleData, _is_valid: bool) -> Result
     Ok(())
 }
 
+/// Helper function to update the weighted moving average of meter reading intervals.
+/// Reserved for future batch processing optimization when we enable global counter updates.
+#[allow(dead_code)]
 fn update_reading_interval(oracle_data: &mut OracleData, new_interval: u32) -> Result<()> {
     // Weighted Moving Average (WMA) for reading interval stability
     // 

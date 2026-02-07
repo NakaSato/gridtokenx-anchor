@@ -3,7 +3,8 @@ use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, Burn
 
 use crate::zk_proofs::{WrappedElGamalCiphertext, RangeProof, TransferProof, WrappedPedersenCommitment, ZkTokenProof};
 use crate::confidential_ops::{
-    verified_shield, verified_unshield, verified_private_transfer, ConfidentialBalance
+    verified_shield, verified_unshield, verified_private_transfer, ConfidentialBalance,
+    ConfidentialSettlementEvent, BatchConfidentialSettlementEvent,
 };
 use crate::TradingError;
 
@@ -206,6 +207,14 @@ pub fn process_execute_confidential_settlement(
         sell_order.status = crate::state::OrderStatus::PartiallyFilled as u8;
     }
 
+    // Emit event for off-chain tracking
+    emit!(ConfidentialSettlementEvent {
+        buyer: buy_order.buyer,
+        seller: sell_order.seller,
+        energy_amount: amount,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
+
     msg!("Executed confidential settlement for {} energy tokens", amount);
     Ok(())
 }
@@ -226,6 +235,31 @@ pub fn process_execute_confidential_auction_settlement(
     // 1. Validation
     require!(batch.state == crate::auction::AuctionState::Cleared as u8, crate::auction::AuctionError::AuctionNotReady);
     require!(price == batch.clearing_price, crate::auction::AuctionError::PriceMismatch);
+
+    // Optional: Check if either party submitted a confidential order
+    // This connects the ZK settlement back to the encrypted auction participation.
+    let mut buyer_found = false;
+    let mut seller_found = false;
+    let buyer_key = ctx.accounts.buyer_owner.key();
+    let seller_key = ctx.accounts.seller_owner.key();
+
+    for i in 0..batch.confidential_order_count as usize {
+        let order = &batch.confidential_orders[i];
+        if order.order_id == buyer_key && order.is_bid == 1 {
+            buyer_found = true;
+        }
+        if order.order_id == seller_key && order.is_bid == 0 {
+            seller_found = true;
+        }
+    }
+    
+    // In a fully confidential auction, we'd require these to be true.
+    // For MVP/Hybrid, we log status but keep matching flexible.
+    if buyer_found { msg!("Verified Buyer participation in confidential auction"); }
+    if seller_found { msg!("Verified Seller participation in confidential auction"); }
+
+    // Drop the batch reference before CPI calls to avoid "already borrowed" errors
+    drop(batch);
 
     // 2. CONFIDENTIAL PAYMENT (Buyer -> Seller)
     // Even though the amount is known from the auction, moving it between 
@@ -438,6 +472,94 @@ pub struct ExecuteConfidentialSettlement<'info> {
     pub escrow_authority: Signer<'info>, // API Authority that owns escrows
     
     pub token_program: Interface<'info, token_interface::TokenInterface>,
+    pub zk_token_proof_program: Program<'info, ZkTokenProof>,
+    pub system_program: Program<'info, System>,
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BATCH CONFIDENTIAL SETTLEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// A single settlement item in a batch
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct BatchSettlementItem {
+    pub amount: u64,
+    pub encrypted_amount: WrappedElGamalCiphertext,
+    pub proof: TransferProof,
+}
+
+/// Execute multiple confidential settlements in a single transaction
+/// This optimizes compute usage by batching ZK proof verifications
+pub fn process_execute_batch_confidential_settlement(
+    ctx: Context<ExecuteBatchConfidentialSettlement>,
+    settlements: Vec<BatchSettlementItem>,
+) -> Result<()> {
+    require!(!settlements.is_empty(), TradingError::EmptyBatch);
+    require!(settlements.len() <= 5, TradingError::BatchTooLarge);
+
+    let mut total_energy = 0u64;
+    
+    // Process each settlement
+    for (i, settlement) in settlements.iter().enumerate() {
+        msg!("Processing batch settlement {} of {}", i + 1, settlements.len());
+        
+        let sender = &mut ctx.accounts.sender_confidential_balance;
+        let receiver = &mut ctx.accounts.receiver_confidential_balance;
+        
+        let sender_owner = sender.owner.to_bytes();
+        let receiver_owner = receiver.owner.to_bytes();
+
+        // Verify the ZK proof for this settlement
+        verified_private_transfer(
+            &ctx.accounts.zk_token_proof_program.to_account_info(),
+            &sender_owner,
+            &receiver_owner,
+            sender,
+            receiver,
+            settlement.encrypted_amount,
+            settlement.proof.clone(),
+        )?;
+        
+        total_energy = total_energy.checked_add(settlement.amount)
+            .ok_or(TradingError::Overflow)?;
+    }
+
+    // Emit batch event
+    emit!(BatchConfidentialSettlementEvent {
+        num_settlements: settlements.len() as u8,
+        total_energy,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
+
+    msg!("Completed batch confidential settlement: {} settlements, {} total energy", 
+        settlements.len(), total_energy);
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct ExecuteBatchConfidentialSettlement<'info> {
+    #[account(
+        mut,
+        seeds = [b"confidential_balance", authority.key().as_ref(), mint.key().as_ref()],
+        bump = sender_confidential_balance.bump,
+    )]
+    pub sender_confidential_balance: Account<'info, ConfidentialBalance>,
+
+    #[account(
+        mut,
+        seeds = [b"confidential_balance", receiver_owner.key().as_ref(), mint.key().as_ref()],
+        bump = receiver_confidential_balance.bump,
+    )]
+    pub receiver_confidential_balance: Account<'info, ConfidentialBalance>,
+
+    /// CHECK: Receiver's owner address
+    pub receiver_owner: AccountInfo<'info>,
+
+    pub mint: InterfaceAccount<'info, Mint>,
+    
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    
     pub zk_token_proof_program: Program<'info, ZkTokenProof>,
     pub system_program: Program<'info, System>,
 }

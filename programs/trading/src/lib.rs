@@ -851,6 +851,53 @@ pub mod trading {
         confidential::process_execute_confidential_auction_settlement(ctx, amount, price, encrypted_amount, proof)
     }
 
+    /// Execute batch confidential settlement - process multiple ZK settlements in one transaction
+    pub fn batch_confidential_settlement(
+        ctx: Context<ExecuteBatchConfidentialSettlement>,
+        settlements: Vec<BatchSettlementItem>,
+    ) -> Result<()> {
+        confidential::process_execute_batch_confidential_settlement(ctx, settlements)
+    }
+
+    /// Submit an encrypted bid to the current auction
+    pub fn submit_encrypted_bid(
+        ctx: Context<SubmitEncryptedBid>,
+        encrypted_price: [u8; 64],
+        encrypted_amount: [u8; 64],
+        is_bid: bool,
+    ) -> Result<()> {
+        let mut batch = ctx.accounts.batch.load_mut()?;
+        let clock = Clock::get()?;
+
+        // Checks
+        require!(batch.state == AuctionState::Open as u8, AuctionError::AuctionNotOpen);
+        require!(clock.unix_timestamp < batch.end_time, AuctionError::AuctionNotOpen);
+        
+        // Check capacity
+        let current_count = batch.confidential_order_count as usize;
+        require!(current_count < 20, AuctionError::BatchFull);
+
+        let order = ConfidentialAuctionOrder {
+            order_id: ctx.accounts.authority.key(),
+            encrypted_price,
+            encrypted_amount,
+            is_bid: if is_bid { 1 } else { 0 },
+            timestamp: clock.unix_timestamp,
+            _padding: [0; 7],
+        };
+        
+        // Insert order
+        batch.confidential_orders[current_count] = order;
+        batch.confidential_order_count += 1;
+        
+        msg!("Confidential {} submitted to batch {}", 
+            if is_bid { "Bid" } else { "Ask" }, 
+            batch.batch_id
+        );
+        
+        Ok(())
+    }
+
     // ============================================
     // Phase 3: Periodic Double Auction
     // ============================================
@@ -896,7 +943,7 @@ pub mod trading {
         
         // Check capacity
         let current_count = batch.order_count as usize;
-        require!(current_count < 50, AuctionError::BatchFull);
+        require!(current_count < 20, AuctionError::BatchFull);
 
         // LOCK ASSETS (Escrow)
         // Transfer from user to batch vault
@@ -1186,7 +1233,7 @@ pub mod trading {
 
         // Store Commitment
         let count = batch.commitment_count as usize;
-        require!(count < 32, AuctionError::BatchFull);
+        require!(count < 20, AuctionError::BatchFull);
 
         batch.commitments[count] = AuctionCommitment {
             order_id: ctx.accounts.authority.key(),
@@ -1753,6 +1800,15 @@ pub struct SubmitAuctionOrder<'info> {
     pub authority: Signer<'info>,
     
     pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct SubmitEncryptedBid<'info> {
+    #[account(mut)]
+    pub batch: AccountLoader<'info, AuctionBatch>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
