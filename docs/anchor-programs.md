@@ -10,20 +10,20 @@ The GridTokenX platform is composed of several interacting on-chain programs tha
 
 | Program | Type | Description | Program ID |
 |---------|------|-------------|------------|
-| **Registry** | Core | Central identity and device registry | `3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye` |
-| **Energy Token** | Core | GRX Token-2022 management & minting | `8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq` |
-| **Oracle** | Core | Smart meter data validation & ingestion | `ACeKwdMK1sma3EPnxy7bvgC5yMwy8tg7ZUJvaogC9YfR` |
-| **Trading** | Core | P2P Energy Marketplace & AMM | `GTuRUUwCfvmqW7knqQtzQLMCy61p4UKUrdT5ssVgZbat` |
-| **Governance** | Core | DAO/PoA System management | `51d3SDcs5coxkiwvcjMzPrKeajTPF9yikw66WezipTva` |
-| **Blockbench** | Benchmark | System micro-benchmarks (YCSB) | `B5aDPT9bM692E63ZtBVLQuJhsoJsPdyjn6ATqqgWpbTg` |
-| **TPC-Benchmark** | Benchmark | TPC-C Transaction benchmark | `BcXcPzZHpBJ82RwDSuVY2eVCXj3enda8R3AxUTjXwFgu` |
+| **Registry** | Core | Central identity and device registry | `CXXRVpEwyd2ch7eo425mtaBfr2Yi1825Nm6yik2NEWqR` |
+| **Energy Token** | Core | GRX Token-2022 management & minting | `5DJCWKo5cXt3PXRsrpH1xixra4wXWbNzxZ1p4FHqSxvi` |
+| **Oracle** | Core | Smart meter data validation & ingestion | `EkcPD2YEXhpo1J73UX9EJNnjV2uuFS8KXMVLx9ybqnhU` |
+| **Trading** | Core | P2P Energy Marketplace & AMM | `8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND` |
+| **Governance** | Core | DAO/PoA System management | `8bNpJqZoqqUWKu55VWhR8LWS66BX7NPpwgYBAKhBzu2L` |
+| **Blockbench** | Benchmark | System micro-benchmarks (YCSB) | `9sz5rrCnWTLqPeQVuyJgyQ1hqLGXrT94GLfVVoWUKpxz` |
+| **TPC-Benchmark** | Benchmark | TPC-C Transaction benchmark | `Gn99qZgnpwNXsQaBB7zvyycnRJmMGaQ4UaG5PpvBsmEu` |
 
 ---
 
 ## Core Platform Programs
 
 ### 1. Registry Program
-**ID:** `3aF9FmyFuGzg4i1TCyySLQM1zWK8UUQyFALxo2f236ye`
+**ID:** `CXXRVpEwyd2ch7eo425mtaBfr2Yi1825Nm6yik2NEWqR`
 
 The Registry program serves as the source of truth for all participants in the network. It links on-chain identities (Public Keys) to physical entities (Users) and devices (Smart Meters).
 
@@ -42,7 +42,7 @@ The Registry program serves as the source of truth for all participants in the n
 ---
 
 ### 2. Energy Token Program
-**ID:** `8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq`
+**ID:** `5DJCWKo5cXt3PXRsrpH1xixra4wXWbNzxZ1p4FHqSxvi`
 
 Manages the **GRX** token using the **Token-2022** standard. This program handles the cryptographic representation of energy credits and Renewable Energy Certificates (RECs).
 
@@ -60,7 +60,7 @@ Manages the **GRX** token using the **Token-2022** standard. This program handle
 ---
 
 ### 3. Oracle Program
-**ID:** `ACeKwdMK1sma3EPnxy7bvgC5yMwy8tg7ZUJvaogC9YfR`
+**ID:** `EkcPD2YEXhpo1J73UX9EJNnjV2uuFS8KXMVLx9ybqnhU`
 
 The Oracle program is the bridge between off-chain IoT devices (Smart Meters) and the on-chain Registry. It implements data quality checks and anomaly detection.
 
@@ -79,7 +79,7 @@ The Oracle acts as a "Gatekeeper". It does not store all historical data on-chai
 ---
 
 ### 4. Trading Program
-**ID:** `GTuRUUwCfvmqW7knqQtzQLMCy61p4UKUrdT5ssVgZbat`
+**ID:** `8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND`
 
 A comprehensive marketplace supporting both Order Book (P2P) and Automated Market Maker (AMM) models for energy trading.
 
@@ -102,7 +102,7 @@ A comprehensive marketplace supporting both Order Book (P2P) and Automated Marke
 ---
 
 ### 5. Governance Program
-**ID:** `51d3SDcs5coxkiwvcjMzPrKeajTPF9yikw66WezipTva`
+**ID:** `8bNpJqZoqqUWKu55VWhR8LWS66BX7NPpwgYBAKhBzu2L`
 
 Manages the Proof of Authority (PoA) consensus configuration and network-wide emergency controls.
 
@@ -118,7 +118,7 @@ Manages the Proof of Authority (PoA) consensus configuration and network-wide em
 These programs are used to evaluate the performance of the Solana cluster itself for the specific workload profiles of the energy grid.
 
 ### 1. Blockbench
-**ID:** `B5aDPT9bM692E63ZtBVLQuJhsoJsPdyjn6ATqqgWpbTg`
+**ID:** `9sz5rrCnWTLqPeQVuyJgyQ1hqLGXrT94GLfVVoWUKpxz`
 
 An adaptation of the *BLOCKBENCH* framework (SIGMOD 2017) for Solana. It tests isolated layers of the blockchain stack.
 
@@ -130,7 +130,7 @@ An adaptation of the *BLOCKBENCH* framework (SIGMOD 2017) for Solana. It tests i
 - **YCSB**: Implements Yahoo! Cloud Serving Benchmark key-value operations (Insert, Update, Read, Scan).
 
 ### 2. TPC-Benchmark (TPC-C)
-**ID:** `BcXcPzZHpBJ82RwDSuVY2eVCXj3enda8R3AxUTjXwFgu`
+**ID:** `Gn99qZgnpwNXsQaBB7zvyycnRJmMGaQ4UaG5PpvBsmEu`
 
 A full implementation of the TPC-C (Online Transaction Processing) benchmark standard, mapped to Solana's account model.
 

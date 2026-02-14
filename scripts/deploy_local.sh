@@ -14,9 +14,9 @@ echo "Using config: $CONFIG"
 echo "🔍 Building..."
 # Note: In local dev, --verifiable is slow (docker). We use standard build for speed unless specified.
 if [ "$1" == "--verifiable" ]; then
-    anchor build --verifiable --provider.cluster $CLUSTER --config $CONFIG
+    anchor build --verifiable
 else
-    anchor build --provider.cluster $CLUSTER --config $CONFIG
+    anchor build
 fi
 
 echo "✅ Build Complete."
@@ -29,6 +29,6 @@ if ! pgrep -x "solana-test-validator" > /dev/null; then
     # anchor localnet would handle this, but for pure deploy we expect it running or use anchor deploy
 fi
 
-anchor deploy --provider.cluster $CLUSTER --config $CONFIG
+anchor deploy
 
 echo "✅ Localnet Deployment Successful!"

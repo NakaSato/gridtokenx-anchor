@@ -57,7 +57,7 @@ macro_rules! compute_fn {
     ($name:expr => $block:block) => { $block };
 }
 
-declare_id!("8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND");
+declare_id!("2mYzcKsqTEH1LdNszBMJDAo63SRjDUyk2BXMjHiwFZwt");
 
 #[program]
 pub mod trading {
@@ -1405,6 +1405,24 @@ pub mod trading {
         compliance_period: [u8; 16],
     ) -> Result<()> {
         carbon::process_retire_rec_certificate(ctx, reason, beneficiary, compliance_period)
+    }
+
+    /// Create a listing for carbon credits (RECs)
+    pub fn create_carbon_listing(
+        ctx: Context<CreateCarbonListing>,
+        amount: u64,
+        price_per_rec: u64,
+        expires_at: i64,
+    ) -> Result<()> {
+        carbon::process_create_carbon_listing(ctx, amount, price_per_rec, expires_at)
+    }
+
+    /// Fill a carbon listing (buy RECs)
+    pub fn fill_carbon_listing(
+        ctx: Context<FillCarbonListing>,
+        amount: u64,
+    ) -> Result<()> {
+        carbon::process_fill_carbon_listing(ctx, amount)
     }
 
     /// Update the batch processing configuration for the market

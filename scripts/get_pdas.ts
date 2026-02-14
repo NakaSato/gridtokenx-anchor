@@ -8,6 +8,7 @@ async function main() {
 
     const registryProgram = anchor.workspace.Registry;
     const tradingProgram = anchor.workspace.Trading;
+    const energyTokenProgram = anchor.workspace.EnergyToken;
 
     // Derive Registry PDA
     const [registryPda] = PublicKey.findProgramAddressSync(
@@ -21,8 +22,15 @@ async function main() {
         tradingProgram.programId
     );
 
+    // Derive Energy Token Mint PDA (Token-2022)
+    const [mintPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("mint_2022")],
+        energyTokenProgram.programId
+    );
+
     console.log(`REGISTRY_PDA=${registryPda.toBase58()}`);
     console.log(`MARKET_PDA=${marketPda.toBase58()}`);
+    console.log(`ENERGY_TOKEN_MINT=${mintPda.toBase58()}`);
 }
 
 main().catch(err => {

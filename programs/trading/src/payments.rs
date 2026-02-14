@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
+use anchor_spl::associated_token::AssociatedToken;
 
 use crate::stablecoin::*;
 use crate::wormhole::*;
@@ -677,7 +678,13 @@ pub struct InitializeBridge<'info> {
 #[derive(Accounts)]
 #[instruction(destination_chain: u16, destination_address: [u8; 32], amount: u64, timestamp: u64)]
 pub struct InitiateBridgeTransfer<'info> {
+    #[account(
+        seeds = [b"bridge_config", market.key().as_ref()],
+        bump = bridge_config.bump
+    )]
     pub bridge_config: Account<'info, BridgeConfig>,
+    
+    pub market: AccountLoader<'info, Market>,
     
     #[account(
         init,
@@ -693,14 +700,23 @@ pub struct InitiateBridgeTransfer<'info> {
     #[account(mut)]
     pub user_token_account: InterfaceAccount<'info, TokenAccount>,
     
-    #[account(mut)]
+    #[account(
+        init_if_needed,
+        payer = user,
+        token::mint = token_mint,
+        token::authority = bridge_config,
+        seeds = [b"bridge_escrow", market.key().as_ref(), token_mint.key().as_ref()],
+        bump
+    )]
     pub bridge_escrow: InterfaceAccount<'info, TokenAccount>,
     
     #[account(mut)]
     pub user: Signer<'info>,
     
     pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]

@@ -11,7 +11,9 @@ gridtokenx-anchor/
 │   ├── governance/         # Governance module
 │   ├── oracle/             # Price oracle for energy credits
 │   ├── registry/           # User registration and management
-│   └── trading/            # Energy trading marketplace
+│   ├── trading/            # Energy trading marketplace
+│   ├── blockbench/         # BLOCKBENCH micro-benchmarks (YCSB)
+│   └── tpc-benchmark/      # TPC-C transaction benchmark
 ├── src/                   # Generated client libraries and utilities
 │   ├── client.ts          # Unified client for all programs
 │   ├── energy_token.ts    # Energy token types and client
@@ -34,12 +36,13 @@ gridtokenx-anchor/
 
 ## Program Addresses
 
-- **Energy Token**: `94G1r674LmRDmLN2UPjDFD8Eh7zT8JaSaxv9v68GyEur`
-- **Governance**: `4DY97YYBt4bxvG7xaSmWy3MhYhmA6HoMajBHVqhySvXe`
-- **Oracle**: `DvdtU4quEbuxUY2FckmvcXwTpC9qp4HLJKb1PMLaqAoE`
-- **Registry**: `2XPQmFYMdXjP7ffoBB3mXeCdboSFg5Yeb6QmTSGbW8a7`
-- **Trading**: `GZnqNTJsre6qB4pWCQRE9FiJU2GUeBtBDPp6s7zosctk`
-- **BLOCKBENCH**: `BLKbnchMrk1111111111111111111111111111111111`
+- **Energy Token**: `5DJCWKo5cXt3PXRsrpH1xixra4wXWbNzxZ1p4FHqSxvi`
+- **Governance**: `8bNpJqZoqqUWKu55VWhR8LWS66BX7NPpwgYBAKhBzu2L`
+- **Oracle**: `EkcPD2YEXhpo1J73UX9EJNnjV2uuFS8KXMVLx9ybqnhU`
+- **Registry**: `CXXRVpEwyd2ch7eo425mtaBfr2Yi1825Nm6yik2NEWqR`
+- **Trading**: `8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND`
+- **BLOCKBENCH**: `9sz5rrCnWTLqPeQVuyJgyQ1hqLGXrT94GLfVVoWUKpxz`
+- **TPC-Benchmark**: `Gn99qZgnpwNXsQaBB7zvyycnRJmMGaQ4UaG5PpvBsmEu`
 
 ## Performance Benchmarks
 
@@ -123,7 +126,7 @@ pnpm blockbench:report
 
 - Node.js 18+
 - Solana CLI 1.18+
-- Anchor CLI 0.32.1
+- Anchor CLI 0.32.0
 - Rust 1.70+
 - pnpm (recommended package manager)
 
@@ -339,10 +342,10 @@ User and asset registration system:
 
 ### Oracle
 
-Price feed and data verification:
-- Real-time energy prices from multiple sources
-- Grid load and production metrics
-- Weather and environmental data integration
+Smart meter data validation and market clearing:
+- Smart meter reading validation and anomaly detection
+- Market clearing trigger
+- Multi-oracle support with backup oracles
 
 ### Trading
 
@@ -354,10 +357,10 @@ Decentralized energy marketplace:
 
 ### Governance
 
-Decentralized decision making:
-- Proposal system for protocol changes
-- Voting based on energy token holdings
-- Parameter adjustment for market stability
+PoA-based governance with ERC certificate management:
+- PoA-based governance with ERC certificate management
+- Emergency controls (pause/unpause)
+- Authority transfer with 2-step verification
 
 ## Testing Strategy
 
@@ -424,7 +427,7 @@ tests/
 
 The project uses Anchor configuration in `Anchor.toml`:
 
-- **Toolchain**: Anchor 0.32.1 with pnpm package manager
+- **Toolchain**: Anchor 0.32.0 with pnpm package manager
 - **Program Addresses**: Pre-defined program IDs for localnet
 - **Test Configuration**: Optimized test settings with genesis programs
 - **Provider**: Localnet cluster with dev-wallet as default

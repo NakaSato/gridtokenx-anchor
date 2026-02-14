@@ -1,6 +1,6 @@
 # GridTokenX Glossary & Concepts
 
-**Version:** 2.0.0  
+**Version:** 0.1.1  
 **Last Updated:** February 2, 2026
 
 ---
@@ -43,7 +43,7 @@
 | **Spot Price** | Current market price for immediate energy delivery. |
 | **Forward Contract** | Agreement to buy/sell energy at a predetermined price for future delivery. |
 | **Merit Order** | Ranking of power plants by marginal cost, determining dispatch order. Renewables typically have near-zero marginal cost. |
-| **Clearing Price** | The price at which supply equals demand in an auction market. All matched trades execute at this price. |
+| **Clearing Price** | The price at which supply equals demand in an auction market. All matched trades execute at this price. In P2P trading, the current implementation uses Pay-as-Seller pricing (the seller's ask price is used as the clearing price). |
 | **Market Maker** | Entity providing liquidity by offering to buy and sell at quoted prices. In GridTokenX, AMM pools serve this role. |
 | **Spread** | Difference between buy (bid) and sell (ask) prices. Lower spreads indicate higher liquidity. |
 
@@ -187,7 +187,7 @@
 | Term | Definition |
 |------|------------|
 | **P2P Trading** | Direct peer-to-peer trading via limit orders in an order book. |
-| **Periodic Auction** | Batch auction collecting orders, then clearing at uniform price. Runs every 5 minutes. |
+| **Periodic Auction** | Batch auction collecting orders, then clearing at uniform price. Default duration is 5 minutes (configurable by authority). |
 | **AMM (Automated Market Maker)** | Algorithmic liquidity provision using constant product formula (x * y = k). |
 | **Order Book** | Collection of active buy and sell orders organized by price. |
 | **Matching Engine** | Logic that pairs buy and sell orders based on price-time priority. |
@@ -407,7 +407,7 @@
 │  ACCOUNT TYPES                          KEY LIMITS                          │
 │  ─────────────                          ──────────                          │
 │  Registry: UserAccount, MeterAccount    Max CU: 1,400,000                   │
-│  Trading: Market, Order, TradeRecord    Order expiry: 7 days default        │
+│  Trading: Market, Order, TradeRecord    Order expiry: 24 hours default      │
 │  Governance: PoAConfig, ErcAccount      Auction window: 5 minutes           │
 │                                         Min ERC energy: 100 kWh             │
 │                                                                             │
@@ -418,6 +418,8 @@
 │  Oracle:       EkcPD2YEXhpo1J73UX9EJNnjV2uuFS8KXMVLx9ybqnhU                │
 │  Governance:   8bNpJqZoqqUWKu55VWhR8LWS66BX7NPpwgYBAKhBzu2L                │
 │  Energy Token: 5DJCWKo5cXt3PXRsrpH1xixra4wXWbNzxZ1p4FHqSxvi                │
+│  Blockbench:   9sz5rrCnWTLqPeQVuyJgyQ1hqLGXrT94GLfVVoWUKpxz                │
+│  TPC-Benchmark:Gn99qZgnpwNXsQaBB7zvyycnRJmMGaQ4UaG5PpvBsmEu                │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```

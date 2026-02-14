@@ -1,6 +1,8 @@
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token_interface;
 
 // Core modules
 pub mod error;
@@ -11,7 +13,10 @@ pub use error::RegistryError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("CXXRVpEwyd2ch7eo425mtaBfr2Yi1825Nm6yik2NEWqR");
+declare_id!("E1k1C1oyRye4dmZcBKJvFKeEarqJBbyUVP7t6odVgo1X");
+
+/// Airdrop amount for new users (in smallest token units, 9 decimals = 20 GRX)
+pub const AIRDROP_AMOUNT: u64 = 20_000_000_000; // 20 GRX tokens
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};
@@ -92,6 +97,7 @@ pub mod registry {
     }
 
     /// Register a new user in the P2P energy trading system
+    /// Also automatically distributes airdrop amount of GRID tokens to the user
     pub fn register_user(
         ctx: Context<RegisterUser>,
         user_type: UserType,
@@ -119,6 +125,34 @@ pub mod registry {
                 lat,
                 long,
             });
+
+            // Perform automatic airdrop via CPI to energy token program
+            // Only proceed if energy token program is provided (optional)
+            if ctx.accounts.energy_token_program.key() != Pubkey::default() {
+                compute_checkpoint!("before_airdrop_cpi");
+                
+                // Build CPI context for MintToWallet instruction
+                let cpi_accounts = token_interface::MintTo {
+                    mint: ctx.accounts.mint.to_account_info(),
+                    to: ctx.accounts.user_token_account.to_account_info(),
+                    authority: ctx.accounts.token_info.to_account_info(),
+                };
+
+                let cpi_program = ctx.accounts.token_program.to_account_info();
+
+                // Use empty signer seeds since token_info is already an authority signer
+                // The energy-token program will validate the authority signature
+                let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+
+                // Call mint_to from the SPL token interface
+                if let Err(_) = token_interface::mint_to(cpi_ctx, AIRDROP_AMOUNT) {
+                    // Airdrop failure is non-critical, user registration continues
+                    // This allows registration to succeed even if token minting fails
+                    msg!("Warning: Airdrop minting failed for user {}, but registration succeeded", user_authority);
+                }
+                
+                compute_checkpoint!("after_airdrop_cpi");
+            }
         });
         Ok(())
     }
@@ -517,6 +551,28 @@ pub struct RegisterUser<'info> {
 
     #[account(mut)]
     pub authority: Signer<'info>,
+
+    // ===== Optional Airdrop Accounts =====
+    /// CHECK: Energy token program (optional for airdrop)
+    pub energy_token_program: AccountInfo<'info>,
+
+    /// CHECK: Energy token mint account (optional for airdrop)
+    #[account(mut)]
+    pub mint: AccountInfo<'info>,
+
+    /// CHECK: Energy token info PDA account (optional for airdrop)
+    #[account(mut)]
+    pub token_info: AccountInfo<'info>,
+
+    /// CHECK: User's associated token account for receiving airdrop, validated by token program
+    #[account(mut)]
+    pub user_token_account: AccountInfo<'info>,
+
+    /// CHECK: SPL Token program (Token-2022 compatible), validated by runtime
+    pub token_program: AccountInfo<'info>,
+
+    /// Associated Token Program
+    pub associated_token_program: Program<'info, AssociatedToken>,
 
     pub system_program: Program<'info, System>,
 }

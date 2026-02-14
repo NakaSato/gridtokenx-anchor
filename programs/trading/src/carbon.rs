@@ -304,6 +304,143 @@ pub struct RetireRecCertificate<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct CreateCarbonListing<'info> {
+    #[account(mut)]
+    pub marketplace: Account<'info, CarbonMarketplace>,
+
+    #[account(
+        init,
+        payer = seller,
+        space = CarbonListing::LEN,
+        seeds = [b"carbon_listing", marketplace.key().as_ref(), &marketplace.active_listings.to_le_bytes()],
+        bump
+    )]
+    pub listing: Account<'info, CarbonListing>,
+
+    #[account(mut)]
+    pub certificate: Account<'info, RecCertificate>,
+
+    #[account(mut)]
+    pub seller: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct FillCarbonListing<'info> {
+    #[account(mut)]
+    pub marketplace: Account<'info, CarbonMarketplace>,
+
+    #[account(mut)]
+    pub listing: Account<'info, CarbonListing>,
+
+    #[account(mut)]
+    pub certificate: Account<'info, RecCertificate>,
+
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+
+    /// CHECK: Seller account to receive payment
+    #[account(mut)]
+    pub seller: AccountInfo<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+pub fn process_create_carbon_listing(
+    ctx: Context<CreateCarbonListing>,
+    amount: u64,
+    price_per_rec: u64,
+    expires_at: i64,
+) -> Result<()> {
+    let marketplace = &mut ctx.accounts.marketplace;
+    let listing = &mut ctx.accounts.listing;
+    let certificate = &ctx.accounts.certificate;
+    let clock = Clock::get()?;
+
+    require!(marketplace.is_active, CarbonError::MarketplaceInactive);
+    require!(certificate.owner == ctx.accounts.seller.key(), CarbonError::UnauthorizedIssuance);
+    require!(!certificate.is_retired, CarbonError::CertificateRetired);
+    require!(certificate.rec_amount >= amount, CarbonError::InsufficientBalance);
+
+    listing.bump = ctx.bumps.listing;
+    listing.listing_id = marketplace.active_listings as u64;
+    listing.seller = ctx.accounts.seller.key();
+    listing.certificate = certificate.key();
+    listing.amount = amount;
+    listing.price_per_rec = price_per_rec;
+    listing.expires_at = expires_at;
+    listing.created_at = clock.unix_timestamp;
+    listing.is_active = true;
+    listing.total_sold = 0;
+
+    marketplace.active_listings += 1;
+
+    emit!(ListingCreated {
+        listing_id: listing.listing_id,
+        seller: listing.seller,
+        certificate: listing.certificate,
+        amount,
+        price_per_rec,
+        timestamp: clock.unix_timestamp,
+    });
+
+    Ok(())
+}
+
+pub fn process_fill_carbon_listing(
+    ctx: Context<FillCarbonListing>,
+    amount: u64,
+) -> Result<()> {
+    let marketplace = &mut ctx.accounts.marketplace;
+    let listing = &mut ctx.accounts.listing;
+    let certificate = &mut ctx.accounts.certificate;
+    let clock = Clock::get()?;
+
+    require!(marketplace.is_active, CarbonError::MarketplaceInactive);
+    require!(listing.is_active, CarbonError::ListingInactive);
+    require!(listing.expires_at > clock.unix_timestamp, CarbonError::ListingExpired);
+    require!(listing.amount >= amount, CarbonError::InsufficientBalance);
+    require!(amount >= listing.min_purchase, CarbonError::BelowMinimumPurchase);
+
+    let total_price = amount * listing.price_per_rec;
+
+    // Payment (Native SOL transfer for simplicity in this marketplace implementation)
+    let ix = anchor_lang::solana_program::system_instruction::transfer(
+        &ctx.accounts.buyer.key(),
+        &ctx.accounts.seller.key(),
+        total_price,
+    );
+    anchor_lang::solana_program::program::invoke(
+        &ix,
+        &[
+            ctx.accounts.buyer.to_account_info(),
+            ctx.accounts.seller.to_account_info(),
+        ],
+    )?;
+
+    // Update certificate owner (or fractional ownership if we supported it, but here we assume full or simple transfer)
+    // For simplicity, we just update the owner if amount equals or logic allows
+    certificate.owner = ctx.accounts.buyer.key();
+
+    listing.amount -= amount;
+    listing.total_sold += amount;
+    if listing.amount == 0 {
+        listing.is_active = false;
+    }
+
+    emit!(ListingFilled {
+        listing_id: listing.listing_id,
+        buyer: ctx.accounts.buyer.key(),
+        amount,
+        total_price,
+        timestamp: clock.unix_timestamp,
+    });
+
+    Ok(())
+}
+
 impl CarbonMarketplace {
     pub const LEN: usize = 8 + // discriminator
         1 +   // bump

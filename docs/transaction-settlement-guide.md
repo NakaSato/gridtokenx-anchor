@@ -265,18 +265,18 @@ Converts verified meter readings into GRX tokens.
 │       │                         │                         │                 │
 │       │  6. Receive THB         │  7. Transfer GRX       │                 │
 │       │◀════════════════════════│════════════════════════▶│                 │
-│       │  Alice: +346.5 THB      │  Bob: +100 GRX         │                 │
-│       │  (after 1% fee)         │                         │                 │
+│       │  Alice: +349.125 THB    │  Bob: +100 GRX         │                 │
+│       │  (after 0.25% fee)      │                         │                 │
 │       │                         │                         │                 │
 │       │                         │  8. Fee Collection     │                 │
-│       │                         │  Fee Collector: +3.5 THB│                 │
+│       │                         │  Fee Collector: +0.875 THB│               │
 │       │                         │                         │                 │
 │                                                                             │
 │  Settlement Calculation:                                                    │
 │  ═══════════════════════                                                    │
 │  trade_value     = 100 GRX × 3.5 THB = 350 THB                             │
-│  market_fee      = 350 THB × 0.01 = 3.5 THB (1% = 100 bps)                 │
-│  seller_receives = 350 - 3.5 = 346.5 THB                                   │
+│  market_fee      = 350 THB × 0.0025 = 0.875 THB (0.25% = 25 bps)           │
+│  seller_receives = 350 - 0.875 = 349.125 THB                               │
 │  buyer_receives  = 100 GRX                                                  │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -463,8 +463,8 @@ pub struct TokenConfig {
 │        │                        │                        │                  │
 │        │  5a. Receive THB       │  5b. Send USDC        │                  │
 │        │◀═══════════════════════│◀════════════════════════                  │
-│        │  346.5 THB             │  $10.10 USDC          │                  │
-│        │  (net of 1% fee)       │  (incl. conversion)   │                  │
+│        │  349.125 THB           │  $10.10 USDC          │                  │
+│        │  (net of 0.25% fee)    │  (incl. conversion)   │                  │
 │        │                        │                        │                  │
 │        │  5c. Receive GRX       │                        │                  │
 │        │                        │═══════════════════════▶│                  │
@@ -508,7 +508,7 @@ pub struct OrderPaymentInfo {
 │                                                                             │
 │  Fee Type              Rate (bps)    Rate (%)    Applied To                │
 │  ────────────────────────────────────────────────────────────────────────  │
-│  Market Fee            100           1.0%        All P2P trades            │
+│  Market Fee            25            0.25%       All P2P trades            │
 │  Auction Fee           50            0.5%        Auction settlements       │
 │  AMM Swap Fee          30            0.3%        AMM swaps (to LPs)        │
 │  Bridge Fee            50            0.5%        Cross-chain transfers     │
@@ -518,10 +518,10 @@ pub struct OrderPaymentInfo {
 │  ═══════════                                                                │
 │  fee = (trade_value × fee_bps) / 10,000                                    │
 │                                                                             │
-│  Example (100 GRX @ 3.5 THB with 1% fee):                                  │
+│  Example (100 GRX @ 3.5 THB with 0.25% fee):                               │
 │  • Trade value: 350 THB                                                    │
-│  • Fee: 350 × 100 / 10,000 = 3.5 THB                                       │
-│  • Seller receives: 350 - 3.5 = 346.5 THB                                  │
+│  • Fee: 350 × 25 / 10,000 = 0.875 THB                                      │
+│  • Seller receives: 350 - 0.875 = 349.125 THB                              │
 │                                                                             │
 │  Fee Distribution:                                                          │
 │  ┌──────────────────────────────────────────────────────────────────────┐ │
@@ -566,7 +566,7 @@ let (seller_receives, market_fee) = calculate_net_amount(trade_value, market.mar
 
 | Market Type | Default Fee | Min Fee | Max Fee | Configurable By |
 |-------------|-------------|---------|---------|-----------------|
-| P2P Trading | 100 bps | 10 bps | 500 bps | Authority |
+| P2P Trading | 25 bps | 10 bps | 500 bps | Authority |
 | Periodic Auction | 50 bps | 10 bps | 200 bps | Authority |
 | AMM Pools | 30 bps | 5 bps | 100 bps | Pool Creator |
 | Wormhole Bridge | 50 bps | 20 bps | 200 bps | Authority |

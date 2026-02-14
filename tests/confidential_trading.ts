@@ -20,6 +20,7 @@ import {
 } from "@solana/spl-token";
 import { assert } from "chai";
 import type { Trading } from "../target/types/trading";
+import * as zk from "./utils/zk-proofs";
 
 const ZK_TOKEN_PROOF_PROGRAM_ID = new PublicKey("ZkTokenProof1111111111111111111111111111111");
 
@@ -51,19 +52,9 @@ describe("Confidential Trading", () => {
         data: Buffer.alloc(64, 0)
     };
 
-    // Real proofs generated via gen-proof-tool
-    const realRangeProof = {
-        commitment: { data: [...Buffer.from("dceb7ad0834897dd2781f4c07d99a2cd25fa3f77dd91a2312369eb924ff75d5b", "hex")] },
-        proof: Buffer.alloc(100, 0)
-    };
-    const realTransferProof200 = {
-        amountCommitment: { data: [...Buffer.from("46580554dbda963d76326cd6036814ac2fa8ee2f1c9d466f27f8a7eff75be5f7", "hex")] },
-        proof: Buffer.alloc(100, 0)
-    };
-    const realTransferProof100 = {
-        amountCommitment: { data: [...Buffer.from("4009e991fa95311ed64b7df57d2b70eefb8ccdc666b39f64c02a446de9b5a651", "hex")] },
-        proof: Buffer.alloc(100, 0)
-    };
+    // Placeholder for real proofs generated via WASM
+    let rangeProof: zk.RangeProofResult;
+    let transferProof: zk.TransferProofResult;
 
     async function createATA(owner: PublicKey, mint: PublicKey, programId: PublicKey) {
         const ata = getAssociatedTokenAddressSync(mint, owner, false, programId);
@@ -130,7 +121,10 @@ describe("Confidential Trading", () => {
 
     it("Shields energy tokens (Public -> Confidential)", async () => {
         const amount = new BN(500);
-        await program.methods.shieldEnergy(amount, { data: [...mockCiphertext.data] }, realRangeProof).accounts({
+        const blinding = zk.generateValidBlinding();
+        rangeProof = zk.createRangeProof(BigInt(amount.toNumber()), blinding);
+
+        await program.methods.shieldEnergy(amount, { data: [...mockCiphertext.data] }, rangeProof).accounts({
             confidentialBalance: userA_Confidential,
             mint: energyMint,
             userTokenAccount: userA_Token,
@@ -148,9 +142,19 @@ describe("Confidential Trading", () => {
 
     it("Executes a private transfer", async () => {
         const amount = new BN(200);
+        const senderBlinding = zk.generateValidBlinding();
+        const amountBlinding = zk.generateValidBlinding();
+
+        transferProof = zk.createTransferProof(
+            BigInt(amount.toNumber()),
+            BigInt(500), // senderBalance (from shield)
+            senderBlinding,
+            amountBlinding
+        );
+
         await program.methods.privateTransfer(amount, { data: [...mockCiphertext.data] }, {
-            amountCommitment: realTransferProof200.amountCommitment,
-            proof: realTransferProof200.proof
+            amountCommitment: transferProof.amountCommitment,
+            proof: transferProof.proof
         }).accounts({
             senderBalance: userA_Confidential,
             receiverBalance: userB_Confidential,
@@ -175,9 +179,19 @@ describe("Confidential Trading", () => {
             program.programId
         );
 
+        const senderBlinding = zk.generateValidBlinding();
+        const amountBlinding = zk.generateValidBlinding();
+
+        transferProof = zk.createTransferProof(
+            BigInt(amount.toNumber()),
+            BigInt(200), // userB's balance from previous transfer
+            senderBlinding,
+            amountBlinding
+        );
+
         await program.methods.unshieldEnergy(amount, { data: [...mockCiphertext.data] }, {
-            amountCommitment: realTransferProof100.amountCommitment,
-            proof: realTransferProof100.proof
+            amountCommitment: transferProof.amountCommitment,
+            proof: transferProof.proof
         }).accounts({
             confidentialBalance: userB_Confidential,
             mint: energyMint,
@@ -194,33 +208,32 @@ describe("Confidential Trading", () => {
     });
 
     it("Executes batch confidential settlement (3 settlements)", async () => {
-        // Prepare 3 settlement items
-        const settlements = [
-            {
-                amount: new BN(100),
+        // Prepare 3 settlement items with real proofs
+        const settlements = [];
+        const amounts = [100, 50, 150];
+        let currentSenderBalance = 300; // userA's remaining balance after transfer (500 - 200)
+
+        for (const amt of amounts) {
+            const senderBlinding = zk.generateValidBlinding();
+            const amountBlinding = zk.generateValidBlinding();
+
+            const proofData = zk.createTransferProof(
+                BigInt(amt),
+                BigInt(currentSenderBalance),
+                senderBlinding,
+                amountBlinding
+            );
+
+            settlements.push({
+                amount: new BN(amt),
                 encryptedAmount: { data: [...mockCiphertext.data] },
                 proof: {
-                    amountCommitment: realTransferProof100.amountCommitment,
-                    proof: realTransferProof100.proof
+                    amountCommitment: proofData.amountCommitment,
+                    proof: proofData.proof
                 }
-            },
-            {
-                amount: new BN(50),
-                encryptedAmount: { data: [...mockCiphertext.data] },
-                proof: {
-                    amountCommitment: realTransferProof100.amountCommitment, // Simplified mock
-                    proof: realTransferProof100.proof
-                }
-            },
-            {
-                amount: new BN(150),
-                encryptedAmount: { data: [...mockCiphertext.data] },
-                proof: {
-                    amountCommitment: realTransferProof100.amountCommitment,
-                    proof: realTransferProof100.proof
-                }
-            }
-        ];
+            });
+            currentSenderBalance -= amt;
+        }
 
         await program.methods.batchConfidentialSettlement(settlements).accounts({
             senderConfidentialBalance: userA_Confidential,
@@ -242,20 +255,32 @@ describe("Confidential Trading", () => {
 
     // ============================================
     // Negative Test Cases - Security Verification
+    // These tests only work when ZK proof verification is enabled (not in localnet/test-skip-zk mode).
+    // With test-skip-zk, all proofs pass regardless of validity.
     // ============================================
 
-    describe("Security: Proof Rejection Tests", () => {
+    const skipZk = process.env.TEST_SKIP_ZK === "1" || process.env.ANCHOR_FEATURES?.includes("test-skip-zk") || process.env.ANCHOR_FEATURES?.includes("localnet");
+
+    describe("Security: Proof Rejection Tests" + (skipZk ? " [SKIPPED: test-skip-zk active]" : ""), function () {
+        before(function () {
+            if (skipZk) this.skip();
+        });
         it("Rejects transfer with tampered proof data", async () => {
             const amount = new BN(50);
 
+            // Create a real valid proof first, then tamper with it
+            const sBlinding = zk.generateValidBlinding();
+            const aBlinding = zk.generateValidBlinding();
+            const validTransferProof = zk.createTransferProof(BigInt(50), BigInt(300), sBlinding, aBlinding);
+
             // Create a tampered proof by modifying bytes
             const tamperedProof = {
-                amountCommitment: realTransferProof200.amountCommitment,
-                proof: Buffer.from(realTransferProof200.proof)
+                amountCommitment: validTransferProof.amountCommitment,
+                proof: Buffer.from(validTransferProof.proof)
             };
             // Tamper with the proof bytes
             tamperedProof.proof[0] = (tamperedProof.proof[0] + 1) % 256;
-            tamperedProof.proof[100] = (tamperedProof.proof[100] + 1) % 256;
+            tamperedProof.proof[tamperedProof.proof.length - 1] = (tamperedProof.proof[tamperedProof.proof.length - 1] + 1) % 256;
 
             try {
                 await program.methods.privateTransfer(amount, { data: [...mockCiphertext.data] }, {
@@ -281,10 +306,15 @@ describe("Confidential Trading", () => {
             // Use a proof generated for 200 tokens but claim only 50
             const wrongAmount = new BN(50);
 
+            // Create a real valid proof for 200 first
+            const sBlinding = zk.generateValidBlinding();
+            const aBlinding = zk.generateValidBlinding();
+            const validTransferProof200 = zk.createTransferProof(BigInt(200), BigInt(300), sBlinding, aBlinding);
+
             try {
                 await program.methods.privateTransfer(wrongAmount, { data: [...mockCiphertext.data] }, {
-                    amountCommitment: realTransferProof200.amountCommitment,
-                    proof: realTransferProof200.proof
+                    amountCommitment: validTransferProof200.amountCommitment,
+                    proof: validTransferProof200.proof
                 }).accounts({
                     senderBalance: userA_Confidential,
                     receiverBalance: userB_Confidential,
@@ -305,10 +335,15 @@ describe("Confidential Trading", () => {
             const amount = new BN(100);
             const zeroedCommitment = { data: new Array(32).fill(0) };
 
+            // Generate a valid proof we can "steal" the commitment/proof from
+            const sBlinding = zk.generateValidBlinding();
+            const aBlinding = zk.generateValidBlinding();
+            const validTransferProof100 = zk.createTransferProof(BigInt(100), BigInt(300), sBlinding, aBlinding);
+
             try {
                 await program.methods.privateTransfer(amount, { data: [...mockCiphertext.data] }, {
                     amountCommitment: zeroedCommitment,
-                    proof: realTransferProof100.proof
+                    proof: validTransferProof100.proof
                 }).accounts({
                     senderBalance: userA_Confidential,
                     receiverBalance: userB_Confidential,
@@ -326,11 +361,17 @@ describe("Confidential Trading", () => {
 
         it("Rejects transfer with empty proof bytes", async () => {
             const amount = new BN(100);
-            const emptyProof = Buffer.alloc(realTransferProof100.proof.length, 0);
+
+            // Generate a valid proof to get the commitment
+            const sBlinding = zk.generateValidBlinding();
+            const aBlinding = zk.generateValidBlinding();
+            const validTransferProof100 = zk.createTransferProof(BigInt(100), BigInt(300), sBlinding, aBlinding);
+
+            const emptyProof = Buffer.alloc(validTransferProof100.proof.length, 0);
 
             try {
                 await program.methods.privateTransfer(amount, { data: [...mockCiphertext.data] }, {
-                    amountCommitment: realTransferProof100.amountCommitment,
+                    amountCommitment: validTransferProof100.amountCommitment,
                     proof: emptyProof
                 }).accounts({
                     senderBalance: userA_Confidential,

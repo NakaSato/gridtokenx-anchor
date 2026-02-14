@@ -50,6 +50,8 @@
 
 ### 1.1 Market Price Clearing
 
+> **⚠️ Implementation Note:** The CURRENT production implementation uses **Pay-as-Seller pricing** (`clearing_price = sell_order.price_per_kwh`), where the seller's ask price is used directly as the clearing price for P2P trades. The VWAP algorithm described below is defined in code but marked `#[allow(dead_code)]` and is **not actively called**. It is retained for potential future use.
+
 **Purpose:** Determine fair equilibrium price for energy trading based on supply and demand.
 
 **Algorithm:** Hybrid Mid-Point + Volume-Weighted Average Price (VWAP)

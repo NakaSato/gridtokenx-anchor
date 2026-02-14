@@ -11,7 +11,7 @@ pub use error::OracleError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("EkcPD2YEXhpo1J73UX9EJNnjV2uuFS8KXMVLx9ybqnhU");
+declare_id!("296LK1ueWCNbDEoiRv1xw547MjcBdr1CaJVFXNf8NpAg");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};

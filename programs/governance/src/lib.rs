@@ -14,7 +14,7 @@ pub use errors::*;
 pub use events::*;
 pub use state::*;
 
-declare_id!("8bNpJqZoqqUWKu55VWhR8LWS66BX7NPpwgYBAKhBzu2L");
+declare_id!("4xXr6TM6YP6SiTeBcfBXC5dZep5PMhBCUN8uG4VUmQJk");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};
