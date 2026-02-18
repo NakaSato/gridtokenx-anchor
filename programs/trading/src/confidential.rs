@@ -35,6 +35,7 @@ pub fn process_shield_energy(
     encrypted_amount: WrappedElGamalCiphertext,
     proof: RangeProof, // Proves that amount matches encrypted_amount
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     require!(amount > 0, TradingError::InvalidAmount);
     
     // Burn public tokens
@@ -114,6 +115,7 @@ pub fn process_private_transfer(
     encrypted_amount: WrappedElGamalCiphertext,
     proof: TransferProof,
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     let sender = &mut ctx.accounts.sender_balance;
     let receiver = &mut ctx.accounts.receiver_balance;
     
@@ -147,6 +149,7 @@ pub fn process_execute_confidential_settlement(
     let mut sell_order = ctx.accounts.sell_order.load_mut()?;
     let _clock = Clock::get()?;
 
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     // 1. Validation (Matched logic from public settlement)
     require!(amount > 0, TradingError::InvalidAmount);
     require!(
@@ -215,7 +218,6 @@ pub fn process_execute_confidential_settlement(
         timestamp: Clock::get()?.unix_timestamp,
     });
 
-    msg!("Executed confidential settlement for {} energy tokens", amount);
     Ok(())
 }
 
@@ -231,6 +233,8 @@ pub fn process_execute_confidential_auction_settlement(
     let batch_id_bytes = batch.batch_id.to_le_bytes();
     let market_key = batch.market;
     let batch_bump = batch.bump;
+    
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     
     // 1. Validation
     require!(batch.state == crate::auction::AuctionState::Cleared as u8, crate::auction::AuctionError::AuctionNotReady);
@@ -255,8 +259,7 @@ pub fn process_execute_confidential_auction_settlement(
     
     // In a fully confidential auction, we'd require these to be true.
     // For MVP/Hybrid, we log status but keep matching flexible.
-    if buyer_found { msg!("Verified Buyer participation in confidential auction"); }
-    if seller_found { msg!("Verified Seller participation in confidential auction"); }
+    // (Logs removed for CU optimization)
 
     // Drop the batch reference before CPI calls to avoid "already borrowed" errors
     drop(batch);
@@ -305,7 +308,6 @@ pub fn process_execute_confidential_auction_settlement(
     // Note: If the buyer had public collateral in the vault, it should be refunded 
     // or adjusted here. For this MVP, we assume the payment is done purely via ZK.
     
-    msg!("Executed confidential auction settlement for {} tokens", amount);
     Ok(())
 }
 
@@ -341,6 +343,7 @@ pub struct ShieldEnergy<'info> {
     pub owner: Signer<'info>,
     pub zk_token_proof_program: Program<'info, ZkTokenProof>,
     pub token_program: Interface<'info, TokenInterface>,
+    pub governance_config: Account<'info, crate::PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -364,6 +367,7 @@ pub struct UnshieldEnergy<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
     pub token_program: Interface<'info, TokenInterface>,
+    pub governance_config: Account<'info, crate::PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -391,6 +395,7 @@ pub struct PrivateTransfer<'info> {
     #[account(mut)]
     pub owner: Signer<'info>, // Sender owner
     pub zk_token_proof_program: Program<'info, ZkTokenProof>,
+    pub governance_config: Account<'info, crate::PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -431,6 +436,7 @@ pub struct ExecuteConfidentialAuctionSettlement<'info> {
     pub token_program: Interface<'info, token_interface::TokenInterface>,
     pub zk_token_proof_program: Program<'info, ZkTokenProof>,
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, crate::PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -474,6 +480,7 @@ pub struct ExecuteConfidentialSettlement<'info> {
     pub token_program: Interface<'info, token_interface::TokenInterface>,
     pub zk_token_proof_program: Program<'info, ZkTokenProof>,
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, crate::PoAConfig>,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -494,14 +501,16 @@ pub fn process_execute_batch_confidential_settlement(
     ctx: Context<ExecuteBatchConfidentialSettlement>,
     settlements: Vec<BatchSettlementItem>,
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     require!(!settlements.is_empty(), TradingError::EmptyBatch);
     require!(settlements.len() <= 5, TradingError::BatchTooLarge);
+    let num_settlements = settlements.len() as u8;
 
     let mut total_energy = 0u64;
     
     // Process each settlement
-    for (i, settlement) in settlements.iter().enumerate() {
-        msg!("Processing batch settlement {} of {}", i + 1, settlements.len());
+    for (i, settlement) in settlements.into_iter().enumerate() {
+        // Log removed for CU optimization
         
         let sender = &mut ctx.accounts.sender_confidential_balance;
         let receiver = &mut ctx.accounts.receiver_confidential_balance;
@@ -517,7 +526,7 @@ pub fn process_execute_batch_confidential_settlement(
             sender,
             receiver,
             settlement.encrypted_amount,
-            settlement.proof.clone(),
+            settlement.proof,
         )?;
         
         total_energy = total_energy.checked_add(settlement.amount)
@@ -526,13 +535,11 @@ pub fn process_execute_batch_confidential_settlement(
 
     // Emit batch event
     emit!(BatchConfidentialSettlementEvent {
-        num_settlements: settlements.len() as u8,
+        num_settlements,
         total_energy,
         timestamp: Clock::get()?.unix_timestamp,
     });
 
-    msg!("Completed batch confidential settlement: {} settlements, {} total energy", 
-        settlements.len(), total_energy);
     Ok(())
 }
 
@@ -562,4 +569,5 @@ pub struct ExecuteBatchConfidentialSettlement<'info> {
     
     pub zk_token_proof_program: Program<'info, ZkTokenProof>,
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, crate::PoAConfig>,
 }

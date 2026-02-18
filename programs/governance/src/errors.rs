@@ -4,12 +4,6 @@ use anchor_lang::prelude::*;
 pub enum GovernanceError {
     #[msg("Unauthorized authority")]
     UnauthorizedAuthority,
-    #[msg("System is already paused")]
-    AlreadyPaused,
-    #[msg("System is not paused")]
-    NotPaused,
-    #[msg("System is currently paused")]
-    SystemPaused,
     #[msg("System is in maintenance mode")]
     MaintenanceMode,
     #[msg("ERC validation is disabled")]

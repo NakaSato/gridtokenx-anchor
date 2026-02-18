@@ -6,20 +6,16 @@ pub struct PoAConfig {
     // === Authority Configuration ===
     /// Single authority - REC certifying entity
     pub authority: Pubkey,
-    /// Authority name (e.g., "REC")
-    pub authority_name: String,
-    /// Authority contact information
-    pub contact_info: String,
+    /// Authority name (e.g., "REC") - FIXED: 64 bytes
+    pub authority_name: [u8; 64],
+    pub name_len: u8,
+    /// Authority contact information - FIXED: 128 bytes
+    pub contact_info: [u8; 128],
+    pub contact_len: u8,
     /// Governance version for upgrades
     pub version: u8,
     
-    // === Emergency Controls ===
-    /// Emergency pause status
-    pub emergency_paused: bool,
-    /// Emergency pause timestamp
-    pub emergency_timestamp: Option<i64>,
-    /// Emergency pause reason
-    pub emergency_reason: Option<String>,
+    // === Controls ===
     /// System maintenance mode
     pub maintenance_mode: bool,
     
@@ -47,7 +43,7 @@ pub struct PoAConfig {
     /// Allow certificate transfers between accounts
     pub allow_certificate_transfers: bool,
     
-    // === Statistics & Tracking ===
+    // === Tracking ===
     /// Total ERCs issued since inception
     pub total_ercs_issued: u64,
     /// Total ERCs validated for trading
@@ -65,7 +61,7 @@ pub struct PoAConfig {
     /// Last ERC issued timestamp
     pub last_erc_issued_at: Option<i64>,
     
-    // === NEW: Multi-sig Authority Change ===
+    // === Multi-sig Authority Change ===
     /// Pending new authority (for 2-step transfer)
     pub pending_authority: Option<Pubkey>,
     /// When the pending authority change was proposed
@@ -78,14 +74,11 @@ impl PoAConfig {
     pub const LEN: usize = 
         // Authority Configuration
         32 +    // authority
-        64 +    // authority_name
-        128 +   // contact_info
+        64 + 1 + // authority_name + len
+        128 + 1 + // contact_info + len
         1 +     // version
         
-        // Emergency Controls
-        1 +     // emergency_paused
-        9 +     // emergency_timestamp (Option<i64>)
-        132 +   // emergency_reason (Option<String>)
+        // Controls
         1 +     // maintenance_mode
         
         // ERC Certificate Configuration
@@ -102,7 +95,7 @@ impl PoAConfig {
         1 +     // min_oracle_confidence
         1 +     // allow_certificate_transfers
         
-        // Statistics & Tracking
+        // Tracking
         8 +     // total_ercs_issued
         8 +     // total_ercs_validated
         8 +     // total_ercs_revoked
@@ -141,7 +134,7 @@ impl PoAConfig {
     
     /// Check if system is operational (not paused or in maintenance)
     pub fn is_operational(&self) -> bool {
-        !self.emergency_paused && !self.maintenance_mode
+        !self.maintenance_mode
     }
     
     /// Check if ERC issuance is allowed
@@ -152,15 +145,18 @@ impl PoAConfig {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct GovernanceStats {
-    // Core statistics
+    // Core
     pub total_ercs_issued: u64,
     pub total_ercs_validated: u64,
     pub total_ercs_revoked: u64,
     pub total_energy_certified: u64,
     
+    // Authority info
+    pub authority_name: String,
+    pub contact_info: String,
+    
     // Configuration
     pub erc_validation_enabled: bool,
-    pub emergency_paused: bool,
     pub maintenance_mode: bool,
     
     // Limits

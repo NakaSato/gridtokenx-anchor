@@ -69,7 +69,10 @@ describe("Oracle Program", () => {
             authority: apiGateway.publicKey
         }).signers([apiGateway]).rpc();
 
-        // No global counter update in the program, just check if it doesn't throw
+        const data = await program.account.oracleData.fetch(oracleData);
+        assert.equal(data.totalGlobalEnergyProduced.toNumber(), 100);
+        assert.equal(data.totalGlobalEnergyConsumed.toNumber(), 50);
+        assert.equal(data.totalValidReadings.toNumber(), 1);
     });
 
     it("Fails to submit reading from unauthorized gateway", async () => {
@@ -87,13 +90,15 @@ describe("Oracle Program", () => {
     });
 
     it("Triggers market clearing", async () => {
-        await program.methods.triggerMarketClearing().accounts({
+        const epochTimestamp = new BN(Math.floor(Date.now() / 1000));
+        await program.methods.triggerMarketClearing(epochTimestamp).accounts({
             oracleData: oracleData,
             authority: apiGateway.publicKey
         }).signers([apiGateway]).rpc();
 
         const data = await program.account.oracleData.fetch(oracleData);
         assert.ok(data.lastClearing.toNumber() > 0);
+        assert.equal(data.lastClearedEpoch.toNumber(), epochTimestamp.toNumber());
     });
 
     it("Updates oracle status", async () => {

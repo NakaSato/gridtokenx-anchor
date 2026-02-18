@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::{PoAConfig, TradingError};
 
 
 /// Carbon Credit Marketplace for GridTokenX
@@ -138,6 +139,7 @@ pub fn process_mint_rec_certificate(
     generation_start: i64,
     generation_end: i64,
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     let marketplace = &mut ctx.accounts.marketplace;
     let certificate = &mut ctx.accounts.certificate;
     let verified_reading = &ctx.accounts.verified_reading;
@@ -224,6 +226,7 @@ pub struct MintRecCertificate<'info> {
     
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 /// Retire a REC certificate for compliance/offset
@@ -233,6 +236,7 @@ pub fn process_retire_rec_certificate(
     beneficiary: [u8; 32],
     compliance_period: [u8; 16],
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     let marketplace = &mut ctx.accounts.marketplace;
     let certificate = &mut ctx.accounts.certificate;
     let retirement = &mut ctx.accounts.retirement;
@@ -302,6 +306,7 @@ pub struct RetireRecCertificate<'info> {
     pub owner: Signer<'info>,
 
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -325,6 +330,7 @@ pub struct CreateCarbonListing<'info> {
     pub seller: Signer<'info>,
 
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -346,6 +352,7 @@ pub struct FillCarbonListing<'info> {
     pub seller: AccountInfo<'info>,
 
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 pub fn process_create_carbon_listing(
@@ -354,6 +361,7 @@ pub fn process_create_carbon_listing(
     price_per_rec: u64,
     expires_at: i64,
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     let marketplace = &mut ctx.accounts.marketplace;
     let listing = &mut ctx.accounts.listing;
     let certificate = &ctx.accounts.certificate;
@@ -393,6 +401,7 @@ pub fn process_fill_carbon_listing(
     ctx: Context<FillCarbonListing>,
     amount: u64,
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     let marketplace = &mut ctx.accounts.marketplace;
     let listing = &mut ctx.accounts.listing;
     let certificate = &mut ctx.accounts.certificate;

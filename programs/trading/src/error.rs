@@ -23,9 +23,9 @@ pub enum TradingError {
     #[msg("Invalid ERC certificate status")]
     InvalidErcCertificate,
     #[msg("ERC certificate has expired")]
-    ErcCertificateExpired,
+    ErcExpired,
     #[msg("ERC certificate not validated for trading")]
-    ErcNotValidatedForTrading,
+    NotValidatedForTrading,
     #[msg("Order amount exceeds available ERC certificate amount")]
     ExceedsErcAmount,
     #[msg("Batch processing is disabled")]
@@ -42,6 +42,8 @@ pub enum TradingError {
     EmptyBatch,
     #[msg("Batch size exceeds maximum allowed (5)")]
     BatchTooLarge,
+    #[msg("System is in maintenance mode")]
+    MaintenanceMode,
     #[msg("Arithmetic overflow")]
     Overflow,
 }

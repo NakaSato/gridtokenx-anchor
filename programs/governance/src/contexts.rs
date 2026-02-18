@@ -19,20 +19,6 @@ pub struct InitializePoa<'info> {
     pub system_program: Program<'info, System>,
 }
 
-// ========== EMERGENCY CONTROL ==========
-
-#[derive(Accounts)]
-pub struct EmergencyControl<'info> {
-    #[account(
-        mut,
-        seeds = [b"poa_config"],
-        bump,
-        has_one = authority @ GovernanceError::UnauthorizedAuthority
-    )]
-    pub poa_config: Account<'info, PoAConfig>,
-    pub authority: Signer<'info>,
-}
-
 // ========== ERC CERTIFICATE ==========
 
 #[derive(Accounts)]
@@ -70,7 +56,7 @@ pub struct ValidateErc<'info> {
     pub poa_config: Account<'info, PoAConfig>,
     #[account(
         mut,
-        seeds = [b"erc_certificate", erc_certificate.certificate_id.as_bytes()],
+        seeds = [b"erc_certificate", erc_certificate.certificate_id[..erc_certificate.id_len as usize].as_ref()],
         bump
     )]
     pub erc_certificate: Account<'info, ErcCertificate>,
@@ -88,7 +74,7 @@ pub struct RevokeErc<'info> {
     pub poa_config: Account<'info, PoAConfig>,
     #[account(
         mut,
-        seeds = [b"erc_certificate", erc_certificate.certificate_id.as_bytes()],
+        seeds = [b"erc_certificate", erc_certificate.certificate_id[..erc_certificate.id_len as usize].as_ref()],
         bump
     )]
     pub erc_certificate: Account<'info, ErcCertificate>,
@@ -104,7 +90,7 @@ pub struct TransferErc<'info> {
     pub poa_config: Account<'info, PoAConfig>,
     #[account(
         mut,
-        seeds = [b"erc_certificate", erc_certificate.certificate_id.as_bytes()],
+        seeds = [b"erc_certificate", erc_certificate.certificate_id[..erc_certificate.id_len as usize].as_ref()],
         bump,
         constraint = erc_certificate.owner == current_owner.key() @ GovernanceError::UnauthorizedAuthority
     )]

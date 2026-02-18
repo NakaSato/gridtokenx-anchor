@@ -8,18 +8,6 @@ pub struct PoAInitialized {
 }
 
 #[event]
-pub struct EmergencyPauseActivated {
-    pub authority: Pubkey,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct EmergencyPauseDeactivated {
-    pub authority: Pubkey,
-    pub timestamp: i64,
-}
-
-#[event]
 pub struct ErcIssued {
     pub certificate_id: String,
     pub authority: Pubkey,
@@ -39,7 +27,7 @@ pub struct ErcValidatedForTrading {
 pub struct GovernanceConfigUpdated {
     pub authority: Pubkey,
     pub erc_validation_enabled: bool,
-    pub old_enabled: bool,
+    pub allow_certificate_transfers: bool,
     pub timestamp: i64,
 }
 

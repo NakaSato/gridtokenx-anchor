@@ -19,16 +19,18 @@ pub struct Registry {
 #[account(zero_copy)]
 #[repr(C)]
 pub struct UserAccount {
-    pub authority: Pubkey,   // Wallet address that owns this account
-    pub user_type: UserType, // Prosumer or Consumer
-    pub _padding1: [u8; 7],
-    pub lat: f64,            // Latitude coordinate (for geographic proximity queries)
-    pub long: f64,           // Longitude coordinate (for geographic proximity queries)
-    pub status: UserStatus,  // Active, Suspended, or Inactive
-    pub _padding2: [u8; 7],
-    pub registered_at: i64,  // Unix timestamp of registration
-    pub meter_count: u32,    // Number of meters owned (cached for performance)
-    pub _padding3: [u8; 4],
+    pub authority: Pubkey,   // 32 bytes (0-32)
+    pub user_type: UserType, // 1 byte (32-33)
+    pub _padding1: [u8; 3],  // 3 bytes padding (33-36)
+    pub lat_e7: i32,         // 4 bytes (36-40)
+    pub long_e7: i32,        // 4 bytes (40-44)
+    pub _padding2: [u8; 4],  // 4 bytes padding (44-48) - Ensures 8-byte alignment for h3_index
+    pub h3_index: u64,       // 8 bytes (48-56)
+    pub status: UserStatus,  // 1 byte (56-57)
+    pub _padding3: [u8; 7],  // 7 bytes padding (57-64)
+    pub registered_at: i64,  // 8 bytes (64-72)
+    pub meter_count: u32,    // 4 bytes (72-76)
+    pub _padding4: [u8; 4],  // 4 bytes padding (76-80) - Total: 80 bytes
 }
 
 /// Meter account for reading updates

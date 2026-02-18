@@ -6,18 +6,19 @@ use crate::UpdateGovernanceConfig;
 pub fn update_governance_config(
     ctx: Context<UpdateGovernanceConfig>,
     erc_validation_enabled: bool,
+    allow_certificate_transfers: bool,
 ) -> Result<()> {
     let poa_config = &mut ctx.accounts.poa_config;
     let clock = Clock::get()?;
     
-    let old_enabled = poa_config.erc_validation_enabled;
     poa_config.erc_validation_enabled = erc_validation_enabled;
+    poa_config.allow_certificate_transfers = allow_certificate_transfers;
     poa_config.last_updated = clock.unix_timestamp;
     
     emit!(GovernanceConfigUpdated {
         authority: ctx.accounts.authority.key(),
         erc_validation_enabled,
-        old_enabled,
+        allow_certificate_transfers,
         timestamp: clock.unix_timestamp,
     });
     
@@ -89,7 +90,16 @@ pub fn update_authority_info(
     
     require!(contact_info.len() <= 128, GovernanceError::ContactInfoTooLong);
     
-    let old_contact = std::mem::replace(&mut poa_config.contact_info, contact_info.clone());
+    // Capture old contact for event (convert from bytes)
+    let old_contact = String::from_utf8_lossy(&poa_config.contact_info[..poa_config.contact_len as usize]).into_owned();
+    
+    // Update contact_info bytes and length
+    let mut contact_bytes = [0u8; 128];
+    let contact_slice = contact_info.as_bytes();
+    contact_bytes[..contact_slice.len()].copy_from_slice(contact_slice);
+    
+    poa_config.contact_info = contact_bytes;
+    poa_config.contact_len = contact_slice.len() as u8;
     poa_config.last_updated = clock.unix_timestamp;
     
     emit!(AuthorityInfoUpdated {

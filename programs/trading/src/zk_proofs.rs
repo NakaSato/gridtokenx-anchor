@@ -115,8 +115,7 @@ pub struct RangeProof {
 impl RangeProof {
     /// Verify a range proof using the SDK
     pub fn verify(&self, zk_program: &AccountInfo) -> Result<()> {
-        msg!("Verifying range proof via CPI...");
-
+        
         #[cfg(not(feature = "test-skip-zk"))]
         {
             // Parse proof data
@@ -134,7 +133,6 @@ impl RangeProof {
         }
         #[cfg(feature = "test-skip-zk")]
         {
-            msg!("SKIPPING Range Proof verification (test-skip-zk enabled)");
             let _ = zk_program;
         }
 
@@ -167,7 +165,6 @@ impl TransferProof {
         _receiver_old_balance: &WrappedElGamalCiphertext,
         _receiver_new_balance: &WrappedElGamalCiphertext,
     ) -> Result<()> {
-        msg!("Verifying transfer proof via CPI...");
         
         #[cfg(not(feature = "test-skip-zk"))]
         {
@@ -180,7 +177,6 @@ impl TransferProof {
         }
         #[cfg(feature = "test-skip-zk")]
         {
-            msg!("SKIPPING Transfer Proof verification (test-skip-zk enabled)");
             let _ = zk_program;
         }
 

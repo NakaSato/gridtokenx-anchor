@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
 
-
 /// Stablecoin payment configuration for multi-token trading support
 /// Enables payments in USDC/USDT alongside native GRID tokens
 
@@ -13,8 +12,6 @@ pub enum PaymentToken {
     Usdc = 1,
     /// USDT stablecoin
     Usdt = 2,
-    /// Cross-chain wrapped token via Wormhole
-    WormholeWrapped = 3,
 }
 
 impl Default for PaymentToken {
@@ -237,9 +234,6 @@ pub mod known_mints {
     
     /// USDT on Solana mainnet
     pub const USDT_MAINNET: &str = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
-    
-    /// Wormhole USDC
-    pub const USDC_WORMHOLE: &str = "A9mUU4qviSctJVPJdBJWkb28deg915LYJKrzQ19ji3FM";
 }
 
 /// Utility functions for swap rate calculations

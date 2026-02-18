@@ -147,7 +147,6 @@ pub fn set_oracle_authority(
         min_confidence,
         timestamp: clock.unix_timestamp,
     });
-    
 
     Ok(())
 }

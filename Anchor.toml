@@ -1,34 +1,25 @@
 [toolchain]
-anchor_version = "0.30.1"
+anchor_version = "0.32.0"
 
 [features]
 resolution = false
 skip-lint = false
 
-[programs.devnet]
-blockbench = "9sz5rrCnWTLqPeQVuyJgyQ1hqLGXrT94GLfVVoWUKpxz"
-energy_token = "5DJCWKo5cXt3PXRsrpH1xixra4wXWbNzxZ1p4FHqSxvi"
-governance = "8bNpJqZoqqUWKu55VWhR8LWS66BX7NPpwgYBAKhBzu2L"
-oracle = "EkcPD2YEXhpo1J73UX9EJNnjV2uuFS8KXMVLx9ybqnhU"
-registry = "CXXRVpEwyd2ch7eo425mtaBfr2Yi1825Nm6yik2NEWqR"
-tpc_benchmark = "Gn99qZgnpwNXsQaBB7zvyycnRJmMGaQ4UaG5PpvBsmEu"
-trading = "8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND"
-
 [programs.localnet]
 blockbench = "B7Detx5TMRQNzVCgdd9Rp5YnN9cAtC7KeMBrzdZZsd4E"
-energy_token = "5yksg9BHH5RFWpSsLHgRKaX8YAGLwBCu4FQKtpY9bS7U"
-governance = "4xXr6TM6YP6SiTeBcfBXC5dZep5PMhBCUN8uG4VUmQJk"
-oracle = "296LK1ueWCNbDEoiRv1xw547MjcBdr1CaJVFXNf8NpAg"
-registry = "E1k1C1oyRye4dmZcBKJvFKeEarqJBbyUVP7t6odVgo1X"
+energy_token = "GzEcWzkb73zcgvgoNRxEiuuT7CEAbzbHcAgjNV25pbLV"
+governance = "DuLg6buhqs78SRj1qDp5vSyGrSfG9FF4nPKm8Tn8hSJL"
+oracle = "BRctXUydec2wrP4k2NpqZZT2sVnMfGqpv9bmWn5mTWh9"
+registry = "EmiSgo85FVUYWXPtScCMQZBpq9ecZ4jhveg7E7T7F75z"
 tpc_benchmark = "DN3XToyEqdvLxXchQZufQj5eXZrxE1yfxsDVDPUrXemD"
-trading = "2mYzcKsqTEH1LdNszBMJDAo63SRjDUyk2BXMjHiwFZwt"
+trading = "3LXbBJ7sWYYrveHvLoLtwuVYbYd27HPcbpF1DQ8rK1Bo"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "~/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/genesis/faucet-keypair.json"
+wallet = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/genesis/faucet-keypair.json"
 
 [scripts]
 benchmark-tpcc = "npx ts-node tests/performance/benchmarks/tpc-c-anchor.ts"

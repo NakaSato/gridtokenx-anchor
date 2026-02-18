@@ -12,9 +12,12 @@ pub fn handler(ctx: Context<GetGovernanceStats>) -> Result<GovernanceStats> {
         total_ercs_revoked: poa_config.total_ercs_revoked,
         total_energy_certified: poa_config.total_energy_certified,
         
+        // Authority info
+        authority_name: String::from_utf8_lossy(&poa_config.authority_name[..poa_config.name_len as usize]).into_owned(),
+        contact_info: String::from_utf8_lossy(&poa_config.contact_info[..poa_config.contact_len as usize]).into_owned(),
+        
         // Configuration
         erc_validation_enabled: poa_config.erc_validation_enabled,
-        emergency_paused: poa_config.emergency_paused,
         maintenance_mode: poa_config.maintenance_mode,
         
         // Limits

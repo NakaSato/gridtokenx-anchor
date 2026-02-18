@@ -18,6 +18,8 @@ import {
 } from "@solana/spl-token";
 import { assert } from "chai";
 import type { Trading } from "../target/types/trading";
+import type { Governance } from "../target/types/governance";
+import { initializeGovernance, getGovernancePda } from "./utils/governance";
 
 describe("Trading Program", () => {
     const provider = anchor.AnchorProvider.env();
@@ -41,6 +43,7 @@ describe("Trading Program", () => {
     let feeCollector: PublicKey;
     let wheelingCollector: PublicKey;
     let buyerEnergyAccount: PublicKey;
+    let governanceConfig: PublicKey;
 
     before(async () => {
         [marketAddress] = PublicKey.findProgramAddressSync([Buffer.from("market")], program.programId);
@@ -70,6 +73,10 @@ describe("Trading Program", () => {
         // Fund Escrow for tests
         await mintTo(provider.connection, authority.payer, energyMint, sellerEnergyEscrow, authority.payer, 1000, [], { skipPreflight: true }, TOKEN_2022_PROGRAM_ID);
         await mintTo(provider.connection, authority.payer, currencyMint, buyerCurrencyEscrow, authority.payer, 100000);
+
+        // Initialize Governance
+        const governanceProgram = anchor.workspace.Governance as Program<Governance>;
+        governanceConfig = await initializeGovernance(provider, governanceProgram);
     });
 
     async function createATA(owner: PublicKey, mint: PublicKey, programId: PublicKey) {
@@ -113,7 +120,8 @@ describe("Trading Program", () => {
             order: orderPda,
             ercCertificate: null,
             authority: seller.publicKey,
-            systemProgram: SystemProgram.programId
+            systemProgram: SystemProgram.programId,
+            governanceConfig: governanceConfig
         }).signers([seller]).rpc();
 
         const order = await program.account.order.fetch(orderPda);
@@ -133,7 +141,8 @@ describe("Trading Program", () => {
             market: marketAddress,
             order: orderPda,
             authority: buyer.publicKey,
-            systemProgram: SystemProgram.programId
+            systemProgram: SystemProgram.programId,
+            governanceConfig: governanceConfig
         }).signers([buyer]).rpc();
 
         const order = await program.account.order.fetch(orderPda);
@@ -154,7 +163,8 @@ describe("Trading Program", () => {
             order: sOrderPda,
             ercCertificate: null,
             authority: seller.publicKey,
-            systemProgram: SystemProgram.programId
+            systemProgram: SystemProgram.programId,
+            governanceConfig: governanceConfig
         }).signers([seller]).rpc();
 
         const bOrderId = new BN(54321);
@@ -166,12 +176,14 @@ describe("Trading Program", () => {
             market: marketAddress,
             order: bOrderPda,
             authority: buyer.publicKey,
-            systemProgram: SystemProgram.programId
+            systemProgram: SystemProgram.programId,
+            governanceConfig: governanceConfig
         }).signers([buyer]).rpc();
 
         await program.methods.executeAtomicSettlement(
             new BN(200),
             new BN(100),
+            new BN(0),
             new BN(0)
         ).accounts({
             market: marketAddress,
@@ -183,13 +195,15 @@ describe("Trading Program", () => {
             buyerEnergyAccount: buyerEnergyAccount,
             feeCollector: feeCollector,
             wheelingCollector: wheelingCollector,
+            lossCollector: feeCollector,
             energyMint: energyMint,
             currencyMint: currencyMint,
             escrowAuthority: escrowAuthority.publicKey,
             marketAuthority: authority.publicKey,
             tokenProgram: TOKEN_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
-            secondaryTokenProgram: TOKEN_2022_PROGRAM_ID
+            secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
+            governanceConfig: governanceConfig
         }).signers([escrowAuthority]).rpc();
 
         const balance = await provider.connection.getTokenAccountBalance(buyerEnergyAccount);
@@ -199,7 +213,8 @@ describe("Trading Program", () => {
     it("Updates market parameters", async () => {
         await program.methods.updateMarketParams(50, true).accounts({
             market: marketAddress,
-            authority: authority.publicKey
+            authority: authority.publicKey,
+            governanceConfig: governanceConfig
         }).rpc();
 
         const market = await program.account.market.fetch(marketAddress);

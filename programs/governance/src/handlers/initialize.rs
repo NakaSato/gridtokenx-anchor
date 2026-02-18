@@ -8,14 +8,24 @@ pub fn handler(ctx: Context<InitializePoa>) -> Result<()> {
     
     // Authority Configuration
     poa_config.authority = ctx.accounts.authority.key();
-    poa_config.authority_name = "REC".to_string();
-    poa_config.contact_info = "engineering_erc@utcc.ac.th".to_string();
+    
+    // Set fixed-size strings
+    let mut name_bytes = [0u8; 64];
+    let name = "REC".as_bytes();
+    name_bytes[..name.len()].copy_from_slice(name);
+    poa_config.authority_name = name_bytes;
+    poa_config.name_len = name.len() as u8;
+
+    let mut contact_bytes = [0u8; 128];
+    let contact = "engineering_erc@utcc.ac.th".as_bytes();
+    contact_bytes[..contact.len()].copy_from_slice(contact);
+    poa_config.contact_info = contact_bytes;
+    poa_config.contact_len = contact.len() as u8;
+
+    // Set version
     poa_config.version = 1;
     
-    // Emergency Controls
-    poa_config.emergency_paused = false;
-    poa_config.emergency_timestamp = None;
-    poa_config.emergency_reason = None;
+    // Controls
     poa_config.maintenance_mode = false;
     
     // ERC Certificate Configuration
@@ -32,7 +42,7 @@ pub fn handler(ctx: Context<InitializePoa>) -> Result<()> {
     poa_config.min_oracle_confidence = 80; // 80% confidence threshold
     poa_config.allow_certificate_transfers = false;
     
-    // Statistics & Tracking
+    // Tracking
     poa_config.total_ercs_issued = 0;
     poa_config.total_ercs_validated = 0;
     poa_config.total_ercs_revoked = 0;

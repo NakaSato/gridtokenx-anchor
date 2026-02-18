@@ -12,6 +12,8 @@ async function main() {
     const energyTokenProgram = anchor.workspace.EnergyToken;
     const authority = provider.wallet;
 
+    console.log("Registry ID:", registryProgram.programId.toBase58());
+
     console.log("🚀 Initializing Registry, Trading, and EnergyToken programs...");
 
     // 1. Initialize Registry
@@ -67,7 +69,7 @@ async function main() {
     );
 
     try {
-        await energyTokenProgram.methods.initializeToken(registryProgram.programId).accounts({
+        await energyTokenProgram.methods.initializeToken(registryProgram.programId, authority.publicKey).accounts({
             tokenInfo: tokenInfo,
             mint: mintPda,
             authority: authority.publicKey,

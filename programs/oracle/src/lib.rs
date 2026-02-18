@@ -11,7 +11,7 @@ pub use error::OracleError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("296LK1ueWCNbDEoiRv1xw547MjcBdr1CaJVFXNf8NpAg");
+declare_id!("BRctXUydec2wrP4k2NpqZZT2sVnMfGqpv9bmWn5mTWh9");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};
@@ -60,7 +60,10 @@ pub mod oracle {
 
             oracle_data.last_energy_produced = 0;
             oracle_data.last_energy_consumed = 0;
+            oracle_data.total_global_energy_produced = 0;
+            oracle_data.total_global_energy_consumed = 0;
             oracle_data.min_reading_interval = 60;
+            oracle_data.last_cleared_epoch = 0;
         });
 
         Ok(())
@@ -75,7 +78,7 @@ pub mod oracle {
         reading_timestamp: i64,
     ) -> Result<()> {
         compute_fn!("submit_meter_reading" => {
-            let oracle_data = ctx.accounts.oracle_data.load()?;
+            let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
 
             require!(oracle_data.active == 1, OracleError::OracleInactive);
 
@@ -102,7 +105,15 @@ pub mod oracle {
 
             match validation_result {
                 Ok(_) => {
-                    // We no longer update global counters to avoid write contention
+                    // Update global counters (Proof of Work)
+                    oracle_data.total_global_energy_produced = oracle_data.total_global_energy_produced.saturating_add(energy_produced);
+                    oracle_data.total_global_energy_consumed = oracle_data.total_global_energy_consumed.saturating_add(energy_consumed);
+                    oracle_data.total_valid_readings = oracle_data.total_valid_readings.saturating_add(1);
+                    oracle_data.total_readings = oracle_data.total_readings.saturating_add(1);
+                    oracle_data.last_reading_timestamp = reading_timestamp;
+                    oracle_data.last_energy_produced = energy_produced;
+                    oracle_data.last_energy_consumed = energy_consumed;
+
                     emit!(MeterReadingSubmitted {
                         meter_id: meter_id.clone(),
                         energy_produced,
@@ -112,6 +123,10 @@ pub mod oracle {
                     });
                 },
                 Err(e) => {
+                    let mut oracle_data_mut = ctx.accounts.oracle_data.load_mut()?;
+                    oracle_data_mut.total_rejected_readings = oracle_data_mut.total_rejected_readings.saturating_add(1);
+                    oracle_data_mut.total_readings = oracle_data_mut.total_readings.saturating_add(1);
+
                     emit!(MeterReadingRejected {
                         meter_id: meter_id.clone(),
                         energy_produced,
@@ -129,7 +144,7 @@ pub mod oracle {
     }
 
     /// Trigger market clearing process (only via API Gateway)
-    pub fn trigger_market_clearing(ctx: Context<TriggerMarketClearing>) -> Result<()> {
+    pub fn trigger_market_clearing(ctx: Context<TriggerMarketClearing>, epoch_timestamp: i64) -> Result<()> {
         compute_fn!("trigger_market_clearing" => {
             let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
 
@@ -140,12 +155,20 @@ pub mod oracle {
                 OracleError::UnauthorizedGateway
             );
 
+            // Ensure we are not clearing a stale or already cleared epoch
+            require!(
+                epoch_timestamp > oracle_data.last_cleared_epoch,
+                OracleError::InvalidEpoch
+            );
+
             let current_time = Clock::get()?.unix_timestamp;
             oracle_data.last_clearing = current_time;
+            oracle_data.last_cleared_epoch = epoch_timestamp;
 
             emit!(MarketClearingTriggered {
                 authority: ctx.accounts.authority.key(),
                 timestamp: current_time,
+                epoch_number: epoch_timestamp,
             });
         });
 
@@ -360,17 +383,16 @@ fn validate_meter_reading(
 
     // Basic sanity check - production shouldn't be wildly different from consumption
     if oracle_data.anomaly_detection_enabled == 1 {
-        let ratio = if energy_consumed > 0 {
-            (energy_produced as f64 / energy_consumed as f64) * 100.0
-        } else {
-            0.0
-        };
-
-        // Allow production up to configured ratio (default 10x for solar producers, adjustable via config)
-        require!(
-            ratio <= oracle_data.max_production_consumption_ratio as f64,
-            OracleError::AnomalousReading
-        );
+        // Use integer cross-multiplication for ratio check to avoid floating point math
+        // Instead of (produced / consumed) * 100 <= max_ratio
+        // We use produced * 100 <= max_ratio * consumed
+        if energy_consumed > 0 {
+            require!(
+                energy_produced.checked_mul(100).ok_or(OracleError::InvalidConfiguration)? 
+                <= (oracle_data.max_production_consumption_ratio as u64).checked_mul(energy_consumed).ok_or(OracleError::InvalidConfiguration)?,
+                OracleError::AnomalousReading
+            );
+        }
     }
 
     Ok(())
@@ -383,7 +405,13 @@ fn update_quality_score(oracle_data: &mut OracleData, _is_valid: bool) -> Result
     let total_readings = oracle_data.total_valid_readings + oracle_data.total_rejected_readings;
 
     if total_readings > 0 {
-        let success_rate = (oracle_data.total_valid_readings as f64 / total_readings as f64) * 100.0;
+        // Success rate calculation using integer math (scaled by 100)
+        let success_rate = oracle_data.total_valid_readings
+            .checked_mul(100)
+            .ok_or(ProgramError::ArithmeticOverflow)?
+            .checked_div(total_readings)
+            .ok_or(ProgramError::ArithmeticOverflow)?;
+        
         oracle_data.last_quality_score = success_rate as u8;
         oracle_data.quality_score_updated_at = Clock::get()?.unix_timestamp;
     }
@@ -408,10 +436,17 @@ fn update_reading_interval(oracle_data: &mut OracleData, new_interval: u32) -> R
     //   (gradual adjustment, not sudden jump to 600s)
     
     if oracle_data.average_reading_interval > 0 {
-        let weighted_sum = (oracle_data.average_reading_interval as f64 * 0.8) 
-                          + (new_interval as f64 * 0.2);
-        // Use round() for better numerical stability instead of truncation
-        oracle_data.average_reading_interval = weighted_sum.round() as u32;
+        // Integer WMA: (old_average * 4 + new_interval) / 5
+        // This is equivalent to (old * 0.8) + (new * 0.2)
+        let weighted_sum = (oracle_data.average_reading_interval as u64)
+            .checked_mul(4)
+            .ok_or(ProgramError::ArithmeticOverflow)?
+            .checked_add(new_interval as u64)
+            .ok_or(ProgramError::ArithmeticOverflow)?
+            .checked_div(5)
+            .ok_or(ProgramError::ArithmeticOverflow)?;
+            
+        oracle_data.average_reading_interval = weighted_sum as u32;
     } else {
         // Initialize with first reading
         oracle_data.average_reading_interval = new_interval;
@@ -439,7 +474,7 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct SubmitMeterReading<'info> {
-    #[account()]
+    #[account(mut)]
     pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,

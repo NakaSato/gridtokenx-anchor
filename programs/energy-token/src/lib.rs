@@ -36,7 +36,7 @@ macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
 
-declare_id!("5yksg9BHH5RFWpSsLHgRKaX8YAGLwBCu4FQKtpY9bS7U");
+declare_id!("GzEcWzkb73zcgvgoNRxEiuuT7CEAbzbHcAgjNV25pbLV");
 
 pub const DECIMALS: u8 = 9;
 
@@ -137,11 +137,13 @@ pub mod energy_token {
     pub fn initialize_token(
         ctx: Context<InitializeToken>,
         registry_program_id: Pubkey,
+        registry_authority: Pubkey,
     ) -> Result<()> {
         compute_fn!("initialize_token" => {
             let clock = Clock::get()?;
             let mut token_info = ctx.accounts.token_info.load_init()?;
             token_info.authority = ctx.accounts.authority.key();
+            token_info.registry_authority = registry_authority;
             token_info.registry_program = registry_program_id;
             token_info.mint = ctx.accounts.mint.key();
             token_info.total_supply = 0;
@@ -239,17 +241,10 @@ pub mod energy_token {
                 // Check if caller has permission (Admin or Registry Program)
                 let is_admin = ctx.accounts.authority.key() == token_info.authority;
                 
-                // Check if caller is the Registry PDA
-                let (registry_pda, _bump) = Pubkey::find_program_address(&[b"registry"], &token_info.registry_program);
-                let is_registry = ctx.accounts.authority.key() == registry_pda;
+                // Check if caller is the Registry authority passed in accounts
+                // Verification against stored registry_authority is done in the struct constraint
+                let is_registry = ctx.accounts.authority.key() == ctx.accounts.registry_authority.key();
 
-                msg!("Signer: {}", ctx.accounts.authority.key());
-                msg!("TokenInfo Auth: {}", token_info.authority);
-                msg!("Registry Prog: {}", token_info.registry_program);
-                msg!("Derived PDA: {}", registry_pda);
-            
-                // Note: In real deployment, CPI caller verification can be added
-                // By using invoke_signed context or checking instruction data
                 require!(is_admin || is_registry, EnergyTokenError::UnauthorizedAuthority);
             }
 
@@ -449,6 +444,12 @@ pub struct MintTokensDirect<'info> {
     pub user_token_account: Box<InterfaceAccount<'info, TokenAccountInterface>>,
 
     pub authority: Signer<'info>,
+
+    /// CHECK: Validated against stored registry_authority in TokenInfo
+    #[account(
+        constraint = registry_authority.key() == token_info.load()?.registry_authority @ EnergyTokenError::UnauthorizedAuthority
+    )]
+    pub registry_authority: UncheckedAccount<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }

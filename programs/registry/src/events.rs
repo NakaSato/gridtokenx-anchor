@@ -12,8 +12,9 @@ pub struct RegistryInitialized {
 pub struct UserRegistered {
     pub user: Pubkey,
     pub user_type: UserType,
-    pub lat: f64,
-    pub long: f64,
+    pub lat_e7: i32,
+    pub long_e7: i32,
+    pub h3_index: u64,
 }
 
 #[event]

@@ -2,18 +2,21 @@ use anchor_lang::prelude::*;
 
 #[account]
 pub struct ErcCertificate {
-    /// Unique certificate identifier
-    pub certificate_id: String,
+    /// Unique certificate identifier - FIXED: 64 bytes
+    pub certificate_id: [u8; 64],
+    pub id_len: u8,
     /// Issuing authority (Engineering Department)
     pub authority: Pubkey,
     /// Current owner of the certificate (for transfers)
     pub owner: Pubkey,
     /// Amount of renewable energy (kWh)
     pub energy_amount: u64,
-    /// Source of renewable energy (solar, wind, etc.)
-    pub renewable_source: String,
-    /// Additional validation data
-    pub validation_data: String,
+    /// Source of renewable energy (solar, wind, etc.) - FIXED: 64 bytes
+    pub renewable_source: [u8; 64],
+    pub source_len: u8,
+    /// Additional validation data - FIXED: 256 bytes
+    pub validation_data: [u8; 256],
+    pub data_len: u16,
     /// When the certificate was issued
     pub issued_at: i64,
     /// When the certificate expires
@@ -26,8 +29,9 @@ pub struct ErcCertificate {
     pub trading_validated_at: Option<i64>,
     
     // === NEW: Revocation tracking ===
-    /// Revocation reason (if revoked)
-    pub revocation_reason: Option<String>,
+    /// Revocation reason (if revoked) - FIXED: 128 bytes
+    pub revocation_reason: [u8; 128],
+    pub reason_len: u8,
     /// When revoked
     pub revoked_at: Option<i64>,
     
@@ -39,9 +43,13 @@ pub struct ErcCertificate {
 }
 
 impl ErcCertificate {
-    // Updated space: original + string prefixes (4 bytes each)
-    // certificate_id (4+64), renewable_source (4+64), validation_data (4+256), revocation_reason (1+4+128)
-    pub const LEN: usize = (4 + 64) + 32 + 32 + 8 + (4 + 64) + (4 + 256) + 8 + 9 + 1 + 1 + 9 + (1 + 4 + 128) + 9 + 1 + 9;
+    // Space calculation:
+    // certificate_id (64 + 1) + Pubkey (32) + Pubkey (32) + u64 (8) + 
+    // renewable_source (64 + 1) + validation_data (256 + 2) + i64 (8) + 
+    // expires_at (Option<i64>: 9) + ErcStatus (1) + bool (1) + 
+    // trading_validated_at (Option<i64>: 9) + revocation_reason (128 + 1) + 
+    // revoked_at (Option<i64>: 9) + u8 (1) + last_transferred_at (Option<i64>: 9)
+    pub const LEN: usize = 65 + 32 + 32 + 8 + 65 + 258 + 8 + 9 + 1 + 1 + 9 + 129 + 9 + 1 + 9;
     
     /// Check if certificate can be transferred
     pub fn can_transfer(&self) -> bool {

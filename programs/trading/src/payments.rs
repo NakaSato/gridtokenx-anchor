@@ -3,8 +3,7 @@ use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, Tran
 use anchor_spl::associated_token::AssociatedToken;
 
 use crate::stablecoin::*;
-use crate::wormhole::*;
-use crate::{Market, Order, OrderType, OrderStatus, TradingError};
+use crate::{Market, Order, OrderType, OrderStatus, TradingError, PoAConfig};
 
 /// Instructions for stablecoin payments and cross-chain operations
 
@@ -52,6 +51,7 @@ pub fn process_create_stablecoin_sell_order(
     price_per_kwh: u64,
     payment_token: u8,
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     require!(energy_amount > 0, TradingError::InvalidAmount);
     require!(price_per_kwh > 0, TradingError::InvalidPrice);
     
@@ -109,6 +109,7 @@ pub fn process_create_stablecoin_buy_order(
     max_price_per_kwh: u64,
     payment_token: u8,
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     require!(energy_amount > 0, TradingError::InvalidAmount);
     require!(max_price_per_kwh > 0, TradingError::InvalidPrice);
     
@@ -170,6 +171,7 @@ pub fn process_execute_stablecoin_settlement(
     amount: u64,
     exchange_rate: u64,
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     require!(amount > 0, TradingError::InvalidAmount);
     require!(exchange_rate > 0, StablecoinError::OracleRequired);
     
@@ -303,246 +305,6 @@ pub fn process_execute_stablecoin_settlement(
     Ok(())
 }
 
-/// Initialize bridge configuration
-pub fn process_initialize_bridge(
-    ctx: Context<InitializeBridge>,
-    min_bridge_amount: u64,
-    bridge_fee_bps: u16,
-    relayer_fee: u64,
-) -> Result<()> {
-    let market = ctx.accounts.market.load()?;
-    
-    require!(
-        ctx.accounts.authority.key() == market.authority,
-        TradingError::UnauthorizedAuthority
-    );
-    
-    let bridge_config = &mut ctx.accounts.bridge_config;
-    bridge_config.bump = ctx.bumps.bridge_config;
-    bridge_config.market = ctx.accounts.market.key();
-    bridge_config.wormhole_program = ctx.accounts.wormhole_program.key();
-    bridge_config.token_bridge_program = ctx.accounts.token_bridge_program.key();
-    bridge_config.authority = ctx.accounts.authority.key();
-    bridge_config.enabled = true;
-    bridge_config.min_bridge_amount = min_bridge_amount;
-    bridge_config.bridge_fee_bps = bridge_fee_bps;
-    bridge_config.relayer_fee = relayer_fee;
-    
-    // Enable default chains
-    bridge_config.enable_chain(WormholeChain::Ethereum);
-    bridge_config.enable_chain(WormholeChain::Polygon);
-    bridge_config.enable_chain(WormholeChain::Arbitrum);
-    bridge_config.enable_chain(WormholeChain::Base);
-    
-    emit!(BridgeConfigUpdated {
-        authority: ctx.accounts.authority.key(),
-        enabled: true,
-        min_bridge_amount,
-        bridge_fee_bps,
-        timestamp: Clock::get()?.unix_timestamp,
-    });
-    
-    Ok(())
-}
-
-/// Initiate a bridge transfer to another chain
-pub fn process_initiate_bridge_transfer(
-    ctx: Context<InitiateBridgeTransfer>,
-    destination_chain: u16,
-    destination_address: [u8; 32],
-    amount: u64,
-    _timestamp: u64,
-) -> Result<()> {
-    let bridge_config = &ctx.accounts.bridge_config;
-    
-    require!(bridge_config.enabled, BridgeError::BridgeDisabled);
-    require!(
-        amount >= bridge_config.min_bridge_amount,
-        BridgeError::AmountBelowMinimum
-    );
-    
-    // Validate destination chain
-    let chain = match destination_chain {
-        2 => WormholeChain::Ethereum,
-        5 => WormholeChain::Polygon,
-        23 => WormholeChain::Arbitrum,
-        30 => WormholeChain::Base,
-        _ => return Err(BridgeError::ChainNotSupported.into()),
-    };
-    
-    require!(
-        bridge_config.is_chain_supported(chain),
-        BridgeError::ChainNotSupported
-    );
-    
-    // Calculate fees
-    let bridge_fee = (amount as u128)
-        .saturating_mul(bridge_config.bridge_fee_bps as u128)
-        .checked_div(10_000)
-        .unwrap_or(0) as u64;
-    let net_amount = amount.saturating_sub(bridge_fee);
-    
-    let clock = Clock::get()?;
-    
-    // Lock tokens in bridge escrow
-    let cpi_accounts = TransferChecked {
-        from: ctx.accounts.user_token_account.to_account_info(),
-        mint: ctx.accounts.token_mint.to_account_info(),
-        to: ctx.accounts.bridge_escrow.to_account_info(),
-        authority: ctx.accounts.user.to_account_info(),
-    };
-    
-    token_interface::transfer_checked(
-        CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts),
-        amount,
-        ctx.accounts.token_mint.decimals,
-    )?;
-    
-    // Create transfer record
-    let transfer = &mut ctx.accounts.bridge_transfer;
-    transfer.bump = ctx.bumps.bridge_transfer;
-    transfer.user = ctx.accounts.user.key();
-    transfer.source_mint = ctx.accounts.token_mint.key();
-    transfer.destination_chain = destination_chain;
-    transfer.destination_address = destination_address;
-    transfer.amount = net_amount;
-    transfer.fee = bridge_fee;
-    transfer.status = BridgeStatus::Pending as u8;
-    transfer.sequence = 0; // Will be set when message is sent
-    transfer.initiated_at = clock.unix_timestamp;
-    transfer.completed_at = 0;
-    
-    // In production, this would call Wormhole's transfer instruction
-    // For now, we just record the pending transfer
-    
-    emit!(BridgeInitiated {
-        user: ctx.accounts.user.key(),
-        source_mint: ctx.accounts.token_mint.key(),
-        destination_chain,
-        destination_address,
-        amount: net_amount,
-        fee: bridge_fee,
-        sequence: 0,
-        timestamp: clock.unix_timestamp,
-    });
-    
-    Ok(())
-}
-
-/// Complete a bridge transfer from another chain
-pub fn process_complete_bridge_transfer(
-    ctx: Context<CompleteBridgeTransfer>,
-    vaa_hash: [u8; 32],
-) -> Result<()> {
-    let bridge_config = &ctx.accounts.bridge_config;
-    require!(bridge_config.enabled, BridgeError::BridgeDisabled);
-    
-    // In production, we would verify the VAA here using Wormhole core bridge
-    // For this implementation, we assume the VAA is valid as checked by the relayer/API
-    
-    let clock = Clock::get()?;
-    
-    // Update or create wrapped token record
-    let wrapped_record = &mut ctx.accounts.wrapped_record;
-    if wrapped_record.wrapped_mint == Pubkey::default() {
-        wrapped_record.wrapped_mint = ctx.accounts.token_mint.key();
-    }
-    
-    // Release tokens to user
-    let cpi_accounts = TransferChecked {
-        from: ctx.accounts.bridge_escrow.to_account_info(),
-        mint: ctx.accounts.token_mint.to_account_info(),
-        to: ctx.accounts.user_token_account.to_account_info(),
-        authority: ctx.accounts.bridge_escrow.to_account_info(), // Escrow PDA as authority
-    };
-    
-    // Derived PDA signer for bridge escrow
-    let market_key = ctx.accounts.market.key();
-    let seeds = &[
-        b"bridge_escrow",
-        market_key.as_ref(),
-        &[ctx.bumps.bridge_escrow],
-    ];
-    let signer = &[&seeds[..]];
-
-    token_interface::transfer_checked(
-        CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(), 
-            cpi_accounts,
-            signer
-        ),
-        ctx.accounts.bridge_transfer.amount,
-        ctx.accounts.token_mint.decimals,
-    )?;
-    
-    // Mark transfer as completed
-    let transfer_key = ctx.accounts.bridge_transfer.key();
-    let transfer = &mut ctx.accounts.bridge_transfer;
-    transfer.status = BridgeStatus::Completed as u8;
-    transfer.vaa_hash = vaa_hash;
-    transfer.completed_at = clock.unix_timestamp;
-    
-    emit!(BridgeCompleted {
-        user: ctx.accounts.user.key(),
-        transfer: transfer_key,
-        destination_chain: WormholeChain::Solana as u16,
-        amount: transfer.amount,
-        vaa_hash,
-        timestamp: clock.unix_timestamp,
-    });
-    
-    Ok(())
-}
-
-/// Create a cross-chain order record
-pub fn process_create_cross_chain_order(
-    ctx: Context<CreateCrossChainOrder>,
-    origin_chain: u16,
-    origin_order_id: [u8; 32],
-    origin_user: [u8; 32],
-    energy_amount: u64,
-    price: u64,
-    payment_token: [u8; 32],
-) -> Result<()> {
-    let clock = Clock::get()?;
-    let order = &mut ctx.accounts.cross_chain_order;
-    
-    order.solana_order = ctx.accounts.solana_order.key();
-    order.origin_chain = origin_chain;
-    order.origin_order_id = origin_order_id;
-    order.origin_user = origin_user;
-    order.energy_amount = energy_amount;
-    order.price = price;
-    order.payment_token = payment_token;
-    order.status = OrderStatus::Active as u8;
-    order.created_at = clock.unix_timestamp;
-    
-    Ok(())
-}
-
-/// Match a local order with a cross-chain order
-pub fn process_match_cross_chain_order(
-    ctx: Context<MatchCrossChainOrder>,
-    amount: u64,
-) -> Result<()> {
-    let mut solana_order = ctx.accounts.solana_order.load_mut()?;
-    let cross_order = &mut ctx.accounts.cross_chain_order;
-    let clock = Clock::get()?;
-    
-    require!(solana_order.amount >= amount, TradingError::InvalidAmount);
-    require!(cross_order.energy_amount >= amount, TradingError::InvalidAmount);
-    
-    solana_order.filled_amount += amount;
-    cross_order.energy_amount -= amount;
-    
-    if cross_order.energy_amount == 0 {
-        cross_order.status = OrderStatus::Completed as u8;
-        cross_order.settled_at = clock.unix_timestamp;
-    }
-    
-    Ok(())
-}
-
 // Account contexts
 
 #[derive(Accounts)]
@@ -597,6 +359,7 @@ pub struct CreateStablecoinOrder<'info> {
     pub authority: Signer<'info>,
     
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -611,28 +374,28 @@ pub struct ExecuteStablecoinSettlement<'info> {
     pub sell_order: AccountLoader<'info, Order>,
     
     #[account(mut)]
-    pub buy_payment_info: Account<'info, OrderPaymentInfo>,
+    pub buy_payment_info: Box<Account<'info, OrderPaymentInfo>>,
     
     #[account(mut)]
-    pub sell_payment_info: Account<'info, OrderPaymentInfo>,
+    pub sell_payment_info: Box<Account<'info, OrderPaymentInfo>>,
     
     pub stablecoin_mint: InterfaceAccount<'info, Mint>,
     pub energy_mint: InterfaceAccount<'info, Mint>,
     
     #[account(mut)]
-    pub buyer_stablecoin: InterfaceAccount<'info, TokenAccount>,
+    pub buyer_stablecoin: Box<InterfaceAccount<'info, TokenAccount>>,
     
     #[account(mut)]
-    pub seller_stablecoin: InterfaceAccount<'info, TokenAccount>,
+    pub seller_stablecoin: Box<InterfaceAccount<'info, TokenAccount>>,
     
     #[account(mut)]
-    pub buyer_energy: InterfaceAccount<'info, TokenAccount>,
+    pub buyer_energy: Box<InterfaceAccount<'info, TokenAccount>>,
     
     #[account(mut)]
-    pub seller_energy: InterfaceAccount<'info, TokenAccount>,
+    pub seller_energy: Box<InterfaceAccount<'info, TokenAccount>>,
     
     #[account(mut)]
-    pub fee_collector: InterfaceAccount<'info, TokenAccount>,
+    pub fee_collector: Box<InterfaceAccount<'info, TokenAccount>>,
     
     #[account(
         seeds = [b"escrow", market.key().as_ref()],
@@ -647,147 +410,5 @@ pub struct ExecuteStablecoinSettlement<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub energy_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct InitializeBridge<'info> {
-    #[account(mut)]
-    pub market: AccountLoader<'info, Market>,
-    
-    #[account(
-        init,
-        payer = authority,
-        space = BridgeConfig::LEN,
-        seeds = [b"bridge_config", market.key().as_ref()],
-        bump
-    )]
-    pub bridge_config: Account<'info, BridgeConfig>,
-    
-    /// CHECK: Wormhole program
-    pub wormhole_program: AccountInfo<'info>,
-    
-    /// CHECK: Token bridge program
-    pub token_bridge_program: AccountInfo<'info>,
-    
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(destination_chain: u16, destination_address: [u8; 32], amount: u64, timestamp: u64)]
-pub struct InitiateBridgeTransfer<'info> {
-    #[account(
-        seeds = [b"bridge_config", market.key().as_ref()],
-        bump = bridge_config.bump
-    )]
-    pub bridge_config: Account<'info, BridgeConfig>,
-    
-    pub market: AccountLoader<'info, Market>,
-    
-    #[account(
-        init,
-        payer = user,
-        space = BridgeTransfer::LEN,
-        seeds = [b"bridge_transfer", user.key().as_ref(), &timestamp.to_le_bytes()],
-        bump
-    )]
-    pub bridge_transfer: Account<'info, BridgeTransfer>,
-    
-    pub token_mint: InterfaceAccount<'info, Mint>,
-    
-    #[account(mut)]
-    pub user_token_account: InterfaceAccount<'info, TokenAccount>,
-    
-    #[account(
-        init_if_needed,
-        payer = user,
-        token::mint = token_mint,
-        token::authority = bridge_config,
-        seeds = [b"bridge_escrow", market.key().as_ref(), token_mint.key().as_ref()],
-        bump
-    )]
-    pub bridge_escrow: InterfaceAccount<'info, TokenAccount>,
-    
-    #[account(mut)]
-    pub user: Signer<'info>,
-    
-    pub token_program: Interface<'info, TokenInterface>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
-    pub rent: Sysvar<'info, Rent>,
-}
-
-#[derive(Accounts)]
-#[instruction(vaa_hash: [u8; 32])]
-pub struct CompleteBridgeTransfer<'info> {
-    pub market: AccountLoader<'info, Market>,
-    pub bridge_config: Account<'info, BridgeConfig>,
-    
-    #[account(
-        mut,
-        seeds = [b"bridge_transfer", user.key().as_ref(), &bridge_transfer.initiated_at.to_le_bytes()],
-        bump = bridge_transfer.bump,
-        constraint = bridge_transfer.status == BridgeStatus::Pending as u8 @ BridgeError::TransferAlreadyCompleted
-    )]
-    pub bridge_transfer: Account<'info, BridgeTransfer>,
-    
-    #[account(
-        init_if_needed,
-        payer = user,
-        space = WrappedTokenRecord::LEN,
-        seeds = [b"wrapped_token", token_mint.key().as_ref()],
-        bump
-    )]
-    pub wrapped_record: Account<'info, WrappedTokenRecord>,
-    
-    pub token_mint: InterfaceAccount<'info, Mint>,
-    
-    #[account(mut)]
-    pub user_token_account: InterfaceAccount<'info, TokenAccount>,
-    
-    #[account(
-        mut,
-        seeds = [b"bridge_escrow", market.key().as_ref()],
-        bump
-    )]
-    pub bridge_escrow: InterfaceAccount<'info, TokenAccount>,
-    
-    #[account(mut)]
-    pub user: Signer<'info>,
-    
-    pub token_program: Interface<'info, TokenInterface>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(origin_chain: u16, origin_order_id: [u8; 32], origin_user: [u8; 32])]
-pub struct CreateCrossChainOrder<'info> {
-    #[account(
-        init,
-        payer = authority,
-        space = CrossChainOrder::LEN,
-        seeds = [b"cross_chain_order", origin_chain.to_le_bytes().as_ref(), origin_order_id.as_ref()],
-        bump
-    )]
-    pub cross_chain_order: Account<'info, CrossChainOrder>,
-    
-    pub solana_order: AccountLoader<'info, Order>,
-    
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct MatchCrossChainOrder<'info> {
-    #[account(mut)]
-    pub solana_order: AccountLoader<'info, Order>,
-    
-    #[account(mut)]
-    pub cross_chain_order: Account<'info, CrossChainOrder>,
-    
-    pub authority: Signer<'info>,
+    pub governance_config: Account<'info, PoAConfig>,
 }

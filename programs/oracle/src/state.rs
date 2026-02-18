@@ -26,7 +26,11 @@ pub struct OracleData {
     pub last_consensus_timestamp: i64,          // 8 bytes
     pub last_energy_produced: u64,              // 8 bytes - for deviation check
     pub last_energy_consumed: u64,              // 8 bytes - for deviation check
-    pub min_reading_interval: u64,              // 8 bytes - minimum seconds between readings (rate limit)
+    pub total_global_energy_produced: u64,      // 8 bytes - cumulative total
+    pub total_global_energy_consumed: u64,      // 8 bytes - cumulative total
+    pub min_reading_interval: u16,              // 2 bytes - minimum seconds between readings (rate limit)
+    pub _padding_8: [u8; 6],                    // 6 bytes padding to keep 8-byte alignment
+    pub last_cleared_epoch: i64,                // 8 bytes - last epoch finalized on-chain (Unix timestamp in seconds)
     
     // === 4-byte aligned field ===
     pub average_reading_interval: u32,          // 4 bytes

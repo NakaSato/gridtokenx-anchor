@@ -32,4 +32,6 @@ pub enum OracleError {
     BackupOracleNotFound,
     #[msg("Invalid configuration parameter")]
     InvalidConfiguration,
+    #[msg("Invalid market epoch - must be greater than last cleared epoch")]
+    InvalidEpoch,
 }

@@ -13,7 +13,7 @@ pub use error::RegistryError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("E1k1C1oyRye4dmZcBKJvFKeEarqJBbyUVP7t6odVgo1X");
+declare_id!("EmiSgo85FVUYWXPtScCMQZBpq9ecZ4jhveg7E7T7F75z");
 
 /// Airdrop amount for new users (in smallest token units, 9 decimals = 20 GRX)
 pub const AIRDROP_AMOUNT: u64 = 20_000_000_000; // 20 GRX tokens
@@ -101,8 +101,9 @@ pub mod registry {
     pub fn register_user(
         ctx: Context<RegisterUser>,
         user_type: UserType,
-        lat: f64,
-        long: f64,
+        lat_e7: i32,
+        long_e7: i32,
+        h3_index: u64,
     ) -> Result<()> {
         compute_fn!("register_user" => {
             let user_authority = ctx.accounts.authority.key();
@@ -111,8 +112,9 @@ pub mod registry {
 
             user_account.authority = user_authority;
             user_account.user_type = user_type;
-            user_account.lat = lat;
-            user_account.long = long;
+            user_account.lat_e7 = lat_e7;
+            user_account.long_e7 = long_e7;
+            user_account.h3_index = h3_index;
             user_account.status = UserStatus::Active;
             user_account.registered_at = Clock::get()?.unix_timestamp;
             user_account.meter_count = 0;
@@ -122,8 +124,9 @@ pub mod registry {
             emit!(UserRegistered {
                 user: user_authority,
                 user_type,
-                lat,
-                long,
+                lat_e7,
+                long_e7,
+                h3_index,
             });
 
             // Perform automatic airdrop via CPI to energy token program
@@ -474,6 +477,7 @@ pub mod registry {
                 mint: ctx.accounts.mint.to_account_info(),
                 user_token_account: ctx.accounts.user_token_account.to_account_info(),
                 authority: ctx.accounts.registry.to_account_info(), // Registry signs
+                registry_authority: ctx.accounts.registry.to_account_info(),
                 token_program: ctx.accounts.token_program.to_account_info(),
             };
 
@@ -535,7 +539,7 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(user_type: UserType, lat: f64, long: f64)]
+#[instruction(user_type: UserType, lat_e7: i32, long_e7: i32, h3_index: u64)]
 pub struct RegisterUser<'info> {
     #[account(
         init,

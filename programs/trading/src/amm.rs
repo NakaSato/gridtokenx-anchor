@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface, TransferChecked, transfer_checked};
+use crate::{PoAConfig, TradingError};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CurveType {
@@ -62,6 +63,7 @@ pub struct SwapEnergy<'info> {
     pub currency_mint: InterfaceAccount<'info, Mint>,
     pub user: Signer<'info>,
     pub token_program: Interface<'info, TokenInterface>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 pub fn handle_initialize_amm_pool(
@@ -92,6 +94,7 @@ pub fn handle_swap_buy_energy(
     amount_milli_kwh: u64,
     max_currency: u64,
 ) -> Result<()> {
+    require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
     let (total_cost, delta) = {
         let pool = &ctx.accounts.pool;
         let current_supply = pool.energy_reserve;

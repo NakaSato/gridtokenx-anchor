@@ -132,7 +132,6 @@ pub fn verified_shield(
         timestamp: Clock::get()?.unix_timestamp,
     });
     
-    msg!("Verified shield with ZK proof");
     Ok(())
 }
 
@@ -161,7 +160,6 @@ pub fn verified_unshield(
         timestamp: Clock::get()?.unix_timestamp,
     });
     
-    msg!("Verified unshield of {} tokens with ZK proof", amount);
     Ok(())
 }
 
@@ -203,6 +201,5 @@ pub fn verified_private_transfer(
         timestamp: Clock::get()?.unix_timestamp,
     });
     
-    msg!("Verified private transfer with ZK proof");
     Ok(())
 }

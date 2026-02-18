@@ -14,7 +14,7 @@ pub use errors::*;
 pub use events::*;
 pub use state::*;
 
-declare_id!("4xXr6TM6YP6SiTeBcfBXC5dZep5PMhBCUN8uG4VUmQJk");
+declare_id!("DuLg6buhqs78SRj1qDp5vSyGrSfG9FF4nPKm8Tn8hSJL");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};
@@ -38,19 +38,7 @@ pub mod governance {
             handlers::initialize::handler(ctx)
         })
     }
-
-    pub fn emergency_pause(ctx: Context<EmergencyControl>) -> Result<()> {
-        compute_fn!("emergency_pause" => {
-            handlers::emergency::pause(ctx)
-        })
-    }
-
-    pub fn emergency_unpause(ctx: Context<EmergencyControl>) -> Result<()> {
-        compute_fn!("emergency_unpause" => {
-            handlers::emergency::unpause(ctx)
-        })
-    }
-
+    
     pub fn issue_erc(
         ctx: Context<IssueErc>,
         certificate_id: String,
@@ -78,9 +66,10 @@ pub mod governance {
     pub fn update_governance_config(
         ctx: Context<UpdateGovernanceConfig>,
         erc_validation_enabled: bool,
+        allow_certificate_transfers: bool,
     ) -> Result<()> {
         compute_fn!("update_governance_config" => {
-            handlers::config::update_governance_config(ctx, erc_validation_enabled)
+            handlers::config::update_governance_config(ctx, erc_validation_enabled, allow_certificate_transfers)
         })
     }
 

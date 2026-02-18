@@ -2,7 +2,7 @@
 
 use anchor_lang::prelude::*;
 // Use absolute path for governance crate if needed, or ensure it's mapped correctly
-pub use ::governance::{ErcCertificate, ErcStatus};
+pub use ::governance::{ErcCertificate, ErcStatus, PoAConfig};
 use crate::zk_proofs::{WrappedElGamalCiphertext, RangeProof, TransferProof};
 
 // Core modules
@@ -10,9 +10,8 @@ pub mod error;
 pub mod events;
 pub mod state;
 
-// Stablecoin and Cross-chain modules
+// Stablecoin and payments modules
 pub mod stablecoin;
-pub mod wormhole;
 pub mod payments;
 
 // Privacy/ZK modules
@@ -37,7 +36,6 @@ pub use state::*;
 // Features modules
 #[allow(ambiguous_glob_reexports)]
 pub use stablecoin::*;
-pub use wormhole::*;
 pub use payments::*;
 pub use privacy::*;
 pub use confidential::*;
@@ -57,14 +55,13 @@ macro_rules! compute_fn {
     ($name:expr => $block:block) => { $block };
 }
 
-declare_id!("2mYzcKsqTEH1LdNszBMJDAo63SRjDUyk2BXMjHiwFZwt");
+declare_id!("3LXbBJ7sWYYrveHvLoLtwuVYbYd27HPcbpF1DQ8rK1Bo");
 
 #[program]
 pub mod trading {
     use super::*;
 
     pub fn initialize(_ctx: Context<Initialize>) -> Result<()> {
-        msg!("Trading program initialized");
         Ok(())
     }
 
@@ -123,6 +120,7 @@ pub mod trading {
         price_per_kwh: u64,
     ) -> Result<()> {
         compute_fn!("create_sell_order" => {
+            require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
             require!(energy_amount > 0, TradingError::InvalidAmount);
             require!(price_per_kwh > 0, TradingError::InvalidPrice);
 
@@ -138,13 +136,13 @@ pub mod trading {
                 if let Some(expires_at) = erc_certificate.expires_at {
                     require!(
                         clock.unix_timestamp < expires_at,
-                        TradingError::ErcCertificateExpired
+                        TradingError::ErcExpired
                     );
                 }
-
+                
                 require!(
                     erc_certificate.validated_for_trading,
-                    TradingError::ErcNotValidatedForTrading
+                    TradingError::NotValidatedForTrading
                 );
 
                 require!(
@@ -214,6 +212,7 @@ pub mod trading {
         max_price_per_kwh: u64,
     ) -> Result<()> {
         compute_fn!("create_buy_order" => {
+            require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
             require!(energy_amount > 0, TradingError::InvalidAmount);
             require!(max_price_per_kwh > 0, TradingError::InvalidPrice);
 
@@ -257,6 +256,7 @@ pub mod trading {
     /// Match a buy order with a sell order
     pub fn match_orders(ctx: Context<MatchOrders>, match_amount: u64) -> Result<()> {
         compute_fn!("match_orders" => {
+            require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
             require!(match_amount > 0, TradingError::InvalidAmount);
 
             let mut market = ctx.accounts.market.load_mut()?;
@@ -354,6 +354,7 @@ pub mod trading {
 
     /// Cancel an active order
     pub fn cancel_order(ctx: Context<CancelOrder>) -> Result<()> {
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         compute_fn!("cancel_order" => {
             let mut market = ctx.accounts.market.load_mut()?;
             let mut order = ctx.accounts.order.load_mut()?;
@@ -399,6 +400,7 @@ pub mod trading {
         market_fee_bps: u16,
         clearing_enabled: bool,
     ) -> Result<()> {
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         compute_fn!("update_market_params" => {
             let mut market = ctx.accounts.market.load_mut()?;
 
@@ -432,6 +434,7 @@ pub mod trading {
         price: Vec<u64>,
         wheeling_charge: Vec<u64>
     ) -> Result<()> {
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         compute_fn!("execute_batch" => {
             let mut market = ctx.accounts.market.load_mut()?;
             require!(
@@ -473,11 +476,9 @@ pub mod trading {
                 let net_seller_amount = total_value.saturating_sub(market_fee).saturating_sub(wheeling_charge[i]);
 
                 // 1. Transfer Energy (Escrow -> Buyer)
-                // (Logic omitted for brevity, using msg! to simulate high-performance loop)
-                msg!("Match {}: Transfer {} energy to buyer", i, transfer_amount);
+                // (Logic omitted for brevity)
                 
                 // 2. Transfer Currency (Escrow -> Seller)
-                msg!("Match {}: Transfer {} currency to seller (Net)", i, net_seller_amount);
 
                 total_volume = total_volume.saturating_add(transfer_amount);
             }
@@ -516,16 +517,16 @@ pub mod trading {
         amount: u64,
         price: u64,
         wheeling_charge: u64,
+        loss_cost: u64,
     ) -> Result<()> {
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         compute_fn!("execute_atomic_settlement" => {
             let mut market = ctx.accounts.market.load_mut()?;
             let mut buy_order = ctx.accounts.buy_order.load_mut()?;
             let mut sell_order = ctx.accounts.sell_order.load_mut()?;
             let clock = Clock::get()?;
 
-            msg!("Secondary Token Program: {}", ctx.accounts.secondary_token_program.key());
-            msg!("System Program: {}", ctx.accounts.system_program.key());
-            msg!("Token Program: {}", ctx.accounts.token_program.key());
+            let clock = Clock::get()?;
 
             // 1. Validation
             require!(amount > 0, TradingError::InvalidAmount);
@@ -554,7 +555,8 @@ pub mod trading {
                 .unwrap_or(0);
             let net_seller_amount = total_currency_value
                 .saturating_sub(market_fee)
-                .saturating_sub(wheeling_charge);
+                .saturating_sub(wheeling_charge)
+                .saturating_sub(loss_cost);
 
             // 2. TOKEN TRANSFERS (Atomic Swap)
             
@@ -587,6 +589,22 @@ pub mod trading {
                 anchor_spl::token_interface::transfer_checked(
                     CpiContext::new(cpi_program, cpi_accounts), 
                     wheeling_charge,
+                    ctx.accounts.currency_mint.decimals
+                )?;
+            }
+
+            // Loss Cost
+            if loss_cost > 0 {
+                let cpi_accounts = anchor_spl::token_interface::TransferChecked {
+                    from: ctx.accounts.buyer_currency_escrow.to_account_info(),
+                    mint: ctx.accounts.currency_mint.to_account_info(),
+                    to: ctx.accounts.loss_collector.to_account_info(),
+                    authority: ctx.accounts.escrow_authority.to_account_info(),
+                };
+                let cpi_program = ctx.accounts.token_program.to_account_info();
+                anchor_spl::token_interface::transfer_checked(
+                    CpiContext::new(cpi_program, cpi_accounts), 
+                    loss_cost,
                     ctx.accounts.currency_mint.decimals
                 )?;
             }
@@ -662,6 +680,7 @@ pub mod trading {
         ctx: Context<TransferCarbonCredits>,
         amount: u64,
     ) -> Result<()> {
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         compute_fn!("transfer_carbon_credits" => {
             require!(amount > 0, TradingError::InvalidAmount);
             let clock = Clock::get()?;
@@ -732,60 +751,6 @@ pub mod trading {
         exchange_rate: u64,
     ) -> Result<()> {
         payments::process_execute_stablecoin_settlement(ctx, amount, exchange_rate)
-    }
-
-    // ============================================
-    // Phase 2: Cross-Chain Bridge Instructions
-    // ============================================
-
-    /// Initialize the Wormhole bridge configuration
-    pub fn initialize_bridge(
-        ctx: Context<InitializeBridge>,
-        min_bridge_amount: u64,
-        bridge_fee_bps: u16,
-        relayer_fee: u64,
-    ) -> Result<()> {
-        payments::process_initialize_bridge(ctx, min_bridge_amount, bridge_fee_bps, relayer_fee)
-    }
-
-    /// Initiate a bridge transfer to another chain
-    pub fn initiate_bridge_transfer(
-        ctx: Context<InitiateBridgeTransfer>,
-        destination_chain: u16,
-        destination_address: [u8; 32],
-        amount: u64,
-        timestamp: u64,
-    ) -> Result<()> {
-        payments::process_initiate_bridge_transfer(ctx, destination_chain, destination_address, amount, timestamp)
-    }
-
-    /// Complete a bridge transfer from another chain
-    pub fn complete_bridge_transfer(
-        ctx: Context<CompleteBridgeTransfer>,
-        vaa_hash: [u8; 32],
-    ) -> Result<()> {
-        payments::process_complete_bridge_transfer(ctx, vaa_hash)
-    }
-
-    /// Create a cross-chain order record
-    pub fn create_cross_chain_order(
-        ctx: Context<CreateCrossChainOrder>,
-        origin_chain: u16,
-        origin_order_id: [u8; 32],
-        origin_user: [u8; 32],
-        energy_amount: u64,
-        price: u64,
-        payment_token: [u8; 32],
-    ) -> Result<()> {
-        payments::process_create_cross_chain_order(ctx, origin_chain, origin_order_id, origin_user, energy_amount, price, payment_token)
-    }
-
-    /// Match a local order with a cross-chain order
-    pub fn match_cross_chain_order(
-        ctx: Context<MatchCrossChainOrder>,
-        amount: u64,
-    ) -> Result<()> {
-        payments::process_match_cross_chain_order(ctx, amount)
     }
 
     // ============================================
@@ -870,6 +835,7 @@ pub mod trading {
         let clock = Clock::get()?;
 
         // Checks
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         require!(batch.state == AuctionState::Open as u8, AuctionError::AuctionNotOpen);
         require!(clock.unix_timestamp < batch.end_time, AuctionError::AuctionNotOpen);
         
@@ -890,11 +856,6 @@ pub mod trading {
         batch.confidential_orders[current_count] = order;
         batch.confidential_order_count += 1;
         
-        msg!("Confidential {} submitted to batch {}", 
-            if is_bid { "Bid" } else { "Ask" }, 
-            batch.batch_id
-        );
-        
         Ok(())
     }
 
@@ -904,6 +865,7 @@ pub mod trading {
 
     /// Initialize a new auction batch
     pub fn initialize_auction(ctx: Context<InitializeAuction>, batch_id: u64, duration: i64) -> Result<()> {
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         let mut batch = ctx.accounts.batch.load_init()?;
         let market = ctx.accounts.market.load()?;
         
@@ -922,7 +884,6 @@ pub mod trading {
         batch.order_count = 0;
         // orders array is zeroed by default in load_init
         
-        msg!("Auction Batch {} Initialized. Ends at {}", batch_id, batch.end_time);
         Ok(())
     }
 
@@ -938,6 +899,7 @@ pub mod trading {
         let authority_key = ctx.accounts.authority.key();
 
         // Checks
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         require!(batch.state == AuctionState::Open as u8, AuctionError::AuctionNotOpen);
         require!(clock.unix_timestamp < batch.end_time, AuctionError::AuctionNotOpen);
         
@@ -998,6 +960,7 @@ pub mod trading {
         let clock = Clock::get()?;
 
         // Checks
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         require!(
             clock.unix_timestamp >= batch.end_time || batch.state == AuctionState::Locked as u8, 
             AuctionError::AuctionNotReady
@@ -1144,6 +1107,7 @@ pub mod trading {
         let clock = Clock::get()?;
 
         // Checks
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         require!(batch.state == AuctionState::Open as u8, AuctionError::AuctionNotOpen);
         // Ensure index is valid
         let current_count = batch.order_count as usize;
@@ -1212,6 +1176,7 @@ pub mod trading {
         let mut batch = ctx.accounts.batch.load_mut()?;
         let clock = Clock::get()?;
 
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         require!(batch.state == AuctionState::Open as u8, AuctionError::AuctionNotOpen);
         require!(clock.unix_timestamp < batch.end_time, AuctionError::AuctionNotOpen);
         
@@ -1243,7 +1208,6 @@ pub mod trading {
         };
         batch.commitment_count += 1;
 
-        msg!("Confidential commitment submitted");
         Ok(())
     }
 
@@ -1257,6 +1221,8 @@ pub mod trading {
         let mut batch = ctx.accounts.batch.load_mut()?;
         let clock = Clock::get()?;
         let authority_key = ctx.accounts.authority.key();
+
+        require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
 
         // Reveal window: after end_time but before resolution
         require!(clock.unix_timestamp >= batch.end_time, AuctionError::AuctionNotReady);
@@ -1305,7 +1271,6 @@ pub mod trading {
         }
         batch.commitment_count -= 1;
 
-        msg!("Confidential bid revealed and inserted into auction");
         Ok(())
     }
 
@@ -1614,13 +1579,13 @@ pub struct CreateSellOrder<'info> {
     )]
     pub order: AccountLoader<'info, Order>,
 
-    /// Optional: ERC certificate for prosumers
     pub erc_certificate: Option<Box<Account<'info, ErcCertificate>>>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1642,6 +1607,7 @@ pub struct CreateBuyOrder<'info> {
     pub authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1668,6 +1634,7 @@ pub struct MatchOrders<'info> {
     pub authority: Signer<'info>,
 
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1679,6 +1646,7 @@ pub struct CancelOrder<'info> {
     pub order: AccountLoader<'info, Order>,
 
     pub authority: Signer<'info>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1687,6 +1655,7 @@ pub struct UpdateMarketParams<'info> {
     pub market: AccountLoader<'info, Market>,
 
     pub authority: Signer<'info>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1696,6 +1665,7 @@ pub struct ExecuteBatch<'info> {
 
     #[account(mut)]
     pub authority: Signer<'info>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1733,6 +1703,10 @@ pub struct ExecuteAtomicSettlement<'info> {
     #[account(mut)]
     pub wheeling_collector: AccountInfo<'info>,
 
+    /// CHECK: Loss cost collector account
+    #[account(mut)]
+    pub loss_collector: AccountInfo<'info>,
+
     pub energy_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
     pub currency_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
 
@@ -1742,6 +1716,7 @@ pub struct ExecuteAtomicSettlement<'info> {
     pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
     pub system_program: Program<'info, System>,
     pub secondary_token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1765,6 +1740,7 @@ pub struct TransferCarbonCredits<'info> {
     pub rec_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
 
     pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1792,6 +1768,7 @@ pub struct InitializeAuction<'info> {
     pub authority: Signer<'info>,
     
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1819,6 +1796,7 @@ pub struct SubmitAuctionOrder<'info> {
     
     pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1828,6 +1806,7 @@ pub struct SubmitEncryptedBid<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1835,6 +1814,7 @@ pub struct ResolveAuction<'info> {
     #[account(mut)]
     pub batch: AccountLoader<'info, AuctionBatch>,
     pub authority: Signer<'info>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1895,6 +1875,7 @@ pub struct CancelAuctionOrder<'info> {
     pub authority: Signer<'info>,
     
     pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1917,6 +1898,7 @@ pub struct SubmitConfidentialBid<'info> {
     pub authority: Signer<'info>,
     pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
     pub system_program: Program<'info, System>,
+    pub governance_config: Account<'info, PoAConfig>,
 }
 
 #[derive(Accounts)]
@@ -1925,4 +1907,5 @@ pub struct RevealConfidentialBid<'info> {
     pub batch: AccountLoader<'info, AuctionBatch>,
     #[account(mut)]
     pub authority: Signer<'info>,
+    pub governance_config: Account<'info, PoAConfig>,
 }

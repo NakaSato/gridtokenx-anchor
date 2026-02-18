@@ -15,6 +15,7 @@ pub struct MeterReadingSubmitted {
 pub struct MarketClearingTriggered {
     pub authority: Pubkey,
     pub timestamp: i64,
+    pub epoch_number: i64,
 }
 
 #[event]

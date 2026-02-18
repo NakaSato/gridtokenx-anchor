@@ -95,3 +95,17 @@ pub struct AuctionSettled {
     pub amount: u64,
     pub price: u64,
 }
+
+#[event]
+pub struct MaintenanceModeChanged {
+    pub authority: Pubkey,
+    pub maintenance_mode: bool,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct ConfidentialOrderCreated {
+    pub user: Pubkey,
+    pub order_id: Pubkey,
+    pub timestamp: i64,
+}
