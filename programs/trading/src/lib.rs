@@ -24,7 +24,6 @@ pub mod confidential_ops;
 pub mod pricing;
 pub mod meter_verification;
 pub mod carbon;
-pub mod amm;
 pub mod auction;
 pub mod invariants;
 
@@ -42,7 +41,6 @@ pub use confidential::*;
 pub use pricing::*;
 pub use meter_verification::*;
 pub use carbon::*;
-pub use amm::*;
 pub use auction::*;
 
 // Import compute_fn! macro when localnet feature is enabled
@@ -182,26 +180,6 @@ pub mod trading {
 
             Ok(())
         })
-    }
-
-    /// Initialize the Energy AMM pool
-    pub fn initialize_amm_pool(
-        ctx: Context<InitializeAmmPool>,
-        curve_type: CurveType,
-        slope: u64,
-        base: u64,
-        fee_bps: u16,
-    ) -> Result<()> {
-        amm::handle_initialize_amm_pool(ctx, curve_type, slope, base, fee_bps)
-    }
-
-    /// Swap currency for energy via AMM
-    pub fn swap_buy_energy(
-        ctx: Context<SwapEnergy>,
-        amount_milli_kwh: u64,
-        max_currency: u64,
-    ) -> Result<()> {
-        amm::handle_swap_buy_energy(ctx, amount_milli_kwh, max_currency)
     }
 
     /// Create a buy order for energy
