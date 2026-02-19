@@ -17,6 +17,8 @@ pub struct Market {
     pub clearing_enabled: u8,           // 1
     pub locked: u8,                     // 1 (Re-entrancy Guard)
     pub _padding1: [u8; 4],             // 4 -> 80
+    pub min_price_per_kwh: u64,         // 8 — minimum allowed price (must be > 0)
+    pub max_price_per_kwh: u64,         // 8 — maximum allowed price (0 = no cap)
 
     // === BATCH PROCESSING ===
     pub batch_config: BatchConfig,      // 24

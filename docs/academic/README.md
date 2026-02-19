@@ -52,7 +52,6 @@ Advanced technical documentation with detailed algorithms and security analysis:
 | [AMM & Bonding Curves](../programs/deep-dive/amm-bonding-curves.md) | Mathematical foundations for energy-specific AMMs |
 | [Periodic Auction System](../programs/deep-dive/periodic-auction.md) | Batch clearing and uniform price discovery |
 | [Confidential Trading](../programs/deep-dive/confidential-trading.md) | ElGamal encryption and zero-knowledge proofs |
-| [Dynamic Pricing Engine](../programs/deep-dive/dynamic-pricing.md) | Time-of-use and demand-responsive pricing |
 | [Carbon Credit System](../programs/deep-dive/carbon-credits.md) | REC tokenization and carbon offset tracking |
 | [Cross-Chain Bridge](../programs/deep-dive/cross-chain-bridge.md) | Wormhole integration for multi-chain trading |
 | [Oracle Security Model](../programs/deep-dive/oracle-security.md) | Byzantine fault tolerance and data validation |

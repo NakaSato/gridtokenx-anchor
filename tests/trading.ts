@@ -211,7 +211,7 @@ describe("Trading Program", () => {
     });
 
     it("Updates market parameters", async () => {
-        await program.methods.updateMarketParams(50, true).accounts({
+        await program.methods.updateMarketParams(50, true, new BN(1), new BN(0)).accounts({
             market: marketAddress,
             authority: authority.publicKey,
             governanceConfig: governanceConfig

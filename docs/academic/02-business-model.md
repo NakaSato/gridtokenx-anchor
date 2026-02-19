@@ -10,7 +10,6 @@
 > **Related Documentation:**
 > - [Token Economics](./05-token-economics.md) - GRX token design and mechanisms
 > - [Carbon Credit System](../programs/deep-dive/carbon-credits.md) - REC revenue model
-> - [Dynamic Pricing](../programs/deep-dive/dynamic-pricing.md) - Pricing strategy
 
 ---
 

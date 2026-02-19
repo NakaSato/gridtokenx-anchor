@@ -439,66 +439,6 @@ cancel_auction_order(order_idx: u32)
 
 ---
 
-#### Dynamic Pricing
-
-##### `initialize_pricing_config`
-Initialize dynamic pricing configuration.
-
-```typescript
-initialize_pricing_config(
-  base_price: u64,      // Base price per kWh (micro-units)
-  min_price: u64,       // Minimum price floor
-  max_price: u64,       // Maximum price ceiling
-  timezone_offset: i16  // Timezone offset (e.g., 700 for +7:00)
-)
-```
-
-**Accounts:**
-| Name | Type | Description |
-|------|------|-------------|
-| `pricing_config` | `Account<PricingConfig>` | Pricing config (writable) |
-| `market` | `Account<Market>` | Associated market |
-| `authority` | `Signer` | Pricing authority (writable) |
-| `system_program` | `Program` | System program |
-
-**Events:**
-- `PricingConfigured`
-
----
-
-##### `update_market_data`
-Update market data for dynamic pricing.
-
-```typescript
-update_market_data(
-  supply: u64,           // Current supply level
-  demand: u64,           // Current demand level
-  congestion_factor: u16 // Grid congestion (100 = normal)
-)
-```
-
-**Events:**
-- `PriceUpdated`
-
----
-
-##### `create_price_snapshot`
-Create a price snapshot for history.
-
-```typescript
-create_price_snapshot(timestamp: i64)
-```
-
-**Accounts:**
-| Name | Type | Description |
-|------|------|-------------|
-| `pricing_config` | `Account<PricingConfig>` | Pricing configuration |
-| `snapshot` | `Account<PriceSnapshot>` | Snapshot account (writable) |
-| `authority` | `Signer` | Snapshot authority (writable) |
-| `system_program` | `Program` | System program |
-
----
-
 #### Privacy / Confidential Trading
 
 ##### `initialize_confidential_balance`
@@ -887,33 +827,6 @@ pub struct AuctionBatch {
 
 ---
 
-#### `PricingConfig`
-Dynamic pricing configuration.
-
-```rust
-pub struct PricingConfig {
-    pub bump: u8,
-    pub market: Pubkey,
-    pub authority: Pubkey,
-    pub enabled: bool,
-    pub base_price: u64,              // Base price (micro-units)
-    pub min_price: u64,               // Floor price
-    pub max_price: u64,               // Ceiling price
-    pub tou_tiers: [PriceTier; 6],    // Time-of-use tiers
-    pub tou_tier_count: u8,
-    pub seasonal_multipliers: [u16; 4], // Per season (100 = 1.0x)
-    pub current_supply: u64,
-    pub current_demand: u64,
-    pub supply_demand_sensitivity: u16, // Basis points
-    pub congestion_factor: u16,         // 100 = normal
-    pub last_update: i64,
-    pub update_interval: u32,           // Seconds
-    pub timezone_offset: i16,           // UTC offset * 100
-}
-```
-
----
-
 #### `ConfidentialBalance`
 Encrypted balance for privacy trading.
 
@@ -993,9 +906,6 @@ pub struct CarbonMarketplace {
 | `AuctionResolved` | Auction clearing price calculated |
 | `AuctionSettled` | Auction orders settled |
 | `TokenSwapExecuted` | AMM swap completed |
-| `PricingConfigured` | Dynamic pricing initialized |
-| `PriceUpdated` | Dynamic price changed |
-| `PeakEventDeclared` | Peak demand event declared |
 | `BridgeInitiated` | Cross-chain transfer started |
 | `BridgeCompleted` | Cross-chain transfer completed |
 | `BridgeConfigUpdated` | Bridge settings changed |
@@ -2441,7 +2351,6 @@ const [bridgePda] = PublicKey.findProgramAddressSync(
 
 - [Trading Deep Dive](programs/deep-dive/amm-deep-dive.md)
 - [Periodic Auctions](programs/deep-dive/auction-deep-dive.md)
-- [Dynamic Pricing](programs/deep-dive/pricing-deep-dive.md)
 - [Privacy Trading](programs/deep-dive/privacy-deep-dive.md)
 - [Cross-Chain Bridge](programs/deep-dive/bridge-deep-dive.md)
 - [Carbon Credits](programs/deep-dive/carbon-deep-dive.md)

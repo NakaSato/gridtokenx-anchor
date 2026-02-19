@@ -109,7 +109,7 @@ describe("API P2P Trading", () => {
         }
 
         // Set fee to 10% (1000 bps) for easy calculation
-        await program.methods.updateMarketParams(1000, true).accounts({
+        await program.methods.updateMarketParams(1000, true, new BN(1), new BN(0)).accounts({
             market: marketAddress,
             authority: authority.publicKey,
             governanceConfig: governanceConfig

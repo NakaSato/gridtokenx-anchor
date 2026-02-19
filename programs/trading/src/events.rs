@@ -51,6 +51,8 @@ pub struct MarketParamsUpdated {
     pub authority: Pubkey,
     pub market_fee_bps: u16,
     pub clearing_enabled: bool,
+    pub min_price_per_kwh: u64,
+    pub max_price_per_kwh: u64,
     pub timestamp: i64,
 }
 

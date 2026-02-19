@@ -1,620 +1,437 @@
-# Periodic Auction System: Deep Dive
+# Continuous Double Auction (CDA): Deep Dive
 
-> **Uniform Price Clearing for Energy Markets**
+> **On-Chain Order Book & Client-Side Matching Engine for P2P Energy Trading**
 
 ---
 
 ## 1. Executive Summary
 
-The GridTokenX Periodic Auction module implements a **call market mechanism** where orders are batched over a time window and cleared at a single uniform price. This approach is specifically designed for energy markets where:
+The GridTokenX trading system implements a **Continuous Double Auction (CDA)** — the industry-standard mechanism for real-time price discovery. Unlike periodic batch auctions, the CDA matches orders **immediately** as they arrive, providing instant liquidity and transparent price formation.
 
-- Price discovery benefits from aggregated supply/demand information
-- Reduced transaction costs through batch settlement
-- Fair execution for all participants at the same price
-- Integration with grid dispatch cycles (15-minute intervals)
+The CDA is implemented across two layers:
 
-**Key Features:**
-- Zero-copy batch storage for up to 32 orders
-- Optimal Surplus Maximization (OSM) clearing algorithm
-- Pro-rata allocation for partial fills
-- Re-entrancy protected state transitions
+- **Anchor On-Chain Program** (`trading/`): The authoritative settlement layer — creates orders, validates matches, and executes atomic token swaps on Solana.
+- **WASM Client-Side Engine** (`gridtokenx-wasm/modules/orderbook.rs`): A high-performance preview engine compiled to WebAssembly for real-time order book visualization, depth charts, and match previews in the browser.
 
 ---
 
-## 2. Auction Theory Background
+## 2. CDA Architecture Overview
 
-### 2.1 Call Market vs. Continuous Market
-
-| Feature | Call Market (Batch Auction) | Continuous Market |
-|---------|---------------------------|-------------------|
-| **Price Discovery** | Single clearing price | Continuous price movement |
-| **Fairness** | All traders get same price | Price-time priority |
-| **Liquidity** | Concentrated at clearing | Fragmented |
-| **Information** | Full order book visible at clear | Partial visibility |
-| **Use Case** | Opening/closing auctions, energy | Intraday trading |
-
-### 2.2 Uniform Price Clearing (UPC)
-
-In a uniform price auction, the **Market Clearing Price (MCP)** is determined to maximize traded volume:
-
-$$
-\text{MCP} = \arg\max_p \left[ \min\left(\sum_{b_i \geq p} Q_i^{bid}, \sum_{a_j \leq p} Q_j^{ask}\right) \right]
-$$
-
-Where:
-- $b_i$ = Bid price of order $i$
-- $a_j$ = Ask price of order $j$
-- $Q_i^{bid}$ = Quantity of bid order $i$
-- $Q_j^{ask}$ = Quantity of ask order $j$
+```
+┌──────────────────────────────────────────────────────┐
+│                    Frontend (React)                   │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐ │
+│  │ Order Entry  │  │ Depth Chart  │  │ Trade Feed  │ │
+│  └──────┬──────┘  └──────┬───────┘  └──────┬──────┘ │
+│         │                │                  │         │
+│  ┌──────▼──────────────▼──────────────────▼──────┐  │
+│  │         WASM OrderBook Engine (Rust)            │  │
+│  │  • Price-time priority sorting                  │  │
+│  │  • Client-side match preview                    │  │
+│  │  • Depth aggregation                            │  │
+│  │  • Spread / mid-price calculation               │  │
+│  └─────────────────────┬──────────────────────────┘  │
+└────────────────────────┼─────────────────────────────┘
+                         │ Submit order TX
+                         ▼
+┌──────────────────────────────────────────────────────┐
+│              Solana Blockchain (Anchor)               │
+│  ┌──────────────────────────────────────────────────┐│
+│  │              Trading Program                      ││
+│  │  • create_sell_order (post ask)                   ││
+│  │  • create_buy_order  (post bid)                   ││
+│  │  • match_orders      (validate & record match)    ││
+│  │  • execute_atomic_settlement (token swap)         ││
+│  │  • cancel_order      (remove from book)           ││
+│  └──────────────────────────────────────────────────┘│
+│  ┌────────────┐  ┌────────────┐  ┌────────────────┐ │
+│  │   Market    │  │   Order    │  │  TradeRecord   │ │
+│  │  (zero_copy)│  │ (zero_copy)│  │   (regular)    │ │
+│  └────────────┘  └────────────┘  └────────────────┘ │
+└──────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 3. State Architecture
+## 3. Anchor On-Chain Program
 
-### 3.1 Auction Lifecycle
+### 3.1 Market State
 
-```
-┌─────────┐      ┌─────────┐      ┌─────────┐      ┌─────────┐
-│  OPEN   │─────►│ LOCKED  │─────►│ CLEARED │─────►│ SETTLED │
-│         │      │         │      │         │      │         │
-│ Accept  │      │ No new  │      │ Price   │      │ All     │
-│ orders  │      │ orders  │      │ known   │      │ trades  │
-│         │      │         │      │         │      │ executed│
-└─────────┘      └─────────┘      └─────────┘      └─────────┘
-     │                │                │                │
-     ▼                ▼                ▼                ▼
-  submit_bid      lock_batch     resolve_auction   settle_trade
-  submit_ask
-```
-
-### 3.2 AuctionBatch Account
+The `Market` account uses **zero-copy deserialization** to avoid heap allocation costs for the large order book structures:
 
 ```rust
 #[account(zero_copy)]
 #[repr(C)]
-pub struct AuctionBatch {
-    pub market: Pubkey,           // 32 - Parent market
-    pub batch_id: u64,            // 8  - Unique ID (timestamp)
-    
-    pub clearing_price: u64,      // 8  - MCP (set when Cleared)
-    pub clearing_volume: u64,     // 8  - Total volume at MCP
-    
-    pub start_time: i64,          // 8  - Batch open timestamp
-    pub end_time: i64,            // 8  - Batch close timestamp
-    
-    pub state: u8,                // 1  - Open/Locked/Cleared/Settled
-    pub bump: u8,                 // 1  - PDA bump
-    pub locked: u8,               // 1  - Re-entrancy guard
-    pub _padding: [u8; 1],        // 1  - Alignment
-    
-    pub order_count: u32,         // 4  - Active orders
-    
-    pub orders: [AuctionOrder; 32], // 32 × 64 = 2048
-}
+pub struct Market {
+    pub authority: Pubkey,              // 32 - Market operator
+    pub total_volume: u64,              // 8  - Cumulative traded volume
+    pub created_at: i64,                // 8  - Creation timestamp
+    pub last_clearing_price: u64,       // 8  - Most recent trade price
+    pub volume_weighted_price: u64,     // 8  - VWAP tracker
+    pub active_orders: u32,             // 4  - Current open order count
+    pub total_trades: u32,              // 4  - Lifetime trade count
+    pub market_fee_bps: u16,            // 2  - Fee in basis points (default: 25 = 0.25%)
+    pub clearing_enabled: u8,           // 1  - Trading enabled flag
+    pub locked: u8,                     // 1  - Re-entrancy guard
+    pub _padding1: [u8; 4],             // 4  - Alignment → 80 bytes
 
-// Total: 8 (disc) + 80 (header) + 2048 (orders) = 2136 bytes
+    // === BATCH PROCESSING ===
+    pub batch_config: BatchConfig,      // 24
+    pub current_batch: BatchInfo,       // 1640
+    pub has_current_batch: u8,          // 1
+    pub _padding_batch: [u8; 7],        // 7  - Alignment
+
+    // === MARKET DEPTH ===
+    pub buy_side_depth: [PriceLevel; 20],   // 480
+    pub sell_side_depth: [PriceLevel; 20],  // 480
+    pub buy_side_depth_count: u8,       // 1
+    pub sell_side_depth_count: u8,      // 1
+    pub price_history_count: u8,        // 1
+    pub _padding_depth: [u8; 5],        // 5  - Alignment
+
+    // === PRICE DISCOVERY ===
+    pub price_history: [PricePoint; 24],    // 576
+}
 ```
 
-### 3.3 AuctionOrder Structure
+**Key structures:**
 
 ```rust
-#[derive(Clone, Copy, Default, Pod, Zeroable)]
-#[repr(C)]
-pub struct AuctionOrder {
-    pub order_id: Pubkey,    // 32 - Order account address
-    pub price: u64,          // 8  - Limit price
-    pub amount: u64,         // 8  - Order quantity
-    pub timestamp: i64,      // 8  - Submission time
-    pub is_bid: u8,          // 1  - 1=Buy, 0=Sell
-    pub _padding: [u8; 7],   // 7  - Alignment
+pub struct PriceLevel {
+    pub price: u64,          // Price at this level
+    pub total_amount: u64,   // Aggregate quantity
+    pub order_count: u16,    // Number of orders
 }
-// Total: 64 bytes per order
+
+pub struct PricePoint {
+    pub price: u64,          // Clearing price
+    pub volume: u64,         // Volume at this price
+    pub timestamp: i64,      // When the trade occurred
+}
 ```
 
-**Design Decision:** Fixed 32-order limit with `Pod`/`Zeroable` traits enables:
-- Zero-copy access (no deserialization)
-- Predictable account size (rent calculation)
-- O(1) order lookup by index
+### 3.2 Order State
+
+```rust
+#[account(zero_copy)]
+#[repr(C)]
+pub struct Order {
+    pub seller: Pubkey,         // 32
+    pub buyer: Pubkey,          // 32
+    pub order_id: u64,          // 8
+    pub amount: u64,            // 8  - Energy amount (kWh)
+    pub filled_amount: u64,     // 8  - Partially filled tracking
+    pub price_per_kwh: u64,     // 8  - Limit price
+    pub order_type: u8,         // 1  - Buy or Sell (OrderType enum)
+    pub status: u8,             // 1  - Active/PartiallyFilled/Completed/Cancelled/Expired
+    pub _padding: [u8; 6],      // 6  - Alignment
+    pub created_at: i64,        // 8
+    pub expires_at: i64,        // 8  - Auto-expiry (default: +24h)
+}
+```
+
+**Order lifecycle:**
+```
+Active → PartiallyFilled → Completed
+  │                            ↑
+  └──── Cancelled ─────────────┘
+         (by owner)
+```
+
+### 3.3 Order Creation
+
+**Sell Order** (Post an Ask):
+```rust
+pub fn create_sell_order(
+    ctx: Context<CreateSellOrderContext>,
+    order_id_val: u64,
+    energy_amount: u64,
+    price_per_kwh: u64,        // Minimum acceptable price
+) -> Result<()>
+```
+
+Validations:
+- Governance: system must not be in maintenance mode
+- `energy_amount > 0`, `price_per_kwh > 0`
+- Optional ERC certificate: must be `Valid`, not expired, validated for trading, and amount ≤ certificate amount
+- Order PDA: `seeds = [b"order", authority, &order_id.to_le_bytes()]`
+
+**Buy Order** (Post a Bid):
+```rust
+pub fn create_buy_order(
+    ctx: Context<CreateBuyOrderContext>,
+    order_id_val: u64,
+    energy_amount: u64,
+    max_price_per_kwh: u64,    // Maximum willingness to pay
+) -> Result<()>
+```
+
+Both orders expire after **24 hours** by default (`expires_at = now + 86400`).
+
+### 3.4 Matching Rule
+
+```rust
+pub fn match_orders(
+    ctx: Context<MatchOrdersContext>,
+    match_amount: u64,
+) -> Result<()>
+```
+
+**Matching condition:**
+```
+buy_order.price_per_kwh >= sell_order.price_per_kwh
+```
+
+**Clearing price determination:**
+```
+clearing_price = sell_order.price_per_kwh
+```
+
+The seller's ask price is used as the clearing price. Since the buyer is willing to pay up to `max_price_per_kwh` but only pays the seller's (lower) ask, this is **buyer-favorable** — buyers get price improvement when their bid exceeds the ask.
+
+**Partial fill logic:**
+```
+actual_match = min(match_amount, buy_remaining, sell_remaining)
+```
+
+After matching:
+- `filled_amount` incremented on both orders
+- Status transitions: `Active → PartiallyFilled → Completed`
+- `TradeRecord` created with full audit trail
+- Market stats updated: `total_volume`, `total_trades`, `last_clearing_price`
+
+**Fee calculation:**
+```
+total_value = actual_match_amount × clearing_price
+fee = total_value × market_fee_bps / 10,000     (default: 0.25%)
+```
+
+### 3.5 Atomic Settlement
+
+The `execute_atomic_settlement` instruction performs the full trade in a single transaction:
+
+```rust
+pub fn execute_atomic_settlement(
+    ctx: Context<ExecuteAtomicSettlementContext>,
+    amount: u64,
+    price: u64,
+    wheeling_charge_val: u64,    // Grid usage fee
+    loss_cost_val: u64,          // Transmission loss cost
+) -> Result<()>
+```
+
+**Settlement flow:**
+
+```
+total_value    = amount × price
+market_fee     = total_value × fee_bps / 10,000
+net_to_seller  = total_value - market_fee - wheeling_charge - loss_cost
+
+Transfers (all in one TX):
+1. Buyer escrow → Fee collector     : market_fee (currency)
+2. Buyer escrow → Seller account    : net_to_seller (currency)
+3. Seller escrow → Buyer account    : amount (energy tokens)
+```
+
+This ensures **atomicity** — if any transfer fails, the entire settlement reverts.
+
+**Note:** Fee and seller transfers are conditional — they only execute if the respective amounts are > 0.
+
+### 3.6 Market Parameter Updates
+
+```rust
+pub fn update_market_params(
+    ctx: Context<UpdateMarketParamsContext>,
+    fee_bps: u16,
+    clearing: bool,
+) -> Result<()>
+```
+
+Allows the market authority to update the fee rate and enable/disable clearing. Emits `MarketParamsUpdated` event.
+
+### 3.7 Compute Unit Profile
+
+| Instruction | CU Cost | Notes |
+|---|---|---|
+| `create_sell_order` | ~15,000 | Account init + ERC validation |
+| `create_buy_order` | ~12,000 | Account init |
+| `match_orders` | ~35,200 | Zero-copy market update + trade record |
+| `execute_atomic_settlement` | ~45,000 | 3 CPI token transfers |
+| `cancel_order` | ~8,000 | Status update |
 
 ---
 
-## 4. Clearing Algorithm
+## 4. WASM Client-Side Engine
 
-### 4.1 Optimal Surplus Maximization
+### 4.1 Purpose
 
-The algorithm finds the price that maximizes **total surplus** (welfare):
+The WASM `OrderBook` provides **real-time order book operations in the browser** without network roundtrips. It mirrors the on-chain state for instant UI updates.
 
-$$
-\text{Surplus}(p) = \sum_{b_i \geq p} (b_i - p) \cdot Q_i + \sum_{a_j \leq p} (p - a_j) \cdot Q_j
-$$
-
-### 4.2 Implementation
+### 4.2 Order Book Structure
 
 ```rust
-/// Calculate Market Clearing Price using supply/demand intersection
-/// Returns (clearing_price, clearing_volume)
-pub fn calculate_clearing_price(orders: &[AuctionOrder]) -> (u64, u64) {
-    // Step 1: Separate bids (buys) and asks (sells)
-    let mut bids: Vec<AuctionOrder> = orders
-        .iter()
-        .filter(|o| o.is_bid == 1 && o.amount > 0)
-        .cloned()
-        .collect();
-    
-    let mut asks: Vec<AuctionOrder> = orders
-        .iter()
-        .filter(|o| o.is_bid == 0 && o.amount > 0)
-        .cloned()
-        .collect();
-    
-    // Step 2: Sort bids descending (highest paying first)
-    bids.sort_by(|a, b| b.price.cmp(&a.price));
-    
-    // Step 3: Sort asks ascending (lowest selling first)
-    asks.sort_by(|a, b| a.price.cmp(&b.price));
-    
-    // Step 4: Find intersection using price sweep
-    let mut clearing_price = 0u64;
-    let mut max_volume = 0u64;
-    
-    // Collect all unique prices as potential clearing prices
-    let mut price_points: Vec<u64> = bids.iter()
-        .map(|o| o.price)
-        .chain(asks.iter().map(|o| o.price))
-        .collect();
-    price_points.sort();
-    price_points.dedup();
-    
-    for price in price_points {
-        // Aggregate demand at this price (bids >= price)
-        let demand: u64 = bids.iter()
-            .filter(|b| b.price >= price)
-            .map(|b| b.amount)
-            .sum();
-        
-        // Aggregate supply at this price (asks <= price)
-        let supply: u64 = asks.iter()
-            .filter(|a| a.price <= price)
-            .map(|a| a.amount)
-            .sum();
-        
-        // Tradeable volume is minimum of supply and demand
-        let volume = std::cmp::min(supply, demand);
-        
-        // Update if this price achieves higher volume
-        if volume > max_volume {
-            max_volume = volume;
-            clearing_price = price;
+#[wasm_bindgen]
+pub struct OrderBook {
+    bids: Vec<Order>,  // Sorted: price DESC, timestamp ASC
+    asks: Vec<Order>,  // Sorted: price ASC,  timestamp ASC
+}
+```
+
+**Sorting = Price-Time Priority:**
+- Bids: highest price first, then earliest arrival (aggressive buyers prioritized)
+- Asks: lowest price first, then earliest arrival (competitive sellers prioritized)
+
+Orders are inserted using **binary search** for O(log n) insertion into the sorted vector.
+
+### 4.3 Matching Algorithm
+
+```rust
+pub fn match_orders(&mut self) -> Result<JsValue, JsValue> {
+    while !bids.empty() && !asks.empty() {
+        if best_bid.price >= best_ask.price {
+            // Execution price: resting order's price wins
+            exec_price = if bid arrived first { bid.price }
+                         else { ask.price };
+
+            exec_qty = min(bid.qty, ask.qty);
+
+            // Record match, update/remove filled orders
+        } else {
+            break;  // No more crossable orders
         }
     }
-    
-    (clearing_price, max_volume)
 }
 ```
 
-### 4.3 Visual Example
+**Key difference from Anchor:** The WASM engine uses **price-time priority** — the resting (earlier) order sets the execution price. The Anchor program always uses the seller's price.
 
-```
-Price   │     Supply        Demand      Volume
-(THB)   │    (Sellers)      (Buyers)   (Traded)
-────────┼─────────────────────────────────────
-  6.00  │      500           100        100
-  5.50  │      400           200        200
-  5.00  │      300           350        300  ← MCP (highest volume)
-  4.50  │      200           400        200
-  4.00  │      100           450        100
-────────┼─────────────────────────────────────
+### 4.4 API Surface
 
-Supply/Demand Curves:
+| Method | Signature | Description |
+|---|---|---|
+| `new()` | `() → OrderBook` | Create empty book (1,000/side capacity) |
+| `add_order()` | `(id, side, price, qty, ts)` | Insert with binary search |
+| `load_orders()` | `(JsValue) → ()` | Bulk load from JSON array |
+| `cancel_order()` | `(id) → bool` | Remove by ID |
+| `match_orders()` | `() → Vec<Match>` | Execute CDA matching |
+| `get_depth()` | `(levels) → DepthResult` | Aggregated depth for charts |
+| `best_bid_price()` | `() → f64` | Top of bid book |
+| `best_ask_price()` | `() → f64` | Top of ask book |
+| `spread()` | `() → f64` | Best ask − best bid |
+| `mid_price()` | `() → f64` | (Best bid + best ask) / 2 |
 
-Price │                S
-      │               /
- 6.00 ├──────────────•
-      │             /│
- 5.50 ├────────────• │
-      │           /  │
- 5.00 ├──────────●═══●═══ MCP at intersection
-      │         /    │
- 4.50 ├────────•     │D
-      │       /     /
- 4.00 ├──────•     •
-      │     /     /
-      └───────────────────► Quantity
-        100 200 300 400
-
-At MCP = 5.00 THB:
-- Supply: 300 kWh (sellers willing at ≤5.00)
-- Demand: 350 kWh (buyers willing at ≥5.00)
-- Clearing Volume: 300 kWh (limited by supply)
-```
-
----
-
-## 5. Pro-Rata Allocation
-
-### 5.1 Partial Fill Problem
-
-When demand exceeds supply (or vice versa) at the MCP, orders must be **proportionally allocated**:
-
-$$
-\text{Filled}_i = Q_i \times \frac{\text{TotalClearing}}{\text{TotalAtMCP}}
-$$
-
-### 5.2 Implementation
+### 4.5 Depth Chart Data
 
 ```rust
-pub fn calculate_fill_amount(
-    order_amount: u64,
-    clearing_volume: u64,
-    total_at_price: u64,
-) -> u64 {
-    if total_at_price == 0 {
-        return 0;
-    }
-    
-    // Pro-rata: order_amount * (clearing_volume / total_at_price)
-    // Use u128 to prevent overflow
-    let fill = (order_amount as u128)
-        .checked_mul(clearing_volume as u128)
-        .unwrap()
-        .checked_div(total_at_price as u128)
-        .unwrap() as u64;
-    
-    // Cannot fill more than order amount
-    std::cmp::min(fill, order_amount)
+pub fn get_depth(&self, levels: usize) -> DepthResult {
+    // Returns aggregated cumulative quantity at each price level
+    // { bids: [[price, cum_qty], ...], asks: [[price, cum_qty], ...] }
 }
 ```
 
-### 5.3 Example
+Used by the frontend to render the order book depth visualization.
+
+---
+
+## 5. CDA Price Formation
+
+### 5.1 How Prices Are Discovered
+
+In a CDA, prices emerge from the intersection of supply and demand:
 
 ```
-Order  │ Side │ Price │ Amount │ At MCP? │ Pro-Rata Fill
-───────┼──────┼───────┼────────┼─────────┼──────────────
-  A    │ Buy  │ 5.50  │  100   │   ✓     │ 100 × (300/350) = 85.7 → 85
-  B    │ Buy  │ 5.00  │  150   │   ✓     │ 150 × (300/350) = 128.5 → 128
-  C    │ Buy  │ 5.00  │  100   │   ✓     │ 100 × (300/350) = 85.7 → 85
-  D    │ Sell │ 4.50  │  100   │   ✓     │ 100 (fully filled)
-  E    │ Sell │ 5.00  │  200   │   ✓     │ 200 (fully filled)
-───────┼──────┼───────┼────────┼─────────┼──────────────
-Total  │      │       │        │         │ ~300 (matches clearing)
+Price
+  ▲
+  │   Asks (sellers)
+  │   ┌───┐
+  │   │   │  ← Best Ask (lowest seller)
+  │   │   │
+  │ ──┤   ├── ← Spread
+  │   │   │
+  │   │   │  ← Best Bid (highest buyer)
+  │   └───┘
+  │   Bids (buyers)
+  └──────────────────► Quantity
+```
+
+- **Spread** = Best Ask − Best Bid
+- **Mid Price** = (Best Bid + Best Ask) / 2
+- **Trade occurs** when Bid ≥ Ask (spread crosses zero)
+
+### 5.2 Price Rules Comparison
+
+| Aspect | Anchor (On-Chain) | WASM (Client) |
+|---|---|---|
+| **Clearing price** | Seller's ask price | Resting order's price |
+| **Priority** | First valid match submitted | Price-time priority |
+| **Partial fills** | ✅ Yes | ✅ Yes |
+| **Fee** | 0.25% (configurable) | N/A (preview only) |
+
+### 5.3 Fee Distribution
+
+```
+Total Trade Value
+    │
+    ├── 40% → Grid Maintenance Fund (DSO)
+    ├── 40% → Platform Development (Treasury)
+    └── 20% → Insurance Fund (Default protection)
 ```
 
 ---
 
-## 6. State Transitions
+## 6. Batch Processing Extension
 
-### 6.1 Order Submission
+The Market supports an optional **batch auction** mode via `BatchConfig`:
 
 ```rust
-pub fn submit_auction_order(
-    ctx: Context<SubmitAuctionOrder>,
-    price: u64,
-    amount: u64,
-    is_bid: bool,
-) -> Result<()> {
-    let batch = &mut ctx.accounts.auction_batch.load_mut()?;
-    
-    // Validate state
-    require!(
-        batch.state == AuctionState::Open as u8,
-        AuctionError::AuctionNotOpen
-    );
-    
-    // Check capacity
-    require!(
-        batch.order_count < 32,
-        AuctionError::BatchFull
-    );
-    
-    // Create order
-    let order = AuctionOrder {
-        order_id: ctx.accounts.order_account.key(),
-        price,
-        amount,
-        timestamp: Clock::get()?.unix_timestamp,
-        is_bid: if is_bid { 1 } else { 0 },
-        _padding: [0; 7],
-    };
-    
-    // Insert at next available slot
-    let idx = batch.order_count as usize;
-    batch.orders[idx] = order;
-    batch.order_count += 1;
-    
-    emit!(OrderSubmitted {
-        batch_id: batch.batch_id,
-        order_id: order.order_id,
-        price,
-        amount,
-        is_bid,
-        timestamp: order.timestamp,
-    });
-    
-    Ok(())
+#[repr(C)]  // 24 bytes total
+pub struct BatchConfig {
+    pub enabled: u8,                       // Toggle batch mode
+    pub _padding1: [u8; 3],                // Alignment
+    pub max_batch_size: u32,               // Max orders per batch (default: 100)
+    pub batch_timeout_seconds: u32,        // Batch window (default: 300s)
+    pub min_batch_size: u32,               // Minimum to trigger (default: 5)
+    pub price_improvement_threshold: u16,  // Min improvement in bps (default: 5)
+    pub _padding2: [u8; 6],                // Alignment
+}
+
+#[repr(C)]  // 1640 bytes total
+pub struct BatchInfo {
+    pub batch_id: u64,                     // Batch identifier
+    pub order_count: u32,                  // Orders in this batch
+    pub _padding1: [u8; 4],                // Alignment
+    pub total_volume: u64,                 // Aggregate volume
+    pub created_at: i64,                   // Batch creation time
+    pub expires_at: i64,                   // Batch expiry time
+    pub order_ids: [Pubkey; 32],           // Order pubkeys (max 32)
 }
 ```
 
-### 6.2 Batch Locking
-
-```rust
-pub fn lock_auction_batch(ctx: Context<LockAuctionBatch>) -> Result<()> {
-    let batch = &mut ctx.accounts.auction_batch.load_mut()?;
-    let clock = Clock::get()?;
-    
-    require!(
-        batch.state == AuctionState::Open as u8,
-        AuctionError::InvalidState
-    );
-    
-    // Can lock after end_time or by authority
-    let is_past_end_time = clock.unix_timestamp >= batch.end_time;
-    let is_authority = ctx.accounts.authority.key() == batch.market;
-    
-    require!(
-        is_past_end_time || is_authority,
-        AuctionError::CannotLockYet
-    );
-    
-    batch.state = AuctionState::Locked as u8;
-    
-    emit!(BatchLocked {
-        batch_id: batch.batch_id,
-        order_count: batch.order_count,
-        timestamp: clock.unix_timestamp,
-    });
-    
-    Ok(())
-}
-```
-
-### 6.3 Auction Resolution
-
-```rust
-pub fn resolve_auction(ctx: Context<ResolveAuction>) -> Result<()> {
-    let batch = &mut ctx.accounts.auction_batch.load_mut()?;
-    
-    // Re-entrancy guard
-    require!(batch.locked == 0, AuctionError::ReentrantCall);
-    batch.locked = 1;
-    
-    require!(
-        batch.state == AuctionState::Locked as u8,
-        AuctionError::AuctionNotReady
-    );
-    
-    // Calculate clearing price
-    let order_slice = &batch.orders[0..batch.order_count as usize];
-    let (clearing_price, clearing_volume) = calculate_clearing_price(order_slice);
-    
-    // Update batch state
-    batch.clearing_price = clearing_price;
-    batch.clearing_volume = clearing_volume;
-    batch.state = AuctionState::Cleared as u8;
-    batch.locked = 0;
-    
-    emit!(AuctionCleared {
-        batch_id: batch.batch_id,
-        clearing_price,
-        clearing_volume,
-        timestamp: Clock::get()?.unix_timestamp,
-    });
-    
-    Ok(())
-}
-```
+When enabled, orders accumulate in `BatchInfo` (up to 32 order pubkeys) and are cleared together, providing fairer price discovery for lower-frequency markets.
 
 ---
 
-## 7. Settlement Process
+## 7. Security Considerations
 
-### 7.1 Settlement Flow
+### 7.1 Re-Entrancy Guard
+The `Market.locked` field prevents re-entrant calls during settlement.
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       AUCTION SETTLEMENT                                │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  For each order at MCP (batch.clearing_price):                         │
-│                                                                         │
-│  1. Calculate Pro-Rata Fill:                                           │
-│     fill_amount = order.amount × (clearing_volume / total_at_price)    │
-│                                                                         │
-│  2. Execute Trade (atomic CPI):                                        │
-│     ┌─────────────────────────────────────────────────────────────┐    │
-│     │  IF is_bid (buyer):                                         │    │
-│     │    • Transfer (fill_amount × price) currency → seller       │    │
-│     │    • Transfer fill_amount energy → buyer                    │    │
-│     │  ELSE (seller):                                             │    │
-│     │    • (Handled in matching buyer settlement)                 │    │
-│     └─────────────────────────────────────────────────────────────┘    │
-│                                                                         │
-│  3. Update Order Status:                                               │
-│     order.filled_amount += fill_amount                                 │
-│     IF order.filled_amount == order.amount:                            │
-│       order.status = Completed                                         │
-│     ELSE:                                                              │
-│       order.status = PartiallyFilled                                   │
-│                                                                         │
-│  4. Emit Settlement Event                                              │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+### 7.2 Governance Gate
+All trading instructions check `governance_config.is_operational()` — the market authority can halt trading via maintenance mode.
 
-### 7.2 Batch Settlement Instruction
+### 7.3 ERC Validation
+Sell orders optionally require a valid, non-expired Energy Renewable Certificate to prove energy provenance.
 
-```rust
-pub fn settle_auction_order(
-    ctx: Context<SettleAuctionOrder>,
-    order_index: u8,
-) -> Result<()> {
-    let batch = ctx.accounts.auction_batch.load()?;
-    
-    require!(
-        batch.state == AuctionState::Cleared as u8,
-        AuctionError::NotCleared
-    );
-    
-    require!(
-        (order_index as u32) < batch.order_count,
-        AuctionError::InvalidOrderIndex
-    );
-    
-    let order = batch.orders[order_index as usize];
-    let clearing_price = batch.clearing_price;
-    
-    // Check if order qualifies for settlement
-    let qualifies = if order.is_bid == 1 {
-        order.price >= clearing_price
-    } else {
-        order.price <= clearing_price
-    };
-    
-    require!(qualifies, AuctionError::OrderDoesNotQualify);
-    
-    // Calculate fill amount (pro-rata)
-    let total_at_price = calculate_total_at_price(&batch, clearing_price, order.is_bid);
-    let fill_amount = calculate_fill_amount(
-        order.amount,
-        batch.clearing_volume,
-        total_at_price,
-    );
-    
-    // Execute token transfers via CPI
-    // ... (token transfer logic)
-    
-    emit!(OrderSettled {
-        batch_id: batch.batch_id,
-        order_id: order.order_id,
-        fill_amount,
-        clearing_price,
-        timestamp: Clock::get()?.unix_timestamp,
-    });
-    
-    Ok(())
-}
-```
+### 7.4 Order Authorization
+Only the order owner (buyer for buy orders, seller for sell orders) can cancel their order.
+
+### 7.5 Atomic Settlement
+The 3-legged token transfer in `execute_atomic_settlement` ensures no partial states — either the full trade settles or nothing happens.
 
 ---
 
-## 8. Integration with Grid Operations
+## 8. References
 
-### 8.1 15-Minute Market Windows
-
-Energy markets typically operate on 15-minute intervals aligned with grid dispatch:
-
-```rust
-const BATCH_DURATION_SECONDS: i64 = 900; // 15 minutes
-
-pub fn create_next_batch(
-    ctx: Context<CreateBatch>,
-) -> Result<()> {
-    let clock = Clock::get()?;
-    
-    // Align to 15-minute boundaries
-    let current_period = clock.unix_timestamp / BATCH_DURATION_SECONDS;
-    let start_time = current_period * BATCH_DURATION_SECONDS;
-    let end_time = start_time + BATCH_DURATION_SECONDS;
-    
-    let batch = &mut ctx.accounts.auction_batch.load_init()?;
-    batch.batch_id = start_time as u64;
-    batch.start_time = start_time;
-    batch.end_time = end_time;
-    batch.state = AuctionState::Open as u8;
-    // ... initialize other fields
-    
-    Ok(())
-}
-```
-
-### 8.2 Crank-Based Resolution
-
-A permissionless "crank" can trigger auction resolution after the batch window closes:
-
-```typescript
-async function crankAuction(batchAddress: PublicKey) {
-  const batch = await program.account.auctionBatch.fetch(batchAddress);
-  const now = Date.now() / 1000;
-  
-  if (batch.state === AuctionState.Open && now >= batch.endTime) {
-    // Lock the batch
-    await program.methods.lockAuctionBatch().accounts({ ... }).rpc();
-  }
-  
-  if (batch.state === AuctionState.Locked) {
-    // Resolve the auction
-    await program.methods.resolveAuction().accounts({ ... }).rpc();
-  }
-  
-  if (batch.state === AuctionState.Cleared) {
-    // Settle all qualifying orders
-    for (let i = 0; i < batch.orderCount; i++) {
-      await program.methods.settleAuctionOrder(i).accounts({ ... }).rpc();
-    }
-  }
-}
-```
-
----
-
-## 9. Security Analysis
-
-### 9.1 Order Manipulation
-
-**Threat:** Attacker submits many orders to manipulate clearing price.
-
-**Mitigation:**
-- Account rent cost (~0.00089 SOL per order PDA) makes spam expensive
-- Order cancellation blocked after batch lock
-- Maximum 32 orders per batch limits attack surface
-
-### 9.2 Front-Running
-
-**Threat:** Observer sees large order and front-runs.
-
-**Mitigation:**
-- All orders at MCP get same price (no advantage to being first)
-- Pro-rata allocation ensures fair distribution
-- Optional: Commit-reveal scheme for order submission
-
-### 9.3 Re-entrancy
-
-**Threat:** Malicious callback during settlement re-enters auction.
-
-**Mitigation:**
-```rust
-// Guard at start of sensitive operations
-require!(batch.locked == 0, AuctionError::ReentrantCall);
-batch.locked = 1;
-// ... execute operations
-batch.locked = 0;
-```
-
----
-
-## 10. Compute Unit Profile
-
-| Operation | CU Cost | Notes |
-|-----------|---------|-------|
-| `submit_auction_order` | ~8,000 | Fixed array insert |
-| `lock_auction_batch` | ~5,000 | State transition only |
-| `resolve_auction` | ~25,000 | Sorting + sweep (32 orders) |
-| `settle_auction_order` | ~40,000 | Token CPI overhead |
-
-**Total Batch Settlement:** ~25,000 + (32 × 40,000) = ~1.3M CU (requires extended compute)
-
----
-
-## 11. Research Contributions
-
-1. **First Solana implementation** of periodic auction for energy markets
-2. **Zero-copy batch storage** enabling efficient on-chain order management
-3. **Energy grid integration** with 15-minute market windows
-4. **Pro-rata allocation** algorithm for fair partial fills
-
----
-
-## 12. References
-
-1. Budish, E., Cramton, P., & Shim, J. (2015). "The High-Frequency Trading Arms Race"
-2. PJM Interconnection. "Energy Market Operations"
-3. Solana Cookbook. "Zero-Copy Deserialization"
+1. Friedman, D. (1993). "The Double Auction Market: Institutions, Theories, and Evidence"
+2. Gode, D.K. & Sunder, S. (1993). "Allocative Efficiency of Markets with Zero-Intelligence Traders"
+3. Solana. "Zero-Copy Deserialization for Large Accounts"

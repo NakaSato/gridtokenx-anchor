@@ -23,7 +23,6 @@ This directory contains detailed technical deep dives into each component of the
 | [AMM & Bonding Curves](./amm-bonding-curves.md) | Automated Market Maker mathematics and energy-specific curves | ⭐⭐⭐ |
 | [Periodic Auction System](./periodic-auction.md) | Batch order matching and uniform price clearing | ⭐⭐⭐ |
 | [Confidential Trading](./confidential-trading.md) | Zero-knowledge proofs and ElGamal encryption | ⭐⭐⭐⭐ |
-| [Dynamic Pricing Engine](./dynamic-pricing.md) | Time-of-use, supply/demand, and congestion pricing | ⭐⭐⭐ |
 | [Carbon Credit System](./carbon-credits.md) | REC tokenization and carbon offset tracking | ⭐⭐ |
 | [Cross-Chain Bridge](./cross-chain-bridge.md) | Wormhole integration for multi-chain energy trading | ⭐⭐⭐⭐ |
 | [Oracle Security Model](./oracle-security.md) | Byzantine fault tolerance and data validation | ⭐⭐⭐ |
@@ -87,7 +86,6 @@ This directory contains detailed technical deep dives into each component of the
 ### For Developers
 1. Start with [Settlement Architecture](./settlement-architecture.md) to understand the core trading flow
 2. Continue with [AMM & Bonding Curves](./amm-bonding-curves.md) for instant liquidity mechanics
-3. Review [Dynamic Pricing Engine](./dynamic-pricing.md) for price determination
 
 ### For Security Auditors
 1. Begin with [Oracle Security Model](./oracle-security.md) for the trust model

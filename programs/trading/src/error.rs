@@ -42,4 +42,8 @@ pub enum TradingError {
     MaintenanceMode,
     #[msg("Arithmetic overflow")]
     Overflow,
+    #[msg("Price below market minimum")]
+    PriceBelowMinimum,
+    #[msg("Price above market maximum")]
+    PriceAboveMaximum,
 }

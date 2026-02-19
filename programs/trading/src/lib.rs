@@ -29,6 +29,8 @@ pub mod trading {
         market.created_at = Clock::get()?.unix_timestamp;
         market.clearing_enabled = 1;
         market.market_fee_bps = 25;
+        market.min_price_per_kwh = 1;
+        market.max_price_per_kwh = 0;
 
         market.batch_config = BatchConfig {
             enabled: 0,
@@ -66,6 +68,14 @@ pub mod trading {
         require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         require!(energy_amount > 0, TradingError::InvalidAmount);
         require!(price_per_kwh > 0, TradingError::InvalidPrice);
+
+        {
+            let market_ref = ctx.accounts.market.load()?;
+            require!(price_per_kwh >= market_ref.min_price_per_kwh, TradingError::PriceBelowMinimum);
+            if market_ref.max_price_per_kwh > 0 {
+                require!(price_per_kwh <= market_ref.max_price_per_kwh, TradingError::PriceAboveMaximum);
+            }
+        }
 
         if let Some(erc) = &ctx.accounts.erc_certificate {
             let clock = Clock::get()?;
@@ -112,6 +122,14 @@ pub mod trading {
         require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         require!(energy_amount > 0, TradingError::InvalidAmount);
         require!(max_price_per_kwh > 0, TradingError::InvalidPrice);
+
+        {
+            let market_ref = ctx.accounts.market.load()?;
+            require!(max_price_per_kwh >= market_ref.min_price_per_kwh, TradingError::PriceBelowMinimum);
+            if market_ref.max_price_per_kwh > 0 {
+                require!(max_price_per_kwh <= market_ref.max_price_per_kwh, TradingError::PriceAboveMaximum);
+            }
+        }
 
         let mut market = ctx.accounts.market.load_mut()?;
         let mut order = ctx.accounts.order.load_init()?;
@@ -314,16 +332,28 @@ pub mod trading {
         Ok(())
     }
 
-    pub fn update_market_params(ctx: Context<UpdateMarketParamsContext>, fee_bps: u16, clearing: bool) -> Result<()> {
+    pub fn update_market_params(
+        ctx: Context<UpdateMarketParamsContext>,
+        fee_bps: u16,
+        clearing: bool,
+        min_price: u64,
+        max_price: u64,
+    ) -> Result<()> {
         require!(ctx.accounts.governance_config.is_operational(), TradingError::MaintenanceMode);
         let mut market = ctx.accounts.market.load_mut()?;
         require!(ctx.accounts.authority.key() == market.authority, TradingError::UnauthorizedAuthority);
         market.market_fee_bps = fee_bps;
         market.clearing_enabled = if clearing { 1 } else { 0 };
+        if min_price > 0 {
+            market.min_price_per_kwh = min_price;
+        }
+        market.max_price_per_kwh = max_price;
         emit!(crate::events::MarketParamsUpdated {
             authority: ctx.accounts.authority.key(),
             market_fee_bps: fee_bps,
             clearing_enabled: clearing,
+            min_price_per_kwh: market.min_price_per_kwh,
+            max_price_per_kwh: market.max_price_per_kwh,
             timestamp: Clock::get()?.unix_timestamp,
         });
         Ok(())

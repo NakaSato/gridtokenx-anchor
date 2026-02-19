@@ -8,11 +8,10 @@
 > - [AMM & Bonding Curves](./deep-dive/amm-bonding-curves.md) - Mathematical foundations for energy-specific AMMs
 > - [Periodic Auction System](./deep-dive/periodic-auction.md) - Batch clearing and uniform price discovery
 > - [Confidential Trading](./deep-dive/confidential-trading.md) - Privacy-preserving energy transactions
-> - [Dynamic Pricing Engine](./deep-dive/dynamic-pricing.md) - Time-of-use and demand-responsive pricing
 > - [Cross-Chain Bridge](./deep-dive/cross-chain-bridge.md) - Wormhole integration for multi-chain trading
 > - [Settlement Architecture](./deep-dive/settlement-architecture.md) - Atomic settlement and payment finality
 
-The **Trading** program implements a sophisticated multi-modal energy marketplace that combines traditional order book mechanics with automated market maker (AMM) liquidity pools, advanced pricing algorithms, and cross-chain settlement capabilities. This program represents a novel contribution to decentralized energy markets by integrating ERC validation, dynamic pricing, and privacy-preserving trading mechanisms.
+The **Trading** program implements a sophisticated multi-modal energy marketplace that combines traditional order book mechanics with automated market maker (AMM) liquidity pools, batch clearing, and cross-chain settlement capabilities. This program represents a novel contribution to decentralized energy markets by integrating ERC validation and privacy-preserving trading mechanisms.
 
 ---
 
@@ -54,7 +53,7 @@ The Trading program uniquely supports **three concurrent trading mechanisms**:
 
 - **Governance Program**: Validates ERC certificates during sell order creation (prevents uncertified energy sales).
 - **Registry Program**: Verifies user and meter validity (KYC/AML compliance layer).
-- **Pricing Module**: Dynamic time-of-use and demand-responsive pricing.
+- **Pricing Module**: Market-driven price discovery through the CDA order book.
 - **Oracle Services**: Real-time grid congestion and supply/demand data ingestion.
 
 ---
@@ -291,35 +290,6 @@ Aggregates multiple matches into a single transaction.
 
 ## 4. Advanced Features
 
-### 4.1 Dynamic Pricing Module
-
-#### `PricingConfig`
-Implements **Time-of-Use (TOU)** and **demand-responsive pricing**.
-
-| Feature | Implementation |
-|---------|----------------|
-| **TOU Tiers** | Up to 6 configurable time periods (Off-Peak, Mid-Peak, On-Peak, Super-Peak). |
-| **Seasonal Adjustments** | 4 multipliers for Winter/Spring/Summer/Autumn. |
-| **Supply/Demand Sensitivity** | Adjusts price based on `current_supply / current_demand` ratio. |
-| **Grid Congestion** | Multiplier >100 indicates network stress (increases price). |
-
-**Pricing Formula:**
-```
-final_price = base_price 
-            × tou_multiplier 
-            × seasonal_multiplier 
-            × (1 + congestion_factor/100 - 1)
-            × (1 + supply_demand_sensitivity × (demand - supply) / supply)
-```
-
-Bounded by: `min_price ≤ final_price ≤ max_price`
-
-#### `update_market_data`
-Oracle-called instruction to update pricing inputs.
-
-- **Parameters:** `supply`, `demand`, `congestion_factor`
-- **Trigger:** Price recalculation and `PriceUpdated` event.
-
 ### 4.2 Privacy-Preserving Trading (Confidential Transfers)
 
 #### Cryptographic Primitives
@@ -439,9 +409,6 @@ This enables **risk-segmented liquidity pools**.
 
 ### 8.3 Atomic Multi-Party Settlement
 **Innovation:** Settles 6-way transactions (buyer, seller, fee collector, grid operator, 2 escrows) in a single atomic instruction. Demonstrates Solana's parallel execution advantages over sequential EVM chains.
-
-### 8.4 Time-of-Use On-Chain
-**Advancement:** Brings utility-grade **TOU pricing** (traditionally centralized databases) to a decentralized system. Enables dynamic pricing responsive to real-time grid conditions.
 
 ---
 

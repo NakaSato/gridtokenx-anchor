@@ -6,7 +6,6 @@
 
 > **Deep Dive Documentation:**
 > - [Oracle Security Model](./deep-dive/oracle-security.md) - Byzantine fault tolerance, data validation, anomaly detection
-> - [Dynamic Pricing Engine](./deep-dive/dynamic-pricing.md) - Real-time price determination
 
 The **Oracle Program** is the **trusted data ingestion layer** for the GridTokenX decentralized energy trading platform. It serves as the critical bridge between **Advanced Metering Infrastructure (AMI)** systems and the Solana blockchain, providing cryptographic attestation for real-world energy production and consumption measurements. This program implements a **permissioned oracle architecture** with multi-layered validation to ensure data integrity in a high-stakes financial settlement environment.
 
