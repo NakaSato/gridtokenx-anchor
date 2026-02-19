@@ -64,48 +64,8 @@ pub struct BatchExecuted {
 }
 
 #[event]
-pub struct CarbonCreditTransferred {
-    pub sender: Pubkey,
-    pub receiver: Pubkey,
-    pub amount: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct AuctionOrderSubmitted {
-    pub batch_id: u64,
-    pub order_id: Pubkey,
-    pub price: u64,
-    pub amount: u64,
-    pub is_bid: bool,
-}
-
-#[event]
-pub struct AuctionResolved {
-    pub batch_id: u64,
-    pub clearing_price: u64,
-    pub clearing_volume: u64,
-}
-
-#[event]
-pub struct AuctionSettled {
-    pub batch_id: u64,
-    pub buyer: Pubkey,
-    pub seller: Pubkey,
-    pub amount: u64,
-    pub price: u64,
-}
-
-#[event]
 pub struct MaintenanceModeChanged {
     pub authority: Pubkey,
     pub maintenance_mode: bool,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct ConfidentialOrderCreated {
-    pub user: Pubkey,
-    pub order_id: Pubkey,
     pub timestamp: i64,
 }

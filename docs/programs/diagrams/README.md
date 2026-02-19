@@ -11,6 +11,7 @@ This directory contains comprehensive visual documentation for the GridTokenX de
 
 | Diagram | Description | File |
 |---------|-------------|------|
+| **Protocol Application** | Complete protocol diagrams with Mermaid | [protocol-application-diagram.md](./protocol-application-diagram.md) |
 | System Architecture | High-level platform overview | [architecture.md](./architecture.md) |
 | Sequence Diagrams | Transaction flow sequences | [sequences.md](./sequences.md) |
 | Entity Relationship | Account data models | [entity-relationship.md](./entity-relationship.md) |
