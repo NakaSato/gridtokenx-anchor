@@ -40,7 +40,7 @@ pub fn handler(ctx: Context<InitializePoa>) -> Result<()> {
     poa_config.delegation_enabled = false;
     poa_config.oracle_authority = None;
     poa_config.min_oracle_confidence = 80; // 80% confidence threshold
-    poa_config.allow_certificate_transfers = false;
+    poa_config.allow_certificate_transfers = true;
     
     // Tracking
     poa_config.total_ercs_issued = 0;

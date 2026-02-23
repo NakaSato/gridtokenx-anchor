@@ -26,13 +26,14 @@ pub struct Market {
     pub has_current_batch: u8,
     pub _padding_batch: [u8; 7],
 
-    // === MARKET DEPTH ===
-    pub buy_side_depth: [PriceLevel; 20],   // 480
-    pub sell_side_depth: [PriceLevel; 20],  // 480
-    pub buy_side_depth_count: u8,
-    pub sell_side_depth_count: u8,
-    pub price_history_count: u8,
-    pub _padding_depth: [u8; 5],
+    // === MARKET DEPTH (Moved to ZoneMarket) ===
+    pub _padding_depth_1: [u8; 512],
+    pub _padding_depth_2: [u8; 256],
+    pub _padding_depth_3: [u8; 128],
+    pub _padding_depth_4: [u8; 64],
+    pub _padding_depth_5: [u8; 6],          // 512+256+128+64+6 = 966
+    pub price_history_count: u8,            // 1
+    pub _padding_history_align: [u8; 1],    // 1 (brings up to 968 total bytes)
 
     // === PRICE DISCOVERY ===
     pub price_history: [PricePoint; 24],    // 576
@@ -52,6 +53,7 @@ pub struct BatchConfig {
     pub _padding2: [u8; 6],             // 1+3+4+4+4+2+6 = 24. 24 is 8x3. Good.
 }
 
+/// Batch information for grouped order execution
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, InitSpace, bytemuck::Zeroable, bytemuck::Pod)]
 #[repr(C)]
 pub struct BatchInfo {
@@ -62,6 +64,20 @@ pub struct BatchInfo {
     pub created_at: i64,
     pub expires_at: i64,
     pub order_ids: [Pubkey; 32],      // Reduced from 50 to 32 for bytemuck::Pod support
+}
+
+impl Default for BatchInfo {
+    fn default() -> Self {
+        Self {
+            batch_id: 0,
+            order_count: 0,
+            _padding1: [0; 4],
+            total_volume: 0,
+            created_at: 0,
+            expires_at: 0,
+            order_ids: [Pubkey::default(); 32],
+        }
+    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, InitSpace, Default, bytemuck::Zeroable, bytemuck::Pod)]

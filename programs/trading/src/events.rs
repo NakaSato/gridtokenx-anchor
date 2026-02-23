@@ -66,8 +66,56 @@ pub struct BatchExecuted {
 }
 
 #[event]
+pub struct OrderAddedToBatch {
+    pub order_id: Pubkey,
+    pub batch_id: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct BatchCancelled {
+    pub batch_id: u64,
+    pub authority: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
 pub struct MaintenanceModeChanged {
     pub authority: Pubkey,
     pub maintenance_mode: bool,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LimitOrderSubmitted {
+    pub order_id: Pubkey,
+    pub side: u8,  // 0 = Buy, 1 = Sell
+    pub price: u64,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct MarketOrderSubmitted {
+    pub user: Pubkey,
+    pub side: u8,  // 0 = Buy, 1 = Sell
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct DepthUpdated {
+    pub buy_levels: u8,
+    pub sell_levels: u8,
+    pub best_bid: u64,
+    pub best_ask: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct PriceHistoryUpdated {
+    pub trade_price: u64,
+    pub trade_volume: u64,
+    pub vwap: u64,
     pub timestamp: i64,
 }

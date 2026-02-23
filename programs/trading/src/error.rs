@@ -46,4 +46,12 @@ pub enum TradingError {
     PriceBelowMinimum,
     #[msg("Price above market maximum")]
     PriceAboveMaximum,
+    #[msg("Insufficient liquidity for market order")]
+    InsufficientLiquidity,
+    #[msg("Invalid order side")]
+    InvalidOrderSide,
+    #[msg("Order has expired")]
+    OrderExpired,
+    #[msg("Slippage exceeded: Price outside allowed bounds")]
+    SlippageExceeded,
 }

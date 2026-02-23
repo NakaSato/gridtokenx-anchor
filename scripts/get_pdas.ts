@@ -1,8 +1,8 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 
 async function main() {
+    // Only needed to resolve workspace programs
     const provider = anchor.AnchorProvider.env();
     anchor.setProvider(provider);
 
@@ -10,19 +10,16 @@ async function main() {
     const tradingProgram = anchor.workspace.Trading;
     const energyTokenProgram = anchor.workspace.EnergyToken;
 
-    // Derive Registry PDA
     const [registryPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("registry")],
         registryProgram.programId
     );
 
-    // Derive Market PDA
     const [marketPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("market")],
         tradingProgram.programId
     );
 
-    // Derive Energy Token Mint PDA (Token-2022)
     const [mintPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("mint_2022")],
         energyTokenProgram.programId

@@ -182,6 +182,57 @@ match_orders(match_amount: u64)
 
 ---
 
+##### `submit_limit_order`
+Submit a CDA (Continuous Double Auction) limit order to the order book.
+
+```typescript
+submit_limit_order(
+  order_id: u64,    // Unique order identifier
+  side: u8,         // 0 = Buy, 1 = Sell
+  amount: u64,      // Energy amount in milli-kWh
+  price: u64        // Price per kWh (micro-units)
+)
+```
+
+**Accounts:**
+| Name | Type | Description |
+|------|------|-------------|
+| `market` | `Account<Market>` | Trading market (writable) |
+| `order` | `Account<Order>` | New order account (writable) |
+| `authority` | `Signer` | Order owner (writable) |
+| `system_program` | `Program` | System program |
+
+**Events:**
+- `BuyOrderCreated` (if side = 0)
+- `SellOrderCreated` (if side = 1)
+- `LimitOrderSubmitted`
+
+---
+
+##### `submit_market_order`
+Submit a CDA market order for immediate execution at best available price.
+
+```typescript
+submit_market_order(
+  side: u8,      // 0 = Buy (takes asks), 1 = Sell (takes bids)
+  amount: u64    // Energy amount in milli-kWh
+)
+```
+
+**Accounts:**
+| Name | Type | Description |
+|------|------|-------------|
+| `market` | `Account<Market>` | Trading market |
+| `authority` | `Signer` | Order owner (writable) |
+
+**Events:**
+- `MarketOrderSubmitted`
+
+**Errors:**
+- `InsufficientLiquidity` - No orders on opposite side
+
+---
+
 #### Settlement
 
 ##### `execute_atomic_settlement`
@@ -902,6 +953,8 @@ pub struct CarbonMarketplace {
 | `OrderCancelled` | Order cancelled |
 | `OrderMatched` | Orders matched |
 | `BatchExecuted` | Batch settlement completed |
+| `LimitOrderSubmitted` | CDA limit order submitted |
+| `MarketOrderSubmitted` | CDA market order submitted |
 | `AuctionOrderSubmitted` | Order submitted to auction |
 | `AuctionResolved` | Auction clearing price calculated |
 | `AuctionSettled` | Auction orders settled |
@@ -938,6 +991,12 @@ pub struct CarbonMarketplace {
 | 6007 | `WrappedTokenNotApproved` | Wrapped token not approved for trading |
 | 6008 | `UnauthorizedAuthority` | Unauthorized bridge authority |
 | 6009 | `InvalidWormholeProgram` | Invalid Wormhole program |
+| 6010 | `BatchProcessingDisabled` | Batch processing is disabled |
+| 6011 | `BatchSizeExceeded` | Batch size exceeded |
+| 6012 | `ReentrancyLock` | Re-entrancy guard lock |
+| 6013 | `EmptyBatch` | Batch is empty |
+| 6014 | `BatchTooLarge` | Batch size exceeds maximum allowed |
+| 6015 | `InsufficientLiquidity` | Insufficient liquidity for market order |
 
 ---
 

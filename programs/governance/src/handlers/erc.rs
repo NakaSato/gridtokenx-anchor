@@ -72,7 +72,7 @@ pub fn issue(
     erc_certificate.id_len = id_slice.len() as u8;
 
     erc_certificate.authority = ctx.accounts.authority.key();
-    erc_certificate.owner = ctx.accounts.authority.key(); // Initial owner is the authority
+    erc_certificate.owner = Pubkey::new_from_array(meter.owner); // Use meter owner instead of authority
     erc_certificate.energy_amount = energy_amount;
 
     let mut source_bytes = [0u8; 64];
