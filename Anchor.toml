@@ -6,13 +6,13 @@ resolution = false
 skip-lint = false
 
 [programs.localnet]
-blockbench = "B7Detx5TMRQNzVCgdd9Rp5YnN9cAtC7KeMBrzdZZsd4E"
-energy_token = "GzEcWzkb73zcgvgoNRxEiuuT7CEAbzbHcAgjNV25pbLV"
-governance = "DuLg6buhqs78SRj1qDp5vSyGrSfG9FF4nPKm8Tn8hSJL"
-oracle = "BRctXUydec2wrP4k2NpqZZT2sVnMfGqpv9bmWn5mTWh9"
-registry = "EmiSgo85FVUYWXPtScCMQZBpq9ecZ4jhveg7E7T7F75z"
-tpc_benchmark = "DN3XToyEqdvLxXchQZufQj5eXZrxE1yfxsDVDPUrXemD"
-trading = "3LXbBJ7sWYYrveHvLoLtwuVYbYd27HPcbpF1DQ8rK1Bo"
+blockbench = "J8qT5bb6mSAwr9J3S2Sk27VUXzcVuYEDmXMTpw9DGG5B"
+energy_token = "ExZKhghptUk675rjxgHPjJZjczgWWRRwzUTQnqjPTLno"
+governance = "DksRNiZsEZ3zN8n8ZWfukFqi3z74e5865oZ8wFk38p4X"
+oracle = "Ad5crRxCcvKFAShAMYtRAD9XKak1cwH1FCE6TrpUA9i2"
+registry = "DVoD5K5YRuXXF54a3b6r282jRD8RmtVHGfpw55DHFVDe"
+tpc_benchmark = "7LqR6fBtaj66SdsCUCoUveazBHCtRtBvPxteWXu7o2im"
+trading = "3iFReh5tvdWkLt7eJcvGKsST7wcwZsSHk3z3xCfUwHLw"
 
 [registry]
 url = "https://api.apr.dev"
@@ -25,6 +25,7 @@ wallet = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anc
 bootstrap = "npx ts-node scripts/bootstrap-env.ts"
 benchmark-tpcc = "npx ts-node tests/performance/benchmarks/tpc-c-anchor.ts"
 init-governance = "npx ts-node scripts/init-governance.ts"
+init-poa = "npx ts-node scripts/init-poa.ts"
 init-tpcc-schema = "npx ts-node scripts/bootstrap.ts"
 relay = "npx ts-node scripts/solana-relay.ts"
 test-all = "npx tsx scripts/run-all-tests.ts"

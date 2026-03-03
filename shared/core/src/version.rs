@@ -3,7 +3,6 @@ use anchor_lang::prelude::*;
 /// Program version tracking for upgradeable programs
 /// This account stores version information and migration state
 #[account]
-#[derive(Default)]
 pub struct ProgramVersion {
     /// Current version number (incremented on each upgrade)
     pub version: u16,
@@ -19,6 +18,18 @@ pub struct ProgramVersion {
     
     /// Reserved for future use
     pub _reserved: [u8; 64],
+}
+
+impl Default for ProgramVersion {
+    fn default() -> Self {
+        Self {
+            version: 0,
+            last_upgrade: 0,
+            upgrade_authority: Pubkey::default(),
+            is_migrating: false,
+            _reserved: [0u8; 64],
+        }
+    }
 }
 
 impl ProgramVersion {

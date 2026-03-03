@@ -86,6 +86,28 @@ async function main() {
         }
     }
 
+    // 4. Initialize PoA (Governance)
+    const governanceProgram = anchor.workspace.Governance;
+    const [poaConfigPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("poa_config")],
+        governanceProgram.programId
+    );
+
+    try {
+        await governanceProgram.methods.initializePoa().accounts({
+            poaConfig: poaConfigPda,
+            authority: authority.publicKey,
+            systemProgram: SystemProgram.programId,
+        }).rpc();
+        console.log("✅ PoA Config initialized.");
+    } catch (e: any) {
+        if (e.message.includes("already in use")) {
+            console.log("ℹ️ PoA Config already initialized.");
+        } else {
+            console.warn("⚠️ PoA Config initialization error:", e.message);
+        }
+    }
+
     console.log("🎯 Blockchain bootstrap completed successfully.");
 }
 

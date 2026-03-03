@@ -17,10 +17,7 @@ pub struct OffchainOrderPayload {
 #[derive(Accounts)]
 #[instruction(buyer_payload: OffchainOrderPayload, seller_payload: OffchainOrderPayload)]
 pub struct SettleOffchainMatchContext<'info> {
-    #[account(mut)]
     pub market: AccountLoader<'info, Market>,
-    
-    #[account(mut)]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
     
     // Nullifiers to track filled amounts and prevent replay
@@ -67,6 +64,20 @@ pub struct SettleOffchainMatchContext<'info> {
     #[account(seeds = [b"market_authority"], bump)]
     pub market_authority: AccountInfo<'info>,
 
+    #[account(
+        mut,
+        seeds = [b"market_shard", market.key().as_ref(), &[get_shard_id(&payer.key(), market.load()?.num_shards)]],
+        bump
+    )]
+    pub market_shard: Account<'info, MarketShard>,
+
+    #[account(
+        mut,
+        seeds = [b"zone_shard", zone_market.key().as_ref(), &[get_shard_id(&payer.key(), zone_market.load()?.num_shards)]],
+        bump
+    )]
+    pub zone_shard: Account<'info, ZoneMarketShard>,
+
     #[account(mut)]
     pub payer: Signer<'info>,
 
@@ -105,8 +116,10 @@ pub fn settle_offchain_match(
     require!(buyer_payload.expires_at == 0 || clock.unix_timestamp < buyer_payload.expires_at, TradingError::OrderExpired);
     require!(seller_payload.expires_at == 0 || clock.unix_timestamp < seller_payload.expires_at, TradingError::OrderExpired);
 
-    let mut market = ctx.accounts.market.load_mut()?;
-    let mut zone_market = ctx.accounts.zone_market.load_mut()?;
+    let market = ctx.accounts.market.load()?;
+    let _zone_market = ctx.accounts.zone_market.load()?;
+    let market_shard = &mut ctx.accounts.market_shard;
+    let zone_shard = &mut ctx.accounts.zone_shard;
 
     // Check remaining amounts using Nullifiers
     let buyer_remaining = buyer_payload.energy_amount.saturating_sub(ctx.accounts.buyer_nullifier.filled_amount);
@@ -164,9 +177,7 @@ pub fn settle_offchain_match(
         ctx.accounts.energy_mint.decimals
     )?;
 
-    // Optionally handle wheeling and loss transfers similarly (omitted for brevity if 0, but usually needed)
-    
-    // Update State
+    // Update State (Sharded)
     ctx.accounts.buyer_nullifier.filled_amount += match_amount;
     ctx.accounts.buyer_nullifier.order_id = buyer_payload.order_id;
     ctx.accounts.buyer_nullifier.authority = buyer_payload.user;
@@ -177,11 +188,16 @@ pub fn settle_offchain_match(
     ctx.accounts.seller_nullifier.authority = seller_payload.user;
     ctx.accounts.seller_nullifier.bump = ctx.bumps.seller_nullifier;
 
-    market.total_volume += match_amount;
-    market.total_trades += 1;
-    zone_market.total_volume += match_amount;
-    zone_market.total_trades += 1;
-    zone_market.last_clearing_price = clearing_price;
+    // Update Shard instead of Market to avoid global lock contention
+    market_shard.volume_accumulated += match_amount;
+    market_shard.order_count += 1;
+    market_shard.last_update = clock.unix_timestamp;
+
+    // Zone Market Shard updates
+    zone_shard.volume_accumulated += match_amount;
+    zone_shard.trade_count += 1;
+    zone_shard.last_clearing_price = clearing_price;
+    zone_shard.last_update = clock.unix_timestamp;
 
     Ok(())
 }

@@ -37,7 +37,12 @@ pub struct Market {
 
     // === PRICE DISCOVERY ===
     pub price_history: [PricePoint; 24],    // 576
-    pub _padding_history: [u8; 0],          // Already aligned
+    
+    // === SHARDING METRICS (Aggregated from MarketShard) ===
+    pub total_volume_global: u64,           // Aggregated volume
+    pub total_trades_global: u32,           // Aggregated trades
+    pub num_shards: u8,                     // Number of active shards
+    pub _padding_sharding: [u8; 3],         // 8+4+1+3 = 16
 }
 
 /// Batch configuration for batch processing

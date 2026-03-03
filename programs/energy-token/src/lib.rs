@@ -36,7 +36,7 @@ macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
 
-declare_id!("GzEcWzkb73zcgvgoNRxEiuuT7CEAbzbHcAgjNV25pbLV");
+declare_id!("ExZKhghptUk675rjxgHPjJZjczgWWRRwzUTQnqjPTLno");
 
 pub const DECIMALS: u8 = 9;
 

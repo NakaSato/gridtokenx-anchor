@@ -7,7 +7,7 @@ pub mod instructions;
 
 // Re-export core types for submodules
 pub use crate::error::TradingError;
-pub use crate::state::{Market, Order, TradeRecord, OrderType, OrderStatus, PriceLevel, PricePoint, BatchConfig, BatchInfo, ZoneMarket, OrderNullifier};
+pub use crate::state::{Market, Order, TradeRecord, OrderType, OrderStatus, PriceLevel, PricePoint, BatchConfig, BatchInfo, ZoneMarket, OrderNullifier, MarketShard, ZoneMarketShard};
 pub use crate::instructions::*;
 pub use ::governance::{ErcCertificate, ErcStatus, PoAConfig};
 
@@ -20,7 +20,7 @@ pub struct MatchPair {
     pub price: u64,
 }
 
-declare_id!("3LXbBJ7sWYYrveHvLoLtwuVYbYd27HPcbpF1DQ8rK1Bo");
+declare_id!("3iFReh5tvdWkLt7eJcvGKsST7wcwZsSHk3z3xCfUwHLw");
 
 #[program]
 pub mod trading {
@@ -31,7 +31,7 @@ pub mod trading {
         Ok(())
     }
 
-    pub fn initialize_market(ctx: Context<InitializeMarketContext>) -> Result<()> {
+    pub fn initialize_market(ctx: Context<InitializeMarketContext>, num_shards: u8) -> Result<()> {
         let mut market = ctx.accounts.market.load_init()?;
         market.authority = ctx.accounts.authority.key();
         market.active_orders = 0;
@@ -42,6 +42,7 @@ pub mod trading {
         market.market_fee_bps = 25;
         market.min_price_per_kwh = 1;
         market.max_price_per_kwh = 0;
+        market.num_shards = num_shards;
 
         market.batch_config = BatchConfig {
             enabled: 0,
@@ -65,10 +66,11 @@ pub mod trading {
         Ok(())
     }
 
-    pub fn initialize_zone_market(ctx: Context<InitializeZoneMarketContext>, zone_id: u32) -> Result<()> {
+    pub fn initialize_zone_market(ctx: Context<InitializeZoneMarketContext>, zone_id: u32, num_shards: u8) -> Result<()> {
         let mut zone_market = ctx.accounts.zone_market.load_init()?;
         zone_market.market = ctx.accounts.market.key();
         zone_market.zone_id = zone_id;
+        zone_market.num_shards = num_shards;
         zone_market.total_volume = 0;
         zone_market.active_orders = 0;
         zone_market.buy_side_depth_count = 0;
@@ -79,6 +81,10 @@ pub mod trading {
         zone_market.sell_side_depth = [PriceLevel::default(); 20];
         
         Ok(())
+    }
+
+    pub fn initialize_zone_market_shard(ctx: Context<InitializeZoneMarketShardContext>, shard_id: u8) -> Result<()> {
+        instructions::initialize_zone_market_shard(ctx, shard_id)
     }
 
     pub fn create_sell_order(
@@ -797,6 +803,10 @@ pub mod trading {
         )
     }
 
+    pub fn initialize_market_shard(ctx: Context<InitializeMarketShardContext>, shard_id: u8) -> Result<()> {
+        instructions::initialize_market_shard(ctx, shard_id)
+    }
+
     // ============================================
     // Local Context Structs
     // ============================================
@@ -962,4 +972,5 @@ pub mod trading {
         #[account(mut)] pub authority: Signer<'info>,
         pub governance_config: Account<'info, PoAConfig>,
     }
+
 }
