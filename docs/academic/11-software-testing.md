@@ -81,17 +81,16 @@ The GridTokenX test suite is categorized into several domains, each targeting sp
 
 ### 3.1 Functional & Unit Testing
 
-Verifies the logic of individual smart contracts (programs) across all 7 core programs.
+Verifies the logic of individual smart contracts (programs) across all 6 core programs.
 
 | Program | Test Suites | Focus Areas | Test Count |
 |:--------|:------------|:------------|:-----------|
 | **Energy Token** | `energy-token.test.ts` | PDA minting authority, Token-2022 operations, REC validator management, burn mechanisms | 45+ |
 | **Oracle** | `oracle.test.ts` | Meter reading validation, anomaly detection, quality scoring, rate limiting, BFT consensus | 38+ |
 | **Registry** | `registry.test.ts` | User/meter registration, dual high-water marks, temporal monotonicity, settlement calculation | 52+ |
-| **Trading** | `trading.test.ts` | Order matching, VWAP calculation, AMM bonding curves, atomic settlement, ERC validation | 67+ |
+| **Trading** | `trading.test.ts` | Order matching, price calculation, atomic settlement, ERC validation | 67+ |
 | **Governance** | `governance.test.ts` | ERC lifecycle, PoA authority, multi-sig transfers, double-claim prevention | 41+ |
-| **Blockbench** | `blockbench.test.ts` | YCSB workloads, DoNothing, CPUHeavy, IOHeavy, Analytics microbenchmarks | 28+ |
-| **TPC-Benchmark** | `tpc-benchmark.test.ts` | New-Order, Payment, Delivery, Stock-Level, Order-Status transactions | 35+ |
+| **Blockbench** | `blockbench.test.ts` | YCSB workloads, TPC-C/E/H benchmarks, DoNothing, CPUHeavy, IOHeavy, Analytics | 63+ |
 
 #### 3.1.1 Sample Unit Tests
 
@@ -239,15 +238,15 @@ describe('Trading - Order Matching', () => {
     assert.strictEqual(buyOrder.filledAmount.toNumber(), 100 * 1e9);
   });
   
-  it('should calculate VWAP correctly', async () => {
+  it('should calculate matched price correctly', async () => {
     const market = await tradingProgram.account.market.fetch(marketPDA);
     
     // Expected: (buyPrice + sellPrice) / 2 = (5.5 + 4.5) / 2 = 5.0 THB/kWh
-    const expectedVWAP = 5.0 * 1e6;
+    const expectedPrice = 5.0 * 1e6;
     
     assert.approximately(
       market.volumeWeightedPrice.toNumber(),
-      expectedVWAP,
+      expectedPrice,
       0.1 * 1e6 // 0.1 THB tolerance
     );
   });
@@ -639,18 +638,18 @@ describe('Security: Arithmetic Safety', () => {
 
 ```typescript
 describe('Security: Economic Exploits', () => {
-  it('should prevent front-running via batch clearing', async () => {
+  it('should prevent front-running via time-priority matching', async () => {
     // Create multiple orders in same block
     const orders = await Promise.all([
       tradingProgram.methods.createBuyOrder(amount1, price1, expires).rpc(),
-      tradingProgram.methods.createBuyOrder(amount2, price2, expires).rpc(),
+      tradingProgram.methods.createSellOrder(amount2, price2, expires).rpc(),
       tradingProgram.methods.createSellOrder(amount3, price3, expires).rpc(),
     ]);
     
-    // Trigger batch clearing
+    // Process orders via CDA matching
     await oracleProgram.methods.triggerMarketClearing().rpc();
     
-    // All orders matched at SAME clearing price (prevents MEV)
+    // Orders matched at fair clearing price (prevents MEV)
     const executions = await tradingProgram.account.market.fetch(marketPDA);
     const clearingPrice = executions.lastClearingPrice;
     
@@ -782,7 +781,7 @@ Recent performance benchmarks utilizing **Blockbench** and **TPC-Benchmark** ind
 | `execute_atomic_settlement` (6-way) | ~480ms | ~28,000 CU | ~4,285/sec |
 | `update_price_history` | ~390ms | ~3,000 CU | ~40,000/sec |
 
-**Key Finding:** VWAP lazy updates (every 10 orders) reduce average CU by 20%.
+**Key Finding:** Lazy price updates (every 10 orders) reduce average CU by 20%.
 
 #### Governance Program
 | Operation | Avg Latency | CU Consumption | Throughput |
@@ -849,9 +848,9 @@ Large Scale (W=100):
    - Mitigation: Scale horizontally (100 warehouses = 1,000 parallel transactions)
 
 3. **Trading.match_orders**
-   - Bottleneck: Market account write lock during VWAP update
-   - Impact: Batch clearing limited to ~300 orders/block
-   - Mitigation: Lazy VWAP updates (every 10 orders, not every trade)
+   - Bottleneck: Market account write lock during price update
+   - Impact: Matching limited to ~300 orders/block
+   - Mitigation: Lazy price updates (every 10 orders, not every trade)
 
 ### 4.4 Load Test Results
 
@@ -860,7 +859,7 @@ Large Scale (W=100):
 - **Successful:** 15,074,320 (99.7%)
 - **Failed (transient):** 45,680 (0.3% - network congestion)
 - **Average TPS:** 4,200
-- **Peak TPS:** 6,845 (during batch clearing phase)
+- **Peak TPS:** 6,845 (during high-volume trading phase)
 - **P50 Latency:** 410ms
 - **P95 Latency:** 625ms
 - **P99 Latency:** 1,280ms
@@ -897,7 +896,7 @@ Large Scale (W=100):
 **Optimization Techniques Applied:**
 1. Zero-copy accounts: -3,000 CU
 2. Disabled logging: -800 CU
-3. Lazy VWAP updates: -2,500 CU
+3. Lazy price updates: -2,500 CU
 4. Saturation math (prevent overflow checks): -500 CU
 5. Integer-only arithmetic: -1,200 CU
 

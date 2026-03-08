@@ -18,6 +18,26 @@
 //!    to avoid costly realloc operations.
 
 use anchor_lang::prelude::*;
+use bytemuck::{Pod, Zeroable};
+use crate::error::TpcError;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+pub fn string_to_bytes<const N: usize>(s: &str) -> [u8; N] {
+    let mut bytes = [0u8; N];
+    let s_bytes = s.as_bytes();
+    let len = s_bytes.len().min(N);
+    bytes[..len].copy_from_slice(&s_bytes[..len]);
+    bytes
+}
+
+pub fn bytes_to_string(bytes: &[u8]) -> String {
+    let len = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+    let s = std::str::from_utf8(&bytes[..len]).unwrap_or("");
+    s.to_string()
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // BENCHMARK CONFIGURATION
@@ -104,46 +124,44 @@ pub struct BenchmarkStats {
 /// Contention Profile: MODERATE
 /// - Updated by Payment transactions (YTD field)
 /// - All payments for this warehouse contend on this account
-#[account]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct Warehouse {
-    /// Warehouse ID (W_ID) - primary key
+    /// Warehouse ID (W_ID)
     pub w_id: u64,
     
-    /// Warehouse name (W_NAME) - max 10 chars
-    pub name: String,
+    /// Warehouse name (W_NAME) - max 10 chars, using 16 for Pod
+    pub name: [u8; 16],
     
-    /// Address fields
-    pub street_1: String,  // W_STREET_1 - max 20 chars
-    pub street_2: String,  // W_STREET_2 - max 20 chars
-    pub city: String,      // W_CITY - max 20 chars
-    pub state: String,     // W_STATE - 2 chars
-    pub zip: String,       // W_ZIP - 9 chars
+    /// Street suffix 1 (W_STREET_1) - max 20, using 32
+    pub street_1: [u8; 32],
     
-    /// Tax rate (W_TAX) - stored as basis points (0-2000 for 0-20%)
+    /// Street suffix 2 (W_STREET_2) - max 20, using 32
+    pub street_2: [u8; 32],
+    
+    /// City name (W_CITY) - max 20, using 32
+    pub city: [u8; 32],
+    
+    /// State (W_STATE) - 2 chars, using 2
+    pub state: [u8; 2],
+    
+    /// Zip code (W_ZIP) - 9 chars, using 16 for alignment/Pod
+    pub zip: [u8; 16],
+    pub _padding: [u8; 6], // 8 + 16 + 32 + 32 + 32 + 2 + 16 = 138. 144-138=6.
+    
+    /// Sales tax (W_TAX)
     pub tax: u64,
     
-    /// Year-to-date balance (W_YTD) - updated by Payment transactions
-    /// This is a HOT FIELD causing write contention
+    /// Year-to-date sales (W_YTD)
     pub ytd: u64,
     
-    /// Bump seed for PDA derivation
+    /// Bump seed
     pub bump: u8,
+    pub _padding_2: [u8; 7],
 }
 
 impl Warehouse {
-    /// Space required for account allocation
-    /// Includes discriminator (8) + all fields with max lengths
-    pub const SPACE: usize = 8 +  // discriminator
-        8 +                       // w_id
-        4 + 10 +                  // name (String: 4 byte len + 10 chars)
-        4 + 20 +                  // street_1
-        4 + 20 +                  // street_2
-        4 + 20 +                  // city
-        4 + 2 +                   // state
-        4 + 9 +                   // zip
-        8 +                       // tax
-        8 +                       // ytd
-        1;                        // bump
+    pub const SPACE: usize = 8 + std::mem::size_of::<Warehouse>();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -157,53 +175,49 @@ impl Warehouse {
 /// - next_o_id is incremented by EVERY New-Order transaction
 /// - All New-Order transactions for this district are SERIALIZED
 /// - Parallelism is achieved ACROSS districts, not within
-#[account]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct District {
-    /// Warehouse ID (D_W_ID) - part of composite key
+    /// Warehouse ID (D_W_ID)
     pub w_id: u64,
-    
-    /// District ID (D_ID) - 1-10 per warehouse
+    /// District ID (D_ID)
     pub d_id: u64,
     
-    /// District name (D_NAME) - max 10 chars
-    pub name: String,
+    /// District name (D_NAME) - max 10, using 16
+    pub name: [u8; 16],
     
-    /// Address fields
-    pub street_1: String,
-    pub street_2: String,
-    pub city: String,
-    pub state: String,
-    pub zip: String,
+    /// Street suffix 1 (D_STREET_1) - max 20, using 32
+    pub street_1: [u8; 32],
     
-    /// Tax rate (D_TAX) - stored as basis points
+    /// Street suffix 2 (D_STREET_2) - max 20, using 32
+    pub street_2: [u8; 32],
+    
+    /// City name (D_CITY) - max 20, using 32
+    pub city: [u8; 32],
+    
+    /// State (D_STATE) - 2, using 2
+    pub state: [u8; 2],
+    
+    /// Zip code (D_ZIP) - 9, using 16 for Pod
+    pub zip: [u8; 16],
+    pub _padding: [u8; 6], // Align to 8 bytes
+    
+    /// Sales tax (D_TAX)
     pub tax: u64,
     
-    /// Year-to-date balance (D_YTD) - updated by Payment
+    /// Year-to-date sales (D_YTD)
     pub ytd: u64,
     
-    /// CRITICAL: Next available order ID (D_NEXT_O_ID)
-    /// This counter is the primary source of write contention
-    /// All New-Order transactions must increment this atomically
+    /// Next available order ID (D_NEXT_O_ID)
     pub next_o_id: u64,
     
-    /// Bump seed for PDA derivation
+    /// Bump seed
     pub bump: u8,
+    pub _padding_2: [u8; 7],
 }
 
 impl District {
-    pub const SPACE: usize = 8 +  // discriminator
-        8 +                       // w_id
-        8 +                       // d_id
-        4 + 10 +                  // name
-        4 + 20 +                  // street_1
-        4 + 20 +                  // street_2
-        4 + 20 +                  // city
-        4 + 2 +                   // state
-        4 + 9 +                   // zip
-        8 +                       // tax
-        8 +                       // ytd
-        8 +                       // next_o_id
-        1;                        // bump
+    pub const SPACE: usize = 8 + std::mem::size_of::<District>();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -226,71 +240,79 @@ pub enum CreditStatus {
 /// Contention Profile: LOW
 /// - Updated by Payment transactions (balance, ytd_payment)
 /// - Conflicts only when same customer makes multiple payments
-#[account]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct Customer {
     /// Warehouse ID (C_W_ID)
     pub w_id: u64,
     /// District ID (C_D_ID)
     pub d_id: u64,
-    /// Customer ID (C_ID) - 1-3000 per district
+    /// Customer ID (C_ID)
     pub c_id: u64,
     
-    /// Name fields (for secondary index lookup)
-    pub first: String,   // C_FIRST - max 16 chars
-    pub middle: String,  // C_MIDDLE - 2 chars
-    pub last: String,    // C_LAST - max 16 chars (used for 60% of lookups!)
+    /// First name (C_FIRST) - 16
+    pub first: [u8; 16],
     
-    /// Address
-    pub street_1: String,
-    pub street_2: String,
-    pub city: String,
-    pub state: String,
-    pub zip: String,
-    pub phone: String,   // C_PHONE - 16 chars
+    /// Middle name (C_MIDDLE) - 2, using 2
+    pub middle: [u8; 2],
     
-    /// Timestamps
-    pub since: i64,      // C_SINCE - registration timestamp
+    /// Last name (C_LAST) - 16
+    pub last: [u8; 16],
     
-    /// Credit information
-    pub credit: CreditStatus,  // C_CREDIT - GC or BC
-    pub credit_lim: u64,       // C_CREDIT_LIM
-    pub discount: u64,         // C_DISCOUNT - basis points
+    /// Street suffix 1 (C_STREET_1) - 20, using 32
+    pub street_1: [u8; 32],
     
-    /// Financial data
-    pub balance: i64,          // C_BALANCE - can be negative
-    pub ytd_payment: u64,      // C_YTD_PAYMENT
-    pub payment_cnt: u32,      // C_PAYMENT_CNT
-    pub delivery_cnt: u32,     // C_DELIVERY_CNT
+    /// Street suffix 2 (C_STREET_2) - 20, using 32
+    pub street_2: [u8; 32],
     
-    /// Additional data for bad credit customers
-    pub data: String,          // C_DATA - max 500 chars
+    /// City name (C_CITY) - 20, using 32
+    pub city: [u8; 32],
+    
+    /// State (C_STATE) - 2, using 2
+    pub state: [u8; 2],
+    
+    /// Zip code (C_ZIP) - 9, using 16
+    pub zip: [u8; 16],
+    
+    /// Phone number (C_PHONE) - 16
+    pub phone: [u8; 16],
+    pub _padding: [u8; 4], // Align to 8 bytes (188 + 4 = 192)
+    
+    /// Date of registration (C_SINCE)
+    pub since: i64,
+    
+    /// Credit status (C_CREDIT)
+    pub credit: u8,
+    pub _padding_2: [u8; 7],
+    
+    /// Credit limit (C_CREDIT_LIM)
+    pub credit_lim: u64,
+    
+    /// Discount rate (C_DISCOUNT)
+    pub discount: u64,
+    
+    /// Current balance (C_BALANCE)
+    pub balance: i64,
+    
+    /// Year-to-date payment (C_YTD_PAYMENT)
+    pub ytd_payment: u64,
+    
+    /// Number of payments (C_PAYMENT_CNT)
+    pub payment_cnt: u32,
+    
+    /// Number of deliveries (C_DELIVERY_CNT)
+    pub delivery_cnt: u32,
+    
+    /// Additional data - max 500, using 512 for Pod
+    pub data: [u8; 512],
     
     /// Bump seed
     pub bump: u8,
+    pub _padding_3: [u8; 7],
 }
 
 impl Customer {
-    pub const SPACE: usize = 8 +  // discriminator
-        8 + 8 + 8 +               // w_id, d_id, c_id
-        4 + 16 +                  // first
-        4 + 2 +                   // middle
-        4 + 16 +                  // last
-        4 + 20 +                  // street_1
-        4 + 20 +                  // street_2
-        4 + 20 +                  // city
-        4 + 2 +                   // state
-        4 + 9 +                   // zip
-        4 + 16 +                  // phone
-        8 +                       // since
-        1 +                       // credit (enum)
-        8 +                       // credit_lim
-        8 +                       // discount
-        8 +                       // balance (signed)
-        8 +                       // ytd_payment
-        4 +                       // payment_cnt
-        4 +                       // delivery_cnt
-        4 + 500 +                 // data
-        1;                        // bump
+    pub const SPACE: usize = 8 + std::mem::size_of::<Customer>();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -342,37 +364,31 @@ impl CustomerLastNameIndex {
 /// Contention Profile: READ-ONLY after initialization
 /// - Never updated during benchmark execution
 /// - Safe for parallel access from all transactions
-#[account]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct Item {
-    /// Item ID (I_ID) - 1 to 100,000
+    /// Item ID (I_ID)
     pub i_id: u64,
     
     /// Image ID (I_IM_ID)
     pub im_id: u64,
     
-    /// Item name (I_NAME) - max 24 chars
-    pub name: String,
+    /// Item name (I_NAME) - 24, using 32
+    pub name: [u8; 32],
     
-    /// Item price (I_PRICE) - stored in minor units (cents)
-    /// Range: $1.00 to $100.00 (100-10000)
+    /// Item price (I_PRICE)
     pub price: u64,
     
-    /// Item data (I_DATA) - max 50 chars
-    /// 10% contain "ORIGINAL" string
-    pub data: String,
+    /// Item data (I_DATA) - 50, using 64
+    pub data: [u8; 64],
     
     /// Bump seed
     pub bump: u8,
+    pub _padding: [u8; 7],
 }
 
 impl Item {
-    pub const SPACE: usize = 8 +  // discriminator
-        8 +                       // i_id
-        8 +                       // im_id
-        4 + 24 +                  // name
-        8 +                       // price
-        4 + 50 +                  // data
-        1;                        // bump
+    pub const SPACE: usize = 8 + std::mem::size_of::<Item>();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -386,28 +402,28 @@ impl Item {
 /// - Updated by EVERY New-Order that includes this item
 /// - Popular items will have significant contention
 /// - TPC-C uses skewed distribution (zipfian) for item selection
-#[account]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct Stock {
     /// Warehouse ID (S_W_ID)
     pub w_id: u64,
     /// Item ID (S_I_ID)
     pub i_id: u64,
     
-    /// Current quantity (S_QUANTITY) - 10 to 100
+    /// Current quantity (S_QUANTITY)
     pub quantity: u64,
     
-    /// District-specific data strings (S_DIST_01 through S_DIST_10)
-    /// Each is 24 chars, used for order line distribution info
-    pub dist_01: String,
-    pub dist_02: String,
-    pub dist_03: String,
-    pub dist_04: String,
-    pub dist_05: String,
-    pub dist_06: String,
-    pub dist_07: String,
-    pub dist_08: String,
-    pub dist_09: String,
-    pub dist_10: String,
+    /// District-specific data strings - 24, using 32
+    pub dist_01: [u8; 32],
+    pub dist_02: [u8; 32],
+    pub dist_03: [u8; 32],
+    pub dist_04: [u8; 32],
+    pub dist_05: [u8; 32],
+    pub dist_06: [u8; 32],
+    pub dist_07: [u8; 32],
+    pub dist_08: [u8; 32],
+    pub dist_09: [u8; 32],
+    pub dist_10: [u8; 32],
     
     /// Year-to-date quantity sold (S_YTD)
     pub ytd: u64,
@@ -415,27 +431,19 @@ pub struct Stock {
     /// Order count (S_ORDER_CNT)
     pub order_cnt: u32,
     
-    /// Remote order count (S_REMOTE_CNT) - cross-warehouse orders
+    /// Remote order count
     pub remote_cnt: u32,
     
-    /// Stock data (S_DATA) - max 50 chars
-    /// 10% contain "ORIGINAL" string
-    pub data: String,
+    /// Stock data - 50, using 64
+    pub data: [u8; 64],
     
     /// Bump seed
     pub bump: u8,
+    pub _padding: [u8; 7],
 }
 
 impl Stock {
-    pub const SPACE: usize = 8 +  // discriminator
-        8 + 8 +                   // w_id, i_id
-        8 +                       // quantity
-        (4 + 24) * 10 +           // dist_01 through dist_10
-        8 +                       // ytd
-        4 +                       // order_cnt
-        4 +                       // remote_cnt
-        4 + 50 +                  // data
-        1;                        // bump
+    pub const SPACE: usize = 8 + std::mem::size_of::<Stock>();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -451,7 +459,8 @@ impl Stock {
 /// 
 /// OPTIMIZATION: Order lines are embedded as a vector instead of separate accounts
 /// This reduces the transaction size and account loading overhead
-#[account]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct Order {
     /// Warehouse ID (O_W_ID)
     pub w_id: u64,
@@ -465,74 +474,62 @@ pub struct Order {
     /// Entry date (O_ENTRY_D)
     pub entry_d: i64,
     
-    /// Carrier ID (O_CARRIER_ID) - set during Delivery
-    pub carrier_id: Option<u64>,
+    /// Carrier ID (O_CARRIER_ID) - set during Delivery (0 if None)
+    pub carrier_id: u64,
     
     /// Order line count (O_OL_CNT) - 5 to 15
     pub ol_cnt: u8,
     
     /// All local flag (O_ALL_LOCAL)
-    /// True if all items are from home warehouse
-    pub all_local: bool,
+    /// 0 if false, 1 if true
+    pub all_local: u8,
+    pub bump: u8,
+    pub _padding: [u8; 5], // Align embedded lines (32+8+8+1+1+1+5=56)
     
     /// EMBEDDED: Order lines (optimization)
     /// Instead of separate ORDER_LINE accounts, embed them here
     /// Max 15 lines per TPC-C spec
-    pub lines: Vec<OrderLine>,
-    
-    /// Bump seed
-    pub bump: u8,
+    pub lines: [OrderLine; 15],
 }
 
 /// Order line - individual item in an order
 /// Embedded in Order account to reduce account count per transaction
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+#[zero_copy]
+#[repr(C)]
 pub struct OrderLine {
     /// Line number (OL_NUMBER) - 1 to 15
     pub number: u8,
+    pub _padding: [u8; 7], // Align next u64
     
     /// Item ID (OL_I_ID)
     pub i_id: u64,
     
     /// Supply warehouse ID (OL_SUPPLY_W_ID)
-    /// May differ from order's warehouse for remote orders
     pub supply_w_id: u64,
     
-    /// Delivery date (OL_DELIVERY_D) - set during Delivery
-    pub delivery_d: Option<i64>,
+    /// Delivery date (OL_DELIVERY_D)
+    pub delivery_d: i64,
     
-    /// Quantity (OL_QUANTITY)
-    pub quantity: u8,
-    
-    /// Amount (OL_AMOUNT) - computed from item price * quantity
+    /// Amount (OL_AMOUNT)
     pub amount: u64,
     
-    /// Distribution info (OL_DIST_INFO) - 24 chars from Stock
-    pub dist_info: String,
+    /// Distribution info - 24, using 32
+    pub dist_info: [u8; 32],
+
+    /// Quantity (OL_QUANTITY)
+    pub quantity: u8,
+    pub _padding_2: [u8; 7],
 }
 
 impl OrderLine {
-    pub const SPACE: usize = 1 +  // number
-        8 +                       // i_id
-        8 +                       // supply_w_id
-        1 + 8 +                   // delivery_d (Option)
-        1 +                       // quantity
-        8 +                       // amount
-        4 + 24;                   // dist_info
+    pub const SPACE: usize = std::mem::size_of::<OrderLine>();
 }
 
 impl Order {
     /// Maximum order lines per TPC-C spec
     pub const MAX_ORDER_LINES: usize = 15;
     
-    pub const SPACE: usize = 8 +  // discriminator
-        8 + 8 + 8 + 8 +           // w_id, d_id, o_id, c_id
-        8 +                       // entry_d
-        1 + 8 +                   // carrier_id (Option)
-        1 +                       // ol_cnt
-        1 +                       // all_local
-        4 + (OrderLine::SPACE * Self::MAX_ORDER_LINES) + // lines vector
-        1;                        // bump
+    pub const SPACE: usize = 8 + std::mem::size_of::<Order>();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -578,13 +575,14 @@ impl NewOrderEntry {
 /// PDA: ["history", w_id.to_le_bytes(), d_id.to_le_bytes(), h_id.to_le_bytes()]
 /// 
 /// Contention Profile: LOW (write-once)
-/// - Created by Payment transaction
-/// - Never updated after creation
-#[account]
+/// History account - records a payment
+/// PDA: ["history", w_id.to_le_bytes(), d_id.to_le_bytes(), h_id.to_le_bytes()]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct History {
-    /// Customer's warehouse ID (H_C_W_ID)
+    /// Warehouse ID (H_C_W_ID) of customer
     pub c_w_id: u64,
-    /// Customer's district ID (H_C_D_ID)
+    /// District ID (H_C_D_ID) of customer
     pub c_d_id: u64,
     /// Customer ID (H_C_ID)
     pub c_id: u64,
@@ -594,7 +592,7 @@ pub struct History {
     /// Transaction's district ID (H_D_ID)
     pub d_id: u64,
     
-    /// History ID (for PDA derivation)
+    /// History ID
     pub h_id: u64,
     
     /// Transaction date (H_DATE)
@@ -603,22 +601,16 @@ pub struct History {
     /// Payment amount (H_AMOUNT)
     pub amount: u64,
     
-    /// Data string (H_DATA) - warehouse + district names
-    pub data: String,
+    /// Data string - 24, using 32
+    pub data: [u8; 32],
     
     /// Bump seed
     pub bump: u8,
+    pub _padding: [u8; 7],
 }
 
 impl History {
-    pub const SPACE: usize = 8 +  // discriminator
-        8 + 8 + 8 +               // c_w_id, c_d_id, c_id
-        8 + 8 +                   // w_id, d_id
-        8 +                       // h_id
-        8 +                       // date
-        8 +                       // amount
-        4 + 24 +                  // data
-        1;                        // bump
+    pub const SPACE: usize = 8 + std::mem::size_of::<History>();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

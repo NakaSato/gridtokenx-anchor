@@ -54,4 +54,13 @@ pub enum BlockbenchError {
     
     #[msg("Arithmetic overflow")]
     ArithmeticOverflow,
+
+    #[msg("Math check failed")]
+    MathOverflow,
+
+    #[msg("Invalid amount")]
+    InvalidAmount,
+
+    #[msg("Insufficient funds")]
+    InsufficientFunds,
 }

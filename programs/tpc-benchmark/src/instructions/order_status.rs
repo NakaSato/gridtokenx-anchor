@@ -28,9 +28,9 @@ pub struct OrderStatus<'info> {
             d_id.to_le_bytes().as_ref(),
             c_id.to_le_bytes().as_ref()
         ],
-        bump = customer.bump,
+        bump = customer.load()?.bump,
     )]
-    pub customer: Account<'info, Customer>,
+    pub customer: AccountLoader<'info, Customer>,
     
     /// Most recent order - READ
     /// Note: In a full implementation, we'd need to find the most recent order
@@ -79,21 +79,21 @@ pub struct OrderLineStatus {
 /// * `d_id` - District ID  
 /// * `c_id` - Customer ID (if by_last_name = false)
 /// * `by_last_name` - Whether customer was looked up by last name
-pub fn order_status(
-    ctx: Context<OrderStatus>,
+pub fn order_status<'info>(
+    ctx: Context<OrderStatus<'info>>,
     w_id: u64,
     d_id: u64,
     c_id: u64,
     by_last_name: bool,
 ) -> Result<()> {
-    let customer = &ctx.accounts.customer;
+    let customer = ctx.accounts.customer.load()?;
     
     // Build result
     let mut result = OrderStatusResult {
         c_id: customer.c_id,
-        c_first: customer.first.clone(),
-        c_middle: customer.middle.clone(),
-        c_last: customer.last.clone(),
+        c_first: String::from_utf8_lossy(&customer.first).trim_end_matches(char::from(0)).to_string(),
+        c_middle: String::from_utf8_lossy(&customer.middle).trim_end_matches(char::from(0)).to_string(),
+        c_last: String::from_utf8_lossy(&customer.last).trim_end_matches(char::from(0)).to_string(),
         c_balance: customer.balance,
         o_id: None,
         o_entry_d: None,
@@ -102,27 +102,28 @@ pub fn order_status(
     };
     
     // If order account is provided, read order details
-    if let Some(order_account) = &ctx.accounts.order {
-        let order_data = order_account.try_borrow_data()?;
+    if let Some(order_info) = &ctx.accounts.order {
+        let data = order_info.try_borrow_data()?;
+        if data.len() < 8 + std::mem::size_of::<Order>() {
+            return Err(ErrorCode::AccountDiscriminatorMismatch.into());
+        }
+        let order = bytemuck::from_bytes::<Order>(&data[8..8 + std::mem::size_of::<Order>()]);
         
-        // Skip discriminator and deserialize
-        if order_data.len() > 8 {
-            if let Ok(order) = Order::try_deserialize(&mut &order_data[8..]) {
-                result.o_id = Some(order.o_id);
-                result.o_entry_d = Some(order.entry_d);
-                result.o_carrier_id = order.carrier_id;
-                
-                // Extract order line information
-                for line in &order.lines {
-                    result.order_lines.push(OrderLineStatus {
-                        ol_i_id: line.i_id,
-                        ol_supply_w_id: line.supply_w_id,
-                        ol_quantity: line.quantity,
-                        ol_amount: line.amount,
-                        ol_delivery_d: line.delivery_d,
-                    });
-                }
-            }
+        result.o_id = Some(order.o_id);
+        result.o_entry_d = Some(order.entry_d);
+        result.o_carrier_id = if order.carrier_id == 0 { None } else { Some(order.carrier_id) };
+        
+        // Extract order line information
+        let ol_cnt = order.ol_cnt as usize;
+        for i in 0..ol_cnt {
+            let line = &order.lines[i];
+            result.order_lines.push(OrderLineStatus {
+                ol_i_id: line.i_id,
+                ol_supply_w_id: line.supply_w_id,
+                ol_quantity: line.quantity,
+                ol_amount: line.amount,
+                ol_delivery_d: if line.delivery_d == 0 { None } else { Some(line.delivery_d) },
+            });
         }
     }
     

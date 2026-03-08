@@ -60,7 +60,7 @@ pub struct InitializeWarehouse<'info> {
         seeds = [b"warehouse", w_id.to_le_bytes().as_ref()],
         bump
     )]
-    pub warehouse: Account<'info, Warehouse>,
+    pub warehouse: AccountLoader<'info, Warehouse>,
     
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -68,8 +68,8 @@ pub struct InitializeWarehouse<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn initialize_warehouse(
-    ctx: Context<InitializeWarehouse>,
+pub fn initialize_warehouse<'info>(
+    ctx: Context<InitializeWarehouse<'info>>,
     w_id: u64,
     name: String,
     street_1: String,
@@ -81,24 +81,18 @@ pub fn initialize_warehouse(
 ) -> Result<()> {
     require!(w_id > 0, TpcError::InvalidWarehouseId);
     require!(tax <= 2000, TpcError::InvalidTaxRate);
-    require!(name.len() <= 10, TpcError::StringTooLong);
-    require!(street_1.len() <= 20, TpcError::StringTooLong);
-    require!(street_2.len() <= 20, TpcError::StringTooLong);
-    require!(city.len() <= 20, TpcError::StringTooLong);
-    require!(state.len() <= 2, TpcError::StringTooLong);
-    require!(zip.len() <= 9, TpcError::StringTooLong);
     
-    let warehouse = &mut ctx.accounts.warehouse;
+    let mut warehouse = ctx.accounts.warehouse.load_init()?;
     
     warehouse.w_id = w_id;
-    warehouse.name = name;
-    warehouse.street_1 = street_1;
-    warehouse.street_2 = street_2;
-    warehouse.city = city;
-    warehouse.state = state;
-    warehouse.zip = zip;
+    warehouse.name = string_to_bytes(&name);
+    warehouse.street_1 = string_to_bytes(&street_1);
+    warehouse.street_2 = string_to_bytes(&street_2);
+    warehouse.city = string_to_bytes(&city);
+    warehouse.state = string_to_bytes(&state);
+    warehouse.zip = string_to_bytes(&zip);
     warehouse.tax = tax;
-    warehouse.ytd = 300_000_00; // $300,000.00 initial YTD (in cents)
+    warehouse.ytd = 300_000_00;
     warehouse.bump = ctx.bumps.warehouse;
     
     msg!("Warehouse {} initialized", w_id);
@@ -119,14 +113,14 @@ pub struct InitializeDistrict<'info> {
         seeds = [b"district", w_id.to_le_bytes().as_ref(), d_id.to_le_bytes().as_ref()],
         bump
     )]
-    pub district: Account<'info, District>,
+    pub district: AccountLoader<'info, District>,
     
     /// Verify warehouse exists
     #[account(
         seeds = [b"warehouse", w_id.to_le_bytes().as_ref()],
-        bump = warehouse.bump
+        bump = warehouse.load()?.bump,
     )]
-    pub warehouse: Account<'info, Warehouse>,
+    pub warehouse: AccountLoader<'info, Warehouse>,
     
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -134,8 +128,8 @@ pub struct InitializeDistrict<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn initialize_district(
-    ctx: Context<InitializeDistrict>,
+pub fn initialize_district<'info>(
+    ctx: Context<InitializeDistrict<'info>>,
     w_id: u64,
     d_id: u64,
     name: String,
@@ -149,19 +143,19 @@ pub fn initialize_district(
     require!(d_id >= 1 && d_id <= 10, TpcError::InvalidDistrictId);
     require!(tax <= 2000, TpcError::InvalidTaxRate);
     
-    let district = &mut ctx.accounts.district;
+    let mut district = ctx.accounts.district.load_init()?;
     
     district.w_id = w_id;
     district.d_id = d_id;
-    district.name = name;
-    district.street_1 = street_1;
-    district.street_2 = street_2;
-    district.city = city;
-    district.state = state;
-    district.zip = zip;
+    district.name = string_to_bytes(&name);
+    district.street_1 = string_to_bytes(&street_1);
+    district.street_2 = string_to_bytes(&street_2);
+    district.city = string_to_bytes(&city);
+    district.state = string_to_bytes(&state);
+    district.zip = string_to_bytes(&zip);
     district.tax = tax;
-    district.ytd = 30_000_00; // $30,000.00 initial YTD (in cents)
-    district.next_o_id = 3001; // Starting order ID (3000 initial orders per TPC-C)
+    district.ytd = 30_000_00;
+    district.next_o_id = 3001;
     district.bump = ctx.bumps.district;
     
     Ok(())
@@ -186,14 +180,14 @@ pub struct InitializeCustomer<'info> {
         ],
         bump
     )]
-    pub customer: Account<'info, Customer>,
+    pub customer: AccountLoader<'info, Customer>,
     
     /// Verify district exists
     #[account(
         seeds = [b"district", w_id.to_le_bytes().as_ref(), d_id.to_le_bytes().as_ref()],
-        bump = district.bump
+        bump = district.load()?.bump,
     )]
-    pub district: Account<'info, District>,
+    pub district: AccountLoader<'info, District>,
     
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -201,8 +195,8 @@ pub struct InitializeCustomer<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn initialize_customer(
-    ctx: Context<InitializeCustomer>,
+pub fn initialize_customer<'info>(
+    ctx: Context<InitializeCustomer<'info>>,
     w_id: u64,
     d_id: u64,
     c_id: u64,
@@ -222,30 +216,32 @@ pub fn initialize_customer(
     require!(c_id >= 1 && c_id <= 3000, TpcError::InvalidCustomerId);
     require!(discount <= 5000, TpcError::InvalidDiscount);
     
-    let customer = &mut ctx.accounts.customer;
+    let mut customer = ctx.accounts.customer.load_init()?;
     let clock = Clock::get()?;
     
     customer.w_id = w_id;
     customer.d_id = d_id;
     customer.c_id = c_id;
-    customer.first = first;
-    customer.middle = middle;
-    customer.last = last;
-    customer.street_1 = street_1;
-    customer.street_2 = street_2;
-    customer.city = city;
-    customer.state = state;
-    customer.zip = zip;
-    customer.phone = phone;
+    customer.first = string_to_bytes(&first);
+    customer.middle = string_to_bytes(&middle);
+    customer.last = string_to_bytes(&last);
+    customer.street_1 = string_to_bytes(&street_1);
+    customer.street_2 = string_to_bytes(&street_2);
+    customer.city = string_to_bytes(&city);
+    customer.state = string_to_bytes(&state);
+    customer.zip = string_to_bytes(&zip);
+    customer.phone = string_to_bytes(&phone);
     customer.since = clock.unix_timestamp;
-    customer.credit = credit;
+    customer.credit = match credit {
+        CreditStatus::GoodCredit => 0,
+        CreditStatus::BadCredit => 1,
+    };
     customer.credit_lim = credit_lim;
     customer.discount = discount;
-    customer.balance = -10_00; // Initial balance: -$10.00 (in cents)
-    customer.ytd_payment = 10_00; // Initial YTD payment: $10.00
+    customer.balance = -10_00;
+    customer.ytd_payment = 10_00;
     customer.payment_cnt = 1;
     customer.delivery_cnt = 0;
-    customer.data = String::new();
     customer.bump = ctx.bumps.customer;
     
     msg!("Customer {}-{}-{} initialized", w_id, d_id, c_id);
@@ -266,7 +262,7 @@ pub struct InitializeItem<'info> {
         seeds = [b"item", i_id.to_le_bytes().as_ref()],
         bump
     )]
-    pub item: Account<'info, Item>,
+    pub item: AccountLoader<'info, Item>,
     
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -274,8 +270,8 @@ pub struct InitializeItem<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn initialize_item(
-    ctx: Context<InitializeItem>,
+pub fn initialize_item<'info>(
+    ctx: Context<InitializeItem<'info>>,
     i_id: u64,
     im_id: u64,
     name: String,
@@ -283,16 +279,14 @@ pub fn initialize_item(
     data: String,
 ) -> Result<()> {
     require!(i_id >= 1 && i_id <= 100_000, TpcError::InvalidItemId);
-    require!(name.len() <= 24, TpcError::StringTooLong);
-    require!(data.len() <= 50, TpcError::StringTooLong);
     
-    let item = &mut ctx.accounts.item;
+    let mut item = ctx.accounts.item.load_init()?;
     
     item.i_id = i_id;
     item.im_id = im_id;
-    item.name = name;
+    item.name = string_to_bytes(&name);
     item.price = price;
-    item.data = data;
+    item.data = string_to_bytes(&data);
     item.bump = ctx.bumps.item;
     
     msg!("Item {} initialized: price = {}", i_id, price);
@@ -313,21 +307,21 @@ pub struct InitializeStock<'info> {
         seeds = [b"stock", w_id.to_le_bytes().as_ref(), i_id.to_le_bytes().as_ref()],
         bump
     )]
-    pub stock: Account<'info, Stock>,
+    pub stock: AccountLoader<'info, Stock>,
     
     /// Verify warehouse exists
     #[account(
         seeds = [b"warehouse", w_id.to_le_bytes().as_ref()],
-        bump = warehouse.bump
+        bump = warehouse.load()?.bump,
     )]
-    pub warehouse: Account<'info, Warehouse>,
+    pub warehouse: AccountLoader<'info, Warehouse>,
     
     /// Verify item exists
     #[account(
         seeds = [b"item", i_id.to_le_bytes().as_ref()],
-        bump = item.bump
+        bump = item.load()?.bump,
     )]
-    pub item: Account<'info, Item>,
+    pub item: AccountLoader<'info, Item>,
     
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -336,8 +330,8 @@ pub struct InitializeStock<'info> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn initialize_stock(
-    ctx: Context<InitializeStock>,
+pub fn initialize_stock<'info>(
+    ctx: Context<InitializeStock<'info>>,
     w_id: u64,
     i_id: u64,
     quantity: u64,
@@ -353,25 +347,25 @@ pub fn initialize_stock(
     dist_10: String,
     data: String,
 ) -> Result<()> {
-    let stock = &mut ctx.accounts.stock;
+    let mut stock = ctx.accounts.stock.load_init()?;
     
     stock.w_id = w_id;
     stock.i_id = i_id;
     stock.quantity = quantity;
-    stock.dist_01 = dist_01;
-    stock.dist_02 = dist_02;
-    stock.dist_03 = dist_03;
-    stock.dist_04 = dist_04;
-    stock.dist_05 = dist_05;
-    stock.dist_06 = dist_06;
-    stock.dist_07 = dist_07;
-    stock.dist_08 = dist_08;
-    stock.dist_09 = dist_09;
-    stock.dist_10 = dist_10;
+    stock.dist_01 = string_to_bytes(&dist_01);
+    stock.dist_02 = string_to_bytes(&dist_02);
+    stock.dist_03 = string_to_bytes(&dist_03);
+    stock.dist_04 = string_to_bytes(&dist_04);
+    stock.dist_05 = string_to_bytes(&dist_05);
+    stock.dist_06 = string_to_bytes(&dist_06);
+    stock.dist_07 = string_to_bytes(&dist_07);
+    stock.dist_08 = string_to_bytes(&dist_08);
+    stock.dist_09 = string_to_bytes(&dist_09);
+    stock.dist_10 = string_to_bytes(&dist_10);
     stock.ytd = 0;
     stock.order_cnt = 0;
     stock.remote_cnt = 0;
-    stock.data = data;
+    stock.data = string_to_bytes(&data);
     stock.bump = ctx.bumps.stock;
     
     msg!("Stock for item {} at warehouse {} initialized: qty = {}", i_id, w_id, quantity);

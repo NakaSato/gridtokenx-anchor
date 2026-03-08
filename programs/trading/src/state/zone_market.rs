@@ -1,6 +1,11 @@
 use anchor_lang::prelude::*;
 use crate::state::market::PriceLevel;
 
+/// Maximum depth levels per side of the order book.
+/// Caps update_depth Vec payload at ~336 bytes (4 vecs × 10 × 8 + length prefixes),
+/// keeping total transaction size safely below Solana's 1,232-byte limit.
+pub const MAX_DEPTH_LEVELS: usize = 10;
+
 /// Zone Market account for tracking order book depth in a specific geographic zone.
 /// This allows order book depth mapping to be sharded out of the main Market account,
 /// preventing write lock contention on the global state when different zones are trading.
@@ -21,8 +26,8 @@ pub struct ZoneMarket {
     pub last_clearing_price: u64,           // 8
     
     // === MARKET DEPTH ===
-    pub buy_side_depth: [PriceLevel; 20],   // 480
-    pub sell_side_depth: [PriceLevel; 20],  // 480
+    pub buy_side_depth: [PriceLevel; MAX_DEPTH_LEVELS],   // 240
+    pub sell_side_depth: [PriceLevel; MAX_DEPTH_LEVELS],  // 240
 }
 
 /// Sharded zone market statistics for reduced contention

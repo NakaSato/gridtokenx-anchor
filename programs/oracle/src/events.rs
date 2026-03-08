@@ -68,3 +68,13 @@ pub struct ProductionRatioConfigUpdated {
     pub max_production_consumption_ratio: u16,
     pub timestamp: i64,
 }
+
+#[event]
+pub struct ReadingsAggregated {
+    pub authority: Pubkey,
+    pub total_produced: u64,
+    pub total_consumed: u64,
+    pub valid_count: u64,
+    pub rejected_count: u64,
+    pub timestamp: i64,
+}

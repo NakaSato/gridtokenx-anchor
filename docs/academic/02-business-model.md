@@ -48,7 +48,7 @@
 │                │                                                           │               │
 │  • Solana PoA  │  ┌─────────────────────────────────────────────────────┐ │               │
 │    blockchain  │  │  Web Application ──► Mobile App ──► API Integration │ │               │
-│  • 7 Anchor    │  └─────────────────────────────────────────────────────┘ │               │
+│  • 6 Anchor    │  └─────────────────────────────────────────────────────┘ │               │
 │    programs    │                                                           │               │
 │  • BFT oracle  │                                                           │               │
 │    network     │                                                           │               │
@@ -119,7 +119,7 @@
 
 | Value Proposition | Description | Differentiation |
 |-------------------|-------------|-----------------|
-| **Direct P2P Trading** | Trade energy directly with neighbors via multi-modal marketplace (bilateral, AMM, auction, batch clearing) | No intermediary markup |
+| **Direct P2P Trading** | Trade energy directly with neighbors via continuous double auction (CDA) order book | No intermediary markup |
 | **Instant Settlement** | Real-time atomic settlement (~440ms average latency) | vs. monthly billing |
 | **Tokenized Energy** | 1 kWh = 1 GRX token (Token-2022 standard) | Liquid, tradable asset |
 | **Verified Green** | On-chain ERC certificates with lifecycle management | Immutable, auditable proof |
@@ -491,7 +491,7 @@ Legend: ★ = Feature Rating (1-5)
 | **Security** | Byzantine Fault Tolerant (3f+1 consensus) | Single oracle, centralized | Tamper-resistant |
 | **Energy Accounting** | Dual high-water marks (prevents double-spend) | Basic balance tracking | Economic security |
 | **Payments** | Multi-currency (GRX, Thai Baht Chain) | Single currency | Flexibility |
-| **Order Types** | 4 modalities (bilateral, AMM, auction, batch) | Typically 1-2 types | Market sophistication |
+| **Order Types** | CDA order book (limit orders, price-time priority) | Typically 1-2 types | Market sophistication |
 | **Performance Testing** | Blockbench + TPC-C benchmarks | Ad-hoc testing | Research-grade validation |
 | **Code Coverage** | 94.2% test coverage, 489 tests | Varies (often undisclosed) | Production-ready quality |
 
@@ -499,9 +499,9 @@ Legend: ★ = Feature Rating (1-5)
 
 ## 6. Technical Architecture & Capabilities
 
-### 6.1 Seven-Program Modular Architecture
+### 6.1 Six-Program Modular Architecture
 
-GridTokenX is built on **7 specialized Solana Anchor programs**, each optimized for specific functionality:
+GridTokenX is built on **6 specialized Solana Anchor programs**, each optimized for specific functionality:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -526,15 +526,13 @@ GridTokenX is built on **7 specialized Solana Anchor programs**, each optimized 
                    ▼                     ▼
          ┌─────────────────┐   ┌─────────────────┐
          │    TRADING      │   │   GOVERNANCE    │
-         │  (Multi-Modal   │   │  (ERC Certifi-  │
-         │   Marketplace)  │   │   cates & PoA)  │
+         │  (CDA Order     │   │  (ERC Certifi-  │
+         │   Book)         │   │   cates & PoA)  │
          ├─────────────────┤   ├─────────────────┤
-         │ • 4 order types │   │ • ERC lifecycle │
-         │ • VWAP pricing  │   │ • Double-claim  │
-         │ • AMM bonding   │   │   prevention    │
-         │ • Batch clear   │   │ • Multi-sig xfer│
-         │ • Atomic settle │   │ • PoA authority │
-         │ • 8k matches/s  │   │ • 18k issue/sec │
+         │ • CDA order book │   │ • ERC lifecycle │
+         │ • Price matching │   │ • Double-claim  │
+         │ • Atomic settle  │   │   prevention    │
+         │ • 8k matches/s   │   │ • 18k issue/sec │
          └─────────────────┘   └─────────────────┘
 
 ┌─────────────────┐   ┌─────────────────┐
@@ -586,7 +584,7 @@ GridTokenX is built on **7 specialized Solana Anchor programs**, each optimized 
 | Technique | CU Savings | Impact |
 |-----------|------------|--------|
 | **Zero-Copy Accounts** | -3,000 CU | Avoids deserialization overhead for large accounts |
-| **Lazy VWAP Updates** | -2,500 CU | Calculate every 10 orders, not every trade |
+| **Lazy Price Updates** | -2,500 CU | Calculate every 10 orders, not every trade |
 | **Disabled Logging** | -800 CU | Remove `msg!()` calls in production |
 | **Saturation Math** | -500 CU | Prevent overflow checks (safe with BN validation) |
 | **Integer Arithmetic** | -1,200 CU | Avoid floating-point operations |
@@ -635,7 +633,7 @@ GridTokenX is built on **7 specialized Solana Anchor programs**, each optimized 
 |------------|---------------|------------------|----------|
 | Oracle account writes | 400 readings/sec | Shard by region (10 accounts) | 4,000 readings/sec |
 | TPC District.next_o_id | 10 orders/district | Scale warehouses (100x) | 1,000 concurrent orders |
-| Market VWAP updates | 300 orders/block | Lazy updates (every 10th) | 3,000 orders/block |
+| Market price updates | 300 orders/block | Lazy updates (every 10th) | 3,000 orders/block |
 
 **Target (Phase 2):**
 - 50,000 sustained TPS (regional sharding)

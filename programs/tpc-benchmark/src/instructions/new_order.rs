@@ -46,18 +46,18 @@ pub struct NewOrder<'info> {
     /// Warehouse - read tax rate
     #[account(
         seeds = [b"warehouse", w_id.to_le_bytes().as_ref()],
-        bump = warehouse.bump,
+        bump = warehouse.load()?.bump,
     )]
-    pub warehouse: Account<'info, Warehouse>,
+    pub warehouse: AccountLoader<'info, Warehouse>,
     
     /// District - CRITICAL: increment next_o_id (WRITE LOCK)
     /// This is the primary serialization point for the district
     #[account(
         mut,
         seeds = [b"district", w_id.to_le_bytes().as_ref(), d_id.to_le_bytes().as_ref()],
-        bump = district.bump,
+        bump = district.load()?.bump,
     )]
-    pub district: Account<'info, District>,
+    pub district: AccountLoader<'info, District>,
     
     /// Customer - read discount rate
     #[account(
@@ -67,9 +67,9 @@ pub struct NewOrder<'info> {
             d_id.to_le_bytes().as_ref(),
             c_id.to_le_bytes().as_ref()
         ],
-        bump = customer.bump,
+        bump = customer.load()?.bump,
     )]
-    pub customer: Account<'info, Customer>,
+    pub customer: AccountLoader<'info, Customer>,
     
     /// Order - to be created (PDA with next_o_id)
     /// Space allocated for max 15 order lines
@@ -85,7 +85,7 @@ pub struct NewOrder<'info> {
         ],
         bump
     )]
-    pub order: Account<'info, Order>,
+    pub order: AccountLoader<'info, Order>,
     
     /// NewOrder - to be created (queue entry for undelivered orders)
     #[account(
@@ -134,7 +134,7 @@ pub struct NewOrder<'info> {
 /// # Remaining Accounts Layout
 /// For each order line i: [Item_i, Stock_i]
 pub fn new_order<'info>(
-    ctx: Context<'_, '_, 'info, 'info, NewOrder<'info>>,
+    ctx: Context<NewOrder<'info>>,
     w_id: u64,
     d_id: u64,
     c_id: u64,
@@ -167,9 +167,9 @@ pub fn new_order<'info>(
     // READ PHASE
     // ═══════════════════════════════════════════════════════════════════
     
-    let warehouse = &ctx.accounts.warehouse;
-    let district = &mut ctx.accounts.district;
-    let customer = &ctx.accounts.customer;
+    let warehouse = ctx.accounts.warehouse.load()?;
+    let mut district = ctx.accounts.district.load_mut()?;
+    let customer = ctx.accounts.customer.load()?;
     let clock = Clock::get()?;
     
     // Get tax rates and discount
@@ -199,10 +199,19 @@ pub fn new_order<'info>(
     // PROCESS ORDER LINES
     // ═══════════════════════════════════════════════════════════════════
     
+    let mut order = ctx.accounts.order.load_init()?;
+    order.w_id = w_id;
+    order.d_id = d_id;
+    order.o_id = o_id;
+    order.c_id = c_id;
+    order.entry_d = clock.unix_timestamp;
+    order.carrier_id = 0;
+    order.ol_cnt = ol_cnt as u8;
+    order.all_local = 1;
+    order.bump = ctx.bumps.order;
+
     let mut total_amount: u64 = 0;
-    let mut all_local = true;
-    let mut processed_lines: Vec<OrderLine> = Vec::with_capacity(ol_cnt);
-    
+
     for (i, ol_input) in order_lines.iter().enumerate() {
         // Get Item and Stock accounts from remaining_accounts
         let item_idx = i * 2;
@@ -211,16 +220,21 @@ pub fn new_order<'info>(
         let item_account = &ctx.remaining_accounts[item_idx];
         let stock_account = &ctx.remaining_accounts[stock_idx];
         
-        // Deserialize Item (read-only)
+        // Use manual bytemuck for zero_copy access
         let item_data = item_account.try_borrow_data()?;
-        let item: Item = Item::try_deserialize(&mut &item_data[..])?;
+        if item_data.len() < 8 + std::mem::size_of::<Item>() {
+            return Err(anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch.into());
+        }
+        let item = bytemuck::from_bytes::<Item>(&item_data[8..8 + std::mem::size_of::<Item>()]);
         
         // Verify item ID matches
         require!(item.i_id == ol_input.i_id, TpcError::ItemNotFound);
         
-        // Deserialize and update Stock (mutable)
         let mut stock_data = stock_account.try_borrow_mut_data()?;
-        let mut stock: Stock = Stock::try_deserialize(&mut &stock_data[..])?;
+        if stock_data.len() < 8 + std::mem::size_of::<Stock>() {
+            return Err(anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch.into());
+        }
+        let stock = bytemuck::from_bytes_mut::<Stock>(&mut stock_data[8..8 + std::mem::size_of::<Stock>()]);
         
         // Verify stock matches
         require!(
@@ -241,7 +255,7 @@ pub fn new_order<'info>(
         stock.order_cnt += 1;
         if ol_input.supply_w_id != w_id {
             stock.remote_cnt += 1;
-            all_local = false;
+            order.all_local = 0;
         }
         
         // Calculate line amount
@@ -250,34 +264,31 @@ pub fn new_order<'info>(
         
         // Get district info for this line
         let dist_info = match d_id {
-            1 => stock.dist_01.clone(),
-            2 => stock.dist_02.clone(),
-            3 => stock.dist_03.clone(),
-            4 => stock.dist_04.clone(),
-            5 => stock.dist_05.clone(),
-            6 => stock.dist_06.clone(),
-            7 => stock.dist_07.clone(),
-            8 => stock.dist_08.clone(),
-            9 => stock.dist_09.clone(),
-            10 => stock.dist_10.clone(),
-            _ => String::new(),
+            1 => stock.dist_01,
+            2 => stock.dist_02,
+            3 => stock.dist_03,
+            4 => stock.dist_04,
+            5 => stock.dist_05,
+            6 => stock.dist_06,
+            7 => stock.dist_07,
+            8 => stock.dist_08,
+            9 => stock.dist_09,
+            10 => stock.dist_10,
+            _ => [0u8; 32],
         };
         
-        // Create order line
-        let order_line = OrderLine {
+        // Create order line directly in the fixed-size array
+        order.lines[i] = OrderLine {
             number: (i + 1) as u8,
+            _padding: [0u8; 7],
             i_id: ol_input.i_id,
             supply_w_id: ol_input.supply_w_id,
-            delivery_d: None,
-            quantity: ol_input.quantity,
+            delivery_d: 0,
             amount: line_amount,
             dist_info,
+            quantity: ol_input.quantity,
+            _padding_2: [0u8; 7],
         };
-        processed_lines.push(order_line);
-        
-        // Serialize stock back
-        let serialized_stock = stock.try_to_vec()?;
-        stock_data[8..8 + serialized_stock.len()].copy_from_slice(&serialized_stock);
     }
     
     // ═══════════════════════════════════════════════════════════════════
@@ -293,22 +304,6 @@ pub fn new_order<'info>(
         .saturating_div(10000)
         .saturating_mul(10000 - c_discount)
         .saturating_div(10000);
-    
-    // ═══════════════════════════════════════════════════════════════════
-    // CREATE ORDER
-    // ═══════════════════════════════════════════════════════════════════
-    
-    let order = &mut ctx.accounts.order;
-    order.w_id = w_id;
-    order.d_id = d_id;
-    order.o_id = o_id;
-    order.c_id = c_id;
-    order.entry_d = clock.unix_timestamp;
-    order.carrier_id = None;
-    order.ol_cnt = ol_cnt as u8;
-    order.all_local = all_local;
-    order.lines = processed_lines;
-    order.bump = ctx.bumps.order;
     
     // ═══════════════════════════════════════════════════════════════════
     // CREATE NEW-ORDER (Undelivered queue entry)

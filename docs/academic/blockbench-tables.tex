@@ -3,10 +3,10 @@
 \centering
 \caption{BLOCKBENCH Benchmark Results for Solana (GridTokenX)}
 \label{tab:blockbench-results}
-\begin{tabular}{lrrrr}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
-\textbf{Benchmark} & \textbf{Throughput} & \textbf{Avg Latency} & \textbf{P99 Latency} & \textbf{Success} \\
-                   & (TPS)               & (ms)                  & (ms)                  & Rate (\%)       \\
+\textbf{Benchmark} & \textbf{Tput (TPS)} & \textbf{Avg (ms)} & \textbf{P99 (ms)} & \textbf{Succ.~(\%)} \\
 \midrule
 DoNothing & 225 & 2.515 & 3.927 & 100.0 \\
 CPUHeavy-Sort & 231 & 2.455 & 2.841 & 100.0 \\
@@ -17,34 +17,33 @@ YCSB-B & 442 & 1.805 & 4.573 & 99.9 \\
 YCSB-C & 391 & 1.756 & 2.724 & 99.9 \\
 Smallbank & 1,745 & 5.720 & 10.000 & 99.85 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}%
 \end{table}
-
 
 % TPC Benchmark Results Table - Auto-generated (2026-01-17)
 \begin{table}[htbp]
 \centering
 \caption{TPC Benchmark Suite Results for Solana (GridTokenX)}
 \label{tab:tpc-results}
-\begin{tabular}{lrrrr}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
-\textbf{Benchmark} & \textbf{Primary Metric} & \textbf{Avg Latency} & \textbf{P99 Latency} & \textbf{Success} \\
-                   &                         & (ms)                  & (ms)                  & Rate (\%)       \\
+\textbf{Benchmark} & \textbf{Primary Metric} & \textbf{Avg (ms)} & \textbf{P99 (ms)} & \textbf{Succ.~(\%)} \\
 \midrule
 TPC-C & 21,136 tpmC & 11.35 & 20.00 & 99.8 \\
 TPC-E & 309 tpsE & 7.83 & 17.00 & 99.0 \\
 TPC-H & 248,911 QphH & 71.56 & 148.00 & 100.0 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}%
 \end{table}
-
 
 % Platform Comparison Table - Auto-generated (2026-01-17)
 \begin{table}[htbp]
 \centering
 \caption{Blockchain Platform Performance Comparison (BLOCKBENCH Methodology)}
-\label{tab:platform-comparison}
-\begin{tabular}{lrrr}
+\label{tab:platform-comparison-bb}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lrrr@{}}
 \toprule
 \textbf{Platform} & \textbf{YCSB TPS} & \textbf{Smallbank TPS} & \textbf{Latency (ms)} \\
 \midrule
@@ -54,16 +53,15 @@ Ethereum (Geth PoA) & 125 & 110 & 300 \\
 Parity (PoA) & 750 & 650 & 100 \\
 FastFabric & 17,500 & 15,000 & 20 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}%
 \end{table}
-
 
 % Transaction Mix Table - Auto-generated (2026-01-17)
 \begin{table}[htbp]
 \centering
 \caption{TPC-C Transaction Mix Distribution}
 \label{tab:tpcc-mix}
-\begin{tabular}{lrr}
+\begin{tabular}{@{}lrr@{}}
 \toprule
 \textbf{Transaction Type} & \textbf{Count} & \textbf{Percentage} \\
 \midrule
@@ -78,13 +76,13 @@ GET\_ORDER\_STATUS & 957 & 4.0\% \\
 \end{tabular}
 \end{table}
 
-
 % Latency Percentiles Table - Auto-generated (2026-01-17)
 \begin{table}[htbp]
 \centering
 \caption{Latency Distribution (All Benchmarks)}
 \label{tab:latency-percentiles}
-\begin{tabular}{lrrrr}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
 \textbf{Benchmark} & \textbf{p50 (ms)} & \textbf{p75 (ms)} & \textbf{p95 (ms)} & \textbf{p99 (ms)} \\
 \midrule
@@ -93,5 +91,5 @@ SmallBank & 6.00 & -- & 9.00 & 10.00 \\
 TPC-E & 8.00 & -- & 15.00 & 17.00 \\
 TPC-H & 66.00 & -- & 135.00 & 148.00 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}%
 \end{table}

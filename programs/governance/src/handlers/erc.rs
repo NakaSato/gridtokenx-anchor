@@ -14,7 +14,10 @@ pub fn issue(
     let poa_config = &mut ctx.accounts.poa_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let meter_data = ctx.accounts.meter_account.try_borrow_data()?;
-    require!(meter_data.len() >= 8 + std::mem::size_of::<MeterAccount>(), GovernanceError::InvalidMeterAccount);
+    require!(
+        meter_data.len() >= 8 + std::mem::size_of::<MeterAccount>(),
+        GovernanceError::InvalidMeterAccount
+    );
     let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
     let clock = Clock::get()?;
 
@@ -91,7 +94,7 @@ pub fn issue(
     erc_certificate.status = ErcStatus::Valid;
     erc_certificate.validated_for_trading = false;
     erc_certificate.expires_at = Some(clock.unix_timestamp + poa_config.erc_validity_period);
-    
+
     // Initialize new fields
     erc_certificate.revocation_reason = [0u8; 128];
     erc_certificate.reason_len = 0;
@@ -129,7 +132,10 @@ pub fn validate_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
     let clock = Clock::get()?;
 
     // Operational checks
-    require!(poa_config.is_operational(), GovernanceError::MaintenanceMode);
+    require!(
+        poa_config.is_operational(),
+        GovernanceError::MaintenanceMode
+    );
     require!(
         erc_certificate.status == ErcStatus::Valid,
         GovernanceError::InvalidErcStatus
@@ -156,7 +162,10 @@ pub fn validate_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
     poa_config.last_updated = clock.unix_timestamp;
 
     emit!(ErcValidatedForTrading {
-        certificate_id: String::from_utf8_lossy(&erc_certificate.certificate_id[..erc_certificate.id_len as usize]).into_owned(),
+        certificate_id: String::from_utf8_lossy(
+            &erc_certificate.certificate_id[..erc_certificate.id_len as usize]
+        )
+        .into_owned(),
         authority: ctx.accounts.authority.key(),
         timestamp: clock.unix_timestamp,
     });
@@ -170,49 +179,58 @@ pub fn revoke(ctx: Context<crate::RevokeErc>, reason: String) -> Result<()> {
     let poa_config = &mut ctx.accounts.poa_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let clock = Clock::get()?;
-    
+
     // Operational checks
-    require!(poa_config.is_operational(), GovernanceError::MaintenanceMode);
-    
+    require!(
+        poa_config.is_operational(),
+        GovernanceError::MaintenanceMode
+    );
+
     // Reason is required
-    require!(!reason.is_empty(), GovernanceError::RevocationReasonRequired);
+    require!(
+        !reason.is_empty(),
+        GovernanceError::RevocationReasonRequired
+    );
     require!(reason.len() <= 128, GovernanceError::ContactInfoTooLong);
-    
+
     // Certificate must be revocable (Valid or Pending)
     require!(
         erc_certificate.can_revoke(),
         GovernanceError::AlreadyRevoked
     );
-    
+
     // Store certificate data before revocation
     let energy_amount = erc_certificate.energy_amount;
-    
+
     // Revoke the certificate
     erc_certificate.status = ErcStatus::Revoked;
     erc_certificate.revoked_at = Some(clock.unix_timestamp);
     erc_certificate.validated_for_trading = false;
-    
+
     // Update statistics
     poa_config.total_ercs_revoked = poa_config.total_ercs_revoked.saturating_add(1);
     poa_config.last_updated = clock.unix_timestamp;
-    
-    emit!(ErcRevoked {
-        certificate_id: String::from_utf8_lossy(&erc_certificate.certificate_id[..erc_certificate.id_len as usize]).into_owned(),
-        authority: ctx.accounts.authority.key(),
-        reason: reason.clone(),
-        energy_amount,
-        timestamp: clock.unix_timestamp,
-    });
-    
-    // Store reason in fixed buffer
+
+    // Write reason bytes BEFORE emitting the event so `reason` can be moved
+    // into emit! without a heap-allocating .clone().
     let mut reason_bytes = [0u8; 128];
     let reason_slice = reason.as_bytes();
     let len = reason_slice.len().min(128);
     reason_bytes[..len].copy_from_slice(&reason_slice[..len]);
-    
     erc_certificate.revocation_reason = reason_bytes;
     erc_certificate.reason_len = len as u8;
-    
+
+    emit!(ErcRevoked {
+        certificate_id: String::from_utf8_lossy(
+            &erc_certificate.certificate_id[..erc_certificate.id_len as usize],
+        )
+        .into_owned(),
+        authority: ctx.accounts.authority.key(),
+        reason, // moved — no clone needed
+        energy_amount,
+        timestamp: clock.unix_timestamp,
+    });
+
     // Logging disabled to save CU - use events instead
 
     Ok(())
@@ -223,22 +241,25 @@ pub fn transfer(ctx: Context<crate::TransferErc>) -> Result<()> {
     let poa_config = &mut ctx.accounts.poa_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let clock = Clock::get()?;
-    
+
     // Operational checks
-    require!(poa_config.is_operational(), GovernanceError::MaintenanceMode);
-    
+    require!(
+        poa_config.is_operational(),
+        GovernanceError::MaintenanceMode
+    );
+
     // Transfers must be enabled OR sender is authority (Issuance transfer)
     require!(
         poa_config.allow_certificate_transfers || erc_certificate.owner == poa_config.authority,
         GovernanceError::TransfersNotAllowed
     );
-    
+
     // Certificate must be transferable (Valid + validated for trading)
     require!(
         erc_certificate.can_transfer(),
         GovernanceError::NotValidatedForTrading
     );
-    
+
     // Check expiration
     if let Some(expires_at) = erc_certificate.expires_at {
         require!(
@@ -246,30 +267,33 @@ pub fn transfer(ctx: Context<crate::TransferErc>) -> Result<()> {
             GovernanceError::ErcExpired
         );
     }
-    
+
     // Cannot transfer to self
     require!(
         ctx.accounts.new_owner.key() != erc_certificate.owner,
         GovernanceError::CannotTransferToSelf
     );
-    
+
     // Store data for event
     let from_owner = erc_certificate.owner;
     let to_owner = ctx.accounts.new_owner.key();
     let energy_amount = erc_certificate.energy_amount;
-    
+
     // Transfer ownership
     erc_certificate.owner = to_owner;
     erc_certificate.transfer_count = erc_certificate.transfer_count.saturating_add(1);
     erc_certificate.last_transferred_at = Some(clock.unix_timestamp);
-    
+
     emit!(ErcTransferred {
-        certificate_id: String::from_utf8_lossy(&erc_certificate.certificate_id[..erc_certificate.id_len as usize]).into_owned(),
+        certificate_id: String::from_utf8_lossy(
+            &erc_certificate.certificate_id[..erc_certificate.id_len as usize]
+        )
+        .into_owned(),
         from_owner,
         to_owner,
         energy_amount,
         timestamp: clock.unix_timestamp,
     });
-    
+
     Ok(())
 }

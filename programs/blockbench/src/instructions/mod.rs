@@ -7,6 +7,7 @@ pub mod io_heavy;
 pub mod analytics;
 pub mod ycsb;
 pub mod metrics;
+pub mod smallbank;
 
 pub use initialize::*;
 pub use do_nothing::*;
@@ -15,3 +16,4 @@ pub use io_heavy::*;
 pub use analytics::*;
 pub use ycsb::*;
 pub use metrics::*;
+pub use smallbank::*;

@@ -32,7 +32,7 @@ This section contains formal academic documentation covering theoretical foundat
 
 ## 📋 Program Documentation
 
-Detailed technical documentation for each of the seven interconnected Anchor smart contract programs:
+Detailed technical documentation for each of the six interconnected Anchor smart contract programs:
 
 | Program | Document | Responsibility |
 |---------|----------|---------------|
@@ -42,6 +42,7 @@ Detailed technical documentation for each of the seven interconnected Anchor sma
 | Energy Token | [Energy Token Program](../programs/energy-token.md) | GRX token minting/burning, supply control |
 | Trading | [Trading Program](../programs/trading.md) | Order book, matching engine, settlement |
 | Governance | [Governance Program](../programs/governance.md) | ERC certification, PoA configuration |
+| Blockbench | [Blockbench Program](../programs/blockbench.md) | Performance benchmarking (TPC-C, YCSB) |
 
 ### Deep Dive Documentation
 

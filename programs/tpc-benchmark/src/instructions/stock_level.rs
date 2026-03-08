@@ -25,9 +25,9 @@ pub struct StockLevel<'info> {
     /// District to get next_o_id (determines recent orders)
     #[account(
         seeds = [b"district", w_id.to_le_bytes().as_ref(), d_id.to_le_bytes().as_ref()],
-        bump = district.bump,
+        bump = district.load()?.bump,
     )]
-    pub district: Account<'info, District>,
+    pub district: AccountLoader<'info, District>,
     
     // Remaining accounts: Stock accounts to check
     // [stock_1, stock_2, ..., stock_n]
@@ -57,15 +57,15 @@ pub struct StockLevelResult {
 /// 
 /// # Remaining Accounts
 /// Stock accounts to check: ["stock", w_id, i_id] for each item
-pub fn stock_level(
-    ctx: Context<StockLevel>,
+pub fn stock_level<'info>(
+    ctx: Context<StockLevel<'info>>,
     w_id: u64,
     d_id: u64,
     threshold: u64,
 ) -> Result<()> {
     require!(threshold > 0, TpcError::InvalidStockThreshold);
     
-    let district = &ctx.accounts.district;
+    let district = ctx.accounts.district.load()?;
     let _next_o_id = district.next_o_id;
     
     // Count items below threshold from remaining accounts
@@ -73,28 +73,27 @@ pub fn stock_level(
     let mut items_checked: u64 = 0;
     
     for stock_account in ctx.remaining_accounts.iter() {
-        let stock_data = stock_account.try_borrow_data()?;
-        
-        // Skip discriminator and deserialize
-        if stock_data.len() > 8 {
-            if let Ok(stock) = Stock::try_deserialize(&mut &stock_data[8..]) {
-                items_checked += 1;
-                
-                // Check if stock is below threshold
-                if stock.quantity < threshold {
-                    low_stock_count += 1;
-                }
+        let data = stock_account.try_borrow_data()?;
+        if data.len() >= 8 + std::mem::size_of::<Stock>() {
+            let stock = bytemuck::from_bytes::<Stock>(&data[8..8 + std::mem::size_of::<Stock>()]);
+            items_checked += 1;
+            
+            // Check if stock is below threshold
+            if stock.quantity < threshold {
+                low_stock_count += 1;
             }
         }
     }
     
-    let _result = StockLevelResult {
-        w_id,
-        d_id,
-        threshold,
-        low_stock_count,
-        items_checked,
-    };
+    // The StockLevelResult is not explicitly returned or emitted as an event
+    // in this benchmark version, but it's good practice to define it.
+    // let _result = StockLevelResult {
+    //     w_id,
+    //     d_id,
+    //     threshold,
+    //     low_stock_count,
+    //     items_checked,
+    // };
     
     msg!(
         "Stock-Level: W={} D={} threshold={} low_stock={}/{}",

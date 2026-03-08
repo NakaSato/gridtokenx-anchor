@@ -20,4 +20,6 @@ pub enum EnergyTokenError {
     ValidatorAlreadyExists,
     #[msg("Maximum number of validators reached")]
     MaxValidatorsReached,
+    #[msg("REC validator not found in the registered list")]
+    RecValidatorNotFound,
 }

@@ -10,7 +10,7 @@
 > **Related Documentation:**
 > - [Data Flow Diagrams](./04-data-flow-diagrams.md) - System DFD Level 0-2
 > - [Settlement Architecture](../programs/deep-dive/settlement-architecture.md) - Atomic settlement
-> - [Periodic Auction](../programs/deep-dive/periodic-auction.md) - Batch clearing process
+> - [Trading Program](../programs/trading.md) - CDA order book
 
 ---
 

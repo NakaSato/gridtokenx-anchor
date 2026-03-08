@@ -44,14 +44,14 @@ async function main() {
     );
 
     try {
-        await tradingProgram.methods.initializeMarket().accounts({
+        await tradingProgram.methods.initializeMarket(1).accounts({
             market: marketPda,
             authority: authority.publicKey,
             systemProgram: SystemProgram.programId
-        }).rpc();
+        }).rpc({ commitment: 'confirmed' });
         console.log("✅ Market initialized.");
     } catch (e: any) {
-        if (e.message.includes("already in use")) {
+        if (e.message.includes("already in use") || e.message.includes("custom program error: 0x0")) {
             console.log("ℹ️ Market already initialized.");
         } else {
             throw e;

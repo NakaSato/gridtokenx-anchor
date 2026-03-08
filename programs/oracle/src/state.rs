@@ -2,6 +2,31 @@
 
 use anchor_lang::prelude::*;
 
+/// Maximum length for meter ID strings (used for PDA seeds and storage)
+pub const MAX_METER_ID_LEN: usize = 32;
+
+/// MeterState PDA - per-meter account for Sealevel parallel execution
+/// Seeds: [b"meter", meter_id.as_bytes()]
+/// Each meter writes to its own account, avoiding write-lock contention on the global OracleData.
+#[account]
+pub struct MeterState {
+    pub meter_id: [u8; MAX_METER_ID_LEN], // 32 bytes - fixed-size meter identifier
+    pub meter_id_len: u8,                  // 1 byte  - actual length of meter_id
+    pub bump: u8,                          // 1 byte  - PDA bump seed
+    pub energy_produced: u64,              // 8 bytes - latest reading
+    pub energy_consumed: u64,              // 8 bytes - latest reading
+    pub total_energy_produced: u64,        // 8 bytes - cumulative for this meter
+    pub total_energy_consumed: u64,        // 8 bytes - cumulative for this meter
+    pub last_reading_timestamp: i64,       // 8 bytes
+    pub total_readings: u64,              // 8 bytes
+    pub created_at: i64,                  // 8 bytes
+}
+
+impl MeterState {
+    /// Space: 8 (discriminator) + 32 + 1 + 1 + 8*6 + 8 = 8 + 90 = 98
+    pub const SPACE: usize = 8 + MAX_METER_ID_LEN + 1 + 1 + 8 + 8 + 8 + 8 + 8 + 8 + 8;
+}
+
 /// OracleData account with zero_copy for efficient data access
 /// Direct memory access avoids deserialization overhead
 /// All fields explicitly defined including padding to satisfy bytemuck's Pod trait

@@ -34,4 +34,6 @@ pub enum OracleError {
     InvalidConfiguration,
     #[msg("Invalid market epoch - must be greater than last cleared epoch")]
     InvalidEpoch,
+    #[msg("Meter ID exceeds maximum length of 32 bytes")]
+    MeterIdTooLong,
 }

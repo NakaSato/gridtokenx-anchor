@@ -9,7 +9,7 @@
 
 > **Related Documentation:**
 > - [Energy Token Program](../programs/energy-token.md) - GRX smart contract
-> - [AMM & Bonding Curves](../programs/deep-dive/amm-bonding-curves.md) - Price mechanics
+> - [Trading Program](../programs/trading.md) - CDA order book
 > - [Carbon Credit System](../programs/deep-dive/carbon-credits.md) - REC tokenization
 
 ---
@@ -259,7 +259,7 @@ TECHNICAL VALIDATION:
                       └───────────┘
 
 
-TOKEN MOVEMENT SUMMARY (Across 7 Programs):
+TOKEN MOVEMENT SUMMARY (Across 6 Programs):
 ═══════════════════════════════════════════════════════════════════════════════════
 
 1. METER READING:   Oracle validates reading (8k CU, BFT consensus)
@@ -306,7 +306,7 @@ OPTION A: NATIVE GRX PAYMENT
        │                                 ◄─────────────────────────────────│
        │                                 │                                 │
        │                                 │  3. Match Orders                │
-       │                                 │  (VWAP @ 2.9 GRX/kWh)           │
+       │                                 │  (Price @ 2.9 GRX/kWh)          │
        │                                 │  [15k CU, 440ms latency]        │
        │                                 │                                 │
        │  4. GRX Transfer (290 GRX)      │                                 │
@@ -470,7 +470,7 @@ PRICE FLOOR (Too Low):
     │                                                                         │
     │   Example (Typical Trade):                                             │
     │   Surplus: 100 kWh                                                      │
-    │   Market Price: 3.0 GRX/kWh (VWAP from order matching)                │
+    │   Market Price: 3.0 GRX/kWh (from order matching)                     │
     │   Trade Value: 300 GRX                                                  │
     │   Platform Fee: 300 × 0.0025 = 0.75 GRX                                │
     │   Net Revenue = 300 - 0.75 = 299.25 GRX                                │
@@ -902,7 +902,7 @@ EFFICIENCY METRICS
 - Enhanced with cross-program invocation details
 - Added dual high-water mark economic security
 - Updated projections with January 2026 pilot data
-- Included all 7 programs in token flow model
+- Included all 6 programs in token flow model
 - Added BFT oracle consensus validation details
 - Updated risk analysis with implemented mitigations
 

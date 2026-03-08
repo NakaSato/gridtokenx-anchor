@@ -315,3 +315,67 @@ pub struct LatencyHistogram {
 impl LatencyHistogram {
     pub const LEN: usize = 8 + 32 + (8 * 7) + 8 + 1;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SMALLBANK BENCHMARK ACCOUNTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Smallbank Customer account
+#[account]
+pub struct SmallbankCustomer {
+    /// Customer ID (primary key)
+    pub customer_id: u64,
+    
+    /// Customer name (max 16 chars)
+    pub name: String,
+    
+    /// PDA bump
+    pub bump: u8,
+}
+
+impl SmallbankCustomer {
+    pub const SPACE: usize = 8 + // discriminator
+        8 + // customer_id
+        4 + 16 + // name
+        1; // bump
+}
+
+/// Smallbank Savings account
+#[account]
+pub struct SmallbankSavings {
+    /// Customer ID this account belongs to
+    pub customer_id: u64,
+    
+    /// Savings balance
+    pub balance: i64,
+    
+    /// PDA bump
+    pub bump: u8,
+}
+
+impl SmallbankSavings {
+    pub const SPACE: usize = 8 + // discriminator
+        8 + // customer_id
+        8 + // balance
+        1; // bump
+}
+
+/// Smallbank Checking account
+#[account]
+pub struct SmallbankChecking {
+    /// Customer ID this account belongs to
+    pub customer_id: u64,
+    
+    /// Checking balance
+    pub balance: i64,
+    
+    /// PDA bump
+    pub bump: u8,
+}
+
+impl SmallbankChecking {
+    pub const SPACE: usize = 8 + // discriminator
+        8 + // customer_id
+        8 + // balance
+        1; // bump
+}

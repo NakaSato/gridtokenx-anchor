@@ -96,9 +96,11 @@
         │ └───────────┘        └───────────┘        └───────────┘     │
         │                                                               │
         │                    ┌───────────┐                             │
-        │                    │    TPC    │                             │
-        │                    │ Benchmark │                             │
-        │                    │  (BcXc..) │                             │
+        │                    │  BLOCKBENCH │                             │
+        │                    │  PROGRAM    │                             │
+        │                    │  (TPC +     │                             │
+        │                    │  YCSB +     │                             │
+        │                    │  MICRO)     │                             │
         │                    └───────────┘                             │
         └───────────────────────────────────────────────────────────────┘
                                     │
@@ -252,8 +254,7 @@ Legend:
 | **Oracle** | `ACeK...AoE` | Meter Data Validation | `initialize` (7k CU), `submit_meter_reading` (8k CU), `trigger_market_clearing` (2.5k CU), `add_backup_oracle` (3.7k CU), `remove_backup_oracle` (4.3k CU) | 8,000 CU | 15,000/sec |
 | **Trading** | `GTuR...ctk` | Multi-Modal Marketplace | `create_market` (8.5k CU), `create_buy_order` (7.2k CU), `create_sell_order` (7.5k CU), `match_orders` (15k CU), `execute_atomic_settlement` (28k CU), `update_price_history` (3k CU) | 12,000 CU | 8,000/sec |
 | **Governance** | `51d3...vXe` | ERC Certificates & PoA | `initialize_poa_config` (5.2k CU), `issue_erc` (6.5k CU), `validate_erc` (4.8k CU), `issue_erc_with_verification` (11.2k CU w/ CPI), `transfer_erc` (5k CU), `revoke_erc` (3.5k CU) | 6,200 CU | 18,460/sec |
-| **Blockbench** | `B5aD...xyz` | Performance Testing | `do_nothing` (1.2k CU), `cpu_heavy` (18.5k CU), `io_heavy` (22k CU), `analytics` (25k CU), `ycsb_workload_a/b/c` (8.5-12k CU) | 15,000 CU | 6,486/sec |
-| **TPC-Benchmark** | `BcXc...abc` | TPC-C Database Testing | `new_order` (80k CU), `payment` (15k CU), `delivery` (45k CU), `order_status` (3k CU), `stock_level` (8k CU) | 30,000 CU | 3,705/sec |
+| **Blockbench** | `B5aD...xyz` | Performance Testing (TPC-C/E/H, YCSB) | `do_nothing` (1.2k CU), `cpu_heavy` (18.5k CU), `io_heavy` (22k CU), `analytics` (25k CU), `ycsb_workload_a/b/c` (8.5-12k CU), `new_order` (80k CU), `payment` (15k CU) | 15,000 CU | 6,486/sec |
 
 **Performance Notes:**
 - All CU values measured from January 2026 comprehensive benchmarks
@@ -317,11 +318,11 @@ Trading Program (GTuR..ctk)
 ├── Market PDA
 │   Seeds: ["market"]
 │   └── total_orders, matched_orders, total_volume,
-│       volume_weighted_price (VWAP), last_clearing_price
+│       volume_weighted_price (avg), last_clearing_price
 │
 ├── Order PDAs
 │   Seeds: ["order", user_pubkey, order_counter]
-│   └── order_type (Bilateral/AMM/Auction/BatchClearing),
+│   └── order_type (Bilateral/CDA),
 │       amount, filled_amount, price_per_kwh, status,
 │       erc_certificate_id (optional), created_at, expires_at
 │
@@ -345,29 +346,11 @@ Blockbench Program (B5aD..xyz)
 ├── Benchmark State PDA
 │   Seeds: ["benchmark_state"]
 │   └── total_operations, total_compute_units,
-│       workload_stats (YCSB A/B/C/D/E/F)
+│       workload_stats (YCSB A/B/C/D/E/F, TPC-C/E/H)
 │
 └── Workload PDAs
     Seeds: ["workload", workload_type]
     └── Read/update ratios, operation counts, latency stats
-
-TPC-Benchmark Program (BcXc..abc)
-├── Warehouse PDAs
-│   Seeds: ["warehouse", warehouse_id]
-│   └── ytd (year-to-date metrics), tax_rate
-│
-├── District PDAs
-│   Seeds: ["district", warehouse_id, district_id]
-│   └── next_o_id (critical serialization point),
-│       ytd, tax_rate
-│
-├── Customer PDAs
-│   Seeds: ["customer", warehouse_id, district_id, customer_id]
-│   └── balance, ytd_payment, payment_cnt, delivery_cnt
-│
-└── Order PDAs
-    Seeds: ["order", warehouse_id, district_id, order_id]
-    └── customer_id, entry_d, carrier_id, ol_cnt, all_local
 ```
 
 ### 4.2 Account Size Calculations
@@ -724,8 +707,8 @@ Financial Attacks
 ├─ Double-minting        Mint twice for reading     ✅ settled_net_gen high-water mark
 ├─ Double-claiming       Tokens + certificates      ✅ Dual high-water marks
 │                        for same energy            (settled_net_gen + claimed_erc_gen)
-├─ Front-running         MEV exploitation           ✅ Batch clearing (uniform price)
-├─ Price manipulation    VWAP gaming                ✅ Lazy updates (every 10 orders)
+├─ Front-running         MEV exploitation           ✅ Time-priority matching (CDA)
+├─ Price manipulation    Gaming price updates     ✅ Lazy updates (every 10 orders)
 └─ Economic exploit      Insufficient collateral    ✅ Order escrow (100% locked)
 
 Identity Attacks
@@ -962,7 +945,7 @@ Bottlenecks & Scaling Solutions:
    Solution: Scale warehouses (100x)
    Result: 1,000 concurrent transactions
 
-3. Trading Market VWAP Updates
+3. Trading Market Price Updates
    Current: 300 orders/block (write lock)
    Solution: Lazy updates (every 10th order)
    Result: 3,000 orders/block (10x improvement)

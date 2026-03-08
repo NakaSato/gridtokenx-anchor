@@ -47,7 +47,7 @@ pub use error::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("DN3XToyEqdvLxXchQZufQj5eXZrxE1yfxsDVDPUrXemD");
+declare_id!("7LqR6fBtaj66SdsCUCoUveazBHCtRtBvPxteWXu7o2im");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_fn, compute_checkpoint};
@@ -110,8 +110,8 @@ pub mod tpc_benchmark {
         })
     }
 
-    pub fn initialize_warehouse(
-        ctx: Context<InitializeWarehouse>,
+    pub fn initialize_warehouse<'info>(
+        ctx: Context<InitializeWarehouse<'info>>,
         w_id: u64,
         name: String,
         street_1: String,
@@ -126,8 +126,8 @@ pub mod tpc_benchmark {
         })
     }
 
-    pub fn initialize_district(
-        ctx: Context<InitializeDistrict>,
+    pub fn initialize_district<'info>(
+        ctx: Context<InitializeDistrict<'info>>,
         w_id: u64,
         d_id: u64,
         name: String,
@@ -143,8 +143,8 @@ pub mod tpc_benchmark {
         })
     }
 
-    pub fn initialize_customer(
-        ctx: Context<InitializeCustomer>,
+    pub fn initialize_customer<'info>(
+        ctx: Context<InitializeCustomer<'info>>,
         w_id: u64,
         d_id: u64,
         c_id: u64,
@@ -170,8 +170,8 @@ pub mod tpc_benchmark {
         })
     }
 
-    pub fn initialize_item(
-        ctx: Context<InitializeItem>,
+    pub fn initialize_item<'info>(
+        ctx: Context<InitializeItem<'info>>,
         i_id: u64,
         im_id: u64,
         name: String,
@@ -183,8 +183,8 @@ pub mod tpc_benchmark {
         })
     }
 
-    pub fn initialize_stock(
-        ctx: Context<InitializeStock>,
+    pub fn initialize_stock<'info>(
+        ctx: Context<InitializeStock<'info>>,
         w_id: u64,
         i_id: u64,
         quantity: u64,
@@ -222,7 +222,7 @@ pub mod tpc_benchmark {
     }
 
     pub fn new_order<'info>(
-        ctx: Context<'_, '_, 'info, 'info, NewOrder<'info>>,
+        ctx: Context<NewOrder<'info>>,
         w_id: u64,
         d_id: u64,
         c_id: u64,
@@ -234,8 +234,8 @@ pub mod tpc_benchmark {
         })
     }
 
-    pub fn payment(
-        ctx: Context<Payment>,
+    pub fn payment<'info>(
+        ctx: Context<Payment<'info>>,
         w_id: u64,
         d_id: u64,
         c_id: u64,
@@ -250,8 +250,8 @@ pub mod tpc_benchmark {
         })
     }
 
-    pub fn order_status(
-        ctx: Context<OrderStatus>,
+    pub fn order_status<'info>(
+        ctx: Context<OrderStatus<'info>>,
         w_id: u64,
         d_id: u64,
         c_id: u64,
@@ -262,8 +262,8 @@ pub mod tpc_benchmark {
         })
     }
 
-    pub fn delivery<'a, 'info>(
-        ctx: Context<'a, 'a, 'a, 'info, Delivery<'info>>,
+    pub fn delivery<'info>(
+        ctx: Context<Delivery<'info>>,
         w_id: u64,
         carrier_id: u64,
     ) -> Result<()> {
@@ -272,8 +272,8 @@ pub mod tpc_benchmark {
         })
     }
 
-    pub fn delivery_district(
-        ctx: Context<DeliveryDistrict>,
+    pub fn delivery_district<'info>(
+        ctx: Context<DeliveryDistrict<'info>>,
         w_id: u64,
         d_id: u64,
         carrier_id: u64,
@@ -283,8 +283,8 @@ pub mod tpc_benchmark {
         })
     }
 
-    pub fn stock_level(
-        ctx: Context<StockLevel>,
+    pub fn stock_level<'info>(
+        ctx: Context<StockLevel<'info>>,
         w_id: u64,
         d_id: u64,
         threshold: u64,

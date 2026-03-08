@@ -39,9 +39,9 @@ pub struct Delivery<'info> {
     /// Warehouse for reference
     #[account(
         seeds = [b"warehouse", w_id.to_le_bytes().as_ref()],
-        bump = warehouse.bump,
+        bump = warehouse.load()?.bump,
     )]
-    pub warehouse: Account<'info, Warehouse>,
+    pub warehouse: AccountLoader<'info, Warehouse>,
     
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -56,8 +56,8 @@ pub struct Delivery<'info> {
 /// 
 /// NOTE: This may exceed compute limits for 10 districts.
 /// Consider using delivery_district for production.
-pub fn delivery<'a, 'info>(
-    ctx: Context<'a, 'a, 'a, 'info, Delivery<'info>>,
+pub fn delivery<'info>(
+    ctx: Context<Delivery<'info>>,
     w_id: u64,
     carrier_id: u64,
 ) -> Result<()> {
@@ -79,20 +79,20 @@ pub fn delivery<'a, 'info>(
     );
     
     for i in 0..districts_to_process {
-        let base_idx = i * 3;
+        // Get accounts
+        let new_order_account = &ctx.remaining_accounts[i * 3];
+        let order_account = &ctx.remaining_accounts[i * 3 + 1];
+        let customer_account = &ctx.remaining_accounts[i * 3 + 2];
         
-        // Get accounts for this district
-        let new_order_account = &accounts[base_idx];
-        let order_account = &accounts[base_idx + 1];
-        let customer_account = &accounts[base_idx + 2];
+        let mut order_data = order_account.try_borrow_mut_data()?;
+        let mut customer_data = customer_account.try_borrow_mut_data()?;
         
-        // Process delivery for this district
         process_district_delivery(
             new_order_account,
-            order_account,
-            customer_account,
+            &mut order_data,
+            &mut customer_data,
             carrier_id,
-            delivery_d,
+            clock.unix_timestamp,
             &ctx.accounts.payer.to_account_info(),
         )?;
     }
@@ -112,9 +112,9 @@ pub struct DeliveryDistrict<'info> {
     /// District for reference
     #[account(
         seeds = [b"district", w_id.to_le_bytes().as_ref(), d_id.to_le_bytes().as_ref()],
-        bump = district.bump,
+        bump = district.load()?.bump,
     )]
-    pub district: Account<'info, District>,
+    pub district: AccountLoader<'info, District>,
     
     /// NewOrder to be deleted (oldest in district)
     /// Note: In practice, the client must find the oldest o_id
@@ -140,9 +140,9 @@ pub struct DeliveryDistrict<'info> {
             d_id.to_le_bytes().as_ref(),
             new_order.o_id.to_le_bytes().as_ref()
         ],
-        bump = order.bump,
+        bump = order.load()?.bump,
     )]
-    pub order: Account<'info, Order>,
+    pub order: AccountLoader<'info, Order>,
     
     /// Customer to be updated
     #[account(
@@ -151,11 +151,11 @@ pub struct DeliveryDistrict<'info> {
             b"customer",
             w_id.to_le_bytes().as_ref(),
             d_id.to_le_bytes().as_ref(),
-            order.c_id.to_le_bytes().as_ref()
+            order.load()?.c_id.to_le_bytes().as_ref()
         ],
-        bump = customer.bump,
+        bump = customer.load()?.bump,
     )]
-    pub customer: Account<'info, Customer>,
+    pub customer: AccountLoader<'info, Customer>,
     
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -164,8 +164,8 @@ pub struct DeliveryDistrict<'info> {
 }
 
 /// Execute Per-District Delivery Transaction
-pub fn delivery_district(
-    ctx: Context<DeliveryDistrict>,
+pub fn delivery_district<'info>(
+    ctx: Context<DeliveryDistrict<'info>>,
     w_id: u64,
     d_id: u64,
     carrier_id: u64,
@@ -175,14 +175,14 @@ pub fn delivery_district(
         TpcError::InvalidCarrierId
     );
     
-    let order = &mut ctx.accounts.order;
-    let customer = &mut ctx.accounts.customer;
+    let mut order = ctx.accounts.order.load_mut()?;
+    let mut customer = ctx.accounts.customer.load_mut()?;
     let clock = Clock::get()?;
     let delivery_d = clock.unix_timestamp;
     
     // Verify order not already delivered
     require!(
-        order.carrier_id.is_none(),
+        order.carrier_id == 0,
         TpcError::OrderAlreadyDelivered
     );
     
@@ -192,13 +192,14 @@ pub fn delivery_district(
     // UPDATE ORDER
     // ═══════════════════════════════════════════════════════════════════
     
-    order.carrier_id = Some(carrier_id);
+    order.carrier_id = carrier_id;
     
     // Update delivery date for all order lines
     let mut total_amount: u64 = 0;
-    for line in &mut order.lines {
-        line.delivery_d = Some(delivery_d);
-        total_amount += line.amount;
+    let ol_cnt = order.ol_cnt as usize;
+    for i in 0..ol_cnt {
+        order.lines[i].delivery_d = delivery_d;
+        total_amount += order.lines[i].amount;
     }
     
     // ═══════════════════════════════════════════════════════════════════
@@ -229,40 +230,40 @@ pub fn delivery_district(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Process delivery for a single district (used by full delivery)
-fn process_district_delivery<'info>(
-    new_order_account: &AccountInfo<'info>,
-    order_account: &AccountInfo<'info>,
-    customer_account: &AccountInfo<'info>,
+fn process_district_delivery(
+    new_order_account: &AccountInfo,
+    order_data: &mut [u8],
+    customer_data: &mut [u8],
     carrier_id: u64,
     delivery_d: i64,
-    payer: &AccountInfo<'info>,
+    payer: &AccountInfo,
 ) -> Result<()> {
-    // Deserialize order
-    let mut order_data = order_account.try_borrow_mut_data()?;
-    let mut order: Order = Order::try_deserialize(&mut &order_data[8..])?;
+    // Access accounts using manual bytemuck for zero_copy
+    if order_data.len() < 8 + std::mem::size_of::<Order>() {
+        return Err(ErrorCode::AccountDiscriminatorMismatch.into());
+    }
+    let order = bytemuck::from_bytes_mut::<Order>(&mut order_data[8..8 + std::mem::size_of::<Order>()]);
     
     // Verify not already delivered
     require!(
-        order.carrier_id.is_none(),
+        order.carrier_id == 0,
         TpcError::OrderAlreadyDelivered
     );
     
     // Update order
-    order.carrier_id = Some(carrier_id);
+    order.carrier_id = carrier_id;
     let mut total_amount: u64 = 0;
-    for line in &mut order.lines {
-        line.delivery_d = Some(delivery_d);
-        total_amount += line.amount;
+    let ol_cnt = order.ol_cnt as usize;
+    for i in 0..ol_cnt {
+        order.lines[i].delivery_d = delivery_d;
+        total_amount += order.lines[i].amount;
     }
     
-    // Serialize order back
-    let serialized_order = order.try_to_vec()?;
-    order_data[8..8 + serialized_order.len()].copy_from_slice(&serialized_order);
-    drop(order_data);
-    
-    // Deserialize and update customer
-    let mut customer_data = customer_account.try_borrow_mut_data()?;
-    let mut customer: Customer = Customer::try_deserialize(&mut &customer_data[8..])?;
+    // Access customer using manual bytemuck
+    if customer_data.len() < 8 + std::mem::size_of::<Customer>() {
+        return Err(ErrorCode::AccountDiscriminatorMismatch.into());
+    }
+    let customer = bytemuck::from_bytes_mut::<Customer>(&mut customer_data[8..8 + std::mem::size_of::<Customer>()]);
     
     customer.balance = customer.balance
         .checked_add(total_amount as i64)
@@ -271,11 +272,7 @@ fn process_district_delivery<'info>(
         .checked_add(1)
         .ok_or(TpcError::BalanceOverflow)?;
     
-    let serialized_customer = customer.try_to_vec()?;
-    customer_data[8..8 + serialized_customer.len()].copy_from_slice(&serialized_customer);
-    drop(customer_data);
-    
-    // Close new_order account and reclaim rent
+    // Close new_order account and reclaim rent (manual closing for batch)
     let lamports = new_order_account.lamports();
     **new_order_account.try_borrow_mut_lamports()? = 0;
     **payer.try_borrow_mut_lamports()? = payer.lamports()

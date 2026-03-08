@@ -20,7 +20,7 @@
 //! - Scan: Range queries (limited by Solana model)
 //!
 //! ## Reference
-//! 
+//!
 //! Based on "BLOCKBENCH: A Framework for Analyzing Private Blockchains" (SIGMOD 2017)
 //! Adapted for Solana's account model and BPF/SBF execution environment.
 
@@ -35,14 +35,16 @@ pub use error::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("B7Detx5TMRQNzVCgdd9Rp5YnN9cAtC7KeMBrzdZZsd4E");
+declare_id!("J8qT5bb6mSAwr9J3S2Sk27VUXzcVuYEDmXMTpw9DGG5B");
 
 #[cfg(feature = "localnet")]
-use compute_debug::{compute_fn, compute_checkpoint};
+use compute_debug::{compute_checkpoint, compute_fn};
 
 #[cfg(not(feature = "localnet"))]
 macro_rules! compute_fn {
-    ($name:expr => $block:block) => { $block };
+    ($name:expr => $block:block) => {
+        $block
+    };
 }
 #[cfg(not(feature = "localnet"))]
 #[allow(unused_macros)]
@@ -55,27 +57,27 @@ pub mod blockbench_constants {
     /// YCSB Workload A: 50% read, 50% update (update heavy)
     pub const YCSB_WORKLOAD_A_READ: u8 = 50;
     pub const YCSB_WORKLOAD_A_UPDATE: u8 = 50;
-    
+
     /// YCSB Workload B: 95% read, 5% update (read heavy)
     pub const YCSB_WORKLOAD_B_READ: u8 = 95;
     pub const YCSB_WORKLOAD_B_UPDATE: u8 = 5;
-    
+
     /// YCSB Workload C: 100% read (read only)
     pub const YCSB_WORKLOAD_C_READ: u8 = 100;
-    
+
     /// YCSB Workload F: 50% read, 50% read-modify-write
     pub const YCSB_WORKLOAD_F_READ: u8 = 50;
     pub const YCSB_WORKLOAD_F_RMW: u8 = 50;
-    
+
     /// Default record count for YCSB
     pub const DEFAULT_RECORD_COUNT: u32 = 10000;
-    
+
     /// Default field size in bytes
     pub const DEFAULT_FIELD_SIZE: u16 = 100;
-    
+
     /// CPUHeavy sort array size
     pub const CPU_HEAVY_SORT_SIZE: u16 = 256;
-    
+
     /// IOHeavy operations per transaction
     pub const IO_HEAVY_OPS_PER_TX: u8 = 10;
 }
@@ -123,7 +125,11 @@ pub mod blockbench {
         Ok(res)
     }
 
-    pub fn cpu_heavy_hash(ctx: Context<CpuHeavy>, iterations: u16, data_size: u16) -> Result<[u8; 32]> {
+    pub fn cpu_heavy_hash(
+        ctx: Context<CpuHeavy>,
+        iterations: u16,
+        data_size: u16,
+    ) -> Result<[u8; 32]> {
         let res = compute_fn!("cpu_heavy_hash" => {
             instructions::cpu_heavy_hash(ctx, iterations, data_size)
         })?;
@@ -194,11 +200,7 @@ pub mod blockbench {
         })
     }
 
-    pub fn ycsb_insert(
-        ctx: Context<YcsbInsert>,
-        key: [u8; 32],
-        value: Vec<u8>,
-    ) -> Result<()> {
+    pub fn ycsb_insert(ctx: Context<YcsbInsert>, key: [u8; 32], value: Vec<u8>) -> Result<()> {
         compute_fn!("ycsb_insert" => {
             instructions::ycsb_insert(ctx, key, value)
         })
@@ -211,11 +213,7 @@ pub mod blockbench {
         Ok(res)
     }
 
-    pub fn ycsb_update(
-        ctx: Context<YcsbUpdate>,
-        key: [u8; 32],
-        value: Vec<u8>,
-    ) -> Result<()> {
+    pub fn ycsb_update(ctx: Context<YcsbUpdate>, key: [u8; 32], value: Vec<u8>) -> Result<()> {
         compute_fn!("ycsb_update" => {
             instructions::ycsb_update(ctx, key, value)
         })
@@ -259,5 +257,57 @@ pub mod blockbench {
             instructions::finalize_benchmark(ctx)
         })?;
         Ok(res)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SMALLBANK BENCHMARK
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn smallbank_create_account(
+        ctx: Context<SmallbankCreateAccount>,
+        customer_id: u64,
+        name: String,
+        initial_savings: i64,
+        initial_checking: i64,
+    ) -> Result<()> {
+        compute_fn!("smallbank_create_account" => {
+            instructions::smallbank_create_account(ctx, customer_id, name, initial_savings, initial_checking)
+        })
+    }
+
+    pub fn smallbank_transact_savings(
+        ctx: Context<SmallbankTransactSavings>,
+        amount: i64,
+    ) -> Result<()> {
+        compute_fn!("smallbank_transact_savings" => {
+            instructions::smallbank_transact_savings(ctx, amount)
+        })
+    }
+
+    pub fn smallbank_deposit_checking(
+        ctx: Context<SmallbankDepositChecking>,
+        amount: i64,
+    ) -> Result<()> {
+        compute_fn!("smallbank_deposit_checking" => {
+            instructions::smallbank_deposit_checking(ctx, amount)
+        })
+    }
+
+    pub fn smallbank_send_payment(ctx: Context<SmallbankSendPayment>, amount: i64) -> Result<()> {
+        compute_fn!("smallbank_send_payment" => {
+            instructions::smallbank_send_payment(ctx, amount)
+        })
+    }
+
+    pub fn smallbank_write_check(ctx: Context<SmallbankWriteCheck>, amount: i64) -> Result<()> {
+        compute_fn!("smallbank_write_check" => {
+            instructions::smallbank_write_check(ctx, amount)
+        })
+    }
+
+    pub fn smallbank_amalgamate(ctx: Context<SmallbankAmalgamate>) -> Result<()> {
+        compute_fn!("smallbank_amalgamate" => {
+            instructions::smallbank_amalgamate(ctx)
+        })
     }
 }

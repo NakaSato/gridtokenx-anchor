@@ -10,6 +10,14 @@ import {
 import { assert } from "chai";
 import type { Oracle } from "../target/types/oracle";
 
+/// Derive a meter PDA from its string ID
+function findMeterPda(meterId: string, programId: PublicKey): [PublicKey, number] {
+    return PublicKey.findProgramAddressSync(
+        [Buffer.from("meter"), Buffer.from(meterId)],
+        programId
+    );
+}
+
 describe("Oracle Program", () => {
     const provider = anchor.AnchorProvider.env();
     anchor.setProvider(provider);
@@ -52,7 +60,7 @@ describe("Oracle Program", () => {
         }
     });
 
-    it("Submits meter reading via API Gateway", async () => {
+    it("Submits meter reading via API Gateway (writes to MeterState PDA)", async () => {
         // First, update the apiGateway to the new one for this test run
         try {
             await program.methods.updateApiGateway(apiGateway.publicKey).accounts({
@@ -63,25 +71,88 @@ describe("Oracle Program", () => {
             // Ignore if already set
         }
 
+        const meterId = "METER-001";
+        const [meterState] = findMeterPda(meterId, program.programId);
+
         const timestamp = new BN(Math.floor(Date.now() / 1000));
-        await program.methods.submitMeterReading("METER-001", new BN(100), new BN(50), timestamp).accounts({
+        await program.methods.submitMeterReading(meterId, new BN(100), new BN(50), timestamp).accounts({
             oracleData: oracleData,
-            authority: apiGateway.publicKey
+            meterState: meterState,
+            authority: apiGateway.publicKey,
+            systemProgram: SystemProgram.programId,
+        }).signers([apiGateway]).rpc();
+
+        // Verify per-meter state (not global counters)
+        const meter = await program.account.meterState.fetch(meterState);
+        assert.equal(meter.totalEnergyProduced.toNumber(), 100);
+        assert.equal(meter.totalEnergyConsumed.toNumber(), 50);
+        assert.equal(meter.totalReadings.toNumber(), 1);
+
+        // Global counters should still be 0 (updated via aggregate_readings)
+        const data = await program.account.oracleData.fetch(oracleData);
+        assert.equal(data.totalGlobalEnergyProduced.toNumber(), 0);
+    });
+
+    it("Submits readings for different meters in parallel (Sealevel)", async () => {
+        const meters = ["METER-A", "METER-B", "METER-C"];
+        const timestamp = new BN(Math.floor(Date.now() / 1000));
+
+        // Build all transactions — each touches a different MeterState PDA
+        const txPromises = meters.map((meterId) => {
+            const [meterState] = findMeterPda(meterId, program.programId);
+            return program.methods
+                .submitMeterReading(meterId, new BN(200), new BN(100), timestamp)
+                .accounts({
+                    oracleData: oracleData,
+                    meterState: meterState,
+                    authority: apiGateway.publicKey,
+                    systemProgram: SystemProgram.programId,
+                })
+                .signers([apiGateway])
+                .rpc();
+        });
+
+        await Promise.all(txPromises);
+
+        // Verify each meter has its own state
+        for (const meterId of meters) {
+            const [meterState] = findMeterPda(meterId, program.programId);
+            const meter = await program.account.meterState.fetch(meterState);
+            assert.equal(meter.totalEnergyProduced.toNumber(), 200);
+            assert.equal(meter.totalReadings.toNumber(), 1);
+        }
+    });
+
+    it("Aggregates readings into global counters (batch)", async () => {
+        // Gateway aggregates: 4 meters × their totals
+        await program.methods.aggregateReadings(
+            new BN(700),  // total_produced (100 + 200*3)
+            new BN(350),  // total_consumed (50 + 100*3)
+            new BN(4),    // valid_count
+            new BN(0),    // rejected_count
+        ).accounts({
+            oracleData: oracleData,
+            authority: apiGateway.publicKey,
         }).signers([apiGateway]).rpc();
 
         const data = await program.account.oracleData.fetch(oracleData);
-        assert.equal(data.totalGlobalEnergyProduced.toNumber(), 100);
-        assert.equal(data.totalGlobalEnergyConsumed.toNumber(), 50);
-        assert.equal(data.totalValidReadings.toNumber(), 1);
+        assert.equal(data.totalGlobalEnergyProduced.toNumber(), 700);
+        assert.equal(data.totalGlobalEnergyConsumed.toNumber(), 350);
+        assert.equal(data.totalValidReadings.toNumber(), 4);
+        assert.equal(data.totalReadings.toNumber(), 4);
     });
 
     it("Fails to submit reading from unauthorized gateway", async () => {
         const other = Keypair.generate();
+        const meterId = "METER-001";
+        const [meterState] = findMeterPda(meterId, program.programId);
         const timestamp = new BN(Math.floor(Date.now() / 1000));
         try {
-            await program.methods.submitMeterReading("METER-001", new BN(100), new BN(50), timestamp).accounts({
+            await program.methods.submitMeterReading(meterId, new BN(100), new BN(50), timestamp).accounts({
                 oracleData: oracleData,
-                authority: other.publicKey
+                meterState: meterState,
+                authority: other.publicKey,
+                systemProgram: SystemProgram.programId,
             }).signers([other]).rpc();
             assert.fail("Should have failed");
         } catch (e: any) {

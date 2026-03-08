@@ -118,11 +118,8 @@ pub mod energy_token {
             token_interface::mint_to(cpi_ctx, amount)?;
             compute_checkpoint!("after_mint_cpi");
 
-            // Update total supply
-            let mut token_info = ctx.accounts.token_info.load_mut()?;
-            token_info.total_supply = token_info.total_supply.saturating_add(amount);
-
-            // Logging disabled to save CU
+            // total_supply is NOT updated here — use sync_total_supply for batch updates
+            // to avoid write-lock contention on token_info during high-frequency minting
 
             emit!(TokensMinted {
                 recipient: ctx.accounts.destination.key(),
@@ -222,31 +219,40 @@ pub mod energy_token {
             token_interface::burn(cpi_ctx, amount)?;
             compute_checkpoint!("after_burn_cpi");
 
-            let mut token_info = ctx.accounts.token_info.load_mut()?;
-            token_info.total_supply = token_info.total_supply.saturating_sub(amount);
-
-            // Logging disabled to save CU
+            // total_supply is NOT updated here — use sync_total_supply for batch updates
         });
         Ok(())
     }
 
     /// Mint tokens directly to a user (authority or registry program only)
-    /// This is used for off-chain verified meter readings
+    /// 
+    /// Sealevel-optimized: token_info is read-only (no total_supply write).
+    /// If REC validators are registered, one must co-sign to prove energy provenance.
+    /// Call sync_total_supply periodically to batch-update the stored total.
     pub fn mint_tokens_direct(ctx: Context<MintTokensDirect>, amount: u64) -> Result<()> {
         compute_fn!("mint_tokens_direct" => {
-            // Scope the borrow to ensure it drops before mutable borrow later
-            {
-                let token_info = ctx.accounts.token_info.load()?;
-            
-                // Check if caller has permission (Admin or Registry Program)
-                let is_admin = ctx.accounts.authority.key() == token_info.authority;
-                
-                // Check if caller is the Registry authority passed in accounts
-                // Verification against stored registry_authority is done in the struct constraint
-                let is_registry = ctx.accounts.authority.key() == ctx.accounts.registry_authority.key();
+            let token_info = ctx.accounts.token_info.load()?;
 
-                require!(is_admin || is_registry, EnergyTokenError::UnauthorizedAuthority);
+            // Check if caller has permission (Admin or Registry Program)
+            let is_admin = ctx.accounts.authority.key() == token_info.authority;
+            let is_registry = ctx.accounts.authority.key() == ctx.accounts.registry_authority.key();
+            require!(is_admin || is_registry, EnergyTokenError::UnauthorizedAuthority);
+
+            // REC Validator co-signature: when validators are registered, one must sign
+            // This proves the minted energy has a corresponding Renewable Energy Certificate
+            if token_info.rec_validators_count > 0 {
+                let rec_key = ctx.accounts.rec_validator.key();
+                let mut found = false;
+                for i in 0..token_info.rec_validators_count as usize {
+                    if token_info.rec_validators[i] == rec_key {
+                        found = true;
+                        break;
+                    }
+                }
+                require!(found, EnergyTokenError::RecValidatorNotFound);
             }
+
+            drop(token_info);
 
             // Mint tokens using token_info PDA as authority
             let seeds = &[b"token_info_2022".as_ref(), &[ctx.bumps.token_info]];
@@ -265,14 +271,37 @@ pub mod energy_token {
             token_interface::mint_to(cpi_ctx, amount)?;
             compute_checkpoint!("after_mint_direct_cpi");
 
-            // Update total supply
-            let mut token_info = ctx.accounts.token_info.load_mut()?;
-            token_info.total_supply = token_info.total_supply.saturating_add(amount);
+            // total_supply is NOT updated here — use sync_total_supply for batch updates
 
-            // Use GridTokensMinted event which clearly implies energy to token conversion
             emit!(GridTokensMinted {
                 meter_owner: ctx.accounts.user_token_account.key(),
                 amount,
+                timestamp: Clock::get()?.unix_timestamp,
+            });
+        });
+        Ok(())
+    }
+
+    /// Sync total_supply from the canonical SPL Mint account (admin only)
+    /// 
+    /// Call this periodically (e.g. every N mints/burns) instead of writing
+    /// token_info on every transaction. Eliminates write-lock contention on
+    /// token_info during high-frequency mint/burn operations.
+    pub fn sync_total_supply(ctx: Context<SyncTotalSupply>) -> Result<()> {
+        compute_fn!("sync_total_supply" => {
+            let mut token_info = ctx.accounts.token_info.load_mut()?;
+
+            require!(
+                ctx.accounts.authority.key() == token_info.authority,
+                EnergyTokenError::UnauthorizedAuthority
+            );
+
+            let canonical_supply = ctx.accounts.mint.supply;
+            token_info.total_supply = canonical_supply;
+
+            emit!(TotalSupplySynced {
+                authority: ctx.accounts.authority.key(),
+                supply: canonical_supply,
                 timestamp: Clock::get()?.unix_timestamp,
             });
         });
@@ -328,7 +357,6 @@ pub struct MintToWallet<'info> {
     pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(
-        mut,
         seeds = [b"token_info_2022"],
         bump,
         constraint = token_info.load()?.authority == authority.key() @ EnergyTokenError::UnauthorizedAuthority,
@@ -412,9 +440,6 @@ pub struct TransferTokens<'info> {
 #[derive(Accounts)]
 pub struct BurnTokens<'info> {
     #[account(mut)]
-    pub token_info: AccountLoader<'info, TokenInfo>,
-
-    #[account(mut)]
     pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(mut)]
@@ -427,8 +452,8 @@ pub struct BurnTokens<'info> {
 
 #[derive(Accounts)]
 pub struct MintTokensDirect<'info> {
+    /// Global config — read-only, no write lock for Sealevel parallelism
     #[account(
-        mut,
         seeds = [b"token_info_2022"],
         bump
     )]
@@ -451,6 +476,26 @@ pub struct MintTokensDirect<'info> {
     )]
     pub registry_authority: UncheckedAccount<'info>,
 
+    /// REC Validator co-signer — must be in token_info.rec_validators when count > 0
+    pub rec_validator: Signer<'info>,
+
     pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct SyncTotalSupply<'info> {
+    #[account(
+        mut,
+        seeds = [b"token_info_2022"],
+        bump
+    )]
+    pub token_info: AccountLoader<'info, TokenInfo>,
+
+    #[account(
+        constraint = mint.key() == token_info.load()?.mint @ EnergyTokenError::UnauthorizedAuthority,
+    )]
+    pub mint: InterfaceAccount<'info, MintInterface>,
+
+    pub authority: Signer<'info>,
 }
 

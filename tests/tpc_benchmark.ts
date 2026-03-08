@@ -62,6 +62,10 @@ describe("TPC Benchmark Program", () => {
         }
     });
 
+    const decodeBytes = (bytes: number[]): string => {
+        return Buffer.from(bytes).toString("utf8").replace(/\0/g, "").trim();
+    };
+
     it("Initializes a warehouse", async () => {
         try {
             await program.methods.initializeWarehouse(
@@ -83,7 +87,7 @@ describe("TPC Benchmark Program", () => {
         }
 
         const warehouse = await program.account.warehouse.fetch(warehouseAccount);
-        assert.equal(warehouse.name, "Whse 1");
+        assert.equal(decodeBytes(warehouse.name as number[]), "Whse 1");
     });
 
     it("Initializes a district", async () => {
@@ -109,7 +113,7 @@ describe("TPC Benchmark Program", () => {
         }
 
         const district = await program.account.district.fetch(districtAccount);
-        assert.equal(district.name, "District 1");
+        assert.equal(decodeBytes(district.name as number[]), "District 1");
     });
 
     it("Initializes a customer", async () => {
@@ -141,7 +145,7 @@ describe("TPC Benchmark Program", () => {
         }
 
         const customer = await program.account.customer.fetch(customerAccount);
-        assert.equal(customer.first, "First");
+        assert.equal(decodeBytes(customer.first as number[]), "First");
     });
 
     it("Performs a payment transaction", async () => {

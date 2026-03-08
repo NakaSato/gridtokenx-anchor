@@ -37,3 +37,10 @@ pub struct EnergyConsumed {
     pub tokens_burned: u64,
     pub timestamp: i64,
 }
+
+#[event]
+pub struct TotalSupplySynced {
+    pub authority: Pubkey,
+    pub supply: u64,
+    pub timestamp: i64,
+}

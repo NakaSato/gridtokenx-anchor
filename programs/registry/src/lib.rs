@@ -478,6 +478,7 @@ pub mod registry {
                 user_token_account: ctx.accounts.user_token_account.to_account_info(),
                 authority: ctx.accounts.registry.to_account_info(), // Registry signs
                 registry_authority: ctx.accounts.registry.to_account_info(),
+                rec_validator: ctx.accounts.rec_validator.to_account_info(),
                 token_program: ctx.accounts.token_program.to_account_info(),
             };
 
@@ -720,6 +721,10 @@ pub struct SettleAndMintTokens<'info> {
 
     /// CHECK: SPL Token program
     pub token_program: AccountInfo<'info>,
+
+    /// CHECK: REC Validator co-signer (required when validators are registered in token_info)
+    /// For registry->energy_token CPI, this can be the meter_owner or a separate validator
+    pub rec_validator: AccountInfo<'info>,
 }
 #[derive(Accounts)]
 pub struct MarkErcClaimed<'info> {
