@@ -19,8 +19,8 @@ pub struct Order {
     pub expires_at: i64,        // 8
 }
 
-#[account]
-#[derive(InitSpace)]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct TradeRecord {
     pub sell_order: Pubkey,
     pub buy_order: Pubkey,

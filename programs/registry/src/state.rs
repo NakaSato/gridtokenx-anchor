@@ -7,12 +7,28 @@ use anchor_lang::prelude::*;
 #[repr(C)]
 pub struct Registry {
     pub authority: Pubkey,
-    pub oracle_authority: Pubkey,  // Authorized oracle (Option -> Pubkey for ZeroCopy)
-    pub has_oracle_authority: u8,   // Track if oracle_authority is valid (u8 for Pod)
-    pub _padding: [u8; 7],          // Alignment
+    pub oracle_authority: Pubkey, // Authorized oracle (Option -> Pubkey for ZeroCopy)
+    pub has_oracle_authority: u8, // Track if oracle_authority is valid (u8 for Pod)
+    pub _padding: [u8; 7],        // Alignment
     pub user_count: u64,
     pub meter_count: u64,
-    pub active_meter_count: u64,    // Track active meters separately
+    pub active_meter_count: u64, // Track active meters separately
+}
+
+/// RegistryShard account for distributed counters
+#[account(zero_copy)]
+#[repr(C)]
+pub struct RegistryShard {
+    pub shard_id: u8,
+    pub _padding: [u8; 7],
+    pub user_count: u64,
+    pub meter_count: u64,
+}
+
+impl RegistryShard {
+    pub fn load_from_bytes(data: &[u8]) -> Result<&Self> {
+        Ok(bytemuck::from_bytes(data))
+    }
 }
 
 /// User account for frequent lookups
@@ -27,7 +43,8 @@ pub struct UserAccount {
     pub _padding2: [u8; 4],  // 4 bytes padding (44-48) - Ensures 8-byte alignment for h3_index
     pub h3_index: u64,       // 8 bytes (48-56)
     pub status: UserStatus,  // 1 byte (56-57)
-    pub _padding3: [u8; 7],  // 7 bytes padding (57-64)
+    pub shard_id: u8,        // 1 byte (57-58)
+    pub _padding3: [u8; 6],  // 6 bytes padding (58-64)
     pub registered_at: i64,  // 8 bytes (64-72)
     pub meter_count: u32,    // 4 bytes (72-76)
     pub _padding4: [u8; 4],  // 4 bytes padding (76-80) - Total: 80 bytes
@@ -37,14 +54,14 @@ pub struct UserAccount {
 #[account(zero_copy)]
 #[repr(C)]
 pub struct MeterAccount {
-    pub meter_id: [u8; 32],     // Unique meter identifier (fixed size for ZeroCopy)
-    pub owner: Pubkey,          // User who owns this meter
-    pub meter_type: MeterType,  // Solar, Wind, Battery, or Grid
-    pub status: MeterStatus,    // Active, Inactive, or Maintenance
-    pub _padding: [u8; 6],      // Alignment
-    pub registered_at: i64,     // When meter was registered
-    pub last_reading_at: i64,   // Last time reading was updated
-    pub total_generation: u64,  // Cumulative energy generated (in smallest units)
+    pub meter_id: [u8; 32],    // Unique meter identifier (fixed size for ZeroCopy)
+    pub owner: Pubkey,         // User who owns this meter
+    pub meter_type: MeterType, // Solar, Wind, Battery, or Grid
+    pub status: MeterStatus,   // Active, Inactive, or Maintenance
+    pub _padding: [u8; 6],     // Alignment
+    pub registered_at: i64,    // When meter was registered
+    pub last_reading_at: i64,  // Last time reading was updated
+    pub total_generation: u64, // Cumulative energy generated (in smallest units)
     pub total_consumption: u64, // Cumulative energy consumed (in smallest units)
 
     // --- TOKENIZATION TRACKING ---

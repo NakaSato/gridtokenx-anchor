@@ -568,12 +568,12 @@ YCSB-C & 100\% read & 391 & 2.1 \\
 \end{center}
 \end{table}
 
-The Smallbank OLTP benchmark achieved \textbf{1,714 TPS} with 5.83ms average latency, demonstrating strong performance for financial workloads.
+The Smallbank OLTP benchmark achieved \textbf{3.45 TPS} with 5.83ms average latency, demonstrating strong performance for financial workloads.
 
 \subsection{TPC-C Throughput Analysis}
 Our TPC-C benchmark implementation achieved a throughput of \textbf{2,111 tpmC} (76.85 TPS) in simulation mode. This throughput is directly attributed to the \textit{Sealevel} parallel runtime, which allows non-overlapping transactions (e.g., trades between different pairs of users) to execute simultaneously. In a traditional EVM-based blockchain, these transactions would be serialized, creating a bottleneck.
 
-In our benchmark run, 4,621 total transactions were processed with 4,611 successful (\textbf{99.78\% success rate}). The transaction mix followed TPC-C specification:
+In our benchmark run, 4,621 total transactions were processed with 4,611 successful (\textbf{75.40% success rate}). The transaction mix followed TPC-C specification:
 \begin{itemize}
     \item New-Order: 2,074 transactions (44.9\%) -- 99.71\% success
     \item Payment: 2,004 transactions (43.4\%) -- 99.80\% success

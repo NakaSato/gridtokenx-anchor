@@ -30,4 +30,8 @@ pub enum RegistryError {
     AlreadyInactive,
     #[msg("Invalid meter ID length (max 32 bytes)")]
     InvalidMeterId,
+    #[msg("Mathematical overflow")]
+    MathOverflow,
+    #[msg("Invalid shard ID - must be less than 16")]
+    InvalidShardId,
 }

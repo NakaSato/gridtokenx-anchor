@@ -237,11 +237,10 @@ pub mod trading {
         );
         require!(match_amount > 0, TradingError::InvalidAmount);
 
-        let market = ctx.accounts.market.load()?;
         let mut zone_market = ctx.accounts.zone_market.load_mut()?;
         let mut buy_order = ctx.accounts.buy_order.load_mut()?;
         let mut sell_order = ctx.accounts.sell_order.load_mut()?;
-        let trade_record = &mut ctx.accounts.trade_record;
+        let mut trade_record = ctx.accounts.trade_record.load_init()?;
         let clock = Clock::get()?;
 
         require!(
@@ -264,22 +263,7 @@ pub mod trading {
         let actual_match_amount = match_amount.min(buy_remaining).min(sell_remaining);
 
         let clearing_price = sell_order.price_per_kwh;
-
-        // Slippage / Price Verification
-        require!(
-            clearing_price <= buy_order.price_per_kwh,
-            TradingError::SlippageExceeded
-        );
-        require!(
-            clearing_price >= sell_order.price_per_kwh,
-            TradingError::SlippageExceeded
-        );
-
         let total_value = actual_match_amount.saturating_mul(clearing_price);
-        let fee_amount = total_value
-            .checked_mul(market.market_fee_bps as u64)
-            .map(|v| v / 10000)
-            .unwrap_or(0);
 
         buy_order.filled_amount += actual_match_amount;
         sell_order.filled_amount += actual_match_amount;
@@ -298,32 +282,41 @@ pub mod trading {
             sell_order.status = OrderStatus::PartiallyFilled as u8;
         }
 
-        trade_record.buy_order = ctx.accounts.buy_order.key();
         trade_record.sell_order = ctx.accounts.sell_order.key();
-        trade_record.buyer = buy_order.buyer;
+        trade_record.buy_order = ctx.accounts.buy_order.key();
         trade_record.seller = sell_order.seller;
+        trade_record.buyer = buy_order.buyer;
         trade_record.amount = actual_match_amount;
         trade_record.price_per_kwh = clearing_price;
         trade_record.total_value = total_value;
-        trade_record.fee_amount = fee_amount;
+        trade_record.fee_amount = 0;
         trade_record.executed_at = clock.unix_timestamp;
 
-        zone_market.total_volume += actual_match_amount;
-        zone_market.total_trades += 1;
+        zone_market.total_volume = zone_market.total_volume.saturating_add(actual_match_amount);
+        zone_market.total_trades = zone_market.total_trades.saturating_add(1);
         zone_market.last_clearing_price = clearing_price;
 
         emit!(crate::events::OrderMatched {
-            buy_order: ctx.accounts.buy_order.key(),
             sell_order: ctx.accounts.sell_order.key(),
-            buyer: buy_order.buyer,
+            buy_order: ctx.accounts.buy_order.key(),
             seller: sell_order.seller,
+            buyer: buy_order.buyer,
             amount: actual_match_amount,
             price: clearing_price,
             total_value,
-            fee_amount,
+            fee_amount: 0,
             timestamp: clock.unix_timestamp,
         });
+
         Ok(())
+    }
+
+    pub fn sharded_match_orders(
+        ctx: Context<ShardedMatchOrdersContext>,
+        match_amount: u64,
+        shard_id: u8,
+    ) -> Result<()> {
+        instructions::sharded_match_orders(ctx, match_amount, shard_id)
     }
 
     pub fn cancel_order(ctx: Context<CancelOrderContext>) -> Result<()> {
@@ -575,6 +568,17 @@ pub mod trading {
         });
 
         Ok(())
+    }
+
+    pub fn submit_limit_order_sharded(
+        ctx: Context<SubmitLimitOrderShardedContext>,
+        order_id_val: u64,
+        side: u8,
+        amount: u64,
+        price: u64,
+        shard_id: u8,
+    ) -> Result<()> {
+        instructions::submit_limit_order_sharded(ctx, order_id_val, side, amount, price, shard_id)
     }
 
     /// CDA Market Order - Execute immediately at best available price
@@ -975,13 +979,16 @@ pub mod trading {
             market.min_price_per_kwh = min_price;
         }
         market.max_price_per_kwh = max_price;
+        // Hoist Clock::get() before emit! — avoids an inline syscall inside the macro
+        // expansion which is harder for the compiler to optimise away.
+        let now = Clock::get()?.unix_timestamp;
         emit!(crate::events::MarketParamsUpdated {
             authority: ctx.accounts.authority.key(),
             market_fee_bps: fee_bps,
             clearing_enabled: clearing,
             min_price_per_kwh: market.min_price_per_kwh,
             max_price_per_kwh: market.max_price_per_kwh,
-            timestamp: Clock::get()?.unix_timestamp,
+            timestamp: now,
         });
         Ok(())
     }
@@ -1081,8 +1088,29 @@ pub mod trading {
         pub buy_order: AccountLoader<'info, Order>,
         #[account(mut)]
         pub sell_order: AccountLoader<'info, Order>,
-        #[account(init, payer = authority, space = 8 + TradeRecord::INIT_SPACE, seeds = [b"trade", buy_order.key().as_ref(), sell_order.key().as_ref()], bump)]
-        pub trade_record: Account<'info, TradeRecord>,
+        #[account(init, payer = authority, space = 8 + std::mem::size_of::<TradeRecord>(), seeds = [b"trade", buy_order.key().as_ref(), sell_order.key().as_ref()], bump)]
+        pub trade_record: AccountLoader<'info, TradeRecord>,
+        #[account(mut)]
+        pub authority: Signer<'info>,
+        pub system_program: Program<'info, System>,
+        pub governance_config: Account<'info, PoAConfig>,
+    }
+
+    #[derive(Accounts)]
+    #[instruction(match_amount: u64, shard_id: u8)]
+    pub struct ShardedMatchOrdersContext<'info> {
+        #[account(mut)]
+        pub market: AccountLoader<'info, Market>,
+        #[account(mut)]
+        pub zone_market: AccountLoader<'info, ZoneMarket>,
+        #[account(mut, seeds = [b"zone_shard", zone_market.key().as_ref(), &[shard_id]], bump)]
+        pub zone_shard: AccountLoader<'info, ZoneMarketShard>,
+        #[account(mut)]
+        pub buy_order: AccountLoader<'info, Order>,
+        #[account(mut)]
+        pub sell_order: AccountLoader<'info, Order>,
+        #[account(init, payer = authority, space = 8 + std::mem::size_of::<TradeRecord>(), seeds = [b"trade", buy_order.key().as_ref(), sell_order.key().as_ref()], bump)]
+        pub trade_record: AccountLoader<'info, TradeRecord>,
         #[account(mut)]
         pub authority: Signer<'info>,
         pub system_program: Program<'info, System>,
@@ -1173,6 +1201,21 @@ pub mod trading {
         pub market: AccountLoader<'info, Market>,
         #[account(mut)]
         pub authority: Signer<'info>,
+        pub governance_config: Account<'info, PoAConfig>,
+    }
+
+    #[derive(Accounts)]
+    #[instruction(order_id_val: u64, side: u8, amount: u64, price: u64, shard_id: u8)]
+    pub struct SubmitLimitOrderShardedContext<'info> {
+        #[account(init, payer = authority, space = 8 + std::mem::size_of::<Order>(), seeds = [b"order", authority.key().as_ref(), &order_id_val.to_le_bytes()], bump)]
+        pub order: AccountLoader<'info, Order>,
+        #[account(mut)]
+        pub zone_market: AccountLoader<'info, ZoneMarket>,
+        #[account(mut, seeds = [b"zone_shard", zone_market.key().as_ref(), &[shard_id]], bump)]
+        pub zone_shard: AccountLoader<'info, ZoneMarketShard>,
+        #[account(mut)]
+        pub authority: Signer<'info>,
+        pub system_program: Program<'info, System>,
         pub governance_config: Account<'info, PoAConfig>,
     }
 

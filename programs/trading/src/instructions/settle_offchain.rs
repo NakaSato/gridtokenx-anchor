@@ -69,14 +69,14 @@ pub struct SettleOffchainMatchContext<'info> {
         seeds = [b"market_shard", market.key().as_ref(), &[get_shard_id(&payer.key(), market.load()?.num_shards)]],
         bump
     )]
-    pub market_shard: Account<'info, MarketShard>,
+    pub market_shard: AccountLoader<'info, MarketShard>,
 
     #[account(
         mut,
         seeds = [b"zone_shard", zone_market.key().as_ref(), &[get_shard_id(&payer.key(), zone_market.load()?.num_shards)]],
         bump
     )]
-    pub zone_shard: Account<'info, ZoneMarketShard>,
+    pub zone_shard: AccountLoader<'info, ZoneMarketShard>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -118,8 +118,8 @@ pub fn settle_offchain_match(
 
     let market = ctx.accounts.market.load()?;
     let _zone_market = ctx.accounts.zone_market.load()?;
-    let market_shard = &mut ctx.accounts.market_shard;
-    let zone_shard = &mut ctx.accounts.zone_shard;
+    let mut market_shard = ctx.accounts.market_shard.load_mut()?;
+    let mut zone_shard = ctx.accounts.zone_shard.load_mut()?;
 
     // Check remaining amounts using Nullifiers
     let buyer_remaining = buyer_payload.energy_amount.saturating_sub(ctx.accounts.buyer_nullifier.filled_amount);

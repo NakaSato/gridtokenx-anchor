@@ -194,7 +194,7 @@ describe("TPC-C Performance Stress Test", () => {
                             latencies.push(Date.now() - txStart);
                             successCount++;
                         })
-                        .catch(e => {
+                        .catch(_e => {
                             failCount++;
                         });
                 } else {
@@ -216,7 +216,7 @@ describe("TPC-C Performance Stress Test", () => {
                             latencies.push(Date.now() - txStart);
                             successCount++;
                         })
-                        .catch(e => {
+                        .catch(_e => {
                             failCount++;
                         });
                 }
@@ -229,29 +229,38 @@ describe("TPC-C Performance Stress Test", () => {
 
         const endTime = Date.now();
         const duration = (endTime - startTime) / 1000;
-        const avgLatency = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
+        const avgLatency = latencies.length > 0
+            ? latencies.reduce((a, b) => a + b, 0) / latencies.length
+            : 0;
+        const p95Latency = latencies.length > 0
+            ? latencies.sort((a, b) => a - b)[Math.floor(latencies.length * 0.95)]
+            : 0;
         const tps = successCount / duration;
 
         const results = {
             timestamp: new Date().toISOString(),
             benchmark: "TPC-C",
             txCount: TX_COUNT,
+            concurrency: CONCURRENCY,
             successCount,
             failCount,
+            successRate: ((successCount / TX_COUNT) * 100).toFixed(1) + "%",
             duration,
             tps,
-            avgLatencyMs: avgLatency
+            avgLatencyMs: avgLatency,
+            p95LatencyMs: p95Latency,
         };
 
         console.log(`\n\n--- TPC-C STRESS TEST RESULTS ---`);
         console.log(`Duration:       ${duration.toFixed(2)}s`);
-        console.log(`Success Count:  ${successCount}`);
+        console.log(`Success Count:  ${successCount} / ${TX_COUNT}`);
         console.log(`Fail Count:     ${failCount}`);
         console.log(`Throughput:     ${tps.toFixed(2)} TPS`);
         console.log(`Avg Latency:    ${avgLatency.toFixed(2)}ms`);
+        console.log(`P95 Latency:    ${p95Latency.toFixed(2)}ms`);
         console.log(`---------------------------------\n`);
 
-        // Save results to file
+        // Persist results for CI tracking
         const resultsDir = path.join(process.cwd(), 'test-results', 'tpc');
         if (!fs.existsSync(resultsDir)) {
             fs.mkdirSync(resultsDir, { recursive: true });
@@ -261,5 +270,6 @@ describe("TPC-C Performance Stress Test", () => {
         console.log(`Results saved to: ${filepath}`);
 
         assert.isAtLeast(successCount, TX_COUNT * 0.8, "Success rate should be at least 80%");
+        assert.isAbove(tps, 5, "Throughput should exceed 5 TPS");
     });
 });

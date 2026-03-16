@@ -127,13 +127,15 @@ pub struct PricePoint {
 /// Sharded market statistics for reduced contention
 /// Each shard tracks independent volume/order counts that can be aggregated
 /// This allows parallel writes without MVCC conflicts on the main Market account
-#[account]
-#[derive(InitSpace)]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct MarketShard {
     pub shard_id: u8,            // 0-255 shard identifier
+    pub _padding1: [u8; 7],
     pub market: Pubkey,          // Parent market
     pub volume_accumulated: u64, // Volume in this shard
     pub order_count: u32,        // Order count fits in u32
+    pub _padding2: [u8; 4],
     pub last_update: i64,        // Last update timestamp
 }
 

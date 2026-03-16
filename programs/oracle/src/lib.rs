@@ -34,6 +34,9 @@ pub mod oracle {
 
     pub fn initialize(ctx: Context<Initialize>, api_gateway: Pubkey) -> Result<()> {
         compute_fn!("initialize" => {
+            // Single Clock::get() syscall — reused for created_at and quality_score_updated_at
+            // to avoid paying for two separate sysvar reads during initialization.
+            let now = Clock::get()?.unix_timestamp;
             let mut oracle_data = ctx.accounts.oracle_data.load_init()?;
             oracle_data.authority = ctx.accounts.authority.key();
             oracle_data.api_gateway = api_gateway;
@@ -41,7 +44,7 @@ pub mod oracle {
             oracle_data.last_reading_timestamp = 0;
             oracle_data.last_clearing = 0;
             oracle_data.active = 1;
-            oracle_data.created_at = Clock::get()?.unix_timestamp;
+            oracle_data.created_at = now;
 
             oracle_data.min_energy_value = 0;
             oracle_data.max_energy_value = 1000000;
@@ -54,7 +57,7 @@ pub mod oracle {
             oracle_data.total_rejected_readings = 0;
             oracle_data.average_reading_interval = 300;
             oracle_data.last_quality_score = 100;
-            oracle_data.quality_score_updated_at = Clock::get()?.unix_timestamp;
+            oracle_data.quality_score_updated_at = now;
 
             oracle_data.backup_oracles_count = 0;
             oracle_data.consensus_threshold = 2;

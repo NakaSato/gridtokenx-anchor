@@ -24,12 +24,14 @@ pub use state::*;
 
 // Import compute_fn! macro when localnet feature is enabled
 #[cfg(feature = "localnet")]
-use compute_debug::{compute_fn, compute_checkpoint};
+use compute_debug::{compute_checkpoint, compute_fn};
 
 // No-op versions for non-localnet builds
 #[cfg(not(feature = "localnet"))]
 macro_rules! compute_fn {
-    ($name:expr => $block:block) => { $block };
+    ($name:expr => $block:block) => {
+        $block
+    };
 }
 #[cfg(not(feature = "localnet"))]
 macro_rules! compute_checkpoint {
@@ -64,7 +66,7 @@ pub mod energy_token {
             // Check if Metaplex program is available (for localnet testing)
             if ctx.accounts.metadata_program.executable {
                 compute_checkpoint!("before_metaplex_cpi");
-                
+
                 // Create metadata using Metaplex Token Metadata program
                 CreateV1CpiBuilder::new(&ctx.accounts.metadata_program.to_account_info())
                     .metadata(&ctx.accounts.metadata.to_account_info())
@@ -100,6 +102,9 @@ pub mod energy_token {
                     EnergyTokenError::UnauthorizedAuthority
                 );
             }
+            // Cache clock before CPI — avoids an inline syscall inside the emit! macro
+            // and ensures the timestamp is captured before the CPI context is consumed.
+            let now = Clock::get()?.unix_timestamp;
             // Logging disabled to save CU
             let cpi_accounts = token_interface::MintTo {
                 mint: ctx.accounts.mint.to_account_info(),
@@ -124,7 +129,7 @@ pub mod energy_token {
             emit!(TokensMinted {
                 recipient: ctx.accounts.destination.key(),
                 amount,
-                timestamp: Clock::get()?.unix_timestamp,
+                timestamp: now,
             });
         });
         Ok(())
@@ -225,7 +230,7 @@ pub mod energy_token {
     }
 
     /// Mint tokens directly to a user (authority or registry program only)
-    /// 
+    ///
     /// Sealevel-optimized: token_info is read-only (no total_supply write).
     /// If REC validators are registered, one must co-sign to prove energy provenance.
     /// Call sync_total_supply periodically to batch-update the stored total.
@@ -254,6 +259,10 @@ pub mod energy_token {
 
             drop(token_info);
 
+            // Cache clock before CPI — avoids an inline syscall inside the emit! macro
+            // and ensures the timestamp is captured before the CPI context is consumed.
+            let now = Clock::get()?.unix_timestamp;
+
             // Mint tokens using token_info PDA as authority
             let seeds = &[b"token_info_2022".as_ref(), &[ctx.bumps.token_info]];
             let signer_seeds = &[&seeds[..]];
@@ -276,14 +285,14 @@ pub mod energy_token {
             emit!(GridTokensMinted {
                 meter_owner: ctx.accounts.user_token_account.key(),
                 amount,
-                timestamp: Clock::get()?.unix_timestamp,
+                timestamp: now,
             });
         });
         Ok(())
     }
 
     /// Sync total_supply from the canonical SPL Mint account (admin only)
-    /// 
+    ///
     /// Call this periodically (e.g. every N mints/burns) instead of writing
     /// token_info on every transaction. Eliminates write-lock contention on
     /// token_info during high-frequency mint/burn operations.
@@ -299,10 +308,12 @@ pub mod energy_token {
             let canonical_supply = ctx.accounts.mint.supply;
             token_info.total_supply = canonical_supply;
 
+            // Hoist Clock::get() before emit! — avoids inline syscall inside macro expansion.
+            let now = Clock::get()?.unix_timestamp;
             emit!(TotalSupplySynced {
                 authority: ctx.accounts.authority.key(),
                 supply: canonical_supply,
-                timestamp: Clock::get()?.unix_timestamp,
+                timestamp: now,
             });
         });
         Ok(())
@@ -498,4 +509,3 @@ pub struct SyncTotalSupply<'info> {
 
     pub authority: Signer<'info>,
 }
-

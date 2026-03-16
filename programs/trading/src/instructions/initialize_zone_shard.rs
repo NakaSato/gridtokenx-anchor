@@ -9,11 +9,11 @@ pub struct InitializeZoneMarketShardContext<'info> {
     #[account(
         init,
         payer = payer,
-        space = 8 + ZoneMarketShard::INIT_SPACE,
+        space = 8 + std::mem::size_of::<ZoneMarketShard>(),
         seeds = [b"zone_shard", zone_market.key().as_ref(), &[shard_id]],
         bump
     )]
-    pub zone_shard: Account<'info, ZoneMarketShard>,
+    pub zone_shard: AccountLoader<'info, ZoneMarketShard>,
     
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -21,7 +21,7 @@ pub struct InitializeZoneMarketShardContext<'info> {
 }
 
 pub fn initialize_zone_market_shard(ctx: Context<InitializeZoneMarketShardContext>, shard_id: u8) -> Result<()> {
-    let zone_shard = &mut ctx.accounts.zone_shard;
+    let mut zone_shard = ctx.accounts.zone_shard.load_init()?;
     zone_shard.shard_id = shard_id;
     zone_shard.zone_market = ctx.accounts.zone_market.key();
     zone_shard.volume_accumulated = 0;

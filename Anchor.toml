@@ -1,17 +1,15 @@
 [toolchain]
-anchor_version = "0.32.0"
+anchor_version = "0.32.1"
 
 [features]
 resolution = false
 skip-lint = false
 
 [programs.localnet]
-blockbench = "J8qT5bb6mSAwr9J3S2Sk27VUXzcVuYEDmXMTpw9DGG5B"
 energy_token = "ExZKhghptUk675rjxgHPjJZjczgWWRRwzUTQnqjPTLno"
 governance = "DksRNiZsEZ3zN8n8ZWfukFqi3z74e5865oZ8wFk38p4X"
 oracle = "Ad5crRxCcvKFAShAMYtRAD9XKak1cwH1FCE6TrpUA9i2"
 registry = "DVoD5K5YRuXXF54a3b6r282jRD8RmtVHGfpw55DHFVDe"
-tpc_benchmark = "7LqR6fBtaj66SdsCUCoUveazBHCtRtBvPxteWXu7o2im"
 trading = "3iFReh5tvdWkLt7eJcvGKsST7wcwZsSHk3z3xCfUwHLw"
 
 [registry]
@@ -19,26 +17,23 @@ url = "https://api.apr.dev"
 
 [provider]
 cluster = "localnet"
-wallet = "/Users/chanthawat/Developments/gridtokenx-platform-infa/gridtokenx-anchor/scripts/poa-cluster/genesis/faucet-keypair.json"
+wallet = "~/.config/solana/id.json"
 
 [scripts]
-bootstrap = "npx ts-node scripts/bootstrap-env.ts"
-benchmark-tpcc = "npx ts-node tests/performance/benchmarks/tpc-c-anchor.ts"
 init-governance = "npx ts-node scripts/init-governance.ts"
 init-poa = "npx ts-node scripts/init-poa.ts"
-init-tpcc-schema = "npx ts-node scripts/bootstrap.ts"
-relay = "npx ts-node scripts/solana-relay.ts"
-test-all = "npx tsx scripts/run-all-tests.ts"
-test-confidential-bidding = "anchor test tests/confidential_bidding.ts -- --features localnet"
-verify-bridge = "npx tsx scripts/verify_bridge.ts"
-verify-carbon = "npx tsx scripts/verify_carbon_credits.ts"
-verify-dao = "npx ts-node scripts/verify-dao.ts"
-verify-p2p = "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/verify_p2p_settlement_collection.ts"
-verify-premium = "npx tsx scripts/verify_premium_trading.ts"
-test = "npx mocha --require tsx -t 1000000 tests/offchain_relay.ts"
+init-sharding = "npx ts-node scripts/initialize-sharding.ts"
+setup-alts = "npx ts-node scripts/setup-alts.ts"
+init-shards = "npx tsx scripts/init-shards.ts"
+init-registry = "npx tsx scripts/init-registry.ts"
+init-market = "npx ts-node scripts/init-market.ts"
+init-oracle = "npx ts-node scripts/init-oracle.ts"
+init-zone-market = "npx ts-node scripts/init-zone-market.ts"
+mint-tokens = "npx ts-node scripts/mint-tokens.ts"
+test-registry = "anchor test tests/registry_sharding.ts"
+test-oracle = "anchor test tests/oracle.ts"
 
 [test]
-startup_wait = 60000
-shutdown_wait = 5000
+startup_wait = 10000
+shutdown_wait = 2000
 upgradeable = false
-test-offchain = "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/offchain_relay.ts"

@@ -32,13 +32,15 @@ pub struct ZoneMarket {
 
 /// Sharded zone market statistics for reduced contention
 /// Tracks volume and trades on a per-shard basis within a zone
-#[account]
-#[derive(InitSpace)]
+#[account(zero_copy)]
+#[repr(C)]
 pub struct ZoneMarketShard {
     pub shard_id: u8,                    // 0-255 shard identifier
+    pub _padding1: [u8; 7],
     pub zone_market: Pubkey,             // Parent ZoneMarket
     pub volume_accumulated: u64,         // Volume in this shard
     pub trade_count: u32,                // Trade count in this shard
+    pub _padding2: [u8; 4],
     pub last_clearing_price: u64,        // Latest clearing price in this shard
     pub last_update: i64,                // Last update timestamp
 }
