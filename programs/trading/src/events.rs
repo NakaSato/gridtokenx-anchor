@@ -119,3 +119,11 @@ pub struct PriceHistoryUpdated {
     pub vwap: u64,
     pub timestamp: i64,
 }
+
+#[event]
+pub struct AuctionCleared {
+    pub clearing_price: u64,
+    pub clearing_volume: u64,
+    pub matched_orders: u32,
+    pub timestamp: i64,
+}

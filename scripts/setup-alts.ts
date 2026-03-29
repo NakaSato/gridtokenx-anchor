@@ -11,7 +11,7 @@ async function main() {
     const provider = anchor.AnchorProvider.env();
     anchor.setProvider(provider);
 
-    const tradingProgramId = new PublicKey('3iFReh5tvdWkLt7eJcvGKsST7wcwZsSHk3z3xCfUwHLw');
+    const tradingProgramId = new PublicKey('5yakTtiNHXHonCPqkwh1M22jujqugCJhEkYaHAoaB6pG');
     const govProgramId = new PublicKey('DksRNiZsEZ3zN8n8ZWfukFqi3z74e5865oZ8wFk38p4X');
     const payer = provider.wallet;
 

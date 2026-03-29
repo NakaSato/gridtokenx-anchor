@@ -2,18 +2,51 @@
 
 > **Technical Documentation**: Comprehensive guide to all algorithms used in the GridTokenX decentralized energy trading platform on Solana blockchain.
 
+**Version:** 2.1  
+**Last Updated:** March 16, 2026  
+**Status:** Production Ready
+
+---
+
+## Executive Summary
+
+This document provides comprehensive technical documentation for all algorithms powering the GridTokenX decentralized energy trading platform. The platform implements:
+
+- **P2P Energy Trading**: Direct buyer-seller matching with pay-as-seller pricing
+- **Periodic Auctions**: Batch settlement at uniform clearing prices
+- **Automated Market Maker (AMM)**: Instant liquidity via bonding curves
+- **Oracle Data Validation**: Multi-layer verification of smart meter readings
+- **Energy-Backed Tokens**: GRX tokens minted 1:1 with verified energy production
+- **Renewable Energy Certificates (RECs)**: Tradeable environmental attributes
+- **Cross-Program Composability**: Seamless interaction between 5 core programs
+
+### Core Algorithm Categories
+
+| Category | Programs | Key Algorithms |
+|----------|----------|----------------|
+| **Trading** | `trading` | Order matching, price discovery, VWAP, AMM |
+| **Oracle** | `oracle` | Meter validation, anomaly detection, BFT consensus |
+| **Token** | `energy-token` | Minting, burning, PDA authority |
+| **Registry** | `registry` | High-water marks, settlement, temporal monotonicity |
+| **Governance** | `governance` | ERC lifecycle, double-claim prevention, PoA |
+
 ---
 
 ## Table of Contents
 
 - [GridTokenX Platform Algorithms](#gridtokenx-platform-algorithms)
-  - [Table of Contents](#table-of-contents)
+  - [Executive Summary](#executive-summary)
   - [1. Trading Algorithms](#1-trading-algorithms)
     - [1.1 Market Price Clearing](#11-market-price-clearing)
     - [1.2 Order Matching Algorithm](#12-order-matching-algorithm)
     - [1.3 Volume-Weighted Average Price (VWAP)](#13-volume-weighted-average-price-vwap)
-    - [1.4 Price Discovery Mechanism](#14-price-discovery-mechanism)
-    - [1.5 AMM Bonding Curves](#15-amm-bonding-curves)
+    - [1.4 Auction Clearing Price Discovery](#14-auction-clearing-price-discovery)
+    - [1.5 Price Discovery Mechanism](#15-price-discovery-mechanism)
+    - [1.6 AMM Bonding Curves](#16-amm-bonding-curves)
+    - [1.7 Settlement & Fee Algorithms](#17-settlement--fee-algorithms)
+      - [1.7.1 Trade Settlement Calculation](#171-trade-settlement-calculation)
+      - [1.7.2 Fee Structure](#172-fee-structure)
+      - [1.7.3 Escrow Management](#173-escrow-management)
   - [2. Oracle Algorithms](#2-oracle-algorithms)
     - [2.1 Meter Reading Validation](#21-meter-reading-validation)
     - [2.2 Anomaly Detection](#22-anomaly-detection)
@@ -50,11 +83,28 @@
 
 ### 1.1 Market Price Clearing
 
-> **⚠️ Implementation Note:** The CURRENT production implementation uses **Pay-as-Seller pricing** (`clearing_price = sell_order.price_per_kwh`), where the seller's ask price is used directly as the clearing price for P2P trades. The VWAP algorithm described below is defined in code but marked `#[allow(dead_code)]` and is **not actively called**. It is retained for potential future use.
+> **⚠️ Implementation Note:** The CURRENT production implementation uses **Pay-as-Seller pricing** (`clearing_price = sell_order.price_per_kwh`), where the seller's ask price is used directly as the clearing price for P2P trades. This favors sellers and provides price certainty. The VWAP algorithm described below is defined in code but marked `#[allow(dead_code)]` and is **not actively called**. It is retained for potential future auction implementations.
 
 **Purpose:** Determine fair equilibrium price for energy trading based on supply and demand.
 
-**Algorithm:** Hybrid Mid-Point + Volume-Weighted Average Price (VWAP)
+**Production Algorithm:** Pay-as-Seller (Seller's Ask Price)
+
+```rust
+// Current production implementation in trading program
+pub fn match_orders(
+    ctx: Context<MatchOrders>,
+    match_amount: u64
+) -> Result<()> {
+    // ... validation code ...
+    
+    // Clearing price = seller's ask price (Pay-as-Seller)
+    let clearing_price = sell_order.price_per_kwh;
+    
+    // ... settlement code ...
+}
+```
+
+**Future Algorithm:** Hybrid Mid-Point + Volume-Weighted Average Price (VWAP)
 
 ```rust
 fn calculate_volume_weighted_price(
@@ -65,7 +115,7 @@ fn calculate_volume_weighted_price(
 ) -> u64 {
     // Step 1: Calculate Mid-Point Price
     let base_price = (buy_price.saturating_add(sell_price)) / 2;
-    
+
     // Step 2: Calculate Volume Weight (0-100%)
     if market.total_volume > 0 {
         let weight = volume
@@ -73,13 +123,13 @@ fn calculate_volume_weighted_price(
             .checked_div(market.total_volume)
             .unwrap_or(1000)
             .min(1000);  // Cap at 100%
-        
+
         // Step 3: Apply weighted adjustment
         let weighted_adjustment = base_price
             .saturating_mul(weight)
             .checked_div(10000)
             .unwrap_or(0);
-        
+
         base_price.saturating_add(weighted_adjustment)
     } else {
         base_price  // First trade uses pure mid-point
@@ -322,7 +372,141 @@ VWAP = 1,550 / 300 = 5.167 THB/kWh
 
 ---
 
-### 1.4 Price Discovery Mechanism
+### 1.4 Auction Clearing Price Discovery
+
+**Purpose:** Discover uniform market clearing price through batch auction mechanism for periodic settlement.
+
+**Algorithm:** Supply-Demand Intersection with Uniform Pricing
+
+```rust
+pub fn clear_auction(
+    ctx: Context<ClearAuction>,
+    auction_window: AuctionWindow,
+) -> Result<()> {
+    let mut market = ctx.accounts.market.load_mut()?;
+    
+    // Step 1: Collect all orders in auction window
+    let sell_orders = collect_sell_orders(&auction_window)?;
+    let buy_orders = collect_buy_orders(&auction_window)?;
+    
+    // Step 2: Sort orders
+    // Sellers: ascending by price (cheapest first)
+    // Buyers: descending by price (highest first)
+    let mut sorted_sells = sell_orders.iter()
+        .sort_by(|a, b| a.price_per_kwh.cmp(&b.price_per_kwh));
+    let mut sorted_buys = buy_orders.iter()
+        .sort_by(|a, b| b.price_per_kwh.cmp(&a.price_per_kwh));
+    
+    // Step 3: Build aggregate supply and demand curves
+    let mut supply_curve: Vec<(u64, u64)> = Vec::new();  // (price, cumulative_volume)
+    let mut demand_curve: Vec<(u64, u64)> = Vec::new();
+    
+    let mut cumulative_supply = 0u64;
+    for order in sorted_sells {
+        cumulative_supply += order.amount;
+        supply_curve.push((order.price_per_kwh, cumulative_supply));
+    }
+    
+    let mut cumulative_demand = 0u64;
+    for order in sorted_buys {
+        cumulative_demand += order.amount;
+        demand_curve.push((order.price_per_kwh, cumulative_demand));
+    }
+    
+    // Step 4: Find clearing price (supply = demand intersection)
+    let (clearing_price, clearing_volume) = find_clearing_point(
+        &supply_curve,
+        &demand_curve
+    )?;
+    
+    // Step 5: Match all compatible orders at clearing price
+    execute_auction_matches(
+        &mut market,
+        &sorted_sells,
+        &sorted_buys,
+        clearing_price,
+        clearing_volume
+    )?;
+    
+    emit!(AuctionCleared {
+        clearing_price,
+        clearing_volume,
+        matched_orders: market.total_trades,
+    });
+    
+    Ok(())
+}
+
+fn find_clearing_point(
+    supply_curve: &[(u64, u64)],
+    demand_curve: &[(u64, u64)],
+) -> Result<(u64, u64)> {
+    // Find price where supply curve intersects demand curve
+    for (sell_price, supply_vol) in supply_curve {
+        for (buy_price, demand_vol) in demand_curve {
+            if sell_price <= buy_price {
+                // Found overlap - use sell_price as clearing price
+                let volume = supply_vol.min(demand_vol);
+                return Ok((*sell_price, volume));
+            }
+        }
+    }
+    
+    err!(ErrorCode::NoClearingPriceFound)
+}
+```
+
+**Mathematical Formula:**
+
+$$
+\text{Clearing Price } P^* = \{p : S(p) = D(p)\}
+$$
+
+Where:
+- $S(p)$ = Aggregate supply at price $p$ (cumulative sell orders ≥ p)
+- $D(p)$ = Aggregate demand at price $p$ (cumulative buy orders ≤ p)
+
+**Example:**
+
+```
+Auction Window: 15 minutes
+
+Sell Orders (sorted ASC):          Buy Orders (sorted DESC):
+┌────────────────────────┐        ┌────────────────────────┐
+│ 50 kWh @ 3.2 THB       │        │ 30 kWh @ 3.8 THB       │
+│ 80 kWh @ 3.4 THB       │        │ 60 kWh @ 3.6 THB       │
+│ 40 kWh @ 3.6 THB       │        │ 50 kWh @ 3.4 THB       │
+│ 30 kWh @ 3.8 THB       │        │ 20 kWh @ 3.2 THB       │
+└────────────────────────┘        └────────────────────────┘
+
+Supply Curve:                      Demand Curve:
+Price │ Cumulative Volume          Price │ Cumulative Volume
+3.8   │ 200                        3.8   │ 30
+3.6   │ 170                        3.6   │ 90
+3.4   │ 90                         3.4   │ 140
+3.2   │ 50                         3.2   │ 160
+
+Intersection: P* = 3.4 THB, Q* = 90 kWh
+
+Matched Orders at 3.4 THB:
+- Sell: 50 kWh + 40 kWh = 90 kWh (orders @ 3.2 and 3.4)
+- Buy: 30 + 60 = 90 kWh (orders @ 3.8 and 3.6)
+
+Unmatched:
+- Sell: 40 kWh @ 3.6, 30 kWh @ 3.8 (too expensive)
+- Buy: 50 kWh @ 3.4 (partial), 20 kWh @ 3.2 (too cheap)
+```
+
+**Key Features:**
+- ✅ **Uniform Pricing**: All matched orders execute at same clearing price
+- ✅ **Price-Time Priority**: Within same price, earlier orders prioritized
+- ✅ **Partial Fills**: Orders can be partially matched
+- ✅ **MEV Resistance**: Batch execution prevents front-running
+- ✅ **Social Welfare Maximization**: Maximizes total traded volume
+
+---
+
+### 1.5 Price Discovery Mechanism
 
 **Purpose:** Dynamically discover fair market price through continuous order matching.
 
@@ -362,7 +546,7 @@ VWAP = 1,550 / 300 = 5.167 THB/kWh
 
 ---
 
-### 1.5 AMM Bonding Curves
+### 1.6 AMM Bonding Curves
 
 **Purpose:** Provide instant liquidity for energy tokens using automated market maker curves tailored to energy source characteristics.
 
@@ -429,6 +613,237 @@ Trade: Buy 100 kWh
 New energy = 5,000 - 100 = 4,900 kWh
 New tokens = 125,000,000 / 4,900 = 25,510 GRX
 Price = 25,510 - 25,000 = 510 GRX (2% premium for instant liquidity)
+```
+
+---
+
+## 1.7 Settlement & Fee Algorithms
+
+### 1.7.1 Trade Settlement Calculation
+
+**Purpose:** Calculate settlement amounts for matched trades including fees and net transfers.
+
+**Algorithm:** Atomic Settlement with Fee Deduction
+
+```rust
+pub fn calculate_settlement(
+    quantity: u64,           // Trade quantity in kWh
+    price_per_kwh: u64,      // Price in THB/kWh (6 decimals)
+    fee_bps: u16,            // Fee in basis points
+) -> SettlementResult {
+    // Step 1: Calculate gross trade value
+    let gross_value = quantity.saturating_mul(price_per_kwh);
+    
+    // Step 2: Calculate fee (in THB, 6 decimals)
+    let fee_amount = gross_value
+        .saturating_mul(fee_bps as u64)
+        .checked_div(10000)
+        .unwrap_or(0);
+    
+    // Step 3: Calculate net seller receives
+    let seller_receives = gross_value.saturating_sub(fee_amount);
+    
+    // Step 4: Buyer pays gross value
+    let buyer_pays = gross_value;
+    
+    SettlementResult {
+        gross_value,
+        fee_amount,
+        seller_receives,
+        buyer_pays,
+        quantity,
+    }
+}
+
+pub struct SettlementResult {
+    pub gross_value: u64,      // Total trade value (THB)
+    pub fee_amount: u64,       // Platform fee (THB)
+    pub seller_receives: u64,  // Net to seller (THB)
+    pub buyer_pays: u64,       // Total from buyer (THB)
+    pub quantity: u64,         // Energy quantity (kWh)
+}
+```
+
+**Example:**
+
+```
+Trade: 100 kWh @ 3.5 THB/kWh
+Fee: 0.25% (25 bps)
+
+Calculation:
+gross_value   = 100 × 3.5 × 10^6 = 350,000,000 THB (350 THB)
+fee_amount    = 350,000,000 × 25 / 10000 = 875,000 THB (0.875 THB)
+seller_receives = 350,000,000 - 875,000 = 349,125,000 THB (349.125 THB)
+buyer_pays    = 350,000,000 THB (350 THB)
+
+Token Transfers:
+- Buyer:  100 GRX ← (energy tokens)
+- Buyer:  350 THB → (payment)
+- Seller: 100 GRX → (energy tokens)
+- Seller: 349.125 THB ← (net proceeds)
+- Platform: 0.875 THB ← (fee collection)
+```
+
+---
+
+### 1.7.2 Fee Structure
+
+**Purpose:** Apply tiered fee structure based on trading mechanism and volume.
+
+**Fee Schedule:**
+
+| Trading Type | Fee Rate (bps) | Fee Rate (%) | Recipient |
+|--------------|----------------|--------------|-----------|
+| P2P Order Match | 25 | 0.25% | Platform treasury |
+| Periodic Auction | 100 | 1.00% | Platform treasury |
+| AMM Swap | 30 | 0.30% | Liquidity providers |
+| Private Transfer | 1 | 0.01% | Burn address |
+| Energy Mint | 0 | 0% | - |
+| Bridge Transfer | Variable | Variable | Wormhole + Platform |
+
+**Volume Discounts (Future):**
+
+```rust
+pub fn calculate_effective_fee_bps(
+    base_fee_bps: u16,
+    monthly_volume: u64,  // in kWh
+) -> u16 {
+    if monthly_volume >= 1_000_000 {  // 1 GWh
+        base_fee_bps.saturating_sub(10)  // 10 bps discount
+    } else if monthly_volume >= 100_000 {  // 100 MWh
+        base_fee_bps.saturating_sub(5)   // 5 bps discount
+    } else {
+        base_fee_bps
+    }
+}
+```
+
+---
+
+### 1.7.3 Escrow Management
+
+**Purpose:** Securely hold assets during trade execution with timeout-based recovery.
+
+**Algorithm:** Time-Locked Escrow with Automatic Release
+
+```rust
+pub struct EscrowAccount {
+    pub depositor: Pubkey,
+    pub recipient: Pubkey,
+    pub amount: u64,
+    pub token_mint: Pubkey,
+    pub created_at: i64,
+    pub timeout: i64,          // Unix timestamp for release
+    pub status: EscrowStatus,
+}
+
+pub enum EscrowStatus {
+    Active,
+    Released,
+    Refunded,
+}
+
+// Deposit to escrow
+pub fn deposit_to_escrow(
+    ctx: Context<DepositEscrow>,
+    amount: u64,
+    timeout_seconds: i64,
+) -> Result<()> {
+    let escrow = &mut ctx.accounts.escrow;
+    let current_time = Clock::get()?.unix_timestamp;
+    
+    escrow.depositor = ctx.accounts.depositor.key();
+    escrow.recipient = ctx.accounts.recipient.key();
+    escrow.amount = amount;
+    escrow.created_at = current_time;
+    escrow.timeout = current_time + timeout_seconds;
+    escrow.status = EscrowStatus::Active;
+    
+    // Transfer tokens to escrow PDA
+    transfer_tokens(
+        &ctx.accounts.depositor_token,
+        &ctx.accounts.escrow_token,
+        amount
+    )?;
+    
+    Ok(())
+}
+
+// Release to recipient
+pub fn release_escrow(
+    ctx: Context<ReleaseEscrow>,
+) -> Result<()> {
+    let escrow = &ctx.accounts.escrow;
+    
+    require!(
+        escrow.status == EscrowStatus::Active,
+        ErrorCode::EscrowNotActive
+    );
+    
+    require!(
+        ctx.accounts.recipient.key() == escrow.recipient,
+        ErrorCode::UnauthorizedRecipient
+    );
+    
+    // Transfer tokens to recipient
+    transfer_tokens(
+        &ctx.accounts.escrow_token,
+        &ctx.accounts.recipient_token,
+        escrow.amount
+    )?;
+    
+    escrow.status = EscrowStatus::Released;
+    
+    Ok(())
+}
+
+// Timeout refund
+pub fn refund_escrow(
+    ctx: Context<RefundEscrow>,
+) -> Result<()> {
+    let escrow = &ctx.accounts.escrow;
+    let current_time = Clock::get()?.unix_timestamp;
+    
+    require!(
+        escrow.status == EscrowStatus::Active,
+        ErrorCode::EscrowNotActive
+    );
+    
+    require!(
+        current_time > escrow.timeout,
+        ErrorCode::EscrowNotExpired
+    );
+    
+    // Transfer tokens back to depositor
+    transfer_tokens(
+        &ctx.accounts.escrow_token,
+        &ctx.accounts.depositor_token,
+        escrow.amount
+    )?;
+    
+    escrow.status = EscrowStatus::Refunded;
+    
+    Ok(())
+}
+```
+
+**Escrow Lifecycle:**
+
+```
+┌─────────────┐
+│   CREATED   │
+│  (deposit)  │
+└──────┬──────┘
+       │
+       │ ┌─────────────────┐
+       ├─┤  TIMEOUT        │
+       │ │  (refund)       │
+       │ └─────────────────┘
+       │
+       │ ┌─────────────────┐
+       └─┤  RELEASE        │
+         │  (to recipient) │
+         └─────────────────┘
 ```
 
 ---
@@ -1109,8 +1524,6 @@ T4 (10:15): Reading #5 - 160 kWh ✗ Rejected (65 min gap > 60 min future tolera
 
 ### 5.1 ERC Certificate Lifecycle
 
-### 5.1 ERC Certificate Lifecycle
-
 **Purpose:** Manage the full lifecycle of Renewable Energy Certificates from issuance to retirement.
 
 **Algorithm:** State Machine with Validation Gates
@@ -1757,8 +2170,6 @@ Theoretical throughput:
 
 **Techniques:**
 
-**Techniques:**
-
 **1. Lazy Updates**
 ```rust
 // Only update price history every 10 orders or 60 seconds
@@ -1854,49 +2265,58 @@ let mut market = ctx.accounts.market.load_mut()?; // Mutable
 
 ## Appendix A: Algorithm Complexity Analysis
 
-**Trading Algorithms**
+### Trading Algorithms
 
 | Algorithm | Time Complexity | Space Complexity | Notes |
 |-----------|-----------------|------------------|-------|
-| calculate_volume_weighted_price | O(1) | O(1) | Integer arithmetic only |
-| update_price_history | O(n) | O(1) | n = 24 (fixed circular buffer) |
-| match_orders | O(1) | O(1) | Single order pair |
-| Batch matching | O(n log n) | O(n) | n = batch size, sorting orders |
+| `calculate_volume_weighted_price` | O(1) | O(1) | Integer arithmetic only |
+| `update_price_history` | O(n) | O(1) | n = 24 (fixed circular buffer) |
+| `match_orders` | O(1) | O(1) | Single order pair |
+| `clear_auction` | O(n log n) | O(n) | Sorting orders by price |
+| `find_clearing_point` | O(m × k) | O(1) | m = sell orders, k = buy orders |
+| `calculate_settlement` | O(1) | O(1) | Basic arithmetic operations |
+| `deposit_to_escrow` | O(1) | O(1) | Token transfer + state update |
+| `release_escrow` | O(1) | O(1) | Token transfer + state update |
+| `refund_escrow` | O(1) | O(1) | Token transfer + state update |
 | AMM bonding curves | O(1) | O(1) | Constant product formula |
 
-**Oracle Algorithms**
+### Oracle Algorithms
 
 | Algorithm | Time Complexity | Space Complexity | Notes |
 |-----------|-----------------|------------------|-------|
-| validate_meter_reading | O(1) | O(1) | Fixed validation rules |
-| update_quality_score | O(1) | O(1) | Simple division |
-| update_reading_interval | O(1) | O(1) | Exponential moving average |
-| calculate_median (BFT) | O(n log n) | O(n) | n = backup oracle count, sorting |
+| `validate_meter_reading` | O(1) | O(1) | Fixed validation rules |
+| `update_quality_score` | O(1) | O(1) | Simple division |
+| `update_reading_interval` | O(1) | O(1) | Exponential moving average |
+| `calculate_median` (BFT) | O(n log n) | O(n) | n = backup oracle count |
 
-**Registry Algorithms**
-
-| Algorithm | Time Complexity | Space Complexity | Notes |
-|-----------|-----------------|------------------|-------|
-| settle_energy | O(1) | O(1) | High-water mark update |
-| calculate_settlement_amount | O(1) | O(1) | Subtraction operations |
-| temporal_monotonicity_check | O(1) | O(1) | Timestamp comparison |
-
-**Governance Algorithms**
+### Registry Algorithms
 
 | Algorithm | Time Complexity | Space Complexity | Notes |
 |-----------|-----------------|------------------|-------|
-| issue_erc | O(1) | O(1) | Account initialization |
-| validate_erc | O(1) | O(1) | State transition |
-| double_claim_prevention | O(1) | O(1) | Cross-program verification |
-| authority_transfer | O(1) | O(1) | Time-locked state update |
+| `settle_energy` | O(1) | O(1) | High-water mark update |
+| `calculate_settlement_amount` | O(1) | O(1) | Subtraction operations |
+| `temporal_monotonicity_check` | O(1) | O(1) | Timestamp comparison |
+| `update_meter_reading` | O(1) | O(1) | State update + validation |
 
-**Benchmark Algorithms**
+### Governance Algorithms
 
 | Algorithm | Time Complexity | Space Complexity | Notes |
 |-----------|-----------------|------------------|-------|
-| execute_ycsb_operation | O(1) | O(1) | Random operation selection |
-| execute_tpc_transaction | O(n) | O(1) | n = order lines (max 15) |
-| contention_analysis | O(m) | O(m) | m = account count |
+| `issue_erc` | O(1) | O(1) | Account initialization |
+| `validate_erc` | O(1) | O(1) | State transition |
+| `transfer_erc` | O(1) | O(1) | Ownership change |
+| `double_claim_prevention` | O(1) | O(1) | Cross-program verification |
+| `initiate_authority_transfer` | O(1) | O(1) | Time-locked state update |
+| `accept_authority_transfer` | O(1) | O(1) | Authority transfer |
+
+### Benchmark Algorithms
+
+| Algorithm | Time Complexity | Space Complexity | Notes |
+|-----------|-----------------|------------------|-------|
+| `execute_ycsb_operation` | O(1) | O(1) | Random operation selection |
+| `execute_tpc_transaction` | O(n) | O(1) | n = order lines (max 15) |
+| `contention_analysis` | O(m) | O(m) | m = account count |
+| `analyze_new_order_contention` | O(1) | O(k) | k = critical sections |
 
 ---
 
@@ -1907,22 +2327,37 @@ let mut market = ctx.accounts.market.load_mut()?; // Mutable
 1. **Integer Overflow Protection**
    - All math operations use `saturating_*` methods
    - Prevents panics and unexpected behavior
+   - Example: `total_supply.saturating_add(amount)`
 
 2. **Division by Zero Protection**
    - All divisions use `checked_div().unwrap_or(default)`
-   - Safe fallback values
+   - Safe fallback values prevent runtime errors
+   - Example: `value.checked_div(divisor).unwrap_or(0)`
 
 3. **Reentrancy Protection**
    - All state updates before external CPI calls
    - Follows checks-effects-interactions pattern
+   - Solana's runtime provides inherent reentrancy protection
 
 4. **Authority Validation**
    - Every privileged operation checks authority
-   - Uses has_one constraints where possible
+   - Uses `has_one` constraints where possible
+   - Example: `#[account(has_one = authority)]`
 
 5. **Timestamp Validation**
    - Prevents backdating and future-dating
    - Rate limiting prevents spam
+   - Tolerance for clock skew (±60 seconds)
+
+6. **Account Validation**
+   - All accounts checked for proper ownership
+   - Signer verification for privileged operations
+   - PDA derivation ensures program ownership
+
+7. **Data Integrity**
+   - High-water marks prevent double-counting
+   - Monotonic counters ensure temporal ordering
+   - Cross-program verification for shared state
 
 ---
 
@@ -1934,26 +2369,43 @@ let mut market = ctx.accounts.market.load_mut()?; // Mutable
    - Train model on historical meter data
    - Detect subtle fraud patterns
    - Implementation: Off-chain ML → On-chain validation
+   - **Status**: Research phase
 
 2. **Dynamic Pricing Algorithm**
-   - Time-of-use pricing
+   - Time-of-use pricing (peak/off-peak differential)
    - Demand response incentives
-   - Peak/off-peak differential pricing
+   - Real-time grid congestion pricing
+   - **Status**: Design phase
 
 3. **Multi-Signature Certificate Validation**
    - Require consensus from multiple validators
-   - Implement in oracle.backup_oracles
-   - Byzantine fault tolerance
+   - Implement in `oracle.backup_oracles`
+   - Byzantine fault tolerance (f < n/3)
+   - **Status**: Planned for Q2 2026
 
-4. **Automated Market Maker (AMM)**
-   - Liquidity pools for instant trading
-   - Constant product formula adaptation
-   - Reduce slippage for large orders
+4. **Advanced AMM Features**
+   - Concentrated liquidity positions
+   - Dynamic fee adjustment based on volatility
+   - Multi-hop routing for better prices
+   - **Status**: Research phase
+
+5. **Order Book Optimization**
+   - Sparse merkle tree for order storage
+   - Off-chain order matching with on-chain settlement
+   - Batch auction improvements
+   - **Status**: Under consideration
+
+6. **Cross-Chain Settlement**
+   - Wormhole integration for multi-chain trading
+   - Atomic cross-chain swaps
+   - Bridge fee optimization
+   - **Status**: Planned for Q3 2026
 
 5. **Advanced Order Types**
    - Stop-loss orders
    - Limit orders with time-in-force
    - Iceberg orders for large trades
+   - **Status**: Under consideration
 
 ---
 
@@ -1967,8 +2419,8 @@ let mut market = ctx.accounts.market.load_mut()?; // Mutable
 
 ---
 
-**Document Version:** 2.0  
-**Last Updated:** January 25, 2026  
+**Document Version:** 2.1
+**Last Updated:** March 16, 2026
 **Maintainer:** GridTokenX Development Team
 
 **Related Documentation:**

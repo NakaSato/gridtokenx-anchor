@@ -1,6 +1,8 @@
 import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import BN from 'bn.js';
+import * as fs from 'fs';
+import { MINT_SIZE, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 async function main() {
   const provider = anchor.AnchorProvider.env();
@@ -104,6 +106,61 @@ async function main() {
     }
   }
 
+  // 2b. Initialize Currency Token (for payments)
+  console.log('\n[2b/5] Initializing Currency Token Mint...');
+  
+  // Load or generate currency mint keypair
+  let currencyMintKeypair: anchor.web3.Keypair;
+  try {
+    const rawData = fs.readFileSync('currency-mint.json', 'utf8');
+    currencyMintKeypair = anchor.web3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(rawData)));
+    console.log('  ℹ️  Loaded existing currency mint:', currencyMintKeypair.publicKey.toBase58());
+  } catch (e) {
+    currencyMintKeypair = anchor.web3.Keypair.generate();
+    fs.writeFileSync('currency-mint.json', JSON.stringify(Array.from(currencyMintKeypair.secretKey)));
+    console.log('  ℹ️  Generated new currency mint:', currencyMintKeypair.publicKey.toBase58());
+  }
+
+  try {
+    const mintInfo = await provider.connection.getAccountInfo(currencyMintKeypair.publicKey);
+    if (!mintInfo) {
+      console.log('  Initializing Currency Token as standard SPL Mint...');
+      const lamports = await provider.connection.getMinimumBalanceForRentExemption(MINT_SIZE);
+      
+      const transaction = new anchor.web3.Transaction().add(
+        anchor.web3.SystemProgram.createAccount({
+          fromPubkey: authority,
+          newAccountPubkey: currencyMintKeypair.publicKey,
+          space: MINT_SIZE,
+          lamports,
+          programId: TOKEN_PROGRAM_ID,
+        }),
+        // Initialize mint instruction — using raw instruction to avoid extra dependencies if possible
+        {
+          keys: [
+            { pubkey: currencyMintKeypair.publicKey, isSigner: false, isWritable: true },
+            { pubkey: anchor.web3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+          ],
+          programId: TOKEN_PROGRAM_ID,
+          data: Buffer.from([
+            0, // InitializeMint instruction index
+            6, // decimals (standard for currency like USDC)
+            ...authority.toBuffer(),
+            1, // hasFreezeAuthority
+            ...authority.toBuffer(),
+          ]),
+        }
+      );
+
+      await provider.sendAndConfirm(transaction, [currencyMintKeypair]);
+      console.log('  ✅ Currency Token initialized:', currencyMintKeypair.publicKey.toBase58());
+    } else {
+      console.log('  ℹ️  Currency Token already exists:', currencyMintKeypair.publicKey.toBase58());
+    }
+  } catch (e: any) {
+    console.log('  ❌ Currency Token initialization failed:', e.message);
+  }
+
   // 3. Initialize Governance (PoA)
   console.log('\n[3/5] Initializing Governance PoA...');
   const [poaConfigPda] = PublicKey.findProgramAddressSync(
@@ -130,9 +187,10 @@ async function main() {
     [Buffer.from('market')],
     tradingProgram.programId
   );
+  console.log('     Market PDA:', marketPda.toBase58());
   try {
     const tx = await tradingProgram.methods
-      .initializeMarket(10) // num_shards = 10
+      .initializeMarket(4) // 4 shards
       .accounts({
         market: marketPda,
         authority: authority,
@@ -144,14 +202,14 @@ async function main() {
     console.log('  ℹ️  Market already exists or failed:', e.message);
   }
 
-  // 4b. Initialize Zones 1, 2, 3
-  for (const zoneId of [1, 2, 3]) {
+  // 4b. Initialize Zones 0, 1, 2, 3
+  for (const zoneId of [0, 1, 2, 3, 7583, 7584, 7585, 7586, 7587, 7588]) {
     console.log(`  Initializing Zone ${zoneId} Market...`);
     const [zoneMarketPda] = PublicKey.findProgramAddressSync(
       [Buffer.from('zone_market'), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, 'le', 4)],
       tradingProgram.programId
     );
-    console.log(`     Zone ${zoneId} PDA: ${zoneMarketPda.toBase58()}`);
+    console.log(`     Zone ${zoneId} PDA: ${zoneMarketPda.toBase58()}`); // Log zoneMarketPda unconditionally
     try {
       const tx = await tradingProgram.methods
         .initializeZoneMarket(zoneId, 1) // 1 shard per zone
@@ -174,9 +232,15 @@ async function main() {
     [Buffer.from('oracle_data')],
     oracleProgram.programId
   );
+  
+  // Allow overriding the API Gateway address for the Oracle
+  const apiGatewayStr = process.env.ORACLE_API_GATEWAY || authority.toBase58();
+  const apiGateway = new PublicKey(apiGatewayStr);
+  console.log('  Authorized API Gateway:', apiGateway.toBase58());
+
   try {
     const tx = await oracleProgram.methods
-      .initialize(authority) // api_gateway = authority for now
+      .initialize(apiGateway)
       .accounts({
         oracleData: oracleDataPda,
         authority: authority,

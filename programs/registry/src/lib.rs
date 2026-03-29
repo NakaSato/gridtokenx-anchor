@@ -13,17 +13,19 @@ pub use error::RegistryError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("DVoD5K5YRuXXF54a3b6r282jRD8RmtVHGfpw55DHFVDe");
+declare_id!("FmvDiFUWPrwXsqo7z7XnVniKbZDcz32U5HSDVwPug89c");
 
 /// Airdrop amount for new users (in smallest token units, 9 decimals = 20 GRX)
 pub const AIRDROP_AMOUNT: u64 = 20_000_000_000; // 20 GRX tokens
 
 #[cfg(feature = "localnet")]
-use compute_debug::{compute_fn, compute_checkpoint};
+use compute_debug::{compute_checkpoint, compute_fn};
 
 #[cfg(not(feature = "localnet"))]
 macro_rules! compute_fn {
-    ($name:expr => $block:block) => { $block };
+    ($name:expr => $block:block) => {
+        $block
+    };
 }
 #[cfg(not(feature = "localnet"))]
 #[allow(unused_macros)]
@@ -77,10 +79,7 @@ pub mod registry {
     }
 
     /// Set the oracle authority (admin only)
-    pub fn set_oracle_authority(
-        ctx: Context<SetOracleAuthority>,
-        oracle: Pubkey,
-    ) -> Result<()> {
+    pub fn set_oracle_authority(ctx: Context<SetOracleAuthority>, oracle: Pubkey) -> Result<()> {
         compute_fn!("set_oracle_authority" => {
             let mut registry = ctx.accounts.registry.load_mut()?;
             require_keys_eq!(
@@ -94,7 +93,7 @@ pub mod registry {
             } else {
                 None
             };
-            
+
             registry.oracle_authority = oracle;
             registry.has_oracle_authority = 1;
 
@@ -126,8 +125,12 @@ pub mod registry {
                 // Manually deserialize or use zero_copy check
                 // For simplicity in this benchmark-to-prod transition:
                 let shard = RegistryShard::load_from_bytes(&shard_data[8..])?;
-                total_users = total_users.checked_add(shard.user_count).ok_or(RegistryError::MathOverflow)?;
-                total_meters = total_meters.checked_add(shard.meter_count).ok_or(RegistryError::MathOverflow)?;
+                total_users = total_users
+                    .checked_add(shard.user_count)
+                    .ok_or(RegistryError::MathOverflow)?;
+                total_meters = total_meters
+                    .checked_add(shard.meter_count)
+                    .ok_or(RegistryError::MathOverflow)?;
             }
         }
 
@@ -177,7 +180,7 @@ pub mod registry {
             // Only proceed if energy token program is provided (optional)
             if ctx.accounts.energy_token_program.key() != Pubkey::default() {
                 compute_checkpoint!("before_airdrop_cpi");
-                
+
                 // Build CPI context for MintToWallet instruction
                 let cpi_accounts = token_interface::MintTo {
                     mint: ctx.accounts.mint.to_account_info(),
@@ -192,12 +195,12 @@ pub mod registry {
                 let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
 
                 // Call mint_to from the SPL token interface
-                if let Err(_) = token_interface::mint_to(cpi_ctx, AIRDROP_AMOUNT) {
+                if token_interface::mint_to(cpi_ctx, AIRDROP_AMOUNT).is_err() {
                     // Airdrop failure is non-critical, user registration continues
                     // This allows registration to succeed even if token minting fails
                     msg!("Warning: Airdrop minting failed for user {}, but registration succeeded", user_authority);
                 }
-                
+
                 compute_checkpoint!("after_airdrop_cpi");
             }
         });
@@ -222,14 +225,14 @@ pub mod registry {
                 user_account.status == UserStatus::Active,
                 RegistryError::UnauthorizedUser
             );
-            
+
             // Basic owner-user validation (though PDA seeds also protect this)
             require_keys_eq!(
                 owner,
                 user_account.authority,
                 RegistryError::UnauthorizedUser
             );
-            
+
             require!(meter_id.len() <= 32, RegistryError::InvalidMeterId);
 
             meter_account.meter_id = string_to_bytes32(&meter_id);
@@ -254,8 +257,6 @@ pub mod registry {
         });
         Ok(())
     }
-
-
 
     /// Update user status (admin only)
     pub fn update_user_status(
@@ -295,24 +296,24 @@ pub mod registry {
         compute_fn!("update_meter_reading" => {
             let registry = ctx.accounts.registry.load()?;
             let mut meter_account = ctx.accounts.meter_account.load_mut()?;
-            
+
             require!(registry.has_oracle_authority == 1, RegistryError::OracleNotConfigured);
             require_keys_eq!(
                 ctx.accounts.oracle_authority.key(),
                 registry.oracle_authority,
                 RegistryError::UnauthorizedOracle
             );
-            
+
             require!(
                 meter_account.status == MeterStatus::Active,
                 RegistryError::InvalidMeterStatus
             );
-            
+
             require!(
                 reading_timestamp > meter_account.last_reading_at,
                 RegistryError::StaleReading
             );
-            
+
             const MAX_READING_DELTA: u64 = 1_000_000_000_000;
             require!(
                 energy_generated <= MAX_READING_DELTA,
@@ -338,29 +339,26 @@ pub mod registry {
     }
 
     /// Set meter status (owner or authority)
-    pub fn set_meter_status(
-        ctx: Context<SetMeterStatus>,
-        new_status: MeterStatus,
-    ) -> Result<()> {
+    pub fn set_meter_status(ctx: Context<SetMeterStatus>, new_status: MeterStatus) -> Result<()> {
         compute_fn!("set_meter_status" => {
             let mut meter = ctx.accounts.meter_account.load_mut()?;
             let _shard = ctx.accounts.registry_shard.load()?;
             let registry_acc = ctx.accounts.registry.load()?;
-            
+
             let is_owner = ctx.accounts.authority.key() == meter.owner;
             let is_admin = ctx.accounts.authority.key() == registry_acc.authority;
             require!(is_owner || is_admin, RegistryError::UnauthorizedUser);
-            
+
             let old_status = meter.status;
-            
+
             if old_status == MeterStatus::Active && new_status != MeterStatus::Active {
                 // _registry_acc.active_meter_count = _registry_acc.active_meter_count.saturating_sub(1);
             } else if old_status != MeterStatus::Active && new_status == MeterStatus::Active {
                 // _registry_acc.active_meter_count += 1;
             }
-            
+
             meter.status = new_status;
-            
+
             emit!(MeterStatusUpdated {
                 meter_id: bytes32_to_string(&meter.meter_id),
                 owner: meter.owner,
@@ -378,25 +376,25 @@ pub mod registry {
             let mut user = ctx.accounts.user_account.load_mut()?;
             let _shard = ctx.accounts.registry_shard.load()?;
             let _registry_acc = ctx.accounts.registry.load()?;
-            
+
             require_keys_eq!(
                 ctx.accounts.owner.key(),
                 meter.owner,
                 RegistryError::UnauthorizedUser
             );
-            
+
             require!(
                 meter.status != MeterStatus::Inactive,
                 RegistryError::AlreadyInactive
             );
-            
+
             if meter.status == MeterStatus::Active {
                 // _registry_acc.active_meter_count = _registry_acc.active_meter_count.saturating_sub(1);
             }
-            
+
             meter.status = MeterStatus::Inactive;
             user.meter_count = user.meter_count.saturating_sub(1);
-            
+
             emit!(MeterDeactivated {
                 meter_id: bytes32_to_string(&meter.meter_id),
                 owner: meter.owner,
@@ -537,25 +535,24 @@ pub mod registry {
     }
 
     /// Mark energy as claimed for ERC issuance (authorized by governance/oracle)
-    pub fn mark_erc_claimed(
-        ctx: Context<MarkErcClaimed>,
-        amount: u64,
-    ) -> Result<()> {
+    pub fn mark_erc_claimed(ctx: Context<MarkErcClaimed>, amount: u64) -> Result<()> {
         let mut meter = ctx.accounts.meter_account.load_mut()?;
-        
+
         // Authorization check - usually either the registry authority or a specific governance program
         let registry = ctx.accounts.registry.load()?;
         require!(
-            ctx.accounts.authority.key() == registry.authority ||
-            ctx.accounts.authority.key() == registry.oracle_authority,
+            ctx.accounts.authority.key() == registry.authority
+                || ctx.accounts.authority.key() == registry.oracle_authority,
             RegistryError::UnauthorizedAuthority
         );
 
-        let unclaimed = meter.total_generation.saturating_sub(meter.claimed_erc_generation);
+        let unclaimed = meter
+            .total_generation
+            .saturating_sub(meter.claimed_erc_generation);
         require!(amount <= unclaimed, RegistryError::NoUnsettledBalance);
 
         meter.claimed_erc_generation = meter.claimed_erc_generation.saturating_add(amount);
-        
+
         emit!(MeterReadingUpdated {
             meter_id: bytes32_to_string(&meter.meter_id),
             owner: meter.owner,
@@ -703,7 +700,7 @@ pub struct UpdateUserStatus<'info> {
 #[derive(Accounts)]
 pub struct UpdateMeterReading<'info> {
     pub registry: AccountLoader<'info, Registry>,
-    
+
     #[account(mut)]
     pub meter_account: AccountLoader<'info, MeterAccount>,
 
@@ -714,7 +711,7 @@ pub struct UpdateMeterReading<'info> {
 pub struct SetOracleAuthority<'info> {
     #[account(mut)]
     pub registry: AccountLoader<'info, Registry>,
-    
+
     pub authority: Signer<'info>,
 }
 
@@ -722,16 +719,16 @@ pub struct SetOracleAuthority<'info> {
 pub struct SetMeterStatus<'info> {
     #[account(mut)]
     pub registry: AccountLoader<'info, Registry>,
-    
+
     #[account(mut)]
     pub meter_account: AccountLoader<'info, MeterAccount>,
-    
+
     #[account(
         seeds = [b"registry_shard".as_ref(), &[0u8]], // Default to shard 0 for view operations
         bump
     )]
     pub registry_shard: AccountLoader<'info, RegistryShard>,
-    
+
     pub authority: Signer<'info>,
 }
 
@@ -742,16 +739,16 @@ pub struct DeactivateMeter<'info> {
 
     #[account(mut)]
     pub user_account: AccountLoader<'info, UserAccount>,
-    
+
     #[account(
         seeds = [b"registry_shard".as_ref(), &[0u8]],
         bump
     )]
     pub registry_shard: AccountLoader<'info, RegistryShard>,
-    
+
     #[account(mut)]
     pub registry: AccountLoader<'info, Registry>,
-    
+
     pub owner: Signer<'info>,
 }
 

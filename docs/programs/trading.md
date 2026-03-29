@@ -1,8 +1,8 @@
 # Trading Program: Technical Documentation for Research
 
-**Program ID:** `8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND`  
-**Version:** 0.1.1  
-**Last Updated:** February 2, 2026
+**Program ID:** `8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND`
+**Version:** 0.1.1
+**Last Updated:** March 16, 2026
 
 > **Deep Dive Documentation:**
 > - [AMM & Bonding Curves](./deep-dive/amm-bonding-curves.md) - Mathematical foundations for energy-specific AMMs

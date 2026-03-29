@@ -8,6 +8,7 @@ pub struct MeterReadingSubmitted {
     pub energy_produced: u64,
     pub energy_consumed: u64,
     pub timestamp: i64,
+    pub zone_id: i32,
     pub submitter: Pubkey,
 }
 
@@ -59,6 +60,7 @@ pub struct MeterReadingRejected {
     pub energy_produced: u64,
     pub energy_consumed: u64,
     pub timestamp: i64,
+    pub zone_id: i32,
     pub reason: String,
 }
 

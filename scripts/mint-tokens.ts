@@ -1,7 +1,9 @@
+import pkg from "@coral-xyz/anchor";
+const { BN, Program, AnchorProvider } = pkg;
 import * as anchor from "@coral-xyz/anchor";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import {
-  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
@@ -18,10 +20,15 @@ async function main() {
   console.log("🚀 Minting GridTokenX Energy Tokens\n");
 
   const idl = JSON.parse(fs.readFileSync("target/idl/energy_token.json", "utf-8"));
-  const programId = new PublicKey("GzEcWzkb73zcgvgoNRxEiuuT7CEAbzbHcAgjNV25pbLV");
-  const program = new anchor.Program(idl as anchor.Idl, programId, provider);
+  const program = new Program(idl as anchor.Idl, provider);
+  const programId = program.programId;
 
-  const MINT = new PublicKey("2XLTgMue7MHSjZ7A25zmV9xF6ZeBz2LouZt6Y92AtN2H");
+  // Derive Mint PDA
+  const [MINT] = PublicKey.findProgramAddressSync(
+    [Buffer.from("mint_2022")],
+    programId
+  );
+  console.log("Energy Token Mint:", MINT.toBase58());
 
   // Find token info PDA (seeds: [b"token_info_2022"])
   const [tokenInfo] = PublicKey.findProgramAddressSync(
@@ -31,29 +38,53 @@ async function main() {
   console.log("Token Info PDA:", tokenInfo.toBase58());
 
   // Recipients to fund
-  const recipients = [
-    {
-      name: "Dev Wallet",
-      path: path.join(process.cwd(), "../dev-wallet.json"),
-      amount: new anchor.BN(1000000000000), // 1 million tokens (9 decimals)
-    },
-    {
-      name: "Gateway Wallet",
-      path: path.join(process.cwd(), "../gridtokenx-apigateway/dev-wallet.json"),
-      amount: new anchor.BN(1000000000000),
-    },
-  ];
+  const recipients = [];
+
+  // Check if command line arguments are provided
+  if (process.argv.length >= 3) {
+    const address = process.argv[2];
+    const amountStr = process.argv[3] || "1000";
+    const amount = new BN(parseFloat(amountStr) * 1e9);
+    recipients.push({
+      name: "CLI Requested Wallet",
+      address: address,
+      amount: amount,
+    });
+  } else {
+    recipients.push(
+      {
+        name: "Dev Wallet (API)",
+        path: path.join(process.cwd(), "../gridtokenx-api/dev-wallet.json"),
+        amount: new BN(1000000000000),
+      },
+      {
+        name: "Buyer Test User",
+        address: "7rdNNcszvgNcYqQezZicnFHZ9kxyPcSpFCnRNB52meHK",
+        amount: new BN(1000000000000),
+      },
+      {
+        name: "Seller Test User",
+        address: "BT9ESAZoNGnvPswpeHNLgt582GTQrAUv21ZLkk4H6Bad",
+        amount: new BN(1000000000000),
+      }
+    );
+  }
 
   for (const recipient of recipients) {
     console.log(`\n💰 Funding ${recipient.name}...`);
 
-    if (!fs.existsSync(recipient.path)) {
-      console.log(`  ⚠️  Wallet not found: ${recipient.path}`);
-      continue;
+    let recipientPubkey: PublicKey;
+    const r = recipient as any;
+    if (r.address) {
+      recipientPubkey = new PublicKey(r.address);
+    } else {
+      if (!fs.existsSync(r.path)) {
+        console.log(`  ⚠️  Wallet not found: ${recipient.path}`);
+        continue;
+      }
+      const keypairData = JSON.parse(fs.readFileSync(recipient.path!, "utf-8"));
+      recipientPubkey = new PublicKey(keypairData.slice(32, 64));
     }
-
-    const keypairData = JSON.parse(fs.readFileSync(recipient.path, "utf-8"));
-    const recipientPubkey = new PublicKey(keypairData.slice(32, 64));
 
     console.log(`  Address: ${recipientPubkey.toBase58()}`);
 
@@ -62,7 +93,7 @@ async function main() {
       MINT,
       recipientPubkey,
       false,
-      TOKEN_2022_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
 
@@ -78,7 +109,7 @@ async function main() {
         recipientTokenAccount,
         recipientPubkey,
         MINT,
-        TOKEN_2022_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
         ASSOCIATED_TOKEN_PROGRAM_ID
       );
 
@@ -94,13 +125,15 @@ async function main() {
 
     try {
       await program.methods
-        .mintTokens(recipient.amount)
+        .mintToWallet(recipient.amount)
         .accounts({
           tokenInfo: tokenInfo,
           mint: MINT,
           destination: recipientTokenAccount,
+          destinationOwner: recipientPubkey,
           authority: wallet.publicKey,
-          tokenProgram: TOKEN_2022_PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
         })
         .rpc();

@@ -27,14 +27,14 @@ pub struct ErcCertificate {
     pub validated_for_trading: bool,
     /// When validated for trading
     pub trading_validated_at: Option<i64>,
-    
+
     // === NEW: Revocation tracking ===
     /// Revocation reason (if revoked) - FIXED: 128 bytes
     pub revocation_reason: [u8; 128],
     pub reason_len: u8,
     /// When revoked
     pub revoked_at: Option<i64>,
-    
+
     // === NEW: Transfer tracking ===
     /// Number of times transferred
     pub transfer_count: u8,
@@ -44,18 +44,18 @@ pub struct ErcCertificate {
 
 impl ErcCertificate {
     // Space calculation:
-    // certificate_id (64 + 1) + Pubkey (32) + Pubkey (32) + u64 (8) + 
-    // renewable_source (64 + 1) + validation_data (256 + 2) + i64 (8) + 
-    // expires_at (Option<i64>: 9) + ErcStatus (1) + bool (1) + 
-    // trading_validated_at (Option<i64>: 9) + revocation_reason (128 + 1) + 
+    // certificate_id (64 + 1) + Pubkey (32) + Pubkey (32) + u64 (8) +
+    // renewable_source (64 + 1) + validation_data (256 + 2) + i64 (8) +
+    // expires_at (Option<i64>: 9) + ErcStatus (1) + bool (1) +
+    // trading_validated_at (Option<i64>: 9) + revocation_reason (128 + 1) +
     // revoked_at (Option<i64>: 9) + u8 (1) + last_transferred_at (Option<i64>: 9)
     pub const LEN: usize = 65 + 32 + 32 + 8 + 65 + 258 + 8 + 9 + 1 + 1 + 9 + 129 + 9 + 1 + 9;
-    
+
     /// Check if certificate can be transferred
     pub fn can_transfer(&self) -> bool {
         self.status == ErcStatus::Valid && self.validated_for_trading
     }
-    
+
     /// Check if certificate can be revoked
     pub fn can_revoke(&self) -> bool {
         self.status == ErcStatus::Valid || self.status == ErcStatus::Pending

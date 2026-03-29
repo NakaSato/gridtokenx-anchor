@@ -1,7 +1,7 @@
 // Registry program events
 
+use crate::state::{MeterStatus, MeterType, UserStatus, UserType};
 use anchor_lang::prelude::*;
-use crate::state::{UserType, UserStatus, MeterType, MeterStatus};
 
 #[event]
 pub struct RegistryInitialized {

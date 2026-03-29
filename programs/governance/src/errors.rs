@@ -38,13 +38,13 @@ pub enum GovernanceError {
     TransfersNotAllowed,
     #[msg("Insufficient unclaimed generation for ERC issuance")]
     InsufficientUnclaimedGeneration,
-    
+
     // === Revocation Errors ===
     #[msg("Certificate already revoked")]
     AlreadyRevoked,
     #[msg("Revocation reason required")]
     RevocationReasonRequired,
-    
+
     // === Transfer Errors ===
     #[msg("Invalid transfer recipient")]
     InvalidRecipient,
@@ -52,7 +52,7 @@ pub enum GovernanceError {
     CannotTransferToSelf,
     #[msg("Certificate not validated for trading")]
     NotValidatedForTrading,
-    
+
     // === Multi-sig Authority Errors ===
     #[msg("Authority change already pending")]
     AuthorityChangePending,
@@ -62,7 +62,7 @@ pub enum GovernanceError {
     InvalidPendingAuthority,
     #[msg("Authority change expired")]
     AuthorityChangeExpired,
-    
+
     // === Oracle Errors ===
     #[msg("Oracle confidence below minimum threshold")]
     OracleConfidenceTooLow,

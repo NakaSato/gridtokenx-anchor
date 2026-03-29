@@ -1,8 +1,8 @@
 # Registry Program: Technical Documentation for Research
 
-**Program ID:** `CXXRVpEwyd2ch7eo425mtaBfr2Yi1825Nm6yik2NEWqR`  
-**Version:** 0.1.1  
-**Last Updated:** February 2, 2026
+**Program ID:** `CXXRVpEwyd2ch7eo425mtaBfr2Yi1825Nm6yik2NEWqR`
+**Version:** 0.1.1
+**Last Updated:** March 16, 2026
 
 > **Deep Dive Documentation:**
 > - [Settlement Architecture](./deep-dive/settlement-architecture.md) - Account management and settlement flows

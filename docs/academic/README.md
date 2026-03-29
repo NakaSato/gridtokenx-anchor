@@ -1,7 +1,7 @@
 # Academic Documentation
 
-> **Research-oriented documentation for thesis and academic purposes**  
-> *February 2026 Edition*  
+> **Research-oriented documentation for thesis and academic purposes**
+> *March 2026 Edition*
 > **Version:** 2.0.0
 
 This section contains formal academic documentation covering theoretical foundations, system design rationale, comparative analysis, and research contributions of the GridTokenX platform—a blockchain-based peer-to-peer (P2P) energy trading ecosystem built on Solana.

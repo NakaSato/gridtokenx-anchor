@@ -1,5 +1,5 @@
-use anchor_lang::prelude::*;
 use crate::errors::GovernanceError;
+use anchor_lang::prelude::*;
 
 #[account]
 pub struct PoAConfig {
@@ -14,11 +14,11 @@ pub struct PoAConfig {
     pub contact_len: u8,
     /// Governance version for upgrades
     pub version: u8,
-    
+
     // === Controls ===
     /// System maintenance mode
     pub maintenance_mode: bool,
-    
+
     // === ERC Certificate Configuration ===
     /// Whether ERC validation is enabled
     pub erc_validation_enabled: bool,
@@ -32,7 +32,7 @@ pub struct PoAConfig {
     pub auto_revoke_expired: bool,
     /// Require oracle validation for ERC issuance
     pub require_oracle_validation: bool,
-    
+
     // === Advanced Features ===
     /// Whether the authority can delegate ERC validation
     pub delegation_enabled: bool,
@@ -42,7 +42,7 @@ pub struct PoAConfig {
     pub min_oracle_confidence: u8,
     /// Allow certificate transfers between accounts
     pub allow_certificate_transfers: bool,
-    
+
     // === Tracking ===
     /// Total ERCs issued since inception
     pub total_ercs_issued: u64,
@@ -52,7 +52,7 @@ pub struct PoAConfig {
     pub total_ercs_revoked: u64,
     /// Total energy certified (kWh)
     pub total_energy_certified: u64,
-    
+
     // === Timestamps ===
     /// When governance was initialized
     pub created_at: i64,
@@ -60,7 +60,7 @@ pub struct PoAConfig {
     pub last_updated: i64,
     /// Last ERC issued timestamp
     pub last_erc_issued_at: Option<i64>,
-    
+
     // === Multi-sig Authority Change ===
     /// Pending new authority (for 2-step transfer)
     pub pending_authority: Option<Pubkey>,
@@ -71,7 +71,7 @@ pub struct PoAConfig {
 }
 
 impl PoAConfig {
-    pub const LEN: usize = 
+    pub const LEN: usize =
         // Authority Configuration
         32 +    // authority
         64 + 1 + // authority_name + len
@@ -109,8 +109,8 @@ impl PoAConfig {
         // Multi-sig Authority Change
         33 +    // pending_authority (Option<Pubkey>)
         9 +     // pending_authority_proposed_at (Option<i64>)
-        9;      // pending_authority_expires_at (Option<i64>)
-    
+        9; // pending_authority_expires_at (Option<i64>)
+
     /// Validate that config parameters are within acceptable ranges
     pub fn validate_config(&self) -> Result<()> {
         require!(
@@ -131,12 +131,12 @@ impl PoAConfig {
         );
         Ok(())
     }
-    
+
     /// Check if system is operational (not paused or in maintenance)
     pub fn is_operational(&self) -> bool {
         !self.maintenance_mode
     }
-    
+
     /// Check if ERC issuance is allowed
     pub fn can_issue_erc(&self) -> bool {
         self.is_operational() && self.erc_validation_enabled
@@ -150,15 +150,15 @@ pub struct GovernanceStats {
     pub total_ercs_validated: u64,
     pub total_ercs_revoked: u64,
     pub total_energy_certified: u64,
-    
+
     // Authority info
     pub authority_name: String,
     pub contact_info: String,
-    
+
     // Configuration
     pub erc_validation_enabled: bool,
     pub maintenance_mode: bool,
-    
+
     // Limits
     pub min_energy_amount: u64,
     pub max_erc_amount: u64,
@@ -168,17 +168,17 @@ pub struct GovernanceStats {
     pub require_oracle_validation: bool,
     pub allow_certificate_transfers: bool,
     pub delegation_enabled: bool,
-    
+
     // Timestamps
     pub created_at: i64,
     pub last_updated: i64,
     pub last_erc_issued_at: Option<i64>,
-    
+
     // NEW: Authority change status
     pub pending_authority_change: bool,
     pub pending_authority: Option<Pubkey>,
     pub pending_authority_expires_at: Option<i64>,
-    
+
     // NEW: Oracle info
     pub oracle_authority: Option<Pubkey>,
     pub min_oracle_confidence: u8,

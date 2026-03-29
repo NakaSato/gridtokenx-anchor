@@ -27,7 +27,7 @@ async function main() {
   console.log('\n🚀 Initializing Trading Market on-chain...');
   try {
     const tx = await tradingProgram.methods
-      .initializeMarket()
+      .initializeMarket(16)
       .accounts({
         market: marketPda,
         authority: authority.publicKey,

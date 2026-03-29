@@ -1,6 +1,6 @@
-use anchor_lang::prelude::*;
-use crate::state::*;
 use crate::errors::GovernanceError;
+use crate::state::*;
+use anchor_lang::prelude::*;
 
 // ========== INITIALIZATION ==========
 

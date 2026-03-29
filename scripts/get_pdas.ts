@@ -25,9 +25,25 @@ async function main() {
         energyTokenProgram.programId
     );
 
+    const [currencyMintPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("currency_mint")],
+        energyTokenProgram.programId
+    );
+
+    let currencyMintAddr = currencyMintPda.toBase58();
+    try {
+        const fs = await import('fs');
+        const rawData = fs.readFileSync('currency-mint.json', 'utf8');
+        const currencyMintKeypair = anchor.web3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(rawData)));
+        currencyMintAddr = currencyMintKeypair.publicKey.toBase58();
+    } catch (e) {
+        // Fallback to PDA if file not found
+    }
+
     console.log(`REGISTRY_PDA=${registryPda.toBase58()}`);
     console.log(`MARKET_PDA=${marketPda.toBase58()}`);
     console.log(`ENERGY_TOKEN_MINT=${mintPda.toBase58()}`);
+    console.log(`CURRENCY_TOKEN_MINT=${currencyMintAddr}`);
 }
 
 main().catch(err => {

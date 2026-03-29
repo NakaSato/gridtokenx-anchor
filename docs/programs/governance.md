@@ -1,8 +1,8 @@
 # Governance Program: Technical Documentation for Research
 
-**Program ID:** `8bNpJqZoqqUWKu55VWhR8LWS66BX7NPpwgYBAKhBzu2L`  
-**Version:** 0.1.1  
-**Last Updated:** February 2, 2026
+**Program ID:** `8bNpJqZoqqUWKu55VWhR8LWS66BX7NPpwgYBAKhBzu2L`
+**Version:** 0.1.1
+**Last Updated:** March 16, 2026
 
 > **Deep Dive Documentation:**
 > - [Carbon Credit System](./deep-dive/carbon-credits.md) - REC tokenization and carbon offset tracking

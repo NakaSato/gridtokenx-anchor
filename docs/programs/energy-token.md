@@ -1,8 +1,8 @@
 # Energy Token Program: Technical Research Documentation
 
-**Program ID:** `5DJCWKo5cXt3PXRsrpH1xixra4wXWbNzxZ1p4FHqSxvi`  
-**Version:** 0.1.1  
-**Last Updated:** February 2, 2026
+**Program ID:** `5DJCWKo5cXt3PXRsrpH1xixra4wXWbNzxZ1p4FHqSxvi`
+**Version:** 0.1.1
+**Last Updated:** March 16, 2026
 
 > **Deep Dive Documentation:**
 > - [Confidential Trading](./deep-dive/confidential-trading.md) - ElGamal encryption and Token-2022 integration

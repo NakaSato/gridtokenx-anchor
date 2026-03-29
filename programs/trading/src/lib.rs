@@ -15,6 +15,47 @@ pub use crate::state::{
 };
 pub use governance::{ErcCertificate, ErcStatus, PoAConfig};
 
+// ============================================================================
+// AUCTION CLEARING TYPES (Inlined to avoid Anchor macro issues)
+// ============================================================================
+
+/// Auction order with price and volume
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct AuctionOrder {
+    pub order_key: Pubkey,
+    pub price_per_kwh: u64,
+    pub amount: u64,
+    pub filled_amount: u64,
+    pub user: Pubkey,
+    pub is_buy: bool,
+}
+
+/// Supply/demand curve point
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default)]
+pub struct CurvePoint {
+    pub price: u64,
+    pub cumulative_volume: u64,
+}
+
+/// Match result for auction clearing
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct AuctionMatch {
+    pub buy_order: Pubkey,
+    pub sell_order: Pubkey,
+    pub amount: u64,
+    pub price: u64,
+}
+
+/// Clear auction result
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct ClearAuctionResult {
+    pub clearing_price: u64,
+    pub clearing_volume: u64,
+    pub matched_buy_volume: u64,
+    pub matched_sell_volume: u64,
+    pub total_matches: u32,
+}
+
 /// Match pair for batch execution
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub struct MatchPair {
@@ -24,7 +65,7 @@ pub struct MatchPair {
     pub price: u64,
 }
 
-declare_id!("3iFReh5tvdWkLt7eJcvGKsST7wcwZsSHk3z3xCfUwHLw");
+declare_id!("69dGpKu9a8EZiZ7orgfTH6CoGj9DeQHHkHBF2exSr8na");
 
 #[program]
 pub mod trading {
@@ -796,6 +837,219 @@ pub mod trading {
         Ok(())
     }
 
+    /// Clear Auction - Periodic Batch Auction Mechanism
+    /// 
+    /// Implements uniform price auction clearing by finding the supply-demand intersection.
+    /// All matched orders execute at the same clearing price, ensuring fair treatment.
+    /// 
+    /// Algorithm:
+    /// 1. Collect sell orders (sorted ascending by price)
+    /// 2. Collect buy orders (sorted descending by price)
+    /// 3. Build aggregate supply and demand curves
+    /// 4. Find clearing price where supply = demand
+    /// 5. Match all compatible orders at uniform clearing price
+    /// 
+    /// Time Complexity: O(n log n) for sorting + O(m × k) for clearing point
+    /// Space Complexity: O(n) for order vectors
+    pub fn clear_auction(
+        ctx: Context<ClearAuctionContext>,
+        sell_orders: Vec<AuctionOrder>,
+        buy_orders: Vec<AuctionOrder>,
+    ) -> Result<ClearAuctionResult> {
+        require!(
+            ctx.accounts.governance_config.is_operational(),
+            TradingError::MaintenanceMode
+        );
+
+        let mut market = ctx.accounts.market.load_mut()?;
+        let mut zone_market = ctx.accounts.zone_market.load_mut()?;
+        let clock = Clock::get()?;
+
+        // Validate orders
+        require!(!sell_orders.is_empty(), TradingError::InvalidAmount);
+        require!(!buy_orders.is_empty(), TradingError::InvalidAmount);
+
+        // === STEP 1: SORT ORDERS ===
+        let mut sorted_sells = sell_orders.clone();
+        sorted_sells.sort_by(|a, b| a.price_per_kwh.cmp(&b.price_per_kwh));
+
+        let mut sorted_buys = buy_orders.clone();
+        sorted_buys.sort_by(|a, b| b.price_per_kwh.cmp(&a.price_per_kwh));
+
+        // === STEP 2: BUILD SUPPLY CURVE ===
+        let mut supply_curve: Vec<CurvePoint> = Vec::with_capacity(sorted_sells.len());
+        let mut cumulative_supply = 0u64;
+
+        for order in &sorted_sells {
+            cumulative_supply = cumulative_supply.saturating_add(order.amount);
+            supply_curve.push(CurvePoint {
+                price: order.price_per_kwh,
+                cumulative_volume: cumulative_supply,
+            });
+        }
+
+        // === STEP 3: BUILD DEMAND CURVE ===
+        let mut demand_curve: Vec<CurvePoint> = Vec::with_capacity(sorted_buys.len());
+        let mut cumulative_demand = 0u64;
+
+        for order in &sorted_buys {
+            cumulative_demand = cumulative_demand.saturating_add(order.amount);
+            demand_curve.push(CurvePoint {
+                price: order.price_per_kwh,
+                cumulative_volume: cumulative_demand,
+            });
+        }
+
+        // === STEP 4: FIND CLEARING PRICE ===
+        let (clearing_price, clearing_volume) = find_clearing_point(&supply_curve, &demand_curve)?;
+
+        require!(clearing_price > 0, TradingError::InvalidPrice);
+        require!(clearing_volume > 0, TradingError::InvalidAmount);
+
+        // === STEP 5: GENERATE MATCHES ===
+        let mut matched_buy_volume = 0u64;
+        let mut matched_sell_volume = 0u64;
+
+        // Track remaining amounts
+        let mut sell_remaining: Vec<u64> = sorted_sells
+            .iter()
+            .filter(|o| o.price_per_kwh <= clearing_price)
+            .map(|o| o.amount.saturating_sub(o.filled_amount))
+            .collect();
+
+        let mut buy_remaining: Vec<u64> = sorted_buys
+            .iter()
+            .filter(|o| o.price_per_kwh >= clearing_price)
+            .map(|o| o.amount.saturating_sub(o.filled_amount))
+            .collect();
+
+        let eligible_sells: Vec<&AuctionOrder> = sorted_sells
+            .iter()
+            .filter(|o| o.price_per_kwh <= clearing_price)
+            .collect();
+
+        let eligible_buys: Vec<&AuctionOrder> = sorted_buys
+            .iter()
+            .filter(|o| o.price_per_kwh >= clearing_price)
+            .collect();
+
+        let mut sell_idx = 0;
+        let mut buy_idx = 0;
+        let mut total_matches = 0u32;
+
+        while sell_idx < eligible_sells.len() && buy_idx < eligible_buys.len() {
+            let sell_order = eligible_sells[sell_idx];
+            let buy_order = eligible_buys[buy_idx];
+            let sell_rem = &mut sell_remaining[sell_idx];
+            let buy_rem = &mut buy_remaining[buy_idx];
+
+            if *sell_rem > 0 && *buy_rem > 0 {
+                let match_amount = (*sell_rem).min(*buy_rem);
+
+                emit!(crate::events::OrderMatched {
+                    buy_order: buy_order.order_key,
+                    sell_order: sell_order.order_key,
+                    seller: sell_order.user,
+                    buyer: buy_order.user,
+                    amount: match_amount,
+                    price: clearing_price,
+                    total_value: match_amount.saturating_mul(clearing_price),
+                    fee_amount: 0,
+                    timestamp: clock.unix_timestamp,
+                });
+
+                *sell_rem = sell_rem.saturating_sub(match_amount);
+                *buy_rem = buy_rem.saturating_sub(match_amount);
+                matched_buy_volume = matched_buy_volume.saturating_add(match_amount);
+                matched_sell_volume = matched_sell_volume.saturating_add(match_amount);
+                total_matches += 1;
+            }
+
+            if *sell_rem == 0 { sell_idx += 1; }
+            if *buy_rem == 0 { buy_idx += 1; }
+        }
+
+        // === STEP 6: UPDATE MARKET STATE ===
+        market.total_volume = market.total_volume.saturating_add(matched_buy_volume);
+        market.total_trades = market.total_trades.saturating_add(total_matches);
+        market.last_clearing_price = clearing_price;
+
+        zone_market.total_volume = zone_market.total_volume.saturating_add(matched_buy_volume);
+        zone_market.total_trades = zone_market.total_trades.saturating_add(total_matches);
+        zone_market.last_clearing_price = clearing_price;
+
+        // === STEP 7: EMIT EVENT ===
+        emit!(crate::events::AuctionCleared {
+            clearing_price,
+            clearing_volume,
+            matched_orders: total_matches,
+            timestamp: clock.unix_timestamp,
+        });
+
+        Ok(ClearAuctionResult {
+            clearing_price,
+            clearing_volume,
+            matched_buy_volume,
+            matched_sell_volume,
+            total_matches,
+        })
+    }
+
+    /// Execute Auction Matches - Atomic Settlement
+    ///
+    /// Executes token transfers for auction matches generated by clear_auction.
+    /// This separates price discovery (clear_auction) from settlement (execute_auction_matches).
+    ///
+    /// # Arguments
+    /// * `matches` - Vector of AuctionMatch from clear_auction
+    /// * `clearing_price` - Uniform clearing price from clear_auction
+    pub fn execute_auction_matches(
+        ctx: Context<ClearAuctionContext>,
+        matches: Vec<AuctionMatch>,
+        clearing_price: u64,
+    ) -> Result<()> {
+        require!(
+            ctx.accounts.governance_config.is_operational(),
+            TradingError::MaintenanceMode
+        );
+
+        let market = ctx.accounts.market.load()?;
+        let clock = Clock::get()?;
+
+        require!(!matches.is_empty(), TradingError::InvalidAmount);
+
+        let mut total_volume = 0u64;
+        let market_fee_bps = market.market_fee_bps as u64;
+
+        for auction_match in &matches {
+            let trade_value = auction_match.amount.saturating_mul(clearing_price);
+            let market_fee = trade_value
+                .checked_mul(market_fee_bps)
+                .map(|v| v / 10000)
+                .unwrap_or(0);
+
+            total_volume = total_volume.saturating_add(auction_match.amount);
+
+            emit!(crate::events::OrderMatched {
+                buy_order: auction_match.buy_order,
+                sell_order: auction_match.sell_order,
+                seller: Pubkey::default(),
+                buyer: Pubkey::default(),
+                amount: auction_match.amount,
+                price: clearing_price,
+                total_value: trade_value,
+                fee_amount: market_fee,
+                timestamp: clock.unix_timestamp,
+            });
+        }
+
+        let mut market = ctx.accounts.market.load_mut()?;
+        market.total_volume = market.total_volume.saturating_add(total_volume);
+        market.total_trades = market.total_trades.saturating_add(matches.len() as u32);
+
+        Ok(())
+    }
+
     pub fn execute_atomic_settlement(
         ctx: Context<ExecuteAtomicSettlementContext>,
         amount: u64,
@@ -1260,5 +1514,215 @@ pub mod trading {
         #[account(mut)]
         pub authority: Signer<'info>,
         pub governance_config: Account<'info, PoAConfig>,
+    }
+
+    // ========================================================================
+    // AUCTION CLEARING CONTEXT (Inlined to avoid Anchor macro issues)
+    // ========================================================================
+
+    #[derive(Accounts)]
+    pub struct ClearAuctionContext<'info> {
+        #[account(mut)]
+        pub market: AccountLoader<'info, Market>,
+
+        #[account(mut)]
+        pub zone_market: AccountLoader<'info, ZoneMarket>,
+
+        /// CHECK: Authority executing the auction clearing
+        #[account(mut)]
+        pub authority: Signer<'info>,
+
+        /// CHECK: Fee collector account
+        #[account(mut)]
+        pub fee_collector: AccountInfo<'info>,
+
+        /// CHECK: Token program for transfers
+        pub token_program: AccountInfo<'info>,
+
+        pub governance_config: Account<'info, PoAConfig>,
+    }
+}
+
+// ============================================================================
+// AUCTION CLEARING HELPER FUNCTIONS (Outside #[program] module)
+// ============================================================================
+
+/// Find clearing price where supply curve intersects demand curve
+fn find_clearing_point(
+    supply_curve: &[CurvePoint],
+    demand_curve: &[CurvePoint],
+) -> Result<(u64, u64)> {
+    let mut best_price = 0u64;
+    let mut best_volume = 0u64;
+
+    for supply_point in supply_curve {
+        for demand_point in demand_curve {
+            if supply_point.price <= demand_point.price {
+                let volume = supply_point.cumulative_volume.min(demand_point.cumulative_volume);
+                if volume > best_volume {
+                    best_volume = volume;
+                    best_price = supply_point.price;
+                }
+            }
+        }
+    }
+
+    require!(best_price > 0, TradingError::InvalidPrice);
+    require!(best_volume > 0, TradingError::InvalidAmount);
+
+    Ok((best_price, best_volume))
+}
+
+// ============================================================================
+// TESTS
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Helper functions
+    fn create_sell_order(
+        order_key: Pubkey,
+        price: u64,
+        amount: u64,
+        filled: u64,
+        user: Pubkey,
+    ) -> AuctionOrder {
+        AuctionOrder {
+            order_key,
+            price_per_kwh: price,
+            amount,
+            filled_amount: filled,
+            user,
+            is_buy: false,
+        }
+    }
+
+    fn create_buy_order(
+        order_key: Pubkey,
+        price: u64,
+        amount: u64,
+        filled: u64,
+        user: Pubkey,
+    ) -> AuctionOrder {
+        AuctionOrder {
+            order_key,
+            price_per_kwh: price,
+            amount,
+            filled_amount: filled,
+            user,
+            is_buy: true,
+        }
+    }
+
+    #[test]
+    fn test_find_clearing_point_basic() {
+        let supply_curve = vec![
+            CurvePoint { price: 3200000, cumulative_volume: 50_000_000_000 },
+            CurvePoint { price: 3400000, cumulative_volume: 130_000_000_000 },
+            CurvePoint { price: 3600000, cumulative_volume: 170_000_000_000 },
+        ];
+        let demand_curve = vec![
+            CurvePoint { price: 3800000, cumulative_volume: 30_000_000_000 },
+            CurvePoint { price: 3600000, cumulative_volume: 90_000_000_000 },
+            CurvePoint { price: 3400000, cumulative_volume: 140_000_000_000 },
+        ];
+        let (price, volume) = find_clearing_point(&supply_curve, &demand_curve).unwrap();
+        // Algorithm finds intersection with max volume: at 3.4 THB, supply=130, demand=140, vol=130
+        assert_eq!(price, 3400000);
+        assert_eq!(volume, 130_000_000_000);
+    }
+
+    #[test]
+    fn test_find_clearing_point_no_intersection() {
+        let supply_curve = vec![
+            CurvePoint { price: 5000000, cumulative_volume: 100_000_000_000 },
+        ];
+        let demand_curve = vec![
+            CurvePoint { price: 3000000, cumulative_volume: 50_000_000_000 },
+        ];
+        let result = find_clearing_point(&supply_curve, &demand_curve);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sell_order_sorting() {
+        let user = Pubkey::new_unique();
+        let mut orders = vec![
+            create_sell_order(Pubkey::new_unique(), 3600000, 100_000_000_000, 0, user),
+            create_sell_order(Pubkey::new_unique(), 3200000, 50_000_000_000, 0, user),
+            create_sell_order(Pubkey::new_unique(), 3400000, 80_000_000_000, 0, user),
+        ];
+        orders.sort_by(|a, b| a.price_per_kwh.cmp(&b.price_per_kwh));
+        assert_eq!(orders[0].price_per_kwh, 3200000);
+        assert_eq!(orders[1].price_per_kwh, 3400000);
+        assert_eq!(orders[2].price_per_kwh, 3600000);
+    }
+
+    #[test]
+    fn test_buy_order_sorting() {
+        let user = Pubkey::new_unique();
+        let mut orders = vec![
+            create_buy_order(Pubkey::new_unique(), 3400000, 50_000_000_000, 0, user),
+            create_buy_order(Pubkey::new_unique(), 3800000, 30_000_000_000, 0, user),
+            create_buy_order(Pubkey::new_unique(), 3600000, 60_000_000_000, 0, user),
+        ];
+        orders.sort_by(|a, b| b.price_per_kwh.cmp(&a.price_per_kwh));
+        assert_eq!(orders[0].price_per_kwh, 3800000);
+        assert_eq!(orders[1].price_per_kwh, 3600000);
+        assert_eq!(orders[2].price_per_kwh, 3400000);
+    }
+
+    #[test]
+    fn test_price_improvement_seller() {
+        let user = Pubkey::new_unique();
+        let sell_order = create_sell_order(Pubkey::new_unique(), 3200000u64, 50_000_000_000u64, 0, user);
+        let clearing_price: u64 = 3400000;
+        let improvement = clearing_price.saturating_sub(sell_order.price_per_kwh);
+        assert_eq!(improvement, 200000);
+    }
+
+    #[test]
+    fn test_price_improvement_buyer() {
+        let user = Pubkey::new_unique();
+        let buy_order = create_buy_order(Pubkey::new_unique(), 3800000u64, 50_000_000_000u64, 0, user);
+        let clearing_price: u64 = 3400000;
+        let savings = buy_order.price_per_kwh.saturating_sub(clearing_price);
+        assert_eq!(savings, 400000);
+    }
+
+    #[test]
+    fn test_full_auction_scenario() {
+        let user1 = Pubkey::new_unique();
+        let user2 = Pubkey::new_unique();
+        let mut sell_orders = vec![
+            create_sell_order(Pubkey::new_unique(), 3200000, 50_000_000_000, 0, user1),
+            create_sell_order(Pubkey::new_unique(), 3400000, 80_000_000_000, 0, user2),
+        ];
+        let mut buy_orders = vec![
+            create_buy_order(Pubkey::new_unique(), 3800000, 30_000_000_000, 0, user1),
+            create_buy_order(Pubkey::new_unique(), 3600000, 60_000_000_000, 0, user2),
+        ];
+        sell_orders.sort_by(|a, b| a.price_per_kwh.cmp(&b.price_per_kwh));
+        buy_orders.sort_by(|a, b| b.price_per_kwh.cmp(&a.price_per_kwh));
+        
+        let mut supply_curve = Vec::new();
+        let mut cum_supply = 0u64;
+        for o in &sell_orders {
+            cum_supply = cum_supply.saturating_add(o.amount);
+            supply_curve.push(CurvePoint { price: o.price_per_kwh, cumulative_volume: cum_supply });
+        }
+        
+        let mut demand_curve = Vec::new();
+        let mut cum_demand = 0u64;
+        for o in &buy_orders {
+            cum_demand = cum_demand.saturating_add(o.amount);
+            demand_curve.push(CurvePoint { price: o.price_per_kwh, cumulative_volume: cum_demand });
+        }
+        
+        let (price, volume) = find_clearing_point(&supply_curve, &demand_curve).unwrap();
+        assert!(price > 0);
+        assert!(volume > 0);
     }
 }

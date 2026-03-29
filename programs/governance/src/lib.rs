@@ -14,14 +14,16 @@ pub use errors::*;
 pub use events::*;
 pub use state::*;
 
-declare_id!("DksRNiZsEZ3zN8n8ZWfukFqi3z74e5865oZ8wFk38p4X");
+declare_id!("DamT9e1VqbA5nSyFZHExKwQu6qs4L5FW6dirWCK8YLd4");
 
 #[cfg(feature = "localnet")]
-use compute_debug::{compute_fn, compute_checkpoint};
+use compute_debug::{compute_checkpoint, compute_fn};
 
 #[cfg(not(feature = "localnet"))]
 macro_rules! compute_fn {
-    ($name:expr => $block:block) => { $block };
+    ($name:expr => $block:block) => {
+        $block
+    };
 }
 #[cfg(not(feature = "localnet"))]
 #[allow(unused_macros)]
@@ -38,7 +40,7 @@ pub mod governance {
             handlers::initialize::handler(ctx)
         })
     }
-    
+
     pub fn issue_erc(
         ctx: Context<IssueErc>,
         certificate_id: String,
@@ -112,19 +114,19 @@ pub mod governance {
             handlers::stats::handler(ctx)
         })
     }
-    
+
     pub fn revoke_erc(ctx: Context<RevokeErc>, reason: String) -> Result<()> {
         compute_fn!("revoke_erc" => {
             handlers::erc::revoke(ctx, reason)
         })
     }
-    
+
     pub fn transfer_erc(ctx: Context<TransferErc>) -> Result<()> {
         compute_fn!("transfer_erc" => {
             handlers::erc::transfer(ctx)
         })
     }
-    
+
     pub fn propose_authority_change(
         ctx: Context<ProposeAuthorityChange>,
         new_authority: Pubkey,
@@ -133,19 +135,19 @@ pub mod governance {
             handlers::authority::propose_authority_change(ctx, new_authority)
         })
     }
-    
+
     pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<()> {
         compute_fn!("approve_authority_change" => {
             handlers::authority::approve_authority_change(ctx)
         })
     }
-    
+
     pub fn cancel_authority_change(ctx: Context<CancelAuthorityChange>) -> Result<()> {
         compute_fn!("cancel_authority_change" => {
             handlers::authority::cancel_authority_change(ctx)
         })
     }
-    
+
     pub fn set_oracle_authority(
         ctx: Context<SetOracleAuthority>,
         oracle_authority: Pubkey,

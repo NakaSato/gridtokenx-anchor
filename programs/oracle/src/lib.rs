@@ -11,7 +11,7 @@ pub use error::OracleError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("Ad5crRxCcvKFAShAMYtRAD9XKak1cwH1FCE6TrpUA9i2");
+declare_id!("JDUVXMkeGi4oxLp8njBaGScAFaVBBg7iGoiqcY1LxKop");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
@@ -84,6 +84,7 @@ pub mod oracle {
         energy_produced: u64,
         energy_consumed: u64,
         reading_timestamp: i64,
+        zone_id: i32,
     ) -> Result<()> {
         compute_fn!("submit_meter_reading" => {
             // Validate meter_id length
@@ -121,6 +122,7 @@ pub mod oracle {
                     energy_produced,
                     energy_consumed,
                     timestamp: reading_timestamp,
+                    zone_id,
                     reason: format!("{:?}", e),
                 });
                 e
@@ -142,6 +144,9 @@ pub mod oracle {
                 meter_state.bump = ctx.bumps.meter_state;
                 meter_state.created_at = current_time;
             }
+            
+            // Update zone_id on every submission (allows relocation of meters between zones)
+            meter_state.zone_id = zone_id;
 
             meter_state.energy_produced = energy_produced;
             meter_state.energy_consumed = energy_consumed;
@@ -155,6 +160,7 @@ pub mod oracle {
                 energy_produced,
                 energy_consumed,
                 timestamp: reading_timestamp,
+                zone_id,
                 submitter: ctx.accounts.authority.key(),
             });
         });
