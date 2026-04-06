@@ -43,11 +43,15 @@ pub struct UserAccount {
     pub _padding2: [u8; 4],  // 4 bytes padding (44-48) - Ensures 8-byte alignment for h3_index
     pub h3_index: u64,       // 8 bytes (48-56)
     pub status: UserStatus,  // 1 byte (56-57)
-    pub shard_id: u8,        // 1 byte (57-58)
-    pub _padding3: [u8; 6],  // 6 bytes padding (58-64)
+    pub validator_status: ValidatorStatus, // 1 byte (57-58)
+    pub shard_id: u8,        // 1 byte (58-59)
+    pub _padding3: [u8; 5],  // 5 bytes padding (59-64)
     pub registered_at: i64,  // 8 bytes (64-72)
     pub meter_count: u32,    // 4 bytes (72-76)
-    pub _padding4: [u8; 4],  // 4 bytes padding (76-80) - Total: 80 bytes
+    pub _padding4: [u8; 4],  // 4 bytes padding (76-80) - Alignment for staked_grx
+    pub staked_grx: u64,     // 8 bytes (80-88)
+    pub last_stake_at: i64,  // 8 bytes (88-96)
+    pub _padding5: [u8; 8],  // 8 bytes padding (96-104) - Total: 104 bytes (multiple of 8)
 }
 
 /// Meter account for reading updates
@@ -113,3 +117,15 @@ pub enum MeterStatus {
 
 unsafe impl bytemuck::Zeroable for MeterStatus {}
 unsafe impl bytemuck::Pod for MeterStatus {}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
+#[repr(u8)]
+pub enum ValidatorStatus {
+    None,
+    Active,
+    Slashed,
+    Suspended,
+}
+
+unsafe impl bytemuck::Zeroable for ValidatorStatus {}
+unsafe impl bytemuck::Pod for ValidatorStatus {}
