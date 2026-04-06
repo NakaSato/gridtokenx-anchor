@@ -34,4 +34,10 @@ pub enum RegistryError {
     MathOverflow,
     #[msg("Invalid shard ID - must be less than 16")]
     InvalidShardId,
+    #[msg("Insufficient staking balance")]
+    InsufficientStakingBalance,
+    #[msg("Minimum stake requirement not met")]
+    MinStakeNotMet,
+    #[msg("Unstaking is currently locked")]
+    UnstakingLocked,
 }
