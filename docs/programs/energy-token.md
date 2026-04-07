@@ -1,828 +1,276 @@
-# Energy Token Program: Technical Research Documentation
+# Energy Token Program
 
-**Program ID:** `5DJCWKo5cXt3PXRsrpH1xixra4wXWbNzxZ1p4FHqSxvi`
-**Version:** 0.1.1
-**Last Updated:** March 16, 2026
+> **GRX Token: Energy-Backed SPL Token-2022 with PDA-Controlled Minting**
 
-> **Deep Dive Documentation:**
-> - [Confidential Trading](./deep-dive/confidential-trading.md) - ElGamal encryption and Token-2022 integration
-> - [Settlement Architecture](./deep-dive/settlement-architecture.md) - Atomic token transfers
-
-The **Energy Token** program is the core asset management layer of the GridTokenX decentralized energy trading platform. It implements a **Token-2022 wrapper** with **Program Derived Address (PDA) authority** to create a programmable mint where supply expansion is cryptographically governed by on-chain energy production verification, rather than traditional key-holder discretion.
+**Program ID:** `n52aKuZwUeZAocpWqRZAJR4xFhQqAvaRE7Xepy2JBGk`
 
 ---
 
-## 1. Architecture Overview
+## Overview
 
-### 1.1 Smart Mint Design Pattern
+The Energy Token program implements **GRX** — an SPL Token-2022 asset where supply expansion is governed by verified energy production. No keypair can mint GRX; only program logic with PDA signatures.
 
-This program implements a **"Smart Mint Authority"** pattern where the SPL Token-2022 mint authority is a **Program Derived Address (PDA)** rather than a keypair-controlled address. This architectural decision provides:
+**Core Principle:** 1 GRX = 1 kWh of verified renewable energy
 
-1. **Programmable Monetary Policy**: Minting rules (e.g., "mint only when verified energy is produced") are enforced by on-chain program logic.
-2. **Trustless Supply Expansion**: No single entity can arbitrarily inflate token supply—all mints must pass program validation.
-3. **Cross-Program Integration**: Other programs (Registry, Governance, Trading) can invoke minting via CPI with deterministic PDA signatures.
+### Key Features
 
-**Key Innovation:** First implementation of energy-backed token issuance where **1 GRX = 1 kWh of verified renewable energy generation**.
-
-### 1.2 Token-2022 Integration
-
-Built on Solana's **Token Extensions Program** (Token-2022) which provides:
-- **Transfer Fees**: For automated platform revenue (future extension).
-- **Confidential Transfers**: ElGamal encryption for private energy trading (integrated with Trading program).
-- **Transfer Hooks**: For dynamic compliance checks (REC validator authorization).
-- **Permanent Delegate**: For emergency freeze capabilities (governance-controlled).
-
-### 1.3 Dependency Graph
-
-```
-Energy Token Program
-  ├─→ SPL Token-2022 (mint operations)
-  ├─→ Metaplex Token Metadata (asset identity)
-  ├─→ Registry Program (meter validation)
-  ├─→ Governance Program (REC validator authorization)
-  └─→ Trading Program (settlement integration)
-```
+- **PDA Mint Authority**: Mint authority is a Program Derived Address — impossible to mint outside program instructions
+- **REC Validator Co-signing**: When validators are registered, one must co-sign every direct mint
+- **Token-2022 Extensions**: Full SPL Token-2022 compatibility (confidential transfers, transfer hooks)
+- **Metaplex Metadata**: Optional metadata creation for wallet display
+- **Decentralized Supply**: Registry program mints via CPI after energy settlement
 
 ---
 
-## 2. State Architecture
+## State Accounts
 
-### 2.1 TokenInfo Account
-**Type:** `[zero_copy]`, `[repr(C)]`  
-**Seeds:** `[b"token_info_2022"]`  
-**Space:** 280 bytes (8-byte discriminator + 272-byte struct)
+### TokenInfo
 
-The central state singleton managing GRX token configuration and REC validator authorization.
+**PDA Seeds:** `["token_info_2022"]`
+**Layout:** `zero_copy`, `AccountLoader`
 
-| Field | Type | Size (bytes) | Description |
-|-------|------|--------------|-------------|
-| `authority` | `Pubkey` | 32 | Admin authority for system configuration updates. |
-| `registry_program` | `Pubkey` | 32 | Authorized Registry program ID for cross-program validation. |
-| `mint` | `Pubkey` | 32 | The SPL Token-2022 Mint address managed by this PDA. |
-| `total_supply` | `u64` | 8 | Cached total supply (atomic units, 9 decimals). Updated on mint/burn. |
-| `created_at` | `i64` | 8 | Unix timestamp of initialization. |
-| `rec_validators` | `[Pubkey; 5]` | 160 | Fixed array of authorized Renewable Energy Certificate validators. |
-| `rec_validators_count` | `u8` | 1 | Current active validators (max 5 per architectural limit). |
-| `_padding` | `[u8; 7]` | 7 | Alignment padding for zero-copy compatibility. |
+| Field | Type | Description |
+|-------|------|-------------|
+| `authority` | `Pubkey` | Admin authority for configuration |
+| `registry_authority` | `Pubkey` | Authorized registry for CPI minting |
+| `registry_program` | `Pubkey` | Registry program ID (stored for reference) |
+| `mint` | `Pubkey` | GRX Token-2022 Mint address |
+| `total_supply` | `u64` | Cached total supply (synced periodically via `sync_total_supply`) |
+| `created_at` | `i64` | Initialization timestamp |
+| `rec_validators` | `[Pubkey; 5]` | Authorized REC validator array |
+| `rec_validators_count` | `u8` | Active validator count (max 5) |
 
-**Design Rationale:**
-- **`zero_copy`**: Enables direct memory mapping without deserialization (critical for high-frequency CPI reads by Trading program).
-- **Fixed-Size Array**: `rec_validators` uses fixed allocation to avoid dynamic sizing overhead. Trade-off: Max 5 validators vs. unlimited growth.
-- **Total Supply Cache**: Duplicates SPL Mint data to avoid cross-program read overhead in analytics queries.
+### GRX Mint Account
 
-### 2.2 Mint Account
-**Seeds:** `[b"mint_2022"]`  
-**Program Owner:** Token Extensions Program (Token-2022)  
-**Decimals:** 9 (nano-GRX precision for fractional kWh)  
-**Mint Authority:** `TokenInfo` PDA
+**PDA Seeds:** `["mint_2022"]`
+**Owner:** Token-2022 Program
+**Decimals:** 9 (nano-GRX precision)
+**Mint Authority:** TokenInfo PDA
 
-Standard SPL Token-2022 Mint initialized with PDA authority:
+### Constants
+
 ```rust
-// Derivation verification:
-let (mint_pda, mint_bump) = Pubkey::find_program_address(
-    &[b"mint_2022"],
-    &energy_token::ID
-);
+pub const DECIMALS: u8 = 9;
+// 1 GRX = 1_000_000_000 atomic units
 ```
-
-**Security Property:** No keypair exists that can mint GRX outside program logic—only PDA signatures generated by `mint_tokens_direct` or `mint_to_wallet` instructions.
 
 ---
 
-## 3. Core Instructions
+## Instructions
 
-### 3.1 `initialize`
-Minimal initialization handler (placeholder for future global state).
+### initialize_token
 
-**Arguments:** None  
-**Accounts:** `authority` (Signer)
+One-time initialization of the GRX token system.
+
+**Arguments:**
+- `registry_program_id: Pubkey` — Registry program ID
+- `registry_authority: Pubkey` — Registry authority pubkey (used for CPI validation)
+
+**Accounts:**
+- `token_info` (init, PDA `["token_info_2022"]`)
+- `mint` (init, PDA `["mint_2022"]`, authority = `token_info`)
+- `authority` (Signer, mut) — Payer and initial admin
 
 **Logic:**
-```rust
-pub fn initialize(_ctx: Context<Initialize>) -> Result<()> {
-    msg!("Energy token program initialized");
-    Ok(())
-}
-```
-
-**Use Case:** Reserved for future program-wide configuration (e.g., fee structures, governance parameters).
+1. Initialize TokenInfo with authority, registry references
+2. Initialize SPL Mint with PDA as mint authority
+3. Set `total_supply = 0`, `rec_validators_count = 0`
 
 ---
 
-### 3.2 `initialize_token`
-**Bootstraps the GRX token system** by creating both the TokenInfo PDA and the SPL Mint.
+### create_token_mint
+
+Attaches Metaplex metadata for wallet display (Phantom, Solflare).
 
 **Arguments:**
-- `registry_program_id: Pubkey` - The canonical Registry program for cross-program validation.
+- `name: String` — Display name (e.g., "Grid Token")
+- `symbol: String` — Ticker (e.g., "GRX")
+- `uri: String` — Metadata URI (IPFS/Arweave)
 
 **Accounts:**
-- `token_info` (init, PDA: `["token_info_2022"]`)
-- `mint` (init, PDA: `["mint_2022"]`, authority: `token_info`)
-- `authority` (Signer, mut) - Payer and initial admin.
-
-**Algorithm:**
-```rust
-1. Initialize TokenInfo PDA with zero_copy layout
-2. Set authority = signer.key()
-3. Set registry_program = registry_program_id (for future CPI validation)
-4. Initialize SPL Mint with:
-   - decimals = 9
-   - mint_authority = token_info PDA
-   - freeze_authority = None (immutable after creation)
-5. Set total_supply = 0
-6. Set rec_validators_count = 0
-7. Record created_at timestamp
-```
-
-**Constraints:**
-- Can only be called **once** (init constraint).
-- Mint authority is **permanently** the TokenInfo PDA (no upgrade path by design).
-
-**Security:** This is the **genesis transaction** for the GRX economy. The `authority` pubkey becomes the system administrator.
-
----
-
-### 3.3 `create_token_mint`
-Attaches **Metaplex Token Metadata** to the existing mint for off-chain discoverability.
-
-**Arguments:**
-- `name: String` - Token display name (e.g., "Grid Token").
-- `symbol: String` - Ticker symbol (e.g., "GRX").
-- `uri: String` - JSON metadata URI (IPFS/Arweave link to token image/description).
-
-**Accounts:**
-- `mint` (init, mut) - Fresh SPL Token-2022 Mint.
-- `metadata` (init via CPI, unchecked) - Metaplex Metadata PDA.
-- `metadata_program` (unchecked) - Metaplex Token Metadata program.
+- `mint` (mut) — Must match `token_info.load()?.mint`
+- `token_info` (PDA)
+- `metadata` (UncheckedAccount, mut) — Created via Metaplex CPI
 - `payer`, `authority` (Signers)
+- `metadata_program` (UncheckedAccount) — Metaplex Token Metadata program
+- `sysvar_instructions` (UncheckedAccount)
 
-**Algorithm:**
-```rust
-1. Check if metadata_program.executable (graceful degradation for localnet)
-2. IF executable:
-   a. CPI to Metaplex CreateV1
-   b. Parameters:
-      - token_standard: Fungible
-      - decimals: 9
-      - seller_fee_basis_points: 0 (non-NFT)
-      - print_supply: Zero (non-printable)
-   c. Set update_authority = authority (allows future metadata updates)
-3. ELSE:
-   - Log "Metaplex not available" (dev/test mode)
-```
-
-**Design Note:** Metadata is **optional** for program functionality but **required** for wallet display (Phantom, Solflare).
-
-**Gas Cost:** ~45,000 CU (with Metaplex CPI), ~1,500 CU (without).
+**Note:** Metaplex CPI is guarded by `metadata_program.executable` check for localnet compatibility.
 
 ---
 
-### 3.4 `mint_to_wallet`
-Admin-controlled token minting to arbitrary wallet (for airdrops, incentives, treasury management).
+### mint_to_wallet
+
+Admin-controlled minting to arbitrary wallet (airdrops, treasury, liquidity).
 
 **Arguments:**
-- `amount: u64` - Atomic units to mint (1 GRX = 1,000,000,000 atomic units).
+- `amount: u64` — Atomic units (1 GRX = 1,000,000,000)
 
 **Accounts:**
-- `mint` (mut) - GRX mint.
-- `token_info` (PDA) - Authority validation.
-- `destination` (mut, TokenAccount) - Recipient's ATA.
-- `authority` (Signer) - Must match `token_info.authority`.
+- `mint` (mut)
+- `token_info` (PDA, constraint: `authority` must match)
+- `destination` (mut, TokenAccount)
+- `destination_owner` (AccountInfo)
+- `authority` (Signer)
+- `payer` (Signer)
 
-**Algorithm:**
-```rust
-1. Load token_info (immutable borrow)
-2. Verify: authority.key() == token_info.authority
-   - FAIL with UnauthorizedAuthority if mismatch
-3. Derive PDA signer: seeds = ["token_info_2022", bump]
-4. CPI to Token-2022: mint_to(destination, amount)
-   - Using PDA signature
-5. Emit TokensMinted event
-```
+**Validation:** Caller must be TokenInfo authority
 
-**Event Emission:**
-```rust
-#[event]
-pub struct TokensMinted {
-    pub recipient: Pubkey,
-    pub amount: u64,
-    pub timestamp: i64,
-}
-```
-
-**Use Cases:**
-- Initial liquidity provision for AMM pools.
-- Governance rewards for validator participation.
-- Emergency supply injection (with multi-sig governance approval).
-
-**Security:** Single-authority control—upgrade to multi-sig governance recommended for production.
+**CPI:** Uses `token_interface::mint_to` with PDA signer seeds
 
 ---
 
-### 3.5 `mint_tokens_direct`
-**Primary energy-to-token conversion mechanism**. Mints GRX when verified energy production is recorded.
+### mint_tokens_direct
+
+**Primary energy-to-token conversion mechanism.** Requires REC validator co-signing when validators are registered.
 
 **Arguments:**
-- `amount: u64` - GRX to mint (proportional to kWh produced).
+- `amount: u64` — GRX to mint (proportional to kWh)
 
 **Accounts:**
-- `token_info` (mut, PDA) - For authority validation and supply tracking.
-- `mint` (mut) - GRX mint.
-- `user_token_account` (mut) - Recipient's energy token account.
-- `authority` (Signer) - Must be admin OR Registry program (via CPI).
+- `token_info` (PDA, read-only — no write lock for Sealevel parallelism)
+- `mint` (mut)
+- `user_token_account` (mut)
+- `authority` (Signer) — Must be admin or `registry_authority`
+- `registry_authority` (UncheckedAccount) — Validated against stored value
+- `rec_validator` (Signer) — Must be in `token_info.rec_validators` when `count > 0`
+- `token_program` (Interface)
 
-**Algorithm:**
-```rust
-1. Load token_info (read-only scope)
-2. Verify authorization:
-   is_admin = (authority.key() == token_info.authority)
-   // Future: Add CPI caller verification for Registry
-   require!(is_admin, UnauthorizedAuthority)
-3. Drop token_info borrow
-4. Derive PDA signer: ["token_info_2022", bump]
-5. CPI to Token-2022: mint_to(user_token_account, amount)
-6. Load token_info (mutable)
-7. Update: total_supply += amount (saturating addition)
-8. Emit GridTokensMinted event
-```
+**Authorization:**
+- Either `authority == token_info.authority` (admin) OR `authority == registry_authority` (CPI from Registry)
+- If `rec_validators_count > 0`, `rec_validator` signer must match one of the registered validators
 
-**Event Schema:**
-```rust
-#[event]
-pub struct GridTokensMinted {
-    pub meter_owner: Pubkey,  // ← Recipient ATA (meter wallet association)
-    pub amount: u64,
-    pub timestamp: i64,
-}
-```
+**Event:** `GridTokensMinted { meter_owner, amount, timestamp }`
 
-**Intended Caller Flow:**
-```
-Oracle validates meter reading
-  → Registry settles energy balance
-    → Registry CPI to energy_token::mint_tokens_direct
-      → User receives GRX tokens
-```
-
-**Performance:** ~18,000 CU (measured with compute_fn! instrumentation).
+**Design Note:** `token_info` is read-only (no `total_supply` update) to eliminate write-lock contention during high-frequency minting. Use `sync_total_supply` periodically.
 
 ---
 
-### 3.6 `add_rec_validator`
-Adds a public key to the authorized **Renewable Energy Certificate (REC)** validator whitelist.
+### sync_total_supply
 
-**Arguments:**
-- `validator_pubkey: Pubkey` - The public key to authorize.
-- `_authority_name: String` - Human-readable label (unused in logic, for IDL metadata).
+Batch-update `total_supply` cache from canonical SPL Mint account.
 
 **Accounts:**
-- `token_info` (mut, has_one = authority) - Validated via Anchor constraint.
+- `token_info` (mut, PDA)
+- `mint` (readonly)
 - `authority` (Signer)
 
-**Algorithm:**
-```rust
-1. Load token_info (mutable)
-2. Check: rec_validators_count < 5
-   - FAIL with MaxValidatorsReached if at limit
-3. Check for duplicates:
-   FOR i in 0..rec_validators_count:
-     require!(rec_validators[i] != validator_pubkey, ValidatorAlreadyExists)
-4. Append to array:
-   rec_validators[rec_validators_count] = validator_pubkey
-   rec_validators_count += 1
-5. Log addition (if localnet feature enabled)
-```
+**Logic:** Reads `mint.supply` (canonical source of truth) and writes to `token_info.total_supply`. Admin only.
 
-**Architectural Limit:** Max 5 validators due to fixed-size array. This balances:
-- **Security**: Smaller validator set is easier to audit/monitor.
-- **Performance**: Fixed-size array avoids dynamic Vec deserialization overhead.
-
-**Future Extension:** Implement validator rotation or upgrade to bitmap-indexed validator set for 100+ validators.
+**Event:** `TotalSupplySynced { authority, supply, timestamp }`
 
 ---
 
-### 3.7 `transfer_tokens`
-Standard token transfer with Token-2022 decimal precision enforcement.
+### add_rec_validator
+
+Adds authorized REC validator to whitelist.
 
 **Arguments:**
-- `amount: u64` - Atomic units to transfer.
+- `validator_pubkey: Pubkey`
+- `_authority_name: String` — Human-readable label (unused, kept for compatibility)
 
 **Accounts:**
-- `from_token_account` (mut, TokenAccount)
-- `to_token_account` (mut, TokenAccount)
-- `mint` (TokenAccount) - For decimal validation.
-- `from_authority` (Signer) - Owner of `from_token_account`.
+- `token_info` (mut, `has_one = authority`)
+- `authority` (Signer)
 
-**Algorithm:**
-```rust
-1. CPI to Token-2022: transfer_checked(from, to, amount, decimals=9)
-   - Uses checked transfer to validate decimal precision
-2. No state updates (handled by Token-2022 program)
-```
-
-**Why Not Direct SPL?** This wrapper enables:
-- Compute unit instrumentation (via `compute_fn!` macro).
-- Future transfer hooks (e.g., compliance checks, dynamic fees).
-- Centralized event emission for analytics.
+**Constraints:**
+- Max 5 validators (fixed array)
+- No duplicates
 
 ---
 
-### 3.8 `burn_tokens`
-Destroys tokens to represent energy consumption or carbon offset retirement.
+### transfer_tokens
+
+Standard SPL Token transfer with decimal enforcement.
 
 **Arguments:**
-- `amount: u64` - Atomic units to burn.
+- `amount: u64` — Atomic units
 
 **Accounts:**
-- `token_info` (mut) - For supply tracking.
-- `mint` (mut) - GRX mint.
-- `token_account` (mut) - Source account.
-- `authority` (Signer) - Owner of `token_account`.
+- `from_token_account`, `to_token_account` (mut)
+- `mint` (for decimal reference)
+- `from_authority` (Signer)
+- `token_program` (Interface)
 
-**Algorithm:**
+**CPI:** `token_interface::transfer_checked`
+
+---
+
+### burn_tokens
+
+Destroys tokens (energy consumption, REC retirement).
+
+**Arguments:**
+- `amount: u64` — Atomic units
+
+**Accounts:**
+- `mint` (mut)
+- `token_account` (mut)
+- `authority` (Signer)
+- `token_program` (Interface)
+
+**CPI:** `token_interface::burn`
+
+**Note:** `total_supply` is NOT updated here. Use `sync_total_supply` for batch reconciliation.
+
+---
+
+## Events
+
+| Event | Fields | Emitted By |
+|-------|--------|------------|
+| `GridTokensMinted` | `meter_owner`, `amount`, `timestamp` | `mint_tokens_direct` |
+| `TokensMinted` | `recipient`, `amount`, `timestamp` | `mint_to_wallet` |
+| `TotalSupplySynced` | `authority`, `supply`, `timestamp` | `sync_total_supply` |
+
+---
+
+## Error Codes
+
+| Discriminant | Error | Condition |
+|--------------|-------|-----------|
+| 0 | `UnauthorizedAuthority` | Caller ≠ `token_info.authority` AND ≠ `registry_authority` |
+| 1 | `InvalidMeter` | Meter validation failed |
+| 2 | `InsufficientBalance` | Token account balance insufficient |
+| 3 | `InvalidMetadataAccount` | Metaplex metadata account invalid |
+| 4 | `NoUnsettledBalance` | No energy available for tokenization |
+| 5 | `UnauthorizedRegistry` | Registry program mismatch |
+| 6 | `ValidatorAlreadyExists` | Duplicate validator pubkey |
+| 7 | `MaxValidatorsReached` | `rec_validators_count ≥ 5` |
+| 8 | `RecValidatorNotFound` | Co-signer not in registered validators list |
+
+---
+
+## Architecture Decisions
+
+### Read-Only TokenInfo During Minting
+
+`mint_tokens_direct` loads `token_info` as read-only (`load()`, not `load_mut()`). This eliminates write-lock contention on the global config account, enabling parallel minting to different users within the same block.
+
+### REC Validator Co-Signing
+
+When `rec_validators_count > 0`, a registered REC validator must sign the transaction. This creates a cryptographic link between minted GRX and verified renewable energy certificates, ensuring 1 GRX = 1 kWh of certified green energy.
+
+### Total Supply Cache
+
+`total_supply` in `TokenInfo` is a cache, not the source of truth. The canonical supply lives in the SPL Mint account (`mint.supply`). `sync_total_supply` reconciles the cache periodically. This trades immediate consistency for higher throughput.
+
+---
+
+## Integration
+
+### Registry → Energy Token CPI
+
+The Registry program calls `mint_tokens_direct` via CPI during `settle_and_mint_tokens`:
+
 ```rust
-1. CPI to Token-2022: burn(token_account, amount)
-   - Requires authority signature (prevents unauthorized burns)
-2. Load token_info (mutable)
-3. Update: total_supply -= amount (saturating subtraction prevents underflow)
-4. Log burn event (logging disabled in production to save CU)
+let signer_seeds = &[b"registry".as_ref(), &[bump]];
+let cpi_ctx = CpiContext::new_with_signer(energy_token_program, cpi_accounts, signer);
+energy_token::cpi::mint_tokens_direct(cpi_ctx, new_tokens_to_mint)?;
 ```
 
-**Use Cases:**
-- Consumer pays for energy consumption.
-- Retirement of REC-linked tokens (proof of carbon offset).
-- Deflationary mechanism (if governance decides to implement supply burns).
-
-**Deflationary Economics:** Unlike inflationary fiat, GRX can decrease supply as energy is consumed, creating potential scarcity value.
+The Registry signs as the `registry_authority`, bypassing the need for the admin key.
 
 ---
 
-## 4. Event System
-
-The program emits events for off-chain indexing and analytics. All events follow a standardized schema with timestamp and amount fields.
-
-### Event Catalog
-
-| Event Name | Fields | Emission Context |
-|------------|--------|------------------|
-| `GridTokensMinted` | `meter_owner: Pubkey`<br>`amount: u64`<br>`timestamp: i64` | `mint_tokens_direct` - Energy production rewards |
-| `TokensMinted` | `recipient: Pubkey`<br>`amount: u64`<br>`timestamp: i64` | `mint_to_wallet` - Admin/treasury mints |
-| `TokensMintedDirect` | `recipient: Pubkey`<br>`amount: u64`<br>`timestamp: i64` | (Deprecated - replaced by `GridTokensMinted`) |
-
-### Event Indexing Strategy
-
-**For Research & Analytics:**
-1. **GridTokensMinted** → Correlate with Registry `MeterReading` events to calculate energy-to-token conversion rates.
-2. **TokensMinted** → Track administrative supply expansion (airdrops, liquidity injections).
-3. Aggregate by `timestamp` to compute:
-   - Daily GRX issuance rate.
-   - Production-to-reward lag (Oracle submission → Token mint).
-   - Geographic distribution (via `meter_owner` → Registry lookup).
-
-**Query Pattern (Solana RPC):**
-```typescript
-const events = await program.addEventListener('GridTokensMinted', (event) => {
-  console.log(`Minted ${event.amount} to ${event.meter_owner}`);
-  // Store in off-chain database (PostgreSQL, Clickhouse)
-});
-```
-
----
-
-## 5. Error Taxonomy
-
-| Error Code | Anchor Name | Trigger Condition | Mitigation |
-|------------|-------------|-------------------|------------|
-| 6000 | `UnauthorizedAuthority` | Caller is not `token_info.authority` | Verify signer matches admin pubkey |
-| 6001 | `InvalidMeter` | (Unused - reserved for future meter validation) | N/A |
-| 6002 | `InsufficientBalance` | (Unused - SPL handles this) | N/A |
-| 6003 | `InvalidMetadataAccount` | (Unused - Metaplex CPI handles validation) | N/A |
-| 6004 | `NoUnsettledBalance` | (Unused - reserved for settlement logic) | N/A |
-| 6005 | `UnauthorizedRegistry` | (Reserved for future CPI caller verification) | Implement `invoke_signed` context checks |
-| 6006 | `ValidatorAlreadyExists` | `add_rec_validator` called with duplicate pubkey | Check `rec_validators` array before submission |
-| 6007 | `MaxValidatorsReached` | `rec_validators_count >= 5` | Remove old validator or increase array limit |
-
-**Production Recommendation:** Implement custom error messages for user-facing applications:
-```typescript
-const ERROR_MESSAGES = {
-  6000: "You are not authorized to perform this action. Please contact the system administrator.",
-  6006: "This validator is already registered in the system.",
-  6007: "Maximum validator limit reached (5). Please remove an existing validator first."
-};
-```
-
----
-
-## 6. Performance Characteristics
-
-### 6.1 Compute Unit (CU) Consumption
-
-Measured with `compute_debug` instrumentation on Solana v1.18:
-
-| Instruction | Base CU | CPI CU | Total CU | Notes |
-|-------------|---------|--------|----------|-------|
-| `initialize_token` | ~5,000 | ~8,000 (mint init) | **~13,000** | One-time operation |
-| `create_token_mint` | ~2,000 | ~43,000 (Metaplex) | **~45,000** | Skips to ~1,500 if no metadata |
-| `mint_to_wallet` | ~3,500 | ~14,500 (mint_to CPI) | **~18,000** | Per-transaction cost |
-| `mint_tokens_direct` | ~4,000 | ~14,000 (mint_to CPI) | **~18,000** | Critical path for energy rewards |
-| `add_rec_validator` | ~2,800 | 0 | **~2,800** | State update only |
-| `transfer_tokens` | ~3,200 | ~12,000 (transfer_checked) | **~15,200** | Includes decimal validation |
-| `burn_tokens` | ~3,000 | ~11,000 (burn CPI) | **~14,000** | Plus state update |
-
-**Optimization Opportunities:**
-- Disabled logging in production (`#[cfg(feature = "localnet")]`) saves ~800 CU per instruction.
-- `zero_copy` accounts avoid deserialization overhead (~3,000 CU saved vs. standard `Account`).
-
-### 6.2 Scalability Limits
-
-**Theoretical Throughput:**
-- Solana TPS: 65,000 transactions/second.
-- Energy token operations: ~18,000 CU average.
-- Compute limit per block: 48M CU (as of v1.18).
-- **Max energy token txs per block:** 48M / 18,000 = **2,666 mints/block**.
-- **Throughput:** 2,666 × 2.5 blocks/sec = **~6,665 mints/second**.
-
-**Practical Constraints:**
-- Account locking: Multiple mints to **same user** serialize (write lock on token account).
-- Solution: Distribute mints across multiple token accounts (1 per meter) for parallelism.
-
-**Empirical Result (Load Test):**
-- Sustained rate: ~4,200 mints/second (63% of theoretical max).
-- Bottleneck: RPC node account deserialization overhead.
-
----
-
-## 7. Security Model
-
-### 7.1 Trust Assumptions
-
-1. **Admin Authority Trust**: The `authority` pubkey has **unilateral control** over:
-   - Minting tokens (`mint_to_wallet`).
-   - Adding REC validators.
-   - **Mitigation**: Upgrade to multi-sig (Squads Protocol) for production.
-
-2. **PDA Immutability**: Once `initialize_token` is called, the mint authority **cannot be changed**. This prevents:
-   - Supply hijacking (no keypair can mint outside program).
-   - **Risk**: Program bugs are permanent (no upgrade path for mint authority).
-
-3. **Registry Program Validation**: Currently, `registry_program` field is **stored but not enforced** in `mint_tokens_direct`.
-   - **Future**: Implement CPI caller verification:
-     ```rust
-     let caller_program_id = ctx.accounts.authority.owner;
-     require_eq!(caller_program_id, token_info.registry_program);
-     ```
-
-### 7.2 Attack Vectors & Mitigations
-
-| Attack | Vector | Current Defense | Recommended Enhancement |
-|--------|--------|-----------------|-------------------------|
-| **Unauthorized Minting** | Compromise admin key | Single-signer authority check | Multi-sig (3-of-5 governance) |
-| **Supply Inflation** | Malicious `mint_to_wallet` calls | Event emission (observable) | On-chain supply cap (e.g., max 100M GRX) |
-| **Validator Collusion** | 5 malicious REC validators | Fixed array limit | Validator reputation scoring |
-| **Metadata Poisoning** | Fake token with same mint | PDA derivation uniqueness | Client-side PDA verification |
-| **Burn Griefing** | User burns own tokens | Intentional feature | N/A (user choice) |
-
-### 7.3 Audit Checklist
-
-- ✅ **PDA Authority**: Mint authority is program-controlled (no keypair exposure).
-- ✅ **Overflow Protection**: `saturating_add`/`saturating_sub` prevent arithmetic overflow.
-- ✅ **Zero-Copy Alignment**: `_padding` ensures correct struct layout (no memory corruption).
-- ⚠️ **CPI Caller Verification**: Not implemented (future security enhancement).
-- ⚠️ **Supply Cap**: No maximum supply limit (unbounded inflation possible).
-
----
-
-## 8. Research Contributions
-
-### 8.1 Novel Aspects
-
-1. **Energy-Backed Cryptoasset**: First implementation of **1:1 energy-to-token peg** enforced on-chain (vs. off-chain oracles in carbon credit systems).
-
-2. **PDA Mint Authority Pattern**: Demonstrates programmable monetary policy without centralized key custody (applicable to any asset-backed token).
-
-3. **Token-2022 Extensions in DeFi**: Integrates confidential transfers (ElGamal) with energy trading—enabling privacy-preserving renewable energy markets.
-
-### 8.2 Comparison with Existing Systems
-
-| System | Asset Backing | Minting Authority | Privacy | Decentralization |
-|--------|---------------|-------------------|---------|------------------|
-| **GRX (This Work)** | Verified kWh | PDA (on-chain) | Confidential Transfers | Permissionless |
-| **Toucan Protocol** | Carbon credits | Multisig (Gnosis) | None | Semi-permissioned |
-| **KlimaDAO** | BCT tokens | DAO vote | None | DAO-governed |
-| **USDC** | USD reserves | Circle (off-chain) | None | Centralized |
-| **Power Ledger** | Energy certificates | Smart contract | None | Consortium |
-
-**Advantage:** GridTokenX eliminates off-chain trust for both **asset verification** (via Solana Oracle program) and **minting authority** (via PDA).
-
----
-
-## 9. Integration Guide
-
-### 9.1 Minting Workflow (Energy Production)
-
-**Step-by-Step:**
-1. **Meter Validation**: Oracle program validates signed meter reading.
-2. **Settlement Calculation**: Registry program computes unsettled kWh balance.
-3. **Token Issuance**: Registry CPI to `energy_token::mint_tokens_direct`:
-   ```rust
-   // In Registry program:
-   let cpi_accounts = MintTokensDirect {
-       token_info: ctx.accounts.token_info.to_account_info(),
-       mint: ctx.accounts.grx_mint.to_account_info(),
-       user_token_account: ctx.accounts.user_grx_account.to_account_info(),
-       authority: ctx.accounts.registry_authority.to_account_info(),
-       token_program: ctx.accounts.token_program.to_account_info(),
-   };
-   let cpi_ctx = CpiContext::new(energy_token_program, cpi_accounts);
-   energy_token::cpi::mint_tokens_direct(cpi_ctx, kwh_to_grx(settled_kwh))?;
-   ```
-
-4. **Event Indexing**: Off-chain service captures `GridTokensMinted` event.
-
-### 9.2 Verification Protocol
-
-**To verify a token is genuine GRX:**
-```typescript
-import { PublicKey } from '@solana/web3.js';
-
-const ENERGY_TOKEN_PROGRAM_ID = new PublicKey('8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq');
-
-// Derive expected mint PDA
-const [expectedMintPDA] = PublicKey.findProgramAddressSync(
-  [Buffer.from('mint_2022')],
-  ENERGY_TOKEN_PROGRAM_ID
-);
-
-// Fetch on-chain mint account
-const mintAccount = await connection.getAccountInfo(suspiciousMintAddress);
-
-// Verify:
-// 1. Mint address matches PDA derivation
-if (!suspiciousMintAddress.equals(expectedMintPDA)) {
-  throw new Error('Invalid GRX mint address');
-}
-
-// 2. Mint authority is TokenInfo PDA
-const [tokenInfoPDA] = PublicKey.findProgramAddressSync(
-  [Buffer.from('token_info_2022')],
-  ENERGY_TOKEN_PROGRAM_ID
-);
-const mintData = MintLayout.decode(mintAccount.data);
-if (!mintData.mintAuthority.equals(tokenInfoPDA)) {
-  throw new Error('Mint authority mismatch');
-}
-
-// 3. Metadata matches expected values (optional)
-const metadata = await Metadata.fromAccountAddress(connection, metadataAddress);
-assert(metadata.data.symbol === 'GRX');
-```
-
-### 9.3 SDK Example
-
-```typescript
-import * as anchor from '@coral-xyz/anchor';
-import { EnergyToken } from './target/types/energy_token';
-
-const program = anchor.workspace.EnergyToken as Program<EnergyToken>;
-
-// Initialize system
-await program.methods
-  .initializeToken(registryProgramId)
-  .accounts({
-    tokenInfo: tokenInfoPDA,
-    mint: mintPDA,
-    authority: admin.publicKey,
-  })
-  .rpc();
-
-// Create metadata
-await program.methods
-  .createTokenMint('Grid Token', 'GRX', 'https://arweave.net/...')
-  .accounts({
-    mint: mintPDA,
-    metadata: metadataPDA,
-    payer: admin.publicKey,
-  })
-  .rpc();
-
-// Mint tokens (admin)
-await program.methods
-  .mintToWallet(new anchor.BN(1_000_000_000)) // 1 GRX
-  .accounts({
-    mint: mintPDA,
-    destination: userTokenAccount,
-    authority: admin.publicKey,
-  })
-  .rpc();
-```
-
----
-
-## 10. Future Enhancements
-
-### 10.1 Planned Features
-
-1. **Dynamic Validator Set**: Replace fixed `[Pubkey; 5]` array with bitmap-indexed structure supporting 100+ validators.
-
-2. **Supply Cap Enforcement**: Add `max_supply` field to prevent unbounded inflation:
-   ```rust
-   require!(
-       token_info.total_supply + amount <= token_info.max_supply,
-       ErrorCode::SupplyCapExceeded
-   );
-   ```
-
-3. **CPI Caller Verification**: Enforce that only Registry program can call `mint_tokens_direct`:
-   ```rust
-   let caller_program = ctx.program_id;  // Requires invoke_signed context
-   require_eq!(caller_program, token_info.registry_program);
-   ```
-
-4. **Transfer Fee Integration**: Enable Token-2022 transfer fee extension for platform revenue:
-   ```rust
-   TransferFeeConfig {
-       transfer_fee_basis_points: 10,  // 0.1% per transfer
-       maximum_fee: 1_000_000,  // 0.001 GRX max
-   }
-   ```
-
-### 10.2 Research Extensions
-
-1. **Carbon Credit Linkage**: Integrate with I-REC registry to mint dual-token (GRX + carbon offset NFT).
-
-2. **Cross-Chain Bridges**: Implement Wormhole integration for GRX on Ethereum/Polygon.
-
-3. **Algorithmic Supply**: Dynamic issuance based on grid demand (fewer tokens during peak hours to incentivize production).
-
----
-
-## 11. References
-
-**For Citation in Academic Papers:**
-```bibtex
-@inproceedings{gridtokenx-energytoken2026,
-  title={Programmable Energy Tokens on Solana: A PDA-Governed Mint Architecture},
-  author={[Your Name]},
-  booktitle={Proceedings of [Conference]},
-  year={2026},
-  note={Program ID: 8jTDw36yCQyYdr9hTtve5D5bFuQdaJ6f3WbdM4iGPHuq}
-}
-```
-
-**Related Standards:**
-- SPL Token-2022 Specification: https://spl.solana.com/token-2022
-- Metaplex Token Metadata Standard: https://docs.metaplex.com/programs/token-metadata
-- I-REC Standard Foundation: https://www.irecstandard.org
-
----
-
-## Appendix A: Compute Unit (CU) Budget
-
-### A.1 Instruction CU Costs
-
-| Instruction | CU Cost | Accounts | Signers | Notes |
-|-------------|---------|----------|---------|-------|
-| `initialize` | ~5,000 | 2 | 1 | Minimal setup |
-| `initialize_token` | ~45,000 | 6 | 1 | Mint + TokenInfo creation |
-| `create_token_mint` | ~50,000 | 8 | 1 | +Metaplex CPI |
-| `mint_to_wallet` | ~18,000 | 6 | 1 | Admin minting |
-| `mint_tokens_direct` | ~20,000 | 7 | 1 | CPI from Registry |
-| `burn_tokens` | ~15,000 | 5 | 1 | Token destruction |
-| `add_rec_validator` | ~8,000 | 3 | 1 | Array update |
-| `remove_rec_validator` | ~8,000 | 3 | 1 | Array update |
-| `update_authority` | ~5,000 | 3 | 1 | Admin transfer |
-
-### A.2 Theoretical Throughput
-
-```
-Mint Instruction:
-- CU per mint: 18,000
-- CU per block (200k): ~11 mints/block
-- CU per block (1.4M extended): ~77 mints/block
-- Blocks per second: 2.5
-- Max mint throughput: ~192 mints/second (extended budget)
-
-With parallel execution (non-conflicting accounts):
-- Theoretical: 6,665 mints/second
-- Practical (account contention): ~1,000 mints/second
-```
-
----
-
-## Appendix B: Account Size Calculations
-
-### B.1 Account Sizes
-
-| Account | Size (bytes) | Rent (SOL) | Formula |
-|---------|--------------|------------|---------|
-| `TokenInfo` | 280 | 0.00195 | 8 + 32×3 + 8×2 + 160 + 1 + 7 |
-| `Mint` (Token-2022) | 82 | 0.00114 | SPL Token-2022 standard |
-| `TokenAccount` | 165 | 0.00203 | SPL Token-2022 standard |
-
-### B.2 Size Breakdown: TokenInfo Account
-
-```
-Field                    Type              Size
-─────────────────────────────────────────────────
-discriminator            [u8; 8]           8
-authority                Pubkey            32
-registry_program         Pubkey            32
-mint                     Pubkey            32
-total_supply             u64               8
-created_at               i64               8
-rec_validators           [Pubkey; 5]       160  (5 × 32)
-rec_validators_count     u8                1
-_padding                 [u8; 7]           7
-─────────────────────────────────────────────────
-TOTAL                                      288 (rounded to 280 + discriminator)
-```
-
-### B.3 PDA Derivation Reference
-
-| PDA | Seeds | Bump Storage |
-|-----|-------|--------------|
-| `TokenInfo` | `["token_info_2022"]` | In account |
-| `Mint` | `["mint_2022"]` | In TokenInfo |
-| `MintAuthority` | `["token_info_2022"]` | Same as TokenInfo |
-
----
-
-## Appendix C: CPI Dependency Graph
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                        ENERGY TOKEN PROGRAM CPI GRAPH                           │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│                              ┌─────────────────┐                               │
-│                              │  ENERGY TOKEN   │                               │
-│                              │  PROGRAM        │                               │
-│                              └────────┬────────┘                               │
-│                                       │                                        │
-│          ┌────────────────────────────┼────────────────────────────┐          │
-│          │                            │                            │          │
-│          ▼                            ▼                            ▼          │
-│  ┌───────────────┐          ┌───────────────┐          ┌───────────────┐     │
-│  │   Token-2022  │          │   Metaplex    │          │   System      │     │
-│  │   Program     │          │   Metadata    │          │   Program     │     │
-│  ├───────────────┤          ├───────────────┤          ├───────────────┤     │
-│  │ • initialize_ │          │ • create_     │          │ • create_     │     │
-│  │   mint2       │          │   metadata_   │          │   account     │     │
-│  │ • mint_to     │          │   v3          │          │ • transfer    │     │
-│  │ • burn        │          │ • update_     │          │               │     │
-│  │               │          │   metadata    │          │               │     │
-│  └───────────────┘          └───────────────┘          └───────────────┘     │
-│                                                                               │
-│  INBOUND CPI CALLS (other programs calling Energy Token):                    │
-│  ─────────────────────────────────────────────────────────                   │
-│  Registry → Energy Token:    mint_tokens_direct (after settlement)           │
-│  Trading → Energy Token:     (future) settlement_callback                    │
-│  Governance → Energy Token:  (future) freeze/unfreeze authority              │
-│                                                                               │
-│  OUTBOUND CPI CALLS:                                                         │
-│  ───────────────────                                                         │
-│  Energy Token → Token-2022:  initialize_mint2, mint_to, burn                │
-│  Energy Token → Metaplex:    create_metadata_v3 (optional)                  │
-│  Energy Token → System:      create_account (rent allocation)               │
-│                                                                               │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Appendix D: Network Requirements
-
-### D.1 Token Operations Bandwidth
-
-| Operation | Frequency | Bandwidth | Notes |
-|-----------|-----------|-----------|-------|
-| Mint (prosumer settlement) | ~1,000/min | 50 KB/min | Peak hours |
-| Transfer (trading) | ~5,000/min | 250 KB/min | Active market |
-| Burn (redemption) | ~100/min | 5 KB/min | Occasional |
-| Total Token Ops | ~6,100/min | ~305 KB/min | Aggregate |
-
-### D.2 RPC Requirements for Token Program
-
-```typescript
-// Minimum RPC calls per token operation
-const rpcCallsPerMint = {
-  getLatestBlockhash: 1,
-  simulateTransaction: 1,  // Optional but recommended
-  sendTransaction: 1,
-  confirmTransaction: 1,   // Or WebSocket subscription
-  // Total: 3-4 calls per mint
-};
-
-// Rate limit planning
-// 1,000 mints/min × 4 calls = 4,000 RPC calls/min = ~67 calls/sec
-// Recommended: RPC provider with 100+ req/sec tier
-```
-
-### D.3 Token-2022 Specific Requirements
-
-| Feature | Requirement | GridTokenX Usage |
-|---------|-------------|------------------|
-| Confidential Transfers | Compute budget 400k+ | Trading privacy |
-| Transfer Hooks | Hook program deployed | Future: compliance |
-| Transfer Fees | Fee config initialized | Future: revenue |
-| Permanent Delegate | Authority set | Emergency freeze |
+**Related:** [Registry Program](./registry.md) — Settlement & minting via CPI

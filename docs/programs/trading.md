@@ -1,621 +1,509 @@
-# Trading Program: Technical Documentation for Research
+# Trading Program
 
-**Program ID:** `8S2e2p4ghqMJuzTz5AkAKSka7jqsjgBH7eWDcCHzXPND`
-**Version:** 0.1.1
-**Last Updated:** March 16, 2026
+> **Multi-Modal Decentralized Energy Marketplace**
 
-> **Deep Dive Documentation:**
-> - [AMM & Bonding Curves](./deep-dive/amm-bonding-curves.md) - Mathematical foundations for energy-specific AMMs
-> - [Periodic Auction System](./deep-dive/periodic-auction.md) - Batch clearing and uniform price discovery
-> - [Confidential Trading](./deep-dive/confidential-trading.md) - Privacy-preserving energy transactions
-> - [Cross-Chain Bridge](./deep-dive/cross-chain-bridge.md) - Wormhole integration for multi-chain trading
-> - [Settlement Architecture](./deep-dive/settlement-architecture.md) - Atomic settlement and payment finality
-
-The **Trading** program implements a sophisticated multi-modal energy marketplace that combines traditional order book mechanics with automated market maker (AMM) liquidity pools, batch clearing, and cross-chain settlement capabilities. This program represents a novel contribution to decentralized energy markets by integrating ERC validation and privacy-preserving trading mechanisms.
+**Program ID:** `69dGpKu9a8EZiZ7orgfTH6CoGj9DeQHHkHBF2exSr8na`
 
 ---
 
-## 1. System Architecture
+## Overview
 
-### 1.1 Multi-Modal Trading System
+The Trading program implements a sophisticated energy marketplace with **four concurrent trading mechanisms**:
 
-The Trading program uniquely supports **three concurrent trading mechanisms**:
+1. **P2P Order Book** — Traditional limit orders with partial fills
+2. **Continuous Double Auction (CDA)** — Limit orders + market orders with immediate matching
+3. **Batch Processing** — Grouped order execution for efficiency
+4. **Sharded Order Book** — Distributed order matching to reduce write contention
 
-1. **Order Book (P2P)**: Traditional limit order matching with partial fills and price discovery.
-2. **Automated Market Maker (AMM)**: Bonding curve-based instant liquidity with configurable curves for different energy sources.
-3. **Batch Clearing**: Periodic aggregate matching for optimal price discovery and reduced gas costs.
+### Key Features
 
-```
-┌──────────────────────────────────────────────────────────┐
-│              Trading Program Architecture                 │
-│                                                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
-│  │ Order Book  │  │  AMM Pools  │  │   Batch     │     │
-│  │  (P2P)      │  │  (Bonding)  │  │  Clearing   │     │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘     │
-│         │                 │                 │             │
-│         └─────────────────┴─────────────────┘             │
-│                          │                                │
-│                  ┌───────▼────────┐                      │
-│                  │  Market State  │                      │
-│                  │ (Price History)│                      │
-│                  └────────────────┘                      │
-└──────────────────────────────────────────────────────────┘
-         │                    │                   │
-         ▼                    ▼                   ▼
-  ┌──────────┐        ┌──────────┐       ┌──────────┐
-  │Governance│        │ Registry │       │ Pricing  │
-  │(ERC Val) │        │(Identity)│       │(Dynamic) │
-  └──────────┘        └──────────┘       └──────────┘
-```
-
-### 1.2 Integration with Platform Components
-
-- **Governance Program**: Validates ERC certificates during sell order creation (prevents uncertified energy sales).
-- **Registry Program**: Verifies user and meter validity (KYC/AML compliance layer).
-- **Pricing Module**: Market-driven price discovery through the CDA order book.
-- **Oracle Services**: Real-time grid congestion and supply/demand data ingestion.
+- **ERC-Linked Orders** — Sell orders optionally validate against Renewable Energy Certificates
+- **Sharded Matching** — Market shards distribute trade load for parallel execution
+- **Zone Markets** — Geographic order book depth tracking via `ZoneMarket` accounts
+- **Price Bounds** — Configurable min/max price enforcement
+- **Governance Integration** — Checks PoA operational status before trading
 
 ---
 
-## 2. State Architecture
+## State Accounts
 
-### 2.1 Market (Global Trading State)
-**Seeds:** `b"market"`  
-**Type:** `#[account(zero_copy)]`, `#[repr(C)]`
+### Market
 
-The central state machine for all trading activity.
-
-| Field Category | Field | Type | Description |
-|----------------|-------|------|-------------|
-| **Core** | `authority` | `Pubkey` | Market administrator. |
-| | `total_volume` | `u64` | Cumulative energy traded (atomic units). |
-| | `total_trades` | `u32` | Lifetime trade count. |
-| | `active_orders` | `u32` | Currently open orders. |
-| | `market_fee_bps` | `u16` | Platform fee (basis points, e.g., 25 = 0.25%). |
-| | `clearing_enabled` | `u8` | Boolean for batch clearing. |
-| **Price Discovery** | `last_clearing_price` | `u64` | Most recent matched price. |
-| | `volume_weighted_price` | `u64` | VWAP across price history. |
-| | `price_history` | `[PricePoint; 24]` | Last 24 hourly snapshots. |
-| | `price_history_count` | `u8` | Active price points. |
-| **Market Depth** | `buy_side_depth` | `[PriceLevel; 20]` | Aggregated buy-side liquidity. |
-| | `sell_side_depth` | `[PriceLevel; 20]` | Aggregated sell-side liquidity. |
-| | `buy_side_depth_count` | `u8` | Active buy price levels. |
-| | `sell_side_depth_count` | `u8` | Active sell price levels. |
-| **Batch Processing** | `batch_config` | `BatchConfig` | Parameters (max size, timeout, price improvement threshold). |
-| | `current_batch` | `BatchInfo` | Active batch details. |
-
-#### Helper Structs
-
-**PriceLevel** (Market Depth):
-```rust
-pub struct PriceLevel {
-    pub price: u64,          // Price point
-    pub total_amount: u64,   // Aggregate volume at this price
-    pub order_count: u16,    // Number of orders
-}
-```
-
-**PricePoint** (Historical Data):
-```rust
-pub struct PricePoint {
-    pub price: u64,
-    pub volume: u64,
-    pub timestamp: i64,
-}
-```
-
-### 2.2 Order (Individual Trading Intent)
-**Seeds:** `b"order", authority.as_ref(), order_nonce`  
-**Type:** `#[account(zero_copy)]`
+**PDA Seeds:** `["market"]`
+**Layout:** `zero_copy`
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `seller` | `Pubkey` | Sell-side participant (zero if buy order). |
-| `buyer` | `Pubkey` | Buy-side participant (zero if sell order). |
-| `amount` | `u64` | Total energy quantity (atomic units). |
-| `filled_amount` | `u64` | Partial fill tracking. |
-| `price_per_kwh` | `u64` | Limit price. |
-| `order_type` | `u8` | `Sell | Buy` (enum encoded). |
+| `authority` | `Pubkey` | Market administrator |
+| `total_volume` | `u64` | Cumulative energy traded |
+| `total_trades` | `u32` | Lifetime trade count |
+| `active_orders` | `u32` | Currently open orders |
+| `created_at` | `i64` | Market initialization timestamp |
+| `market_fee_bps` | `u16` | Platform fee (default: 25 bps = 0.25%) |
+| `clearing_enabled` | `u8` | Boolean: 1 = clearing active |
+| `locked` | `u8` | Re-entrancy guard flag |
+| `min_price_per_kwh` | `u64` | Minimum allowed price (must be > 0) |
+| `max_price_per_kwh` | `u64` | Maximum allowed price (0 = no cap) |
+| `last_clearing_price` | `u64` | Most recent matched price |
+| `volume_weighted_price` | `u64` | VWAP across price history |
+| `price_history` | `[PricePoint; 24]` | Last 24 hourly snapshots (ring buffer) |
+| `price_history_count` | `u8` | Valid entries in price history |
+| `price_history_head` | `u8` | Ring-buffer write head |
+| `batch_config` | `BatchConfig` | Batch processing configuration |
+| `current_batch` | `BatchInfo` | Active batch (up to 32 order IDs) |
+| `has_current_batch` | `u8` | Boolean: 1 = batch active |
+| `num_shards` | `u8` | Number of market shards |
+
+### BatchConfig
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | `u8` | Batch processing toggle |
+| `max_batch_size` | `u32` | Maximum orders per batch |
+| `batch_timeout_seconds` | `u32` | Batch expiration window |
+| `min_batch_size` | `u32` | Minimum orders to execute |
+| `price_improvement_threshold` | `u16` | Minimum price improvement bps |
+
+### BatchInfo
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `batch_id` | `u64` | Unique batch identifier |
+| `order_count` | `u32` | Orders in this batch |
+| `total_volume` | `u64` | Total batch volume |
+| `created_at` | `i64` | Batch creation time |
+| `expires_at` | `i64` | Batch expiration time |
+| `order_ids` | `[Pubkey; 32]` | Order account pubkeys |
+
+### Order
+
+**PDA Seeds:** `["order", ...]` (context-dependent)
+**Layout:** `zero_copy`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `seller` | `Pubkey` | Sell-side participant (default if buy order) |
+| `buyer` | `Pubkey` | Buy-side participant (default if sell order) |
+| `order_id` | `u64` | User-provided order identifier |
+| `amount` | `u64` | Total energy quantity |
+| `filled_amount` | `u64` | Partial fill tracking |
+| `price_per_kwh` | `u64` | Limit price |
+| `order_type` | `u8` | `Sell(0) | Buy(1)` |
 | `status` | `u8` | `Active | PartiallyFilled | Completed | Cancelled | Expired` |
-| `created_at` | `i64` | Order placement timestamp. |
-| `expires_at` | `i64` | Automatic expiration (default: 24h). |
+| `created_at` | `i64` | Order placement timestamp |
+| `expires_at` | `i64` | Auto-expiration (default: 24h) |
 
-### 2.3 AMM Pool (Bonding Curve Liquidity)
-**Seeds:** `b"amm_pool", market.as_ref(), curve_type`  
-**Type:** Standard `#[account]`
+### TradeRecord
 
-Implements **configurable bonding curves** tailored to energy source characteristics.
+**Layout:** `zero_copy` (immutable once written)
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `market` | `Pubkey` | Associated trading market. |
-| `energy_mint` | `Pubkey` | GRX token mint. |
-| `currency_mint` | `Pubkey` | Payment token mint (e.g., USDC). |
-| `energy_reserve` | `u64` | Pool's energy token balance. |
-| `currency_reserve` | `u64` | Pool's currency token balance. |
-| `curve_type` | `CurveType` | `LinearSolar | SteepWind | FlatBattery` |
-| `bonding_slope` | `u64` | Curve steepness parameter. |
-| `bonding_base` | `u64` | Base price (y-intercept). |
-| `fee_bps` | `u16` | Swap fee (basis points). |
+| `sell_order` | `Pubkey` | Sell order account |
+| `buy_order` | `Pubkey` | Buy order account |
+| `seller` | `Pubkey` | Seller pubkey |
+| `buyer` | `Pubkey` | Buyer pubkey |
+| `amount` | `u64` | Matched volume |
+| `price_per_kwh` | `u64` | Execution price |
+| `total_value` | `u64` | `amount × price` |
+| `fee_amount` | `u64` | Platform fee |
+| `executed_at` | `i64` | Trade timestamp |
 
-#### Bonding Curve Formula
+### ZoneMarket
 
-For a **linear curve** with slope $m$ and base $b$:
+**PDA Seeds:** `["zone_market", market, zone_id]`
+**Layout:** `zero_copy`
 
-$$
-\text{Cost}(x, \Delta) = b \cdot \Delta + \frac{m}{2000} \left(2x\Delta + \Delta^2\right)
-$$
+| Field | Type | Description |
+|-------|------|-------------|
+| `market` | `Pubkey` | Parent market |
+| `zone_id` | `u32` | Geographic zone identifier |
+| `num_shards` | `u8` | Number of zone shards |
+| `total_volume` | `u64` | Zone-specific volume |
+| `active_orders` | `u32` | Open orders in this zone |
+| `total_trades` | `u32` | Zone trade count |
+| `last_clearing_price` | `u64` | Zone clearing price |
+| `buy_side_depth` | `[PriceLevel; 10]` | Buy-side order book depth |
+| `sell_side_depth` | `[PriceLevel; 10]` | Sell-side order book depth |
 
-Where:
-- $x$ = current energy supply in pool
-- $\Delta$ = energy amount being purchased
-- $m$ = `bonding_slope` (adjusted by curve type)
-- $b$ = `bonding_base`
+### PriceLevel
 
-**Curve Type Adjustments:**
-- **SteepWind**: $m' = 2m$ (high volatility, rapid price changes)
-- **FlatBattery**: $m' = m/2$ (stable storage-backed pricing)
-- **LinearSolar**: $m' = m$ (baseline)
+| Field | Type | Description |
+|-------|------|-------------|
+| `price` | `u64` | Price point |
+| `total_amount` | `u64` | Aggregate volume at this price |
+| `order_count` | `u16` | Number of orders |
+
+### PricePoint
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `price` | `u64` | Historical price |
+| `volume` | `u64` | Historical volume |
+| `timestamp` | `i64` | Snapshot timestamp |
+
+### MarketShard
+
+**PDA Seeds:** `["market_shard", market, shard_id]`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `shard_id` | `u8` | Shard identifier |
+| `market` | `Pubkey` | Parent market |
+| `volume_accumulated` | `u64` | Shard-specific volume |
+| `order_count` | `u32` | Shard order count |
+| `last_update` | `i64` | Last update timestamp |
+
+### ZoneMarketShard
+
+**PDA Seeds:** `["zone_market_shard", zone_market, shard_id]`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `shard_id` | `u8` | Shard identifier |
+| `zone_market` | `Pubkey` | Parent zone |
+| `volume_accumulated` | `u64` | Shard volume |
+| `trade_count` | `u32` | Shard trades |
+| `last_clearing_price` | `u64` | Shard clearing price |
+| `last_update` | `i64` | Last update |
+
+### OrderNullifier
+
+Used for sharded limit order submission to prevent duplicate orders.
 
 ---
 
-## 3. Core Instructions
+## Instructions
 
-### 3.1 Market Initialization
+### initialize_program
 
-#### `initialize_market`
-Creates the global Market singleton.
+Creates the global market singleton.
 
-- **Logic:**
-    - Initializes market depth arrays (20 price levels per side).
-    - Sets default parameters (fee = 0.25%, clearing enabled).
-    - Allocates price history buffer (24 hourly snapshots).
+**Accounts:**
+- `market` (init, PDA `["market"]`)
+- `authority` (Signer, mut)
 
-### 3.2 Order Book Operations
+**Defaults:** `fee = 25 bps`, `clearing_enabled = 1`, `batch_config` with 300s timeout
 
-#### `create_sell_order`
-Lists energy for sale with **ERC validation**.
+---
 
-- **Parameters:** `energy_amount`, `price_per_kwh`
-- **Pre-Conditions:**
-    - If `erc_certificate` account provided:
-        - `status == Valid`
-        - Not expired (`current_time < expires_at`)
-        - `validated_for_trading == true`
-        - `energy_amount <= erc_certificate.energy_amount`
-- **Logic:**
-    - Initializes `Order` PDA with `order_type = Sell`.
-    - Updates `market.active_orders` counter.
-    - **Does NOT** update market depth (requires off-chain indexer or manual call).
+### initialize_market
 
-**Research Note:** The ERC validation creates a **cryptographically enforceable renewable energy standard**. Only certified clean energy can be sold on the marketplace.
+Initializes the market with shard configuration.
 
-#### `create_buy_order`
+**Arguments:**
+- `num_shards: u8` — Number of order book shards
+
+**Accounts:**
+- `market` (init, PDA `["market"]`)
+- `authority` (Signer, mut)
+
+---
+
+### initialize_zone_market
+
+Creates a zone-specific market for geographic order book depth.
+
+**Arguments:**
+- `zone_id: u32`
+- `num_shards: u8`
+
+**Accounts:**
+- `zone_market` (init, PDA)
+- `market` (readonly)
+- `authority` (Signer, mut)
+
+---
+
+### initialize_zone_market_shard
+
+Creates a zone market shard for distributed statistics.
+
+**Arguments:**
+- `shard_id: u8`
+
+---
+
+### create_sell_order
+
+Lists energy for sale with optional ERC validation.
+
+**Arguments:**
+- `order_id_val: u64`
+- `energy_amount: u64`
+- `price_per_kwh: u64`
+
+**Accounts:**
+- `order` (init, PDA)
+- `market` (readonly)
+- `zone_market` (mut)
+- `authority` (Signer)
+- `governance_config` (readonly) — Must be operational
+- `erc_certificate` (optional) — ERC validation
+
+**ERC Validation (if provided):**
+- `status == Valid`
+- Not expired (`current_time < expires_at`)
+- `validated_for_trading == true`
+- `energy_amount <= erc_certificate.energy_amount`
+
+**Event:** `SellOrderCreated`
+
+---
+
+### create_buy_order
+
 Places a bid for energy.
 
-- **Parameters:** `energy_amount`, `max_price_per_kwh`
-- **Logic:**
-    - Initializes `Order` with `order_type = Buy`.
-    - Updates buy-side market depth (aggregates orders at same price).
+**Arguments:**
+- `order_id_val: u64`
+- `energy_amount: u64`
+- `max_price_per_kwh: u64`
 
-#### `match_orders`
-Executes a trade between a buy and sell order.
+**Accounts:**
+- `order` (init, PDA)
+- `zone_market` (mut)
+- `authority` (Signer)
+- `governance_config` (readonly)
 
-- **Parameters:** `match_amount`
-- **Validation:**
-    - Both orders must be `Active | PartiallyFilled`.
-    - `buy_order.price_per_kwh >= sell_order.price_per_kwh` (price crossing).
-- **Price Discovery Algorithm:**
-    ```rust
-    clearing_price = calculate_volume_weighted_price(
-        market,
-        buy_price,
-        sell_price,
-        volume,
-    );
-    ```
-    - Uses historical VWAP to smooth price volatility.
-    - Weighted by current trade volume relative to total market volume.
-- **State Updates:**
-    - Increments `filled_amount` on both orders.
-    - Transitions to `Completed` when `filled_amount >= amount`.
-    - Creates immutable `TradeRecord` for audit trail.
-    - Updates `market.total_volume`, `market.total_trades`.
-    - Appends to `price_history` (lazy update, every 10th trade or 60s interval).
+**Event:** `BuyOrderCreated`
 
-#### `cancel_order`
+---
+
+### match_orders
+
+Executes a trade between buy and sell orders.
+
+**Arguments:**
+- `match_amount: u64`
+
+**Validation:**
+- Both orders `Active | PartiallyFilled`
+- `buy_order.price >= sell_order.price` (price crossing)
+
+**Price Discovery:** Uses `sell_order.price_per_kwh` as the clearing price.
+
+**State Updates:**
+- Increment `filled_amount` on both orders
+- Transition to `Completed` when fully filled (decrement `active_orders`)
+- Create immutable `TradeRecord`
+- Update `zone_market.total_volume`, `total_trades`, `last_clearing_price`
+
+**Event:** `OrderMatched`
+
+---
+
+### sharded_match_orders
+
+Sharded version of `match_orders` for parallel execution.
+
+**Arguments:**
+- `match_amount: u64`
+- `shard_id: u8`
+
+---
+
+### submit_limit_order
+
+CDA limit order with immediate matching potential.
+
+**Arguments:**
+- `order_id_val: u64`
+- `side: u8` — 0 = Buy, 1 = Sell
+- `amount: u64`
+- `price: u64`
+
+**Accounts:**
+- `order` (init, PDA)
+- `market` (mut)
+- `zone_market` (mut)
+- `authority` (Signer)
+- `governance_config` (readonly)
+
+**Events:** `BuyOrderCreated | SellOrderCreated` + `LimitOrderSubmitted`
+
+---
+
+### submit_limit_order_sharded
+
+Sharded version of limit order submission.
+
+**Arguments:**
+- `order_id_val: u64`
+- `side: u8`
+- `amount: u64`
+- `price: u64`
+- `shard_id: u8`
+
+---
+
+### submit_market_order
+
+CDA market order — executes at best available price.
+
+**Arguments:**
+- `side: u8` — 0 = Buy (takes asks), 1 = Sell (takes bids)
+- `amount: u64`
+
+**Validation:** Checks liquidity on opposite side (`sell_side_depth_count > 0` for buys, `buy_side_depth_count > 0` for sells).
+
+**Event:** `MarketOrderSubmitted`
+
+---
+
+### cancel_order
+
 User-initiated order cancellation.
 
-- **Access:** Order creator only.
-- **Constraint:** Cannot cancel `Completed` orders.
+**Constraint:** Only `Active | PartiallyFilled` orders can be cancelled.
 
-### 3.3 AMM Operations
+**Accounts:**
+- `market` (readonly)
+- `zone_market` (mut)
+- `order` (mut)
+- `authority` (Signer) — Must be order owner
+- `governance_config` (readonly)
 
-#### `initialize_amm_pool`
-Deploys a bonding curve liquidity pool.
-
-- **Parameters:**
-    - `curve_type`: Energy source characteristic (Solar/Wind/Battery).
-    - `slope`, `base`: Bonding curve parameters.
-    - `fee_bps`: Swap fee (e.g., 30 = 0.3%).
-
-#### `swap_buy_energy`
-Instant energy purchase against AMM pool.
-
-- **Parameters:** `amount_milli_kwh`, `max_currency`
-- **Algorithm:**
-    1. Calculates cost using bonding curve formula.
-    2. Applies fee: `total_cost = cost + (cost * fee_bps / 10000)`.
-    3. Validates slippage: `require!(total_cost <= max_currency)`.
-    4. **Atomic Swap:**
-        - Transfers currency from user to pool vault.
-        - Transfers energy from pool vault to user (using pool PDA as signer).
-    5. Updates `energy_reserve` and `currency_reserve`.
-
-**Research Contribution:** This is the first implementation of **energy source-specific bonding curves** in a blockchain marketplace. Solar has linear pricing (predictable), wind has steep slopes (volatile), and battery storage has flat curves (stable).
-
-### 3.4 Atomic Settlement
-
-#### `execute_atomic_settlement`
-Single-transaction settlement with physical token transfers.
-
-- **Complexity:** Manages 6 token transfers in one instruction:
-    1. **Currency Transfers** (from buyer escrow):
-        - Market fee → Fee collector
-        - Wheeling charge → Grid operator
-        - Net proceeds → Seller
-    2. **Energy Transfer:**
-        - Energy → Buyer (from seller escrow)
-- **Atomicity:** All transfers succeed or entire transaction reverts (no partial settlements).
-- **Event:** `OrderMatched` with full settlement details.
-
-**Research Implication:** Demonstrates **composable atomicity** in Solana, where complex multi-party settlements execute in ~400ms (vs. multi-block confirmations in Ethereum).
-
-### 3.5 Batch Processing
-
-#### `execute_batch`
-Aggregates multiple matches into a single transaction.
-
-- **Parameters:** `Vec<amount>`, `Vec<price>`, `Vec<wheeling_charge>`
-- **Constraints:** Max 4 matches per batch (due to account limit: 4 × 6 accounts = 24 + overhead).
-- **Logic:**
-    - Iterates through match array.
-    - Performs atomic swaps using `ctx.remaining_accounts`.
-    - Emits single `BatchExecuted` event.
-
-**Performance:** Batch processing reduces per-trade compute units by ~40% through amortized overhead.
+**Event:** `OrderCancelled`
 
 ---
 
-## 4. Advanced Features
+### add_order_to_batch
 
-### 4.2 Privacy-Preserving Trading (Confidential Transfers)
+Adds an active order to the current batch.
 
-#### Cryptographic Primitives
-- **ElGamal Encryption**: Hides transaction amounts.
-- **Range Proofs**: Proves amount is positive without revealing value.
-- **Transfer Proofs**: Validates encrypted balance updates.
+**Accounts:**
+- `market` (mut)
+- `order` (readonly)
+- `authority` (Signer)
+- `governance_config` (readonly)
 
-#### `shield_energy`
-Converts public tokens to encrypted balance.
+**Logic:** Creates new batch if `has_current_batch == 0`, adds order to `current_batch.order_ids`.
 
-- **Parameters:** `amount`, `encrypted_amount`, `proof`
-- **Verification:** Range proof ensures `0 < amount < 2^64`.
+**Constraints:**
+- Batch processing must be enabled
+- Batch not expired
+- Batch size ≤ `max_batch_size` and ≤ 32 orders
 
-#### `unshield_energy`
-Converts encrypted balance back to public tokens.
-
-**Research Note:** This is the first implementation of **confidential energy trading** using zero-knowledge proofs on Solana, enabling privacy-preserving compliance with GDPR while maintaining auditability.
-
-### 4.3 Cross-Chain Settlement (Wormhole Integration)
-
-#### `initiate_bridge_transfer`
-Locks tokens for cross-chain transfer.
-
-- **Parameters:** `destination_chain`, `destination_address`, `amount`
-- **Logic:** Burns/locks tokens and emits Wormhole VAA (Verifiable Action Approval).
-
-#### `complete_bridge_transfer`
-Redeems tokens from another chain.
-
-- **Parameters:** `vaa_hash` (cryptographic proof from origin chain)
-- **Verification:** Validates Wormhole guardian signatures.
+**Event:** `OrderAddedToBatch`
 
 ---
 
-## 5. Market Depth & Price Discovery
+### execute_batch
 
-### 5.1 Order Book Depth Aggregation
+Executes a batch of matched order pairs.
 
-The program maintains **real-time market depth** by aggregating orders at identical price points:
+**Arguments:**
+- `match_pairs: Vec<MatchPair>`
 
-```rust
-fn update_market_depth(market: &mut Market, order: &Order, is_sell: bool) {
-    // Find existing price level or create new one
-    // Sort levels: sell-side ascending, buy-side descending
-}
-```
+**Accounts:**
+- `market` (mut)
+- `authority` (Signer)
+- `governance_config` (readonly)
 
-**Efficiency:** Fixed-size arrays (20 levels) avoid dynamic allocation, keeping compute units predictable.
+**Logic:**
+1. Validate batch exists and matches `match_pairs` length
+2. Accumulate total volume
+3. Update market stats (`total_volume`, `total_trades`, `last_clearing_price`)
+4. Clear batch (`has_current_batch = 0`)
 
-### 5.2 Volume-Weighted Average Price (VWAP)
-
-Calculates clearing price using historical context:
-
-```rust
-weighted_price = base_price + (base_price × volume_weight / 10000)
-volume_weight = (current_volume / total_market_volume) × 1000
-```
-
-**Purpose:** Prevents single large trades from distorting price discovery. Smooths volatility for grid operators.
+**Event:** `BatchExecuted`
 
 ---
 
-## 6. Performance Characteristics
+### batch_settle_offchain_match
 
-| Metric | Value | Context |
-|--------|-------|---------|
-| **Order Creation** | ~12,000 CU | With ERC validation. |
-| **Order Matching** | ~25,000 CU | Including price history update. |
-| **AMM Swap** | ~8,000 CU | Bonding curve calculation + 2 transfers. |
-| **Atomic Settlement** | ~35,000 CU | 6 token transfers (currency split + energy). |
-| **Batch (4 matches)** | ~95,000 CU | ~40% savings vs. 4 individual settlements. |
-| **Throughput** | ~600 trades/sec (theoretical) | Limited by account locking on hot orders. |
+Settles off-chain matched orders with on-chain token transfers.
 
-### 6.1 Scalability Patterns
-
-1. **Market Sharding** (Future):
-    ```rust
-    pub struct MarketShard {
-        pub shard_id: u8,        // 0-255 shards
-        pub volume_accumulated: u64,
-        pub order_count: u32,
-    }
-    ```
-    Distributes volume tracking across shards based on `authority.key()[0] % num_shards`.
-
-2. **Lazy Price History**:
-    Only updates price history every 10th trade or after 60-second interval, reducing write frequency.
+**Arguments:**
+- `matches: Vec<BatchMatchPair>`
 
 ---
 
-## 7. Error Taxonomy
+### update_depth
 
-| Code | Error | Scenario | Impact |
-|------|-------|----------|--------|
-| `6000` | `UnauthorizedAuthority` | Non-admin tries to update market params. | Access control violation. |
-| `6001` | `InvalidAmount` | Zero or negative order amount. | Input validation failure. |
-| `6004` | `PriceMismatch` | `buy_price < sell_price` in matching. | Economic logic violation. |
-| `6008` | `InvalidErcCertificate` | ERC status ≠ Valid. | Renewable energy compliance failure. |
-| `6009` | `ErcCertificateExpired` | `current_time >= expires_at`. | Time-based validity check. |
-| `6012` | `BatchProcessingDisabled` | Batch config not enabled. | Feature flag check. |
-| `AmmError::SlippageExceeded` | Actual cost > `max_currency`. | Price volatility protection. |
+Updates zone market order book depth arrays.
 
----
+**Arguments:**
+- `buy_prices: Vec<u64>`, `buy_amounts: Vec<u64>`
+- `sell_prices: Vec<u64>`, `sell_amounts: Vec<u64>`
 
-## 8. Research Contributions
+**Constraints:** All vectors ≤ `MAX_DEPTH_LEVELS` (10).
 
-### 8.1 ERC-Linked Order Book
-**Novelty:** First marketplace to **cryptographically enforce renewable energy certification** at the order creation layer. Traditional energy markets rely on off-chain audits; this system makes fraud computationally infeasible.
-
-### 8.2 Multi-Curve AMM for Energy Assets
-**Contribution:** Recognizes that different energy sources have distinct volatility profiles:
-- Solar: Predictable (linear curve).
-- Wind: Volatile (steep curve).
-- Battery: Stable (flat curve).
-
-This enables **risk-segmented liquidity pools**.
-
-### 8.3 Atomic Multi-Party Settlement
-**Innovation:** Settles 6-way transactions (buyer, seller, fee collector, grid operator, 2 escrows) in a single atomic instruction. Demonstrates Solana's parallel execution advantages over sequential EVM chains.
+**Event:** `DepthUpdated`
 
 ---
 
-## 9. Future Research Directions
+### initialize_shard / initialize_zone_shard
 
-1. **Predictive Price Oracles**: Integrate ML models for demand forecasting.
-2. **Liquidity Mining**: Incentivize AMM pool providers with token rewards.
-3. **Flash Settlements**: Sub-second energy trades for microgrid balancing.
-4. **DAO Governance**: Community-voted market parameter adjustments.
-5. **Carbon Credit Integration**: Automatic REC retirement upon energy consumption.
+Creates market/zone shards for distributed counting.
 
 ---
 
-## 10. References
+## Error Codes
 
-For citation in academic papers:
-```bibtex
-@inproceedings{gridtokenx-trading2026,
-  title={Multi-Modal Decentralized Energy Marketplace with ERC Enforcement and Privacy-Preserving Settlements},
-  author={[Your Name]},
-  booktitle={Proceedings of [Conference]},
-  year={2026},
-  note={Program ID: GTuRUUwCfvmqW7knqQtzQLMCy61p4UKUrdT5ssVgZbat}
-}
-```
-
-**Related Work:**
-- Power Ledger (2016): Peer-to-peer energy trading (centralized oracle).
-- Energy Web Chain (2019): ERC-20 based RECs (no atomic settlement).
-- Solana DeFi Protocols: Serum, Orca (AMM reference implementations).
-
----
-
-## Appendix A: Compute Unit (CU) Budget
-
-### A.1 Instruction CU Costs
-
-| Instruction | CU Cost | Accounts | Signers | Notes |
-|-------------|---------|----------|---------|-------|
-| `initialize_market` | ~25,000 | 4 | 1 | One-time setup |
-| `create_sell_order` | ~35,000 | 8 | 1 | +5k if ERC validation |
-| `create_buy_order` | ~30,000 | 7 | 1 | Market depth update |
-| `match_orders` | ~45,000 | 12 | 2 | Atomic settlement |
-| `cancel_order` | ~15,000 | 5 | 1 | Refund tokens |
-| `amm_swap_buy` | ~40,000 | 10 | 1 | Bonding curve calc |
-| `amm_swap_sell` | ~40,000 | 10 | 1 | Bonding curve calc |
-| `add_liquidity` | ~35,000 | 9 | 1 | LP token mint |
-| `remove_liquidity` | ~35,000 | 9 | 1 | LP token burn |
-| `submit_batch_order` | ~20,000 | 6 | 1 | Queue order |
-| `clear_batch` | ~80,000 | 15+ | 1 | Uniform price clearing |
-| `update_tou_config` | ~10,000 | 3 | 1 | Admin only |
-
-### A.2 CU Optimization Tips
-
-```
-Total CU Budget: 200,000 (default) / 1,400,000 (extended)
-
-Recommended Limits:
-- Simple order: request 50,000 CU
-- AMM swap: request 60,000 CU
-- Batch clear (10 orders): request 150,000 CU
-- Complex settlement: request extended budget
-```
+| Discriminant | Error | Condition |
+|--------------|-------|-----------|
+| 0 | `UnauthorizedAuthority` | Caller is not order owner |
+| 1 | `InvalidAmount` | Zero or negative amount |
+| 2 | `InvalidPrice` | Zero or negative price |
+| 3 | `InactiveSellOrder` | Sell order not active/partially filled |
+| 4 | `InactiveBuyOrder` | Buy order not active/partially filled |
+| 5 | `PriceMismatch` | `buy_price < sell_price` |
+| 6 | `OrderNotCancellable` | Order is Completed/Cancelled/Expired |
+| 7 | `InsufficientEscrowBalance` | Escrow has insufficient funds |
+| 8 | `InvalidErcCertificate` | ERC status ≠ Valid |
+| 9 | `ErcExpired` | Certificate past expiration |
+| 10 | `NotValidatedForTrading` | ERC not approved for trading |
+| 11 | `ExceedsErcAmount` | Order amount > ERC certificate amount |
+| 12 | `BatchProcessingDisabled` | Batch config not enabled |
+| 13 | `BatchSizeExceeded` | Batch limit reached |
+| 14 | `ReentrancyLock` | Re-entrancy guard active |
+| 15 | `EmptyBatch` | No orders in batch |
+| 16 | `BatchTooLarge` | Batch exceeds max size |
+| 17 | `MaintenanceMode` | System paused via governance |
+| 18 | `Overflow` | Arithmetic overflow |
+| 19 | `PriceBelowMinimum` | Price < `min_price_per_kwh` |
+| 20 | `PriceAboveMaximum` | Price > `max_price_per_kwh` (if cap set) |
+| 21 | `InsufficientLiquidity` | No orders on opposite side |
+| 22 | `InvalidOrderSide` | Side not 0 or 1 |
+| 23 | `OrderExpired` | Order past `expires_at` |
+| 24 | `SlippageExceeded` | Price outside allowed bounds |
 
 ---
 
-## Appendix B: Account Size Calculations
+## Events
 
-### B.1 Account Sizes
-
-| Account | Size (bytes) | Rent (SOL) | Formula |
-|---------|--------------|------------|---------|
-| `Market` | 2,048 | 0.01426 | 8 + 32 + 8×6 + (24×24) + (18×40) + 64 |
-| `Order` | 256 | 0.00178 | 8 + 32×2 + 8×4 + 1×4 + padding |
-| `AmmPool` | 512 | 0.00357 | 8 + 32×4 + 8×6 + 2 + padding |
-| `BatchOrder` | 128 | 0.00089 | 8 + 32 + 8×3 + 1×2 |
-| `SettlementBatch` | 4,488 | 0.03125 | 8 + 8×4 + 4 + 1 + (88×50) |
-| `PriceConfig` | 320 | 0.00223 | 8 + (16×18) + 8×2 |
-
-### B.2 Size Breakdown: Market Account
-
-```
-Field                    Type              Size
-─────────────────────────────────────────────────
-discriminator            [u8; 8]           8
-authority                Pubkey            32
-total_volume             u64               8
-total_trades             u32               4
-active_orders            u32               4
-market_fee_bps           u16               2
-clearing_enabled         u8                1
-_padding1                [u8; 1]           1
-last_clearing_price      u64               8
-volume_weighted_price    u64               8
-price_history            [PricePoint; 24]  576  (24 × 24)
-price_history_count      u8                1
-_padding2                [u8; 7]           7
-buy_side_depth           [PriceLevel; 20]  360  (20 × 18)
-sell_side_depth          [PriceLevel; 20]  360  (20 × 18)
-buy_side_depth_count     u8                1
-sell_side_depth_count    u8                1
-batch_config             BatchConfig       48
-current_batch            BatchInfo         32
-_reserved                [u8; 64]          64
-─────────────────────────────────────────────────
-TOTAL                                      ~1,526 (padded to 2,048)
-```
+| Event | Fields |
+|-------|--------|
+| `MarketInitialized` | `authority`, `timestamp` |
+| `SellOrderCreated` | `seller`, `order_id`, `amount`, `price_per_kwh`, `timestamp` |
+| `BuyOrderCreated` | `buyer`, `order_id`, `amount`, `price_per_kwh`, `timestamp` |
+| `OrderMatched` | `sell_order`, `buy_order`, `seller`, `buyer`, `amount`, `price`, `total_value`, `fee_amount`, `timestamp` |
+| `OrderCancelled` | `order_id`, `user`, `timestamp` |
+| `OrderAddedToBatch` | `order_id`, `batch_id`, `timestamp` |
+| `BatchExecuted` | `authority`, `batch_id`, `order_count`, `total_volume`, `timestamp` |
+| `LimitOrderSubmitted` | `order_id`, `side`, `price`, `amount`, `timestamp` |
+| `MarketOrderSubmitted` | `user`, `side`, `amount`, `timestamp` |
+| `DepthUpdated` | `buy_levels`, `sell_levels`, `best_bid`, `best_ask`, `timestamp` |
+| `AuctionCleared` | `clearing_price`, `clearing_volume`, `matched_orders`, `timestamp` |
 
 ---
 
-## Appendix C: CPI Dependency Graph
+## Design Decisions
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           TRADING PROGRAM CPI GRAPH                             │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│                              ┌─────────────────┐                               │
-│                              │  TRADING        │                               │
-│                              │  PROGRAM        │                               │
-│                              └────────┬────────┘                               │
-│                                       │                                        │
-│          ┌────────────────────────────┼────────────────────────────┐          │
-│          │                            │                            │          │
-│          ▼                            ▼                            ▼          │
-│  ┌───────────────┐          ┌───────────────┐          ┌───────────────┐     │
-│  │   Token-2022  │          │   Governance  │          │   Registry    │     │
-│  │   Program     │          │   Program     │          │   Program     │     │
-│  ├───────────────┤          ├───────────────┤          ├───────────────┤     │
-│  │ • transfer    │          │ • validate_   │          │ • verify_     │     │
-│  │ • mint_to     │          │   erc_for_    │          │   user        │     │
-│  │ • burn        │          │   trading     │          │ • get_meter   │     │
-│  │ • approve     │          │               │          │   status      │     │
-│  └───────────────┘          └───────────────┘          └───────────────┘     │
-│          │                                                      │             │
-│          │                                                      │             │
-│          ▼                                                      ▼             │
-│  ┌───────────────┐                                    ┌───────────────┐      │
-│  │ Associated    │                                    │    Oracle     │      │
-│  │ Token Program │                                    │    Program    │      │
-│  ├───────────────┤                                    ├───────────────┤      │
-│  │ • create_ata  │                                    │ • get_price   │      │
-│  │               │                                    │ • get_tou     │      │
-│  └───────────────┘                                    └───────────────┘      │
-│                                                                               │
-│  OUTBOUND CPI CALLS:                                                         │
-│  ───────────────────                                                         │
-│  Trading → Token-2022:     transfer, mint_to, burn                          │
-│  Trading → Governance:     validate_erc_for_trading (read-only)             │
-│  Trading → Registry:       verify_user, get_meter_status (read-only)        │
-│  Trading → Oracle:         get_current_price, get_tou_multiplier            │
-│                                                                               │
-│  INBOUND CPI CALLS:                                                          │
-│  ──────────────────                                                          │
-│  Energy Token → Trading:   settlement_callback (future)                      │
-│                                                                               │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
+### Sharded Order Book
+
+Market shards (`MarketShard`, `ZoneMarketShard`) distribute write load across independent accounts. Each shard tracks its own `volume_accumulated` and `order_count`, which can be aggregated into the global Market/ZoneMarket periodically. This reduces MVCC contention during high-frequency trading.
+
+### Ring-Buffer Price History
+
+`price_history` uses a ring buffer with `price_history_head` as the write pointer. When full, the oldest entry is overwritten. `price_history_count` tracks valid entries (capped at 24).
+
+### Governance Check
+
+Every trading instruction checks `governance_config.is_operational()` — if the Governance program has enabled maintenance mode, all trading halts.
 
 ---
 
-## Appendix D: Network Requirements
-
-### D.1 RPC Endpoints
-
-| Network | Endpoint | Rate Limit | Use Case |
-|---------|----------|------------|----------|
-| Mainnet-Beta | `https://api.mainnet-beta.solana.com` | 100 req/10s | Production (limited) |
-| Mainnet RPC Provider | Helius, QuickNode, Triton | 500+ req/s | Production (recommended) |
-| Devnet | `https://api.devnet.solana.com` | 100 req/10s | Testing |
-| Localnet | `http://localhost:8899` | Unlimited | Development |
-
-### D.2 Validator Requirements (PoA Network)
-
-| Component | Minimum | Recommended | Notes |
-|-----------|---------|-------------|-------|
-| CPU | 12 cores | 32 cores | AMD EPYC / Intel Xeon |
-| RAM | 128 GB | 256 GB | ECC recommended |
-| Storage | 2 TB NVMe | 4 TB NVMe | PCIe 4.0 |
-| Network | 1 Gbps | 10 Gbps | Low latency (<10ms) |
-| OS | Ubuntu 20.04+ | Ubuntu 22.04 | Linux only |
-
-### D.3 Throughput Specifications
-
-| Metric | Value | Conditions |
-|--------|-------|------------|
-| Max TPS (theoretical) | 65,000 | Parallel non-conflicting |
-| Max TPS (trading) | 15,000 | Account contention |
-| Block Time | 400ms | PoH tick rate |
-| Finality | ~400ms | Optimistic confirmation |
-| Finality (guaranteed) | ~13s | 32 confirmations |
-
-### D.4 WebSocket Subscriptions
-
-```typescript
-// Recommended subscription pattern for trading
-const subscriptions = {
-  // Account updates for market state
-  market: connection.onAccountChange(marketPda, callback),
-  
-  // Program logs for trade events
-  trades: connection.onLogs(tradingProgramId, callback),
-  
-  // Slot updates for timing
-  slots: connection.onSlotChange(callback),
-};
-
-// Rate limits: 40 subscriptions per connection
-// Reconnect strategy: Exponential backoff (1s, 2s, 4s, 8s, max 30s)
-```
+**Related:** [Auction Clearing](./auction-clearing.md) — Batch auction algorithm · [Governance](./governance.md) — ERC validation
