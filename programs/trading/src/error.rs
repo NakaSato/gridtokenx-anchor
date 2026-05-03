@@ -54,4 +54,6 @@ pub enum TradingError {
     OrderExpired,
     #[msg("Slippage exceeded: Price outside allowed bounds")]
     SlippageExceeded,
+    #[msg("Grid capacity exceeded: Transmission bottleneck detected")]
+    CapacityExceeded,
 }

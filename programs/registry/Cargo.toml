@@ -21,9 +21,9 @@ no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
-anchor-lang = { workspace = true }
-anchor-spl = { workspace = true }
-base64 = { workspace = true }
+anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
+anchor-spl = { version = "1.0.0", features = ["metadata"] }
+base64 = "0.21"
 bytemuck = { version = "1.20.0", features = ["derive"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }
 

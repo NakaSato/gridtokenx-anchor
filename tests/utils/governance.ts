@@ -1,6 +1,6 @@
-import * as anchor from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
-import { Governance } from "../../target/types/governance";
+import type { Governance } from "../../target/types/governance.js";
 
 export const getGovernancePda = (programId: PublicKey) => {
     return PublicKey.findProgramAddressSync(
@@ -22,7 +22,7 @@ export const initializeGovernance = async (
                 poaConfig: governancePda,
                 authority: provider.wallet.publicKey,
                 systemProgram: SystemProgram.programId,
-            })
+            } as any)
             .rpc();
         return governancePda;
     } catch (e: any) {

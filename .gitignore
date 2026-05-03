@@ -5,9 +5,11 @@ docker-target/
 target/
 **/*.rs.bk
 *.pdb
+.env
 
 # IDL
 *.so
+*.log
 
 # Node
 node_modules/

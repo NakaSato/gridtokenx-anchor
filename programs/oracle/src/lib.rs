@@ -11,7 +11,7 @@ pub use error::OracleError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("JDUVXMkeGi4oxLp8njBaGScAFaVBBg7iGoiqcY1LxKop");
+declare_id!("AiWcoPDEk3G4iKrDXj1wCN1ffWxQDEsgtJZKcjauoFJr");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
@@ -32,14 +32,14 @@ macro_rules! compute_checkpoint {
 pub mod oracle {
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>, api_gateway: Pubkey) -> Result<()> {
+    pub fn initialize(ctx: Context<Initialize>, chain_bridge: Pubkey) -> Result<()> {
         compute_fn!("initialize" => {
             // Single Clock::get() syscall — reused for created_at and quality_score_updated_at
             // to avoid paying for two separate sysvar reads during initialization.
             let now = Clock::get()?.unix_timestamp;
             let mut oracle_data = ctx.accounts.oracle_data.load_init()?;
             oracle_data.authority = ctx.accounts.authority.key();
-            oracle_data.api_gateway = api_gateway;
+            oracle_data.chain_bridge = chain_bridge;
             oracle_data.total_readings = 0;
             oracle_data.last_reading_timestamp = 0;
             oracle_data.last_clearing = 0;
@@ -74,7 +74,7 @@ pub mod oracle {
         Ok(())
     }
 
-    /// Submit meter reading data from AMI (only via API Gateway)
+    /// Submit meter reading data from AMI (only via Chain Bridge)
     ///
     /// Sealevel-optimized: oracle_data is read-only (config), writes go to per-meter MeterState PDA.
     /// This allows readings for different meters to execute in parallel on separate CPU cores.
@@ -99,7 +99,7 @@ pub mod oracle {
             require!(oracle_data.active == 1, OracleError::OracleInactive);
 
             require!(
-                ctx.accounts.authority.key() == oracle_data.api_gateway,
+                ctx.accounts.authority.key() == oracle_data.chain_bridge,
                 OracleError::UnauthorizedGateway
             );
 
@@ -144,7 +144,7 @@ pub mod oracle {
                 meter_state.bump = ctx.bumps.meter_state;
                 meter_state.created_at = current_time;
             }
-            
+
             // Update zone_id on every submission (allows relocation of meters between zones)
             meter_state.zone_id = zone_id;
 
@@ -179,7 +179,7 @@ pub mod oracle {
             require!(oracle_data.active == 1, OracleError::OracleInactive);
 
             require!(
-                ctx.accounts.authority.key() == oracle_data.api_gateway,
+                ctx.accounts.authority.key() == oracle_data.chain_bridge,
                 OracleError::UnauthorizedGateway
             );
 
@@ -238,8 +238,8 @@ pub mod oracle {
                 OracleError::UnauthorizedAuthority
             );
 
-            let old_gateway = oracle_data.api_gateway;
-            oracle_data.api_gateway = new_api_gateway;
+            let old_gateway = oracle_data.chain_bridge;
+            oracle_data.chain_bridge = new_api_gateway;
 
             emit!(ApiGatewayUpdated {
                 authority: ctx.accounts.authority.key(),
@@ -408,7 +408,7 @@ pub mod oracle {
             require!(oracle_data.active == 1, OracleError::OracleInactive);
 
             require!(
-                ctx.accounts.authority.key() == oracle_data.api_gateway,
+                ctx.accounts.authority.key() == oracle_data.chain_bridge,
                 OracleError::UnauthorizedGateway
             );
 

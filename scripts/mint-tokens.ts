@@ -1,6 +1,6 @@
-import pkg from "@coral-xyz/anchor";
+import pkg from "@anchor-lang/core";
 const { BN, Program, AnchorProvider } = pkg;
-import * as anchor from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
@@ -64,7 +64,7 @@ async function main() {
       },
       {
         name: "Seller Test User",
-        address: "BT9ESAZoNGnvPswpeHNLgt582GTQrAUv21ZLkk4H6Bad",
+        address: "7JsfJPuJvhkY376RAzQExbdFbZMgdGc2cWLic25SE1tq",
         amount: new BN(1000000000000),
       }
     );
@@ -132,6 +132,7 @@ async function main() {
           destination: recipientTokenAccount,
           destinationOwner: recipientPubkey,
           authority: wallet.publicKey,
+          payer: wallet.publicKey, // Explicit payer for 1.0.0
           tokenProgram: TOKEN_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,

@@ -1,4 +1,4 @@
-import * as anchor from '@coral-xyz/anchor';
+import * as anchor from '@anchor-lang/core';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import BN from 'bn.js';
 import * as fs from 'fs';
@@ -68,19 +68,31 @@ async function main() {
     [Buffer.from('mint_2022')],
     energyTokenProgram.programId
   );
+  
+  const vaultAuthority = new PublicKey("2ndDBhSWDXPAsgvkVVzsNJLfAAX9mKZkU9z5JaeSkQE4");
+
   try {
     const tx = await energyTokenProgram.methods
-      .initializeToken(registryProgram.programId, authority)
+      .initializeToken(registryProgram.programId, registryPda)
       .accounts({
         tokenInfo: tokenInfoPda,
         mint: mintPda,
-        authority: authority,
+        authority: authority, // Local wallet signs for initialization
         systemProgram: anchor.web3.SystemProgram.programId,
-        tokenProgram: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'), // Try standard Token Program
+        tokenProgram: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-      })
+      } as any)
       .rpc();
-    console.log('  ✅ Energy Token initialized');
+    
+    // Ensure registry_authority is set to Registry PDA (not Vault)
+    console.log('  Setting Energy Token Registry Authority to Registry PDA...');
+    await energyTokenProgram.methods.setRegistryAuthority(registryPda)
+      .accounts({
+        tokenInfo: tokenInfoPda,
+        authority: authority,
+      } as any).rpc();
+
+    console.log('  ✅ Energy Token initialized with Registry PDA as authority');
     console.log('     Mint PDA:', mintPda.toBase58());
   } catch (e: any) {
     if (e.message.includes('InvalidProgramId') || e.message.includes('Program ID was not as expected')) {
@@ -93,7 +105,7 @@ async function main() {
             mint: mintPda,
             authority: authority,
             systemProgram: anchor.web3.SystemProgram.programId,
-            tokenProgram: new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'), // Standard Token-2022
+            tokenProgram: new PublicKey('TokenzQdBNbLqP5VEhdkThp9Dz9L33itf29V7D3fR65'), // Standard Token-2022
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           })
           .rpc();
@@ -212,7 +224,7 @@ async function main() {
     console.log(`     Zone ${zoneId} PDA: ${zoneMarketPda.toBase58()}`); // Log zoneMarketPda unconditionally
     try {
       const tx = await tradingProgram.methods
-        .initializeZoneMarket(zoneId, 1) // 1 shard per zone
+        .initializeZoneMarket(zoneId, 1, new BN(0)) // 1 shard per zone, 0 capacity (infinite)
         .accounts({
           market: marketPda,
           zoneMarket: zoneMarketPda,

@@ -1,19 +1,13 @@
-[toolchain]
-anchor_version = "0.32.1"
-
 [features]
 resolution = false
 skip-lint = false
 
 [programs.localnet]
-energy_token = "n52aKuZwUeZAocpWqRZAJR4xFhQqAvaRE7Xepy2JBGk"
-governance = "DamT9e1VqbA5nSyFZHExKwQu6qs4L5FW6dirWCK8YLd4"
-oracle = "JDUVXMkeGi4oxLp8njBaGScAFaVBBg7iGoiqcY1LxKop"
-registry = "FmvDiFUWPrwXsqo7z7XnVniKbZDcz32U5HSDVwPug89c"
-trading = "69dGpKu9a8EZiZ7orgfTH6CoGj9DeQHHkHBF2exSr8na"
-
-[registry]
-url = "https://api.apr.dev"
+energy_token = "GjSjmPt8VSHr49ti4BijWZSu7rwb8o32pod7gNBnTY4U"
+governance = "6FsfuFEg8LHjSiejc8om8Q6iSaAgfEWHCgz78PT8jocw"
+oracle = "AiWcoPDEk3G4iKrDXj1wCN1ffWxQDEsgtJZKcjauoFJr"
+registry = "HZR6b8GhzhDowyL6dX58qBjdSDNtFyJHU5dPF3kXDcTS"
+trading = "DXxHdUar3pUUKRnt4XAMA8rdYRpAsNY1xk3Zo4crShvY"
 
 [provider]
 cluster = "localnet"
@@ -23,7 +17,6 @@ wallet = "~/.config/solana/id.json"
 init-governance = "npx ts-node scripts/init-governance.ts"
 init-market = "npx ts-node scripts/init-market.ts"
 init-oracle = "npx ts-node scripts/init-oracle.ts"
-update-gateway = "npx ts-node scripts/update-gateway.ts"
 init-poa = "npx ts-node scripts/init-poa.ts"
 init-registry = "npx tsx scripts/init-registry.ts"
 init-sharding = "npx ts-node scripts/initialize-sharding.ts"
@@ -33,6 +26,9 @@ mint-tokens = "npx ts-node scripts/mint-tokens.ts"
 setup-alts = "npx ts-node scripts/setup-alts.ts"
 test-oracle = "anchor test tests/oracle.ts"
 test-registry = "anchor test tests/registry_sharding.ts"
+update-gateway = "npx ts-node scripts/update-gateway.ts"
+
+[hooks]
 
 [test]
 startup_wait = 10000

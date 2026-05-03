@@ -22,8 +22,9 @@ pub struct ZoneMarket {
     pub buy_side_depth_count: u8,           // 1
     pub sell_side_depth_count: u8,          // 1
     pub _padding2: [u8; 6],                 // 6
-
     pub last_clearing_price: u64,           // 8
+    pub capacity: u64,                      // 8 - Total transmission capacity in base units
+    pub committed_flow: u64,                // 8 - Currently committed flow from matches
     
     // === MARKET DEPTH ===
     pub buy_side_depth: [PriceLevel; MAX_DEPTH_LEVELS],   // 240

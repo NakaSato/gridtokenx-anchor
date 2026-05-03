@@ -68,3 +68,9 @@ pub struct MeterDeactivated {
     pub final_generation: u64,
     pub final_consumption: u64,
 }
+
+#[event]
+pub struct AuthorityUpdated {
+    pub old_authority: Pubkey,
+    pub new_authority: Pubkey,
+}

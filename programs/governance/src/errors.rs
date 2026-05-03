@@ -72,4 +72,20 @@ pub enum GovernanceError {
     ValidationDataTooLong,
     #[msg("Invalid meter account")]
     InvalidMeterAccount,
+
+    // === DAO Errors ===
+    #[msg("Invalid proposal status")]
+    InvalidProposalStatus,
+    #[msg("Proposal has expired")]
+    ProposalExpired,
+    #[msg("Proposal has not expired yet")]
+    ProposalNotExpired,
+    #[msg("Invalid target zone")]
+    InvalidTargetZone,
+    #[msg("Invalid parameter type")]
+    InvalidParameterType,
+    #[msg("Insufficient voting power")]
+    InsufficientVotingPower,
+    #[msg("Voter is not registered in target zone")]
+    VoterNotRegisteredInZone,
 }

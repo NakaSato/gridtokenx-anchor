@@ -36,7 +36,7 @@ impl MeterState {
 pub struct OracleData {
     // === 32-byte aligned fields (Pubkeys) ===
     pub authority: Pubkey,            // 32 bytes
-    pub api_gateway: Pubkey,          // 32 bytes
+    pub chain_bridge: Pubkey,         // 32 bytes
     pub backup_oracles: [Pubkey; 10], // 320 bytes (32 * 10)
 
     // === 8-byte aligned fields (u64, i64) ===

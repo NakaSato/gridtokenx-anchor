@@ -13,7 +13,7 @@ pub use error::RegistryError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("FmvDiFUWPrwXsqo7z7XnVniKbZDcz32U5HSDVwPug89c");
+declare_id!("HZR6b8GhzhDowyL6dX58qBjdSDNtFyJHU5dPF3kXDcTS");
 
 /// Airdrop amount for new users (in smallest token units, 9 decimals = 20 GRX)
 pub const AIRDROP_AMOUNT: u64 = 20_000_000_000; // 20 GRX tokens
@@ -105,6 +105,26 @@ pub mod registry {
         Ok(())
     }
 
+    /// Update the registry authority (admin only)
+    pub fn update_authority(ctx: Context<UpdateAuthority>, new_authority: Pubkey) -> Result<()> {
+        let mut registry = ctx.accounts.registry.load_mut()?;
+        require_keys_eq!(
+            registry.authority,
+            ctx.accounts.authority.key(),
+            RegistryError::UnauthorizedAuthority
+        );
+
+        let old_authority = registry.authority;
+        registry.authority = new_authority;
+
+        emit!(AuthorityUpdated {
+            old_authority,
+            new_authority,
+        });
+
+        Ok(())
+    }
+
     /// Aggregate counts from all shards into the global registry (admin only)
     pub fn aggregate_shards(ctx: Context<AggregateShards>) -> Result<()> {
         let mut registry = ctx.accounts.registry.load_mut()?;
@@ -152,6 +172,17 @@ pub mod registry {
     ) -> Result<()> {
         require!(shard_id < 16, RegistryError::InvalidShardId);
         compute_fn!("register_user" => {
+            let registry = ctx.accounts.registry.load()?;
+            
+            // Authorization Check: Either the user signs for themselves, or the Registry Authority signs for them.
+            let is_user_signing = ctx.accounts.authority.is_signer;
+            let is_admin_signing = ctx.accounts.payer.key() == registry.authority;
+            
+            require!(
+                is_user_signing || is_admin_signing,
+                RegistryError::UnauthorizedAuthority
+            );
+
             let user_authority = ctx.accounts.authority.key();
             let mut user_account = ctx.accounts.user_account.load_init()?;
             let mut shard = ctx.accounts.registry_shard.load_mut()?;
@@ -177,27 +208,35 @@ pub mod registry {
             });
 
             // Perform automatic airdrop via CPI to energy token program
-            // Only proceed if energy token program is provided (optional)
             if ctx.accounts.energy_token_program.key() != Pubkey::default() {
+                
                 compute_checkpoint!("before_airdrop_cpi");
 
-                // Build CPI context for MintToWallet instruction
-                let cpi_accounts = token_interface::MintTo {
+                // Build CPI context for MintTo Wallet instruction
+                let cpi_accounts = energy_token::cpi::accounts::MintTokensDirect {
+                    token_info: ctx.accounts.token_info.to_account_info(),
                     mint: ctx.accounts.mint.to_account_info(),
-                    to: ctx.accounts.user_token_account.to_account_info(),
-                    authority: ctx.accounts.token_info.to_account_info(),
+                    user_token_account: ctx.accounts.user_token_account.to_account_info(),
+                    authority: ctx.accounts.registry.to_account_info(), // Registry PDA signs
+                    registry_authority: ctx.accounts.registry.to_account_info(), // Must match stored registry_authority
+                    rec_validator: ctx.accounts.registry.to_account_info(), // Placeholder since count is 0
+                    token_program: ctx.accounts.token_program.to_account_info(),
                 };
 
-                let cpi_program = ctx.accounts.token_program.to_account_info();
+                // let cpi_program = ctx.accounts.energy_token_program.to_account_info();
 
-                // Use empty signer seeds since token_info is already an authority signer
-                // The energy-token program will validate the authority signature
-                let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+                // Use the registry pda as the signer
+                let registry_seeds = &[
+                    b"registry".as_ref(),
+                    &[ctx.bumps.registry]
+                ];
+                let signer = &[&registry_seeds[..]];
 
-                // Call mint_to from the SPL token interface
-                if token_interface::mint_to(cpi_ctx, AIRDROP_AMOUNT).is_err() {
+                let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.energy_token_program.key(), cpi_accounts, signer);
+
+                // Call mint_tokens_direct from the energy token program
+                if energy_token::cpi::mint_tokens_direct(cpi_ctx, AIRDROP_AMOUNT).is_err() {
                     // Airdrop failure is non-critical, user registration continues
-                    // This allows registration to succeed even if token minting fails
                     msg!("Warning: Airdrop minting failed for user {}, but registration succeeded", user_authority);
                 }
 
@@ -516,7 +555,7 @@ pub mod registry {
             ];
             let signer = &[&signer_seeds[..]];
 
-            let cpi_program = ctx.accounts.energy_token_program.to_account_info();
+            // let cpi_program = ctx.accounts.energy_token_program.to_account_info();
             let cpi_accounts = energy_token::cpi::accounts::MintTokensDirect {
                 token_info: ctx.accounts.token_info.to_account_info(),
                 mint: ctx.accounts.mint.to_account_info(),
@@ -527,7 +566,7 @@ pub mod registry {
                 token_program: ctx.accounts.token_program.to_account_info(),
             };
 
-            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+            let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.energy_token_program.key(), cpi_accounts, signer);
             energy_token::cpi::mint_tokens_direct(cpi_ctx, new_tokens_to_mint)?;
         });
 
@@ -578,8 +617,8 @@ pub mod registry {
                 authority: ctx.accounts.authority.to_account_info(),
                 mint: ctx.accounts.grx_mint.to_account_info(),
             };
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            // let cpi_program = ctx.accounts.token_program.to_account_info();
+            let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
 
             token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.grx_mint.decimals)?;
 
@@ -653,7 +692,7 @@ pub struct InitializeShard<'info> {
 pub struct RegisterUser<'info> {
     #[account(
         init,
-        payer = authority,
+        payer = payer,
         space = 8 + std::mem::size_of::<UserAccount>(),
         seeds = [b"user", authority.key().as_ref()],
         bump
@@ -667,39 +706,40 @@ pub struct RegisterUser<'info> {
     )]
     pub registry_shard: AccountLoader<'info, RegistryShard>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"registry"],
+        bump,
+    )]
     pub registry: AccountLoader<'info, Registry>,
 
-    #[account(mut)]
-    pub authority: Signer<'info>,
+    /// CHECK: The user's public key. Authorization checked in instruction body.
+    pub authority: AccountInfo<'info>,
 
-    // ===== Optional Airdrop Accounts =====
-    /// CHECK: Energy token program (optional for airdrop)
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    /// CHECK: The energy token program.
     pub energy_token_program: AccountInfo<'info>,
 
-    /// CHECK: Energy token mint account (optional for airdrop)
+    /// CHECK: The energy token mint.
     #[account(mut)]
     pub mint: AccountInfo<'info>,
 
-    /// CHECK: Energy token info PDA account (optional for airdrop)
-    #[account(mut)]
-    pub token_info: AccountInfo<'info>,
-
-    /// CHECK: User's associated token account for receiving airdrop, validated by token program
+    /// CHECK: The user's token account (ATA).
     #[account(mut)]
     pub user_token_account: AccountInfo<'info>,
 
-    /// CHECK: SPL Token program (Token-2022 compatible), validated by runtime
-    pub token_program: AccountInfo<'info>,
+    /// CHECK: The token info account (mint authority).
+    pub token_info: AccountInfo<'info>,
 
-    /// Associated Token Program
-    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub token_program: Interface<'info, TokenInterface>,
 
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-#[instruction(meter_id: String, shard_id: u8)]
+#[instruction(meter_id: String, meter_type: MeterType, shard_id: u8)]
 pub struct RegisterMeter<'info> {
     #[account(
         init,
@@ -756,6 +796,14 @@ pub struct UpdateMeterReading<'info> {
 
 #[derive(Accounts)]
 pub struct SetOracleAuthority<'info> {
+    #[account(mut)]
+    pub registry: AccountLoader<'info, Registry>,
+
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateAuthority<'info> {
     #[account(mut)]
     pub registry: AccountLoader<'info, Registry>,
 

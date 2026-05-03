@@ -65,7 +65,7 @@ pub struct MatchPair {
     pub price: u64,
 }
 
-declare_id!("69dGpKu9a8EZiZ7orgfTH6CoGj9DeQHHkHBF2exSr8na");
+declare_id!("DXxHdUar3pUUKRnt4XAMA8rdYRpAsNY1xk3Zo4crShvY");
 
 #[program]
 pub mod trading {
@@ -118,11 +118,14 @@ pub mod trading {
         ctx: Context<InitializeZoneMarketContext>,
         zone_id: u32,
         num_shards: u8,
+        capacity: u64,
     ) -> Result<()> {
         let mut zone_market = ctx.accounts.zone_market.load_init()?;
         zone_market.market = ctx.accounts.market.key();
         zone_market.zone_id = zone_id;
         zone_market.num_shards = num_shards;
+        zone_market.capacity = capacity;
+        zone_market.committed_flow = 0;
         zone_market.total_volume = 0;
         zone_market.active_orders = 0;
         zone_market.buy_side_depth_count = 0;
@@ -517,13 +520,10 @@ pub mod trading {
         Ok(())
     }
 
-    pub fn batch_settle_offchain_match<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, SettleOffchainMatchBatchContext<'info>>,
+    pub fn batch_settle_offchain_match<'info>(
+        ctx: Context<'info, SettleOffchainMatchBatchContext<'info>>,
         matches: Vec<BatchMatchPair>,
-    ) -> Result<()>
-    where
-        'c: 'info,
-    {
+    ) -> Result<()> {
         instructions::batch_settle_offchain_match(ctx, matches)
     }
 
@@ -1106,7 +1106,7 @@ pub mod trading {
 
         // Cache AccountInfo clones and mint decimals once — each .to_account_info() call
         // is a heap clone; doing it 12+ times across 5 CPI calls wastes CU budget.
-        let token_prog = ctx.accounts.token_program.to_account_info();
+        let _token_prog = ctx.accounts.token_program.to_account_info();
         let currency_mint_ai = ctx.accounts.currency_mint.to_account_info();
         let currency_decimals = ctx.accounts.currency_mint.decimals;
         let buyer_escrow_ai = ctx.accounts.buyer_currency_escrow.to_account_info();
@@ -1116,7 +1116,7 @@ pub mod trading {
         if market_fee > 0 {
             anchor_spl::token_interface::transfer_checked(
                 CpiContext::new(
-                    token_prog.clone(),
+                    ctx.accounts.token_program.key(),
                     anchor_spl::token_interface::TransferChecked {
                         from: buyer_escrow_ai.clone(),
                         mint: currency_mint_ai.clone(),
@@ -1132,7 +1132,7 @@ pub mod trading {
         if net_seller_amount > 0 {
             anchor_spl::token_interface::transfer_checked(
                 CpiContext::new(
-                    token_prog.clone(),
+                    ctx.accounts.token_program.key(),
                     anchor_spl::token_interface::TransferChecked {
                         from: buyer_escrow_ai.clone(),
                         mint: currency_mint_ai.clone(),
@@ -1149,7 +1149,7 @@ pub mod trading {
         if wheeling_charge_val > 0 {
             anchor_spl::token_interface::transfer_checked(
                 CpiContext::new(
-                    token_prog.clone(),
+                    ctx.accounts.token_program.key(),
                     anchor_spl::token_interface::TransferChecked {
                         from: buyer_escrow_ai.clone(),
                         mint: currency_mint_ai.clone(),
@@ -1166,7 +1166,7 @@ pub mod trading {
         if loss_cost_val > 0 {
             anchor_spl::token_interface::transfer_checked(
                 CpiContext::new(
-                    token_prog,
+                    ctx.accounts.token_program.key(),
                     anchor_spl::token_interface::TransferChecked {
                         from: buyer_escrow_ai,
                         mint: currency_mint_ai,
@@ -1183,7 +1183,7 @@ pub mod trading {
         let energy_decimals = ctx.accounts.energy_mint.decimals;
         anchor_spl::token_interface::transfer_checked(
             CpiContext::new(
-                ctx.accounts.secondary_token_program.to_account_info(),
+                ctx.accounts.secondary_token_program.key(),
                 anchor_spl::token_interface::TransferChecked {
                     from: ctx.accounts.seller_energy_escrow.to_account_info(),
                     mint: ctx.accounts.energy_mint.to_account_info(),
@@ -1403,25 +1403,25 @@ pub mod trading {
         pub sell_order: AccountLoader<'info, Order>,
         /// CHECK: Buyer's token account for currency (Escrow)
         #[account(mut)]
-        pub buyer_currency_escrow: AccountInfo<'info>,
+        pub buyer_currency_escrow: UncheckedAccount<'info>,
         /// CHECK: Seller's token account for energy (Escrow)
         #[account(mut)]
-        pub seller_energy_escrow: AccountInfo<'info>,
+        pub seller_energy_escrow: UncheckedAccount<'info>,
         /// CHECK: Seller's token account for currency (receiver)
         #[account(mut)]
-        pub seller_currency_account: AccountInfo<'info>,
+        pub seller_currency_account: UncheckedAccount<'info>,
         /// CHECK: Buyer's token account for energy (receiver)
         #[account(mut)]
-        pub buyer_energy_account: AccountInfo<'info>,
+        pub buyer_energy_account: UncheckedAccount<'info>,
         /// CHECK: Fee collector account
         #[account(mut)]
-        pub fee_collector: AccountInfo<'info>,
+        pub fee_collector: UncheckedAccount<'info>,
         /// CHECK: Wheeling charge collector account
         #[account(mut)]
-        pub wheeling_collector: AccountInfo<'info>,
+        pub wheeling_collector: UncheckedAccount<'info>,
         /// CHECK: Loss cost collector account
         #[account(mut)]
-        pub loss_collector: AccountInfo<'info>,
+        pub loss_collector: UncheckedAccount<'info>,
         pub energy_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
         pub currency_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
         pub escrow_authority: Signer<'info>,
@@ -1544,10 +1544,10 @@ pub mod trading {
 
         /// CHECK: Fee collector account
         #[account(mut)]
-        pub fee_collector: AccountInfo<'info>,
+        pub fee_collector: UncheckedAccount<'info>,
 
         /// CHECK: Token program for transfers
-        pub token_program: AccountInfo<'info>,
+        pub token_program: UncheckedAccount<'info>,
 
         pub governance_config: Account<'info, PoAConfig>,
     }

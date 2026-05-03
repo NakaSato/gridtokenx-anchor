@@ -1,16 +1,35 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { Program } from "@anchor-lang/core";
 import { Registry } from "../target/types/registry";
 import { expect } from "chai";
-import { PublicKey, Keypair } from "@solana/web3.js";
+import { PublicKey, Keypair, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 import BN from "bn.js";
+import * as fs from "fs";
+import * as os from "os";
+
+// Real program IDs needed by the registry's registerUser instruction
+const TOKEN_PROGRAM_ID = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 describe("registry_sharding", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
 
   const program = anchor.workspace.Registry as Program<Registry>;
   const provider = anchor.getProvider() as anchor.AnchorProvider;
-  const authority = provider.wallet.publicKey;
+  const wallet = provider.wallet;
+
+  // Load the actual keypair for the provider wallet to ensure we have a valid signer
+  const walletPath = os.homedir() + "/.config/solana/id.json";
+  let walletKeypair: Keypair;
+  try {
+      walletKeypair = Keypair.fromSecretKey(
+          Uint8Array.from(JSON.parse(fs.readFileSync(walletPath, "utf-8")))
+      );
+      console.log(`Loaded wallet: ${walletKeypair.publicKey.toBase58()}`);
+      console.log(`Provider wallet: ${wallet.publicKey.toBase58()}`);
+  } catch (e) {
+      console.warn("Could not load wallet from ~/.config/solana/id.json");
+      walletKeypair = (wallet as any).payer || (wallet as any).keypair;
+  }
 
   const [registryPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("registry")],
@@ -23,8 +42,8 @@ describe("registry_sharding", () => {
         .initialize()
         .accounts({
           registry: registryPda,
-          authority: authority,
-          systemProgram: anchor.web3.SystemProgram.programId,
+          authority: wallet.publicKey,
+          systemProgram: SystemProgram.programId,
         })
         .rpc();
     } catch (e) {
@@ -42,8 +61,8 @@ describe("registry_sharding", () => {
           .initializeShard(i)
           .accounts({
             shard: shardPda,
-            authority: authority,
-            systemProgram: anchor.web3.SystemProgram.programId,
+            authority: wallet.publicKey,
+            systemProgram: SystemProgram.programId,
           })
           .rpc();
       } catch (e) {
@@ -65,7 +84,18 @@ describe("registry_sharding", () => {
             program.programId
         );
 
-        await program.methods
+        // Pre-fund the user account for fees
+        const fundTx = new Transaction().add(
+            SystemProgram.transfer({
+                fromPubkey: wallet.publicKey,
+                toPubkey: userKeypair.publicKey,
+                lamports: 10_000_000,
+            })
+        );
+        await provider.sendAndConfirm(fundTx);
+
+        // Use direct Transaction to avoid Anchor signer issues
+        const ix = await program.methods
             .registerUser(
                 { prosumer: {} },
                 13700000,
@@ -78,25 +108,20 @@ describe("registry_sharding", () => {
                 registryShard: shardPda,
                 registry: registryPda,
                 authority: userKeypair.publicKey,
-                energyTokenProgram: PublicKey.default,
-                mint: authority, // placeholder
-                tokenInfo: authority, // placeholder
-                userTokenAccount: authority, // placeholder
-                tokenProgram: anchor.web3.SystemProgram.programId, // placeholder
-                associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
-                systemProgram: anchor.web3.SystemProgram.programId,
-            })
-            .signers([userKeypair])
-            .preInstructions([
-                anchor.web3.SystemProgram.transfer({
-                    fromPubkey: authority,
-                    toPubkey: userKeypair.publicKey,
-                    lamports: 10_000_000,
-                }),
-            ])
-            .rpc();
+                payer: walletKeypair.publicKey, 
+                energyTokenProgram: SystemProgram.programId,
+                mint: walletKeypair.publicKey,
+                userTokenAccount: walletKeypair.publicKey,
+                tokenInfo: walletKeypair.publicKey,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                systemProgram: SystemProgram.programId,
+            } as any)
+            .instruction();
+
+        const tx = new Transaction().add(ix);
+        await sendAndConfirmTransaction(provider.connection, tx, [walletKeypair, userKeypair]);
             
-        const shardAccount = await program.account.registryShard.fetch(shardPda);
+        const shardAccount: any = await program.account.registryShard.fetch(shardPda);
         expect(shardAccount.userCount.toNumber()).to.be.at.least(1);
     }
   });
@@ -115,7 +140,7 @@ describe("registry_sharding", () => {
         .aggregateShards()
         .accounts({
             registry: registryPda,
-            authority: authority,
+            authority: wallet.publicKey,
         })
         .remainingAccounts(shardPdas.map(pda => ({
             pubkey: pda,
@@ -124,7 +149,7 @@ describe("registry_sharding", () => {
         })))
         .rpc();
 
-    const registryAccount = await program.account.registry.fetch(registryPda);
+    const registryAccount: any = await program.account.registry.fetch(registryPda);
     console.log(`Aggregated User Count: ${registryAccount.userCount.toNumber()}`);
     expect(registryAccount.userCount.toNumber()).to.be.at.least(4);
   });

@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { Program } from "@anchor-lang/core";
 import { Registry } from "../target/types/registry";
 import { expect } from "chai";
 import { 

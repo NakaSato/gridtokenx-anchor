@@ -14,7 +14,7 @@ pub use errors::*;
 pub use events::*;
 pub use state::*;
 
-declare_id!("DamT9e1VqbA5nSyFZHExKwQu6qs4L5FW6dirWCK8YLd4");
+declare_id!("6FsfuFEg8LHjSiejc8om8Q6iSaAgfEWHCgz78PT8jocw");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
@@ -156,6 +156,44 @@ pub mod governance {
     ) -> Result<()> {
         compute_fn!("set_oracle_authority" => {
             handlers::authority::set_oracle_authority(ctx, oracle_authority, min_confidence, require_validation)
+        })
+    }
+
+    // === DAO GOVERNANCE ===
+
+    pub fn initialize_zone_config(
+        ctx: Context<InitializeZoneConfig>,
+        zone_id: i32,
+        incentive_multiplier: u64,
+        wheeling_charge: u64,
+    ) -> Result<()> {
+        compute_fn!("initialize_zone_config" => {
+            handlers::dao::initialize_zone_config(ctx, zone_id, incentive_multiplier, wheeling_charge)
+        })
+    }
+
+    pub fn create_proposal(
+        ctx: Context<CreateProposal>,
+        target_zone: i32,
+        proposal_id: u64,
+        parameter: GridParameter,
+        new_value: u64,
+        voting_period_seconds: i64,
+    ) -> Result<()> {
+        compute_fn!("create_proposal" => {
+            handlers::dao::create_proposal(ctx, target_zone, proposal_id, parameter, new_value, voting_period_seconds)
+        })
+    }
+
+    pub fn cast_vote(ctx: Context<CastVote>, choice: bool) -> Result<()> {
+        compute_fn!("cast_vote" => {
+            handlers::dao::cast_vote(ctx, choice)
+        })
+    }
+
+    pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
+        compute_fn!("execute_proposal" => {
+            handlers::dao::execute_proposal(ctx)
         })
     }
 }

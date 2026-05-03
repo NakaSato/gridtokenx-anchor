@@ -21,21 +21,20 @@ localnet = ["compute-debug/localnet", "test-skip-zk"]
 test-skip-zk = []
 
 [dependencies]
-anchor-lang = { workspace = true, features = ["init-if-needed"] }
-anchor-spl = { workspace = true }
-spl-token = { workspace = true }
+anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
+anchor-spl = { version = "1.0.0", features = ["metadata"] }
+
 
 constant_time_eq = "0.3.1"
 blake3 = "=1.5.5"
 
-proc-macro-crate = "=3.2.0"
+proc-macro-crate = "^3.4.0"
 indexmap = "2.7"
 
 sha2 = "0.10"
 hmac = "0.12"
-base64 = { workspace = true }
+base64 = "0.21"
 hex = "0.4"
 bytemuck = { version = "1.16", features = ["derive"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }
 governance = { path = "../governance", features = ["cpi"] }
-solana-zk-token-sdk = "1.18.26"

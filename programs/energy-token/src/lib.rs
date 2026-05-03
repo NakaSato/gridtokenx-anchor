@@ -1,6 +1,10 @@
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
+const IX_ID: Pubkey = Pubkey::new_from_array([
+    6, 167, 213, 23, 25, 44, 92, 142, 224, 137, 211, 236, 12, 137, 234, 123, 14, 153, 162, 115, 140,
+    201, 192, 141, 160, 23, 138, 203, 166, 131, 11, 138,
+]);
 
 use anchor_spl::{
     associated_token::AssociatedToken,
@@ -38,9 +42,7 @@ macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
 
-declare_id!("n52aKuZwUeZAocpWqRZAJR4xFhQqAvaRE7Xepy2JBGk");
-
-pub const DECIMALS: u8 = 9;
+declare_id!("GjSjmPt8VSHr49ti4BijWZSu7rwb8o32pod7gNBnTY4U");
 
 #[program]
 pub mod energy_token {
@@ -112,12 +114,10 @@ pub mod energy_token {
                 authority: ctx.accounts.token_info.to_account_info(),
             };
 
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-
             let seeds = &[b"token_info_2022".as_ref(), &[ctx.bumps.token_info]];
             let signer = &[&seeds[..]];
 
-            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+            let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.key(), cpi_accounts, signer);
 
             compute_checkpoint!("before_mint_cpi");
             token_interface::mint_to(cpi_ctx, amount)?;
@@ -196,13 +196,11 @@ pub mod energy_token {
                 authority: ctx.accounts.from_authority.to_account_info(),
             };
 
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
 
             compute_checkpoint!("before_transfer_cpi");
-            token_interface::transfer_checked(cpi_ctx, amount, DECIMALS)?;
+            token_interface::transfer_checked(cpi_ctx, amount, 9)?;
             compute_checkpoint!("after_transfer_cpi");
-
             // Logging disabled to save CU
         });
         Ok(())
@@ -217,8 +215,7 @@ pub mod energy_token {
                 authority: ctx.accounts.authority.to_account_info(),
             };
 
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
 
             compute_checkpoint!("before_burn_cpi");
             token_interface::burn(cpi_ctx, amount)?;
@@ -241,6 +238,8 @@ pub mod energy_token {
             // Check if caller has permission (Admin or Registry Program)
             let is_admin = ctx.accounts.authority.key() == token_info.authority;
             let is_registry = ctx.accounts.authority.key() == ctx.accounts.registry_authority.key();
+            
+
             require!(is_admin || is_registry, EnergyTokenError::UnauthorizedAuthority);
 
             // REC Validator co-signature: when validators are registered, one must sign
@@ -273,8 +272,7 @@ pub mod energy_token {
                 authority: ctx.accounts.token_info.to_account_info(),
             };
 
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+            let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.token_program.key(), cpi_accounts, signer_seeds);
 
             compute_checkpoint!("before_mint_direct_cpi");
             token_interface::mint_to(cpi_ctx, amount)?;
@@ -318,6 +316,18 @@ pub mod energy_token {
         });
         Ok(())
     }
+
+    /// Update the registry authority (admin only)
+    pub fn set_registry_authority(ctx: Context<SetRegistryAuthority>, new_registry_authority: Pubkey) -> Result<()> {
+        let mut token_info = ctx.accounts.token_info.load_mut()?;
+        require!(
+            ctx.accounts.authority.key() == token_info.authority,
+            EnergyTokenError::UnauthorizedAuthority
+        );
+
+        token_info.registry_authority = new_registry_authority;
+        Ok(())
+    }
 }
 
 // Account structs
@@ -354,8 +364,8 @@ pub struct CreateTokenMint<'info> {
     /// CHECK: Metaplex metadata program (optional for localnet)
     pub metadata_program: UncheckedAccount<'info>,
     pub rent: Sysvar<'info, Rent>,
-    /// CHECK: Sysvar instructions account for Metaplex validation
-    #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
+    /// CHECK: Instructions sysvar for verification
+    #[account(address = IX_ID)]
     pub sysvar_instructions: UncheckedAccount<'info>,
 }
 
@@ -411,7 +421,7 @@ pub struct InitializeToken<'info> {
         payer = authority,
         seeds = [b"mint_2022"],
         bump,
-        mint::decimals = DECIMALS,
+        mint::decimals = 9,
         mint::authority = token_info,
         mint::token_program = token_program,
     )]
@@ -506,6 +516,18 @@ pub struct SyncTotalSupply<'info> {
         constraint = mint.key() == token_info.load()?.mint @ EnergyTokenError::UnauthorizedAuthority,
     )]
     pub mint: InterfaceAccount<'info, MintInterface>,
+
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SetRegistryAuthority<'info> {
+    #[account(
+        mut,
+        seeds = [b"token_info_2022"],
+        bump,
+    )]
+    pub token_info: AccountLoader<'info, TokenInfo>,
 
     pub authority: Signer<'info>,
 }

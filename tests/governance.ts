@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { Program } from "@anchor-lang/core";
 import BN from "bn.js";
 import {
   PublicKey,
@@ -15,7 +15,7 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
 import { assert } from "chai";
 import type { Governance } from "../target/types/governance";
 import type { Registry } from "../target/types/registry";
-import { initializeGovernance, getGovernancePda } from "./utils/governance";
+import { initializeGovernance, getGovernancePda } from "./utils/governance.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PDA helpers
@@ -141,19 +141,14 @@ describe("Governance Program", () => {
           registryShard: shardPda,
           registry: registryPda,
           authority: authority.publicKey,
-          // Optional airdrop accounts.
-          // energyTokenProgram = SystemProgram (Pubkey::default) → airdrop branch is skipped.
-          // associatedTokenProgram must be the real ATA program (validated by Anchor constraint).
-          // mint / tokenInfo / userTokenAccount / tokenProgram are only used inside the airdrop
-          // CPI branch (which is skipped), so SystemProgram is safe for them.
+          payer: authority.publicKey,
           energyTokenProgram: SystemProgram.programId,
           mint: SystemProgram.programId,
           tokenInfo: SystemProgram.programId,
           userTokenAccount: SystemProgram.programId,
           tokenProgram: SystemProgram.programId,
-          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
-        })
+        } as any)
         .rpc();
       console.log("  ✓ User registered");
     } catch (e: any) {
@@ -248,7 +243,7 @@ describe("Governance Program", () => {
   // ── 1. Initialization ─────────────────────────────────────────────────────
 
   it("reports correct authority after initialization", async () => {
-    const config = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    const config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
     assert.ok(
       config.authority.equals(authority.publicKey),
       "PoA config authority should match wallet",
@@ -279,7 +274,7 @@ describe("Governance Program", () => {
       })
       .rpc();
 
-    const config = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    const config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
     assert.equal(config.ercValidationEnabled, true);
     assert.equal(config.allowCertificateTransfers, true);
   });
@@ -297,7 +292,7 @@ describe("Governance Program", () => {
       })
       .rpc();
 
-    const config = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    const config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
     assert.equal(config.minEnergyAmount.toNumber(), 1);
     assert.equal(config.maxErcAmount.toNumber(), 100_000);
   });
@@ -311,7 +306,7 @@ describe("Governance Program", () => {
       .accounts({ poaConfig: poaConfigPda, authority: authority.publicKey })
       .rpc();
 
-    let config = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    let config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
     assert.equal(config.maintenanceMode, true, "Should be in maintenance mode");
 
     // Disable
@@ -353,7 +348,7 @@ describe("Governance Program", () => {
         })
         .rpc();
 
-      const cert = await govProgram.account.ercCertificate.fetch(ercPda);
+      const cert: any = await govProgram.account.ercCertificate.fetch(ercPda);
       assert.equal(cert.energyAmount.toNumber(), 500);
 
       const idStr = Buffer.from(cert.certificateId)
@@ -399,7 +394,7 @@ describe("Governance Program", () => {
       })
       .rpc();
 
-    const cert = await govProgram.account.ercCertificate.fetch(ercPda);
+    const cert: any = await govProgram.account.ercCertificate.fetch(ercPda);
     assert.equal(cert.validatedForTrading, true, "Should be validated");
     assert.ok(cert.tradingValidatedAt !== null, "Timestamp should be set");
   });
@@ -422,7 +417,7 @@ describe("Governance Program", () => {
       })
       .rpc();
 
-    const cert = await govProgram.account.ercCertificate.fetch(ercPda);
+    const cert: any = await govProgram.account.ercCertificate.fetch(ercPda);
     assert.ok(
       cert.owner.equals(newOwner.publicKey),
       "Ownership should have transferred",
@@ -468,7 +463,7 @@ describe("Governance Program", () => {
       })
       .rpc();
 
-    const cert = await govProgram.account.ercCertificate.fetch(erc2Pda);
+    const cert: any = await govProgram.account.ercCertificate.fetch(erc2Pda);
     assert.ok(
       "revoked" in (cert.status as any) ||
         JSON.stringify(cert.status).toLowerCase().includes("revoked"),
@@ -555,7 +550,7 @@ describe("Governance Program", () => {
       })
       .rpc();
 
-    let config = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    let config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
     assert.ok(
       config.pendingAuthority !== null &&
         config.pendingAuthority !== undefined &&

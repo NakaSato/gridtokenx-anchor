@@ -10,4 +10,4 @@ crate-type = ["cdylib", "lib"]
 name = "gridtokenx_shared"
 
 [dependencies]
-anchor-lang = { workspace = true }
+anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }

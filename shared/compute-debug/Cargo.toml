@@ -13,4 +13,4 @@ localnet = []
 idl-build = []
 
 [dependencies]
-anchor-lang = { workspace = true }
+anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }

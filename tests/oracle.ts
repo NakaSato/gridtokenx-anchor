@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { Program } from "@anchor-lang/core";
 import BN from "bn.js";
 import {
   Keypair,
@@ -8,7 +8,7 @@ import {
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import { assert } from "chai";
-import type { Oracle } from "../target/types/oracle";
+import { Oracle } from "../target/types/oracle";
 
 /// Derive a meter PDA from its string ID
 function findMeterPda(
@@ -39,19 +39,18 @@ describe("Oracle Program", () => {
   const METER_B = `M-B-${RUN_TAG}`;
   const METER_C = `M-C-${RUN_TAG}`;
 
-  let oracleData: PublicKey;
+  let oracleDataPda: PublicKey;
 
   // Snapshots taken just before our submit/aggregate tests so that assertions
   // check deltas rather than absolute values. This keeps the suite idempotent
-  // even when oracle_data accumulates totals from prior runs on the same ledger.
+  // even when oracleData accumulates totals from prior runs on the same ledger.
   let globalProducedBefore = 0;
   let globalConsumedBefore = 0;
   let validReadingsBefore = 0;
   let totalReadingsBefore = 0;
-  let globalProducedAfterSubmit = 0; // captured after submit, before aggregate
 
   before(async () => {
-    [oracleData] = PublicKey.findProgramAddressSync(
+    [oracleDataPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("oracle_data")],
       program.programId,
     );
@@ -65,6 +64,12 @@ describe("Oracle Program", () => {
     await provider.connection.confirmTransaction({ signature: sig, ...latest });
   });
 
+  async function getOnChainTimestamp(): Promise<BN> {
+    const slot = await provider.connection.getSlot();
+    const timestamp = await provider.connection.getBlockTime(slot);
+    return new BN(timestamp || Math.floor(Date.now() / 1000));
+  }
+
   // ── 1. Initialization ─────────────────────────────────────────────────────
 
   it("Initializes the oracle", async () => {
@@ -72,15 +77,15 @@ describe("Oracle Program", () => {
       await program.methods
         .initialize(apiGateway.publicKey)
         .accounts({
-          oracleData,
+          oracleData: oracleDataPda,
           authority: authority.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
 
-      const data = await program.account.oracleData.fetch(oracleData);
+      const data: any = await program.account.oracleData.fetch(oracleDataPda);
       assert.ok(data.authority.equals(authority.publicKey));
-      assert.ok(data.apiGateway.equals(apiGateway.publicKey));
+      assert.ok(data.chainBridge.equals(apiGateway.publicKey));
       assert.equal(data.active, 1);
     } catch (e: any) {
       if (e.message.includes("already in use")) {
@@ -88,7 +93,7 @@ describe("Oracle Program", () => {
         // Re-point the oracle's gateway to this run's ephemeral keypair
         await program.methods
           .updateApiGateway(apiGateway.publicKey)
-          .accounts({ oracleData, authority: authority.publicKey })
+          .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
           .rpc();
       } else {
         throw e;
@@ -99,14 +104,14 @@ describe("Oracle Program", () => {
   // ── 2. Per-meter reads (Sealevel-parallel write path) ─────────────────────
 
   it("Submits meter reading via API Gateway (writes to MeterState PDA)", async () => {
-    const [meterState] = findMeterPda(METER_MAIN, program.programId);
-    const timestamp = new BN(Math.floor(Date.now() / 1000));
+    const [meterStatePda] = findMeterPda(METER_MAIN, program.programId);
+    const timestamp = await getOnChainTimestamp();
 
     await program.methods
-      .submitMeterReading(METER_MAIN, new BN(100), new BN(50), timestamp)
+      .submitMeterReading(METER_MAIN, new BN(100), new BN(50), timestamp, 1)
       .accounts({
-        oracleData,
-        meterState,
+        oracleData: oracleDataPda,
+        meterState: meterStatePda,
         authority: apiGateway.publicKey,
         systemProgram: SystemProgram.programId,
       })
@@ -114,7 +119,7 @@ describe("Oracle Program", () => {
       .rpc();
 
     // Verify per-meter PDA state
-    const meter = await program.account.meterState.fetch(meterState);
+    const meter: any = await program.account.meterState.fetch(meterStatePda);
     assert.equal(
       meter.totalEnergyProduced.toNumber(),
       100,
@@ -130,32 +135,20 @@ describe("Oracle Program", () => {
       1,
       "totalReadings should be 1 after first submit",
     );
-
-    // Global counters are updated by aggregate_readings, NOT by submit_meter_reading.
-    // Snapshot the current value so the aggregate test can check a delta.
-    const data = await program.account.oracleData.fetch(oracleData);
-    globalProducedAfterSubmit = data.totalGlobalEnergyProduced.toNumber();
-    // The counter must not have increased as a result of this submit call.
-    // (It may already be non-zero from prior runs — that is fine.)
-    assert.equal(
-      data.totalGlobalEnergyProduced.toNumber(),
-      globalProducedAfterSubmit,
-      "Global counter must not change on submit_meter_reading (only on aggregate_readings)",
-    );
   });
 
   it("Submits readings for different meters in parallel (Sealevel)", async () => {
     const meters = [METER_A, METER_B, METER_C];
-    const timestamp = new BN(Math.floor(Date.now() / 1000));
+    const timestamp = await getOnChainTimestamp();
 
     // All three touch different MeterState PDAs — Sealevel can parallelise them
-    const txPromises = meters.map((meterId) => {
-      const [meterState] = findMeterPda(meterId, program.programId);
+    const txPromises = meters.map((meterId, idx) => {
+      const [meterStatePda] = findMeterPda(meterId, program.programId);
       return program.methods
-        .submitMeterReading(meterId, new BN(200), new BN(100), timestamp)
+        .submitMeterReading(meterId, new BN(200), new BN(100), timestamp, idx + 1)
         .accounts({
-          oracleData,
-          meterState,
+          oracleData: oracleDataPda,
+          meterState: meterStatePda,
           authority: apiGateway.publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -167,8 +160,8 @@ describe("Oracle Program", () => {
 
     // Each fresh PDA should have exactly one reading of 200 produced
     for (const meterId of meters) {
-      const [meterState] = findMeterPda(meterId, program.programId);
-      const meter = await program.account.meterState.fetch(meterState);
+      const [meterStatePda] = findMeterPda(meterId, program.programId);
+      const meter: any = await program.account.meterState.fetch(meterStatePda);
       assert.equal(
         meter.totalEnergyProduced.toNumber(),
         200,
@@ -185,7 +178,7 @@ describe("Oracle Program", () => {
   it("Aggregates readings into global counters (batch)", async () => {
     // Snapshot counters immediately before aggregate_readings so assertions
     // can measure the exact delta this call contributes.
-    const before = await program.account.oracleData.fetch(oracleData);
+    const before: any = await program.account.oracleData.fetch(oracleDataPda);
     globalProducedBefore = before.totalGlobalEnergyProduced.toNumber();
     globalConsumedBefore = before.totalGlobalEnergyConsumed.toNumber();
     validReadingsBefore = before.totalValidReadings.toNumber();
@@ -194,19 +187,19 @@ describe("Oracle Program", () => {
     // Aggregate: METER_MAIN(100/50) + METER_A/B/C(200/100 each) = 700/350 produced/consumed
     await program.methods
       .aggregateReadings(
-        new BN(700), // total_produced
-        new BN(350), // total_consumed
-        new BN(4), // valid_count
-        new BN(0), // rejected_count
+        new BN(700), // totalProduced
+        new BN(350), // totalConsumed
+        new BN(4), // validCount
+        new BN(0), // rejectedCount
       )
       .accounts({
-        oracleData,
+        oracleData: oracleDataPda,
         authority: apiGateway.publicKey,
       })
       .signers([apiGateway])
       .rpc();
 
-    const data = await program.account.oracleData.fetch(oracleData);
+    const data: any = await program.account.oracleData.fetch(oracleDataPda);
 
     assert.equal(
       data.totalGlobalEnergyProduced.toNumber(),
@@ -234,14 +227,14 @@ describe("Oracle Program", () => {
 
   it("Fails to submit reading from unauthorized gateway", async () => {
     const other = Keypair.generate();
-    const [meterState] = findMeterPda(METER_MAIN, program.programId);
-    const timestamp = new BN(Math.floor(Date.now() / 1000));
+    const [meterStatePda] = findMeterPda(METER_MAIN, program.programId);
+    const timestamp = await getOnChainTimestamp();
     try {
       await program.methods
-        .submitMeterReading(METER_MAIN, new BN(100), new BN(50), timestamp)
+        .submitMeterReading(METER_MAIN, new BN(100), new BN(50), timestamp, 1)
         .accounts({
-          oracleData,
-          meterState,
+          oracleData: oracleDataPda,
+          meterState: meterStatePda,
           authority: other.publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -257,18 +250,18 @@ describe("Oracle Program", () => {
   // ── 4. Market clearing ────────────────────────────────────────────────────
 
   it("Triggers market clearing", async () => {
-    const epochTimestamp = new BN(Math.floor(Date.now() / 1000));
+    const epochTimestamp = await getOnChainTimestamp();
 
     await program.methods
       .triggerMarketClearing(epochTimestamp)
       .accounts({
-        oracleData,
+        oracleData: oracleDataPda,
         authority: apiGateway.publicKey,
       })
       .signers([apiGateway])
       .rpc();
 
-    const data = await program.account.oracleData.fetch(oracleData);
+    const data: any = await program.account.oracleData.fetch(oracleDataPda);
     assert.ok(data.lastClearing.toNumber() > 0, "lastClearing should be set");
     assert.equal(
       data.lastClearedEpoch.toNumber(),
@@ -282,18 +275,18 @@ describe("Oracle Program", () => {
   it("Updates oracle status (active/inactive toggle)", async () => {
     await program.methods
       .updateOracleStatus(false)
-      .accounts({ oracleData, authority: authority.publicKey })
+      .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
       .rpc();
 
-    let data = await program.account.oracleData.fetch(oracleData);
+    let data: any = await program.account.oracleData.fetch(oracleDataPda);
     assert.equal(data.active, 0, "Oracle should be inactive");
 
     await program.methods
       .updateOracleStatus(true)
-      .accounts({ oracleData, authority: authority.publicKey })
+      .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
       .rpc();
 
-    data = await program.account.oracleData.fetch(oracleData);
+    data = await program.account.oracleData.fetch(oracleDataPda);
     assert.equal(data.active, 1, "Oracle should be active again");
   });
 
@@ -302,35 +295,35 @@ describe("Oracle Program", () => {
 
     await program.methods
       .updateApiGateway(newGateway)
-      .accounts({ oracleData, authority: authority.publicKey })
+      .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
       .rpc();
 
-    const data = await program.account.oracleData.fetch(oracleData);
+    const data: any = await program.account.oracleData.fetch(oracleDataPda);
     assert.ok(
-      data.apiGateway.equals(newGateway),
+      data.chainBridge.equals(newGateway),
       "apiGateway should be updated",
     );
 
     // Restore the run's ephemeral gateway so subsequent tests still work
     await program.methods
       .updateApiGateway(apiGateway.publicKey)
-      .accounts({ oracleData, authority: authority.publicKey })
+      .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
       .rpc();
   });
 
   it("Updates validation config", async () => {
     await program.methods
       .updateValidationConfig(
-        new BN(10), // min_energy_value
-        new BN(10000), // max_energy_value
-        true, // anomaly_detection_enabled
-        75, // max_reading_deviation_percent
-        false, // require_consensus
+        new BN(10), // minEnergyValue
+        new BN(10000), // maxEnergyValue
+        true, // anomalyDetectionEnabled
+        75, // maxReadingDeviationPercent
+        false, // requireConsensus
       )
-      .accounts({ oracleData, authority: authority.publicKey })
+      .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
       .rpc();
 
-    const data = await program.account.oracleData.fetch(oracleData);
+    const data: any = await program.account.oracleData.fetch(oracleDataPda);
     assert.equal(data.minEnergyValue.toNumber(), 10);
     assert.equal(data.maxEnergyValue.toNumber(), 10000);
     assert.equal(data.maxReadingDeviationPercent, 75);
@@ -339,10 +332,10 @@ describe("Oracle Program", () => {
   it("Adds and removes backup oracles", async () => {
     await program.methods
       .addBackupOracle(backupOracle.publicKey)
-      .accounts({ oracleData, authority: authority.publicKey })
+      .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
       .rpc();
 
-    let data = await program.account.oracleData.fetch(oracleData);
+    let data: any = await program.account.oracleData.fetch(oracleDataPda);
     assert.equal(
       data.backupOraclesCount,
       1,
@@ -355,10 +348,10 @@ describe("Oracle Program", () => {
 
     await program.methods
       .removeBackupOracle(backupOracle.publicKey)
-      .accounts({ oracleData, authority: authority.publicKey })
+      .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
       .rpc();
 
-    data = await program.account.oracleData.fetch(oracleData);
+    data = await program.account.oracleData.fetch(oracleDataPda);
     assert.equal(
       data.backupOraclesCount,
       0,
