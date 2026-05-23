@@ -65,7 +65,7 @@ pub struct MatchPair {
     pub price: u64,
 }
 
-declare_id!("DXxHdUar3pUUKRnt4XAMA8rdYRpAsNY1xk3Zo4crShvY");
+declare_id!("DA9TdkcToi5r7oS7X5CddoMBiGNF3sAGqwPQph1CfLwd");
 
 #[program]
 pub mod trading {

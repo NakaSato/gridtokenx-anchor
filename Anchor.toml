@@ -1,13 +1,15 @@
+[toolchain]
+
 [features]
 resolution = false
 skip-lint = false
 
 [programs.localnet]
-energy_token = "GjSjmPt8VSHr49ti4BijWZSu7rwb8o32pod7gNBnTY4U"
-governance = "6FsfuFEg8LHjSiejc8om8Q6iSaAgfEWHCgz78PT8jocw"
-oracle = "AiWcoPDEk3G4iKrDXj1wCN1ffWxQDEsgtJZKcjauoFJr"
-registry = "HZR6b8GhzhDowyL6dX58qBjdSDNtFyJHU5dPF3kXDcTS"
-trading = "DXxHdUar3pUUKRnt4XAMA8rdYRpAsNY1xk3Zo4crShvY"
+energy_token = "EzXnJoHSjS6VR7eBwHTkHHAJGqVfRsEvyksqz7uJCBpe"
+governance = "BRQEyx7DHX1Ljx1eNTHUve52aHHwkWckBXGeL9FZPEgZ"
+oracle = "D5MCbSHxhxZTRFyUMdTHcQvjzwjx5Lb8jg9PQ2LTja8S"
+registry = "5xdQsDuGa1AaLVnddGhevvf2bngCvSob4dAepETS7oaJ"
+trading = "DA9TdkcToi5r7oS7X5CddoMBiGNF3sAGqwPQph1CfLwd"
 
 [provider]
 cluster = "localnet"
