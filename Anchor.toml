@@ -5,10 +5,12 @@ resolution = false
 skip-lint = false
 
 [programs.localnet]
+blockbench = "HPnJW7bUvHuajENb8YjV1GQbQxUYWH9CP6M8BCzg7EjW"
 energy_token = "EzXnJoHSjS6VR7eBwHTkHHAJGqVfRsEvyksqz7uJCBpe"
 governance = "BRQEyx7DHX1Ljx1eNTHUve52aHHwkWckBXGeL9FZPEgZ"
 oracle = "D5MCbSHxhxZTRFyUMdTHcQvjzwjx5Lb8jg9PQ2LTja8S"
 registry = "5xdQsDuGa1AaLVnddGhevvf2bngCvSob4dAepETS7oaJ"
+tpc_benchmark = "374pa4eZxzF6q1niiRAJojhCKPn2mFhPjnWPbkJ3yEoN"
 trading = "DA9TdkcToi5r7oS7X5CddoMBiGNF3sAGqwPQph1CfLwd"
 
 [provider]
@@ -29,6 +31,7 @@ setup-alts = "npx ts-node scripts/setup-alts.ts"
 test-oracle = "anchor test tests/oracle.ts"
 test-registry = "anchor test tests/registry_sharding.ts"
 update-gateway = "npx ts-node scripts/update-gateway.ts"
+test = "npx mocha -r tsx 'tests/**/*.ts' --timeout 1000000"
 
 [hooks]
 
