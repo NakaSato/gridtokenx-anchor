@@ -33,14 +33,15 @@ pub fn handler(ctx: Context<InitializePoa>) -> Result<()> {
     poa_config.min_energy_amount = 100; // 100 kWh minimum
     poa_config.max_erc_amount = 1_000_000; // 1M kWh max per ERC
     poa_config.erc_validity_period = 31_536_000; // 1 year in seconds
-    poa_config.auto_revoke_expired = false;
     poa_config.require_oracle_validation = false;
 
     // Features
-    poa_config.delegation_enabled = false;
     poa_config.oracle_authority = None;
     poa_config.min_oracle_confidence = 80; // 80% confidence threshold
     poa_config.allow_certificate_transfers = true;
+
+    // DAO Governance
+    poa_config.min_quorum_votes = 100; // Minimum 1 meter's base weight
 
     // Tracking
     poa_config.total_ercs_issued = 0;
