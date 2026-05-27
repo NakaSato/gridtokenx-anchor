@@ -28,20 +28,20 @@ pub struct PoAConfig {
     pub max_erc_amount: u64,
     /// ERC certificate validity period (seconds)
     pub erc_validity_period: i64,
-    /// Auto-revoke expired certificates
-    pub auto_revoke_expired: bool,
     /// Require oracle validation for ERC issuance
     pub require_oracle_validation: bool,
 
     // === Advanced Features ===
-    /// Whether the authority can delegate ERC validation
-    pub delegation_enabled: bool,
     /// Oracle authority for AMI data validation
     pub oracle_authority: Option<Pubkey>,
     /// Minimum confidence score for oracle validation (0-100)
     pub min_oracle_confidence: u8,
     /// Allow certificate transfers between accounts
     pub allow_certificate_transfers: bool,
+
+    // === DAO Governance ===
+    /// Minimum total votes (for + against) required for a proposal to be valid
+    pub min_quorum_votes: u64,
 
     // === Tracking ===
     /// Total ERCs issued since inception
@@ -77,39 +77,40 @@ impl PoAConfig {
         64 + 1 + // authority_name + len
         128 + 1 + // contact_info + len
         1 +     // version
-        
+
         // Controls
         1 +     // maintenance_mode
-        
+
         // ERC Certificate Configuration
         1 +     // erc_validation_enabled
         8 +     // min_energy_amount
         8 +     // max_erc_amount
         8 +     // erc_validity_period
-        1 +     // auto_revoke_expired
         1 +     // require_oracle_validation
-        
+
         // Advanced Features
-        1 +     // delegation_enabled
         33 +    // oracle_authority (Option<Pubkey>)
         1 +     // min_oracle_confidence
         1 +     // allow_certificate_transfers
-        
+
+        // DAO Governance
+        8 +     // min_quorum_votes
+
         // Tracking
         8 +     // total_ercs_issued
         8 +     // total_ercs_validated
         8 +     // total_ercs_revoked
         8 +     // total_energy_certified
-        
+
         // Timestamps
         8 +     // created_at
         8 +     // last_updated
         9 +     // last_erc_issued_at (Option<i64>)
-        
+
         // Multi-sig Authority Change
         33 +    // pending_authority (Option<Pubkey>)
         9 +     // pending_authority_proposed_at (Option<i64>)
-        9; // pending_authority_expires_at (Option<i64>)
+        9;      // pending_authority_expires_at (Option<i64>)
 
     /// Validate that config parameters are within acceptable ranges
     pub fn validate_config(&self) -> Result<()> {
@@ -167,19 +168,21 @@ pub struct GovernanceStats {
     // Features
     pub require_oracle_validation: bool,
     pub allow_certificate_transfers: bool,
-    pub delegation_enabled: bool,
+
+    // DAO
+    pub min_quorum_votes: u64,
 
     // Timestamps
     pub created_at: i64,
     pub last_updated: i64,
     pub last_erc_issued_at: Option<i64>,
 
-    // NEW: Authority change status
+    // Authority change status
     pub pending_authority_change: bool,
     pub pending_authority: Option<Pubkey>,
     pub pending_authority_expires_at: Option<i64>,
 
-    // NEW: Oracle info
+    // Oracle info
     pub oracle_authority: Option<Pubkey>,
     pub min_oracle_confidence: u8,
 }
