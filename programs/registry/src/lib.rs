@@ -1,5 +1,3 @@
-#![allow(deprecated)]
-
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface};
@@ -64,6 +62,10 @@ pub mod registry {
             registry.user_count = 0;
             registry.meter_count = 0;
             registry.active_meter_count = 0;
+
+            emit!(RegistryInitialized {
+                authority: ctx.accounts.authority.key(),
+            });
         });
         Ok(())
     }
@@ -138,13 +140,17 @@ pub mod registry {
         let mut total_meters = 0u64;
 
         for account_info in ctx.remaining_accounts.iter() {
-            // Verify it's a RegistryShard account
-            // In production, we'd check the seeds too, but simple type check for now
+            require_keys_eq!(*account_info.owner, crate::ID, RegistryError::UnauthorizedAuthority);
+
             let shard_data = account_info.try_borrow_data()?;
             if shard_data.len() >= 8 + std::mem::size_of::<RegistryShard>() {
-                // Manually deserialize or use zero_copy check
-                // For simplicity in this benchmark-to-prod transition:
                 let shard = RegistryShard::load_from_bytes(&shard_data[8..])?;
+                
+                let expected_pda = Pubkey::find_program_address(
+                    &[b"registry_shard", &[shard.shard_id]], &crate::ID
+                ).0;
+                require_keys_eq!(account_info.key(), expected_pda, RegistryError::UnauthorizedAuthority);
+                
                 total_users = total_users
                     .checked_add(shard.user_count)
                     .ok_or(RegistryError::MathOverflow)?;
@@ -175,6 +181,7 @@ pub mod registry {
             let registry = ctx.accounts.registry.load()?;
             
             // Authorization Check: Either the user signs for themselves, or the Registry Authority signs for them.
+            // Note: `authority` is an `AccountInfo` instead of `Signer` because the admin can sign on behalf of the user.
             let is_user_signing = ctx.accounts.authority.is_signer;
             let is_admin_signing = ctx.accounts.payer.key() == registry.authority;
             
@@ -197,7 +204,7 @@ pub mod registry {
             user_account.registered_at = Clock::get()?.unix_timestamp;
             user_account.meter_count = 0;
 
-            shard.user_count += 1;
+            shard.user_count = shard.user_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
 
             emit!(UserRegistered {
                 user: user_authority,
@@ -285,8 +292,8 @@ pub mod registry {
             meter_account.settled_net_generation = 0;
             meter_account.claimed_erc_generation = 0;
 
-            user_account.meter_count += 1;
-            shard.meter_count += 1;
+            user_account.meter_count = user_account.meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
+            shard.meter_count = shard.meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
 
             emit!(MeterRegistered {
                 meter_id: meter_id.clone(),
@@ -364,8 +371,8 @@ pub mod registry {
             );
 
             meter_account.last_reading_at = reading_timestamp;
-            meter_account.total_generation += energy_generated;
-            meter_account.total_consumption += energy_consumed;
+            meter_account.total_generation = meter_account.total_generation.checked_add(energy_generated).ok_or(RegistryError::MathOverflow)?;
+            meter_account.total_consumption = meter_account.total_consumption.checked_add(energy_consumed).ok_or(RegistryError::MathOverflow)?;
 
             emit!(MeterReadingUpdated {
                 meter_id: bytes32_to_string(&meter_account.meter_id),
@@ -381,8 +388,7 @@ pub mod registry {
     pub fn set_meter_status(ctx: Context<SetMeterStatus>, new_status: MeterStatus) -> Result<()> {
         compute_fn!("set_meter_status" => {
             let mut meter = ctx.accounts.meter_account.load_mut()?;
-            let _shard = ctx.accounts.registry_shard.load()?;
-            let registry_acc = ctx.accounts.registry.load()?;
+            let mut registry_acc = ctx.accounts.registry.load_mut()?;
 
             let is_owner = ctx.accounts.authority.key() == meter.owner;
             let is_admin = ctx.accounts.authority.key() == registry_acc.authority;
@@ -391,9 +397,9 @@ pub mod registry {
             let old_status = meter.status;
 
             if old_status == MeterStatus::Active && new_status != MeterStatus::Active {
-                // _registry_acc.active_meter_count = _registry_acc.active_meter_count.saturating_sub(1);
+                registry_acc.active_meter_count = registry_acc.active_meter_count.saturating_sub(1);
             } else if old_status != MeterStatus::Active && new_status == MeterStatus::Active {
-                // _registry_acc.active_meter_count += 1;
+                registry_acc.active_meter_count = registry_acc.active_meter_count.saturating_add(1);
             }
 
             meter.status = new_status;
@@ -413,8 +419,7 @@ pub mod registry {
         compute_fn!("deactivate_meter" => {
             let mut meter = ctx.accounts.meter_account.load_mut()?;
             let mut user = ctx.accounts.user_account.load_mut()?;
-            let _shard = ctx.accounts.registry_shard.load()?;
-            let _registry_acc = ctx.accounts.registry.load()?;
+            let mut registry_acc = ctx.accounts.registry.load_mut()?;
 
             require_keys_eq!(
                 ctx.accounts.owner.key(),
@@ -428,7 +433,7 @@ pub mod registry {
             );
 
             if meter.status == MeterStatus::Active {
-                // _registry_acc.active_meter_count = _registry_acc.active_meter_count.saturating_sub(1);
+                registry_acc.active_meter_count = registry_acc.active_meter_count.saturating_sub(1);
             }
 
             meter.status = MeterStatus::Inactive;
@@ -478,36 +483,7 @@ pub mod registry {
     pub fn settle_meter_balance(ctx: Context<SettleMeterBalance>) -> Result<u64> {
         let res = compute_fn!("settle_meter_balance" => {
             let mut meter = ctx.accounts.meter_account.load_mut()?;
-
-            require!(
-                meter.status == MeterStatus::Active,
-                RegistryError::InvalidMeterStatus
-            );
-
-            require_keys_eq!(
-                ctx.accounts.meter_owner.key(),
-                meter.owner,
-                RegistryError::UnauthorizedUser
-            );
-
-            let current_net_gen = meter
-                .total_generation
-                .saturating_sub(meter.total_consumption);
-
-            let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
-
-            require!(new_tokens_to_mint > 0, RegistryError::NoUnsettledBalance);
-
-            meter.settled_net_generation = current_net_gen;
-
-            emit!(MeterBalanceSettled {
-                meter_id: bytes32_to_string(&meter.meter_id),
-                owner: meter.owner,
-                tokens_to_mint: new_tokens_to_mint,
-                total_settled: current_net_gen,
-            });
-
-            new_tokens_to_mint
+            do_settle_meter(&mut meter, ctx.accounts.meter_owner.key())?
         });
 
         Ok(res)
@@ -518,34 +494,7 @@ pub mod registry {
     pub fn settle_and_mint_tokens(ctx: Context<SettleAndMintTokens>) -> Result<()> {
         compute_fn!("settle_and_mint_tokens" => {
             let mut meter = ctx.accounts.meter_account.load_mut()?;
-
-            require!(
-                meter.status == MeterStatus::Active,
-                RegistryError::InvalidMeterStatus
-            );
-
-            require_keys_eq!(
-                ctx.accounts.meter_owner.key(),
-                meter.owner,
-                RegistryError::UnauthorizedUser
-            );
-
-            let current_net_gen = meter
-                .total_generation
-                .saturating_sub(meter.total_consumption);
-
-            let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
-
-            require!(new_tokens_to_mint > 0, RegistryError::NoUnsettledBalance);
-
-            meter.settled_net_generation = current_net_gen;
-
-            emit!(MeterBalanceSettled {
-                meter_id: bytes32_to_string(&meter.meter_id),
-                owner: meter.owner,
-                tokens_to_mint: new_tokens_to_mint,
-                total_settled: current_net_gen,
-            });
+            let new_tokens_to_mint = do_settle_meter(&mut meter, ctx.accounts.meter_owner.key())?;
 
             // We need to sign as the Registry because the Registry is the authority of the Energy Token (TokenInfo)
             let bump = ctx.bumps.registry;
@@ -592,62 +541,95 @@ pub mod registry {
 
         meter.claimed_erc_generation = meter.claimed_erc_generation.saturating_add(amount);
 
-        emit!(MeterReadingUpdated {
+        emit!(ErcClaimed {
             meter_id: bytes32_to_string(&meter.meter_id),
             owner: meter.owner,
-            energy_generated: 0,
-            energy_consumed: 0,
+            amount,
+            total_claimed: meter.claimed_erc_generation,
         });
 
         Ok(())
-        }
+    }
 
-        /// Initialize the staking vault for GRX tokens (admin only)
-        pub fn initialize_vault(_ctx: Context<InitializeVault>) -> Result<()> {
-            Ok(())
-        }
+    /// Initialize the staking vault for GRX tokens (admin only)
+    pub fn initialize_vault(_ctx: Context<InitializeVault>) -> Result<()> {
+        Ok(())
+    }
 
-        /// Stake GRX tokens to participate in the network
-        pub fn stake_grx(ctx: Context<StakeGrx>, amount: u64) -> Result<()> {
-            require!(amount > 0, RegistryError::MinStakeNotMet);
+    /// Stake GRX tokens to participate in the network
+    // TODO: Add unstake_grx and slash_validator instructions
+    pub fn stake_grx(ctx: Context<StakeGrx>, amount: u64) -> Result<()> {
+        require!(amount > 0, RegistryError::MinStakeNotMet);
 
-            let cpi_accounts = token_interface::TransferChecked {
-                from: ctx.accounts.user_grx_ata.to_account_info(),
-                to: ctx.accounts.grx_vault.to_account_info(),
-                authority: ctx.accounts.authority.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-            };
-            // let cpi_program = ctx.accounts.token_program.to_account_info();
-            let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
+        let cpi_accounts = token_interface::TransferChecked {
+            from: ctx.accounts.user_grx_ata.to_account_info(),
+            to: ctx.accounts.grx_vault.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+            mint: ctx.accounts.grx_mint.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
 
-            token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.grx_mint.decimals)?;
+        token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.grx_mint.decimals)?;
 
-            let mut user_account = ctx.accounts.user_account.load_mut()?;
-            user_account.staked_grx = user_account
-                .staked_grx
-                .checked_add(amount)
-                .ok_or(RegistryError::MathOverflow)?;
-            user_account.last_stake_at = Clock::get()?.unix_timestamp;
+        let mut user_account = ctx.accounts.user_account.load_mut()?;
+        user_account.staked_grx = user_account
+            .staked_grx
+            .checked_add(amount)
+            .ok_or(RegistryError::MathOverflow)?;
+        user_account.last_stake_at = Clock::get()?.unix_timestamp;
 
-            Ok(())
-        }
+        Ok(())
+    }
 
-        /// Register as a validator (requires at least 10,000 GRX staked)
-        pub fn register_validator(ctx: Context<RegisterValidator>) -> Result<()> {
-            let mut user_account = ctx.accounts.user_account.load_mut()?;
+    /// Register as a validator (requires at least 10,000 GRX staked)
+    pub fn register_validator(ctx: Context<RegisterValidator>) -> Result<()> {
+        let mut user_account = ctx.accounts.user_account.load_mut()?;
 
-            // Minimum stake requirement: 10,000 GRX
-            const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000;
-            require!(
-                user_account.staked_grx >= MIN_VALIDATOR_STAKE,
-                RegistryError::MinStakeNotMet
-            );
+        // Minimum stake requirement: 10,000 GRX
+        const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000;
+        require!(
+            user_account.staked_grx >= MIN_VALIDATOR_STAKE,
+            RegistryError::MinStakeNotMet
+        );
 
-            user_account.validator_status = ValidatorStatus::Active;
+        user_account.validator_status = ValidatorStatus::Active;
 
-            Ok(())
-        }
-        }
+        Ok(())
+    }
+}
+
+// Internal helpers
+fn do_settle_meter(meter: &mut MeterAccount, owner_key: Pubkey) -> Result<u64> {
+    require!(
+        meter.status == MeterStatus::Active,
+        RegistryError::InvalidMeterStatus
+    );
+
+    require_keys_eq!(
+        owner_key,
+        meter.owner,
+        RegistryError::UnauthorizedUser
+    );
+
+    let current_net_gen = meter
+        .total_generation
+        .saturating_sub(meter.total_consumption);
+
+    let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
+
+    require!(new_tokens_to_mint > 0, RegistryError::NoUnsettledBalance);
+
+    meter.settled_net_generation = current_net_gen;
+
+    emit!(MeterBalanceSettled {
+        meter_id: bytes32_to_string(&meter.meter_id),
+        owner: meter.owner,
+        tokens_to_mint: new_tokens_to_mint,
+        total_settled: current_net_gen,
+    });
+
+    Ok(new_tokens_to_mint)
+}
 
 
 // Account structs
@@ -818,12 +800,6 @@ pub struct SetMeterStatus<'info> {
     #[account(mut)]
     pub meter_account: AccountLoader<'info, MeterAccount>,
 
-    #[account(
-        seeds = [b"registry_shard".as_ref(), &[0u8]], // Default to shard 0 for view operations
-        bump
-    )]
-    pub registry_shard: AccountLoader<'info, RegistryShard>,
-
     pub authority: Signer<'info>,
 }
 
@@ -834,12 +810,6 @@ pub struct DeactivateMeter<'info> {
 
     #[account(mut)]
     pub user_account: AccountLoader<'info, UserAccount>,
-
-    #[account(
-        seeds = [b"registry_shard".as_ref(), &[0u8]],
-        bump
-    )]
-    pub registry_shard: AccountLoader<'info, RegistryShard>,
 
     #[account(mut)]
     pub registry: AccountLoader<'info, Registry>,
