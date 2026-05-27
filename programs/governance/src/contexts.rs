@@ -25,6 +25,7 @@ pub struct InitializePoa<'info> {
 #[instruction(certificate_id: String)]
 pub struct IssueErc<'info> {
     #[account(
+        mut,
         seeds = [b"poa_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
@@ -38,9 +39,29 @@ pub struct IssueErc<'info> {
         bump
     )]
     pub erc_certificate: Account<'info, ErcCertificate>,
-    /// Meter account from registry program - tracks claimed ERC generation
-    /// CHECK: Manual validation and read-only usage
+    /// Meter account from registry program - writable so CPI can update claimed_erc_generation
+    /// CHECK: Size and owner validated in handler; written via CPI to registry
+    #[account(mut)]
     pub meter_account: AccountInfo<'info>,
+    /// Registry singleton PDA ["registry"] - authority must match governance authority
+    /// CHECK: Registry authority is validated against governance authority below
+    #[account(
+        constraint = {
+            let data = registry.try_borrow_data()?;
+            // Registry layout: authority is first field (32 bytes) after 8-byte discriminator
+            require!(data.len() >= 40, GovernanceError::InvalidMeterAccount);
+            let reg_authority = Pubkey::try_from(&data[8..40]).map_err(|_| GovernanceError::InvalidMeterAccount)?;
+            require!(
+                reg_authority == authority.key(),
+                GovernanceError::UnauthorizedAuthority
+            );
+            true
+        }
+    )]
+    pub registry: AccountInfo<'info>,
+    /// The registry program - used to invoke mark_erc_claimed
+    /// CHECK: Registry program ID; validated implicitly by the CPI invocation
+    pub registry_program: AccountInfo<'info>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -49,6 +70,7 @@ pub struct IssueErc<'info> {
 #[derive(Accounts)]
 pub struct ValidateErc<'info> {
     #[account(
+        mut,
         seeds = [b"poa_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
@@ -220,6 +242,12 @@ pub struct CastVote<'info> {
 
 #[derive(Accounts)]
 pub struct ExecuteProposal<'info> {
+    /// PoA config - needed for quorum threshold
+    #[account(
+        seeds = [b"poa_config"],
+        bump
+    )]
+    pub poa_config: Account<'info, PoAConfig>,
     #[account(
         mut,
         seeds = [b"zone_config", zone_config.zone_id.to_le_bytes().as_ref()],
@@ -229,7 +257,11 @@ pub struct ExecuteProposal<'info> {
     #[account(
         mut,
         constraint = proposal.target_zone == zone_config.zone_id @ GovernanceError::InvalidTargetZone,
-        constraint = proposal.status == ProposalStatus::Passed @ GovernanceError::InvalidProposalStatus
+        // Allow Active (will be auto-finalized in handler) or already-Passed proposals
+        constraint = (
+            proposal.status == ProposalStatus::Active
+            || proposal.status == ProposalStatus::Passed
+        ) @ GovernanceError::InvalidProposalStatus
     )]
     pub proposal: Account<'info, Proposal>,
     #[account(mut)]
