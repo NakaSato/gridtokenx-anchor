@@ -26,3 +26,4 @@ anchor-spl = { version = "1.0.0", features = ["metadata"] }
 base64 = "0.21"
 bytemuck = { version = "1.20.0", features = ["derive"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }
+registry = { path = "../registry", features = ["cpi"] }
