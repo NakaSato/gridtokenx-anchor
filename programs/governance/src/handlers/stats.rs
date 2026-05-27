@@ -34,19 +34,21 @@ pub fn handler(ctx: Context<GetGovernanceStats>) -> Result<GovernanceStats> {
         // Advanced features
         require_oracle_validation: poa_config.require_oracle_validation,
         allow_certificate_transfers: poa_config.allow_certificate_transfers,
-        delegation_enabled: poa_config.delegation_enabled,
+
+        // DAO governance
+        min_quorum_votes: poa_config.min_quorum_votes,
 
         // Timestamps
         created_at: poa_config.created_at,
         last_updated: poa_config.last_updated,
         last_erc_issued_at: poa_config.last_erc_issued_at,
 
-        // NEW: Authority change status
+        // Authority change status
         pending_authority_change: poa_config.pending_authority.is_some(),
         pending_authority: poa_config.pending_authority,
         pending_authority_expires_at: poa_config.pending_authority_expires_at,
 
-        // NEW: Oracle info
+        // Oracle info
         oracle_authority: poa_config.oracle_authority,
         min_oracle_confidence: poa_config.min_oracle_confidence,
     })
