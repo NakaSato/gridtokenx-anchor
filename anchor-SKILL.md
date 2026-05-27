@@ -24,11 +24,11 @@ Program IDs (from `Anchor.toml` — do not change without a full `anchor keys sy
 
 | Program        | ID                                              |
 | -------------- | ----------------------------------------------- |
-| `energy_token` | `n52aKuZwUeZAocpWqRZAJR4xFhQqAvaRE7Xepy2JBGk`   |
-| `governance`   | `DamT9e1VqbA5nSyFZHExKwQu6qs4L5FW6dirWCK8YLd4`  |
-| `oracle`       | `JDUVXMkeGi4oxLp8njBaGScAFaVBBg7iGoiqcY1LxKop`  |
-| `registry`     | `FmvDiFUWPrwXsqo7z7XnVniKbZDcz32U5HSDVwPug89c`  |
-| `trading`      | `69dGpKu9a8EZiZ7orgfTH6CoGj9DeQHHkHBF2exSr8na`  |
+| `energy_token` | `EzXnJoHSjS6VR7eBwHTkHHAJGqVfRsEvyksqz7uJCBpe`   |
+| `governance`   | `BRQEyx7DHX1Ljx1eNTHUve52aHHwkWckBXGeL9FZPEgZ`   |
+| `oracle`       | `D5MCbSHxhxZTRFyUMdTHcQvjzwjx5Lb8jg9PQ2LTja8S`   |
+| `registry`     | `5xdQsDuGa1AaLVnddGhevvf2bngCvSob4dAepETS7oaJ`   |
+| `trading`      | `DA9TdkcToi5r7oS7X5CddoMBiGNF3sAGqwPQph1CfLwd`   |
 
 ## Invariants — read before touching any program
 
@@ -138,6 +138,25 @@ anchor build -- --features localnet
 anchor run test-oracle       # → anchor test tests/oracle.ts
 anchor run test-registry     # → anchor test tests/registry_sharding.ts
 ```
+
+### Build & Test Gotchas
+
+1. **Stale Binaries Blocker (Copying `.so` Files)**: 
+   Because the workspace lacks a global Cargo workspace config, `anchor build` compiles program binaries locally to `./programs/<program_name>/target/deploy/`. However, the test runner/validator deploy scripts look for program binaries in the root `./target/deploy/` directory. 
+   **You must copy the newly compiled `.so` files to the root `./target/deploy/` directory prior to testing**:
+   ```bash
+   cp programs/oracle/target/deploy/oracle.so target/deploy/oracle.so
+   cp programs/trading/target/deploy/trading.so target/deploy/trading.so
+   ```
+
+2. **Test Runner (TSX/ESM)**:
+   The workspace uses `npx mocha -r tsx --timeout 1000000` (configured in `Anchor.toml`) instead of `ts-mocha` to run the tests. This resolves native module resolution and import conflicts during ESM module resolution. 
+
+3. **Precompiled Programs Genesis Deployment**:
+   If a test uses precompiled benchmark programs that are not source-resident in `programs/` (like `blockbench` or `tpc_benchmark`), they must remain configured in `Anchor.toml` under `[programs.localnet]` so that the test validator deploys them automatically on localnet startup.
+
+4. **Validator Timers & Time Advancing**:
+   In tests verifying temporal invariants (like oracle rate-limiting or chronological monotonicity), avoid relying on wait/sleep routines to advance time. Instead, construct initial test states with timestamps set in the past (e.g. `timestamp.sub(new BN(70))`) to pass validator checks without race conditions.
 
 Startup: `Anchor.toml` sets `startup_wait = 10000` and `shutdown_wait = 2000` — if you add a program that takes longer to deploy, bump `startup_wait`.
 
