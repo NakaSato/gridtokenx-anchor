@@ -8,6 +8,8 @@ pub struct ZoneConfig {
     pub incentive_multiplier: u64,
     /// Base wheeling charge (scaled)
     pub wheeling_charge: u64,
+    /// Loss factor for the zone (scaled by 1000, e.g., 1050 = 1.05x)
+    pub loss_factor: u64,
     /// Maintenance mode for this specific zone
     pub maintenance_mode: bool,
     /// Last updated timestamp
@@ -21,6 +23,7 @@ impl ZoneConfig {
         4 +  // zone_id
         8 +  // incentive_multiplier
         8 +  // wheeling_charge
+        8 +  // loss_factor
         1 +  // maintenance_mode
         8 +  // last_updated
         1;   // bump
