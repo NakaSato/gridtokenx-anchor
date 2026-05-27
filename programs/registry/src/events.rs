@@ -74,3 +74,11 @@ pub struct AuthorityUpdated {
     pub old_authority: Pubkey,
     pub new_authority: Pubkey,
 }
+
+#[event]
+pub struct ErcClaimed {
+    pub meter_id: String,
+    pub owner: Pubkey,
+    pub amount: u64,
+    pub total_claimed: u64,
+}
