@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { Program } from "@anchor-lang/core";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import BN from "bn.js";
 
@@ -35,29 +35,40 @@ describe("Island Cluster Rehearsal", () => {
       // We need to make sure Governance is initialized first
       try {
         await govProgram.methods
-          .initialize()
+          .initializePoa()
           .accounts({
             poaConfig: poaConfigPda,
             authority: authority.publicKey,
             systemProgram: SystemProgram.programId,
           })
           .rpc();
-      } catch (e) {}
+      } catch (e) {
+        console.error("! Governance initialize failed:", e);
+      }
 
-      await govProgram.methods
-        .initializeZoneConfig(
-          island.id,
-          new BN(island.incentive),
-          new BN(island.wheeling)
-        )
-        .accounts({
-          zoneConfig: zoneConfigPda,
-          poaConfig: poaConfigPda,
-          authority: authority.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
-      console.log(`  ✅ ${island.name} Initialized.`);
+      try {
+        await govProgram.methods
+          .initializeZoneConfig(
+            island.id,
+            new BN(island.incentive),
+            new BN(island.wheeling)
+          )
+          .accounts({
+            zoneConfig: zoneConfigPda,
+            poaConfig: poaConfigPda,
+            authority: authority.publicKey,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc();
+        console.log(`  ✅ ${island.name} Initialized.`);
+      } catch (e: any) {
+        if (e.message?.includes("already in use")) {
+          console.log(`  ✅ ${island.name} already initialized.`);
+        } else {
+          console.error(`  ❌ ${island.name} failed:`, e.message);
+          throw e;
+        }
+      }
     }
   });
 });
