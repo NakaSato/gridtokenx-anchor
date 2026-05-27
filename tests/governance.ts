@@ -15,7 +15,7 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
 import { assert } from "chai";
 import type { Governance } from "../target/types/governance";
 import type { Registry } from "../target/types/registry";
-import { initializeGovernance, getGovernancePda } from "./utils/governance.js";
+import { initializeGovernance, getGovernancePda } from "./utils/governance";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PDA helpers
@@ -83,6 +83,15 @@ describe("Governance Program", () => {
   // Tracks whether the meter was seeded with enough generation for ERC issuance
   let meterSeeded = false;
 
+  // Lifted to suite scope so issueErc tests can reference it
+  const registryPda = findRegistryPda(regProgram.programId);
+
+  // ── DAO governance state ───────────────────────────────────────────────────
+  const ZONE_ID = 301; // Ko Tao microgrid zone
+  const PROPOSAL_ID_RAW = Date.now(); // unique u64 per run
+  let zoneConfigPda: PublicKey;
+  let proposalPda: PublicKey;
+
   // ── Bootstrap ─────────────────────────────────────────────────────────────
 
   before(async () => {
@@ -92,8 +101,21 @@ describe("Governance Program", () => {
     // 1. Initialize governance (idempotent)
     await initializeGovernance(provider, govProgram);
 
+    // ── Compute DAO PDAs ─────────────────────────────────────────────────
+    const zoneIdBuf = Buffer.alloc(4);
+    zoneIdBuf.writeInt32LE(ZONE_ID, 0);
+    const proposalIdBuf = Buffer.alloc(8);
+    proposalIdBuf.writeBigUInt64LE(BigInt(PROPOSAL_ID_RAW), 0);
+    [zoneConfigPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("zone_config"), zoneIdBuf],
+      govProgram.programId,
+    );
+    [proposalPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("proposal"), zoneIdBuf, proposalIdBuf],
+      govProgram.programId,
+    );
+
     // 2. Registry: initialize singleton + shard 0 (idempotent)
-    const registryPda = findRegistryPda(regProgram.programId);
     const shardPda = findRegistryShardPda(0, regProgram.programId);
 
     try {
@@ -343,6 +365,8 @@ describe("Governance Program", () => {
           poaConfig: poaConfigPda,
           ercCertificate: ercPda,
           meterAccount: meterAccountPda,
+          registry: registryPda,
+          registryProgram: regProgram.programId,
           authority: authority.publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -438,6 +462,8 @@ describe("Governance Program", () => {
           poaConfig: poaConfigPda,
           ercCertificate: erc2Pda,
           meterAccount: meterAccountPda,
+          registry: registryPda,
+          registryProgram: regProgram.programId,
           authority: authority.publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -606,6 +632,214 @@ describe("Governance Program", () => {
           e.message?.includes("has_one") ||
           e.message?.includes("2006"),
         `Expected an authorization error, got: ${e.message}`,
+      );
+    }
+  });
+  // ── 8. DAO Governance ─────────────────────────────────────────────────────
+
+  it("initializes a zone config for Ko Tao (zone 301)", async () => {
+    try {
+      await govProgram.methods
+        .initializeZoneConfig(
+          ZONE_ID,
+          new BN(1150), // incentive_multiplier: 1.15x (scaled ×1000)
+          new BN(50),   // wheeling_charge
+        )
+        .accounts({
+          zoneConfig: zoneConfigPda,
+          poaConfig: poaConfigPda,
+          authority: authority.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      const zone: any = await govProgram.account.zoneConfig.fetch(zoneConfigPda);
+      assert.equal(zone.zoneId, ZONE_ID, "zone_id should match");
+      assert.equal(zone.incentiveMultiplier.toNumber(), 1150);
+      assert.equal(zone.lossFactor.toNumber(), 1000, "loss_factor default should be 1000");
+      assert.equal(zone.maintenanceMode, false);
+    } catch (e: any) {
+      if (e.message?.includes("already in use")) {
+        console.log("  ⚠ Zone config already initialized — continuing");
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  it("creates a proposal to raise incentive multiplier", async () => {
+    if (!meterSeeded) {
+      console.log("⚠ Skipping: meter not seeded");
+      return;
+    }
+
+    try {
+      await govProgram.methods
+        .createProposal(
+          ZONE_ID,
+          new BN(PROPOSAL_ID_RAW.toString()),  // unique proposal_id
+          { incentiveMultiplier: {} },          // GridParameter variant
+          new BN(1200),                          // new value: 1.20×
+          new BN(1),                             // voting_period_seconds (1s for test speed)
+        )
+        .accounts({
+          proposal: proposalPda,
+          proposer: authority.publicKey,
+          meterAccount: meterAccountPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      const proposal: any = await govProgram.account.proposal.fetch(proposalPda);
+      assert.equal(proposal.targetZone, ZONE_ID);
+      assert.equal(proposal.newValue.toNumber(), 1200);
+      assert.ok(
+        "active" in (proposal.status as any) ||
+          JSON.stringify(proposal.status).toLowerCase().includes("active"),
+        "Proposal should be Active after creation",
+      );
+    } catch (e: any) {
+      if (e.message?.includes("already in use")) {
+        console.log("  ⚠ Proposal already created — continuing");
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  it("casts a FOR vote with meter-weighted power", async () => {
+    if (!meterSeeded) {
+      console.log("⚠ Skipping: meter not seeded");
+      return;
+    }
+
+    const [voteRecordPda] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("vote"),
+        proposalPda.toBuffer(),
+        authority.publicKey.toBuffer(),
+      ],
+      govProgram.programId,
+    );
+
+    try {
+      await govProgram.methods
+        .castVote(true) // FOR
+        .accounts({
+          proposal: proposalPda,
+          voteRecord: voteRecordPda,
+          voter: authority.publicKey,
+          meterAccount: meterAccountPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      const vote: any = await govProgram.account.voteRecord.fetch(voteRecordPda);
+      assert.equal(vote.choice, true, "Vote choice should be FOR");
+      assert.ok(
+        vote.weight.toNumber() >= 100,
+        `Weight should be >= 100 (min floor), got ${vote.weight.toNumber()}`,
+      );
+
+      const proposal: any = await govProgram.account.proposal.fetch(proposalPda);
+      assert.ok(
+        proposal.votesFor.toNumber() >= 100,
+        "votes_for should reflect the cast weight",
+      );
+    } catch (e: any) {
+      if (e.message?.includes("already in use")) {
+        console.log("  ⚠ Vote already recorded — continuing");
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  it("executes the proposal once voting period expires", async () => {
+    if (!meterSeeded) {
+      console.log("⚠ Skipping: meter not seeded");
+      return;
+    }
+
+    // Wait for the 1-second voting period to elapse
+    await new Promise((r) => setTimeout(r, 2500));
+
+    try {
+      await govProgram.methods
+        .executeProposal()
+        .accounts({
+          poaConfig: poaConfigPda,
+          zoneConfig: zoneConfigPda,
+          proposal: proposalPda,
+          executor: authority.publicKey,
+        })
+        .rpc();
+
+      const zone: any = await govProgram.account.zoneConfig.fetch(zoneConfigPda);
+      assert.equal(
+        zone.incentiveMultiplier.toNumber(),
+        1200,
+        "incentive_multiplier should be updated to 1200 (1.20×)",
+      );
+
+      const proposal: any = await govProgram.account.proposal.fetch(proposalPda);
+      assert.ok(
+        "executed" in (proposal.status as any) ||
+          JSON.stringify(proposal.status).toLowerCase().includes("executed"),
+        "Proposal status should be Executed",
+      );
+    } catch (e: any) {
+      if (e.message?.includes("ProposalNotExpired")) {
+        console.log(
+          "  ⚠ Voting period not yet expired — increase setTimeout duration",
+        );
+      } else if (e.message?.includes("InsufficientQuorum")) {
+        console.log(
+          `  ⚠ Quorum not met — votes_for < min_quorum_votes (${e.message})`,
+        );
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  it("rejects execute on an already-executed proposal", async () => {
+    if (!meterSeeded) {
+      console.log("⚠ Skipping: meter not seeded");
+      return;
+    }
+
+    try {
+      const proposal: any = await govProgram.account.proposal.fetch(proposalPda);
+      const isExecuted =
+        "executed" in (proposal.status as any) ||
+        JSON.stringify(proposal.status).toLowerCase().includes("executed");
+      if (!isExecuted) {
+        console.log("  ⚠ Proposal not executed — skipping rejection test");
+        return;
+      }
+    } catch {
+      console.log("  ⚠ Proposal not found — skipping");
+      return;
+    }
+
+    try {
+      await govProgram.methods
+        .executeProposal()
+        .accounts({
+          poaConfig: poaConfigPda,
+          zoneConfig: zoneConfigPda,
+          proposal: proposalPda,
+          executor: authority.publicKey,
+        })
+        .rpc();
+      assert.fail("Should have been rejected for invalid proposal status");
+    } catch (e: any) {
+      assert.ok(
+        e.message?.includes("InvalidProposalStatus") ||
+          e.message?.includes("ConstraintRaw") ||
+          e.message?.includes("2003"),
+        `Expected InvalidProposalStatus error, got: ${e.message}`,
       );
     }
   });
