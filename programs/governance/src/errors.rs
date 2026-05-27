@@ -88,4 +88,12 @@ pub enum GovernanceError {
     InsufficientVotingPower,
     #[msg("Voter is not registered in target zone")]
     VoterNotRegisteredInZone,
+    #[msg("Revocation reason too long")]
+    RevocationReasonTooLong,
+    #[msg("Proposal did not reach quorum")]
+    InsufficientQuorum,
+    #[msg("Meter account does not belong to signer")]
+    MeterOwnerMismatch,
+    #[msg("Math overflow")]
+    MathOverflow,
 }
