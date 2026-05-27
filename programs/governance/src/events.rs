@@ -113,3 +113,34 @@ pub struct OracleAuthoritySet {
     pub min_confidence: u8,
     pub timestamp: i64,
 }
+
+// === DAO EVENTS ===
+
+#[event]
+pub struct ProposalCreated {
+    pub proposal_id: u64,
+    pub proposer: Pubkey,
+    pub target_zone: i32,
+    pub parameter: String,
+    pub new_value: u64,
+    pub expires_at: i64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct VoteCast {
+    pub proposal_id: u64,
+    pub voter: Pubkey,
+    pub choice: bool,
+    pub weight: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct ProposalExecuted {
+    pub proposal_id: u64,
+    pub target_zone: i32,
+    pub parameter: String,
+    pub new_value: u64,
+    pub timestamp: i64,
+}
