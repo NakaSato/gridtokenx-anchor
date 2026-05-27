@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use crate::contexts::*;
 use crate::state::*;
 use crate::errors::GovernanceError;
+use crate::events::*;
 
 pub fn create_proposal(
     ctx: Context<CreateProposal>,
@@ -14,10 +15,25 @@ pub fn create_proposal(
     let proposal = &mut ctx.accounts.proposal;
     let clock = Clock::get()?;
 
+    // Validate that the proposer owns the supplied meter account
+    {
+        let meter_data = ctx.accounts.meter_account.try_borrow_data()?;
+        require!(
+            meter_data.len() >= 8 + std::mem::size_of::<MeterAccount>(),
+            GovernanceError::InvalidMeterAccount
+        );
+        let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
+        let meter_owner = Pubkey::new_from_array(meter.owner);
+        require!(
+            meter_owner == ctx.accounts.proposer.key(),
+            GovernanceError::MeterOwnerMismatch
+        );
+    }
+
     proposal.proposer = ctx.accounts.proposer.key();
     proposal.target_zone = target_zone;
     proposal.proposal_id = proposal_id;
-    proposal.parameter = parameter;
+    proposal.parameter = parameter.clone();
     proposal.new_value = new_value;
     proposal.votes_for = 0;
     proposal.votes_against = 0;
@@ -25,7 +41,15 @@ pub fn create_proposal(
     proposal.expires_at = clock.unix_timestamp + voting_period_seconds;
     proposal.bump = ctx.bumps.proposal;
 
-    msg!("🚀 Proposal created: Zone {}, Param {:?}, Value {}", target_zone, proposal.parameter, new_value);
+    emit!(ProposalCreated {
+        proposal_id,
+        proposer: ctx.accounts.proposer.key(),
+        target_zone,
+        parameter: format!("{:?}", parameter),
+        new_value,
+        expires_at: proposal.expires_at,
+        timestamp: clock.unix_timestamp,
+    });
 
     Ok(())
 }
@@ -38,7 +62,7 @@ pub fn cast_vote(
     let vote_record = &mut ctx.accounts.vote_record;
     let clock = Clock::get()?;
 
-    // 1. Check if proposal is still active
+    // 1. Check proposal is still active
     require!(
         proposal.status == ProposalStatus::Active,
         GovernanceError::InvalidProposalStatus
@@ -48,16 +72,30 @@ pub fn cast_vote(
         GovernanceError::ProposalExpired
     );
 
-    // 2. Determine voting weight
-    // In a real system, we'd pull this from the meter_account or staked tokens
-    // For now, we use a constant weight or placeholder
-    let weight = 100; // Placeholder for "One Meter = 100 Weight"
+    // 2. Determine voting weight from meter's total_generation
+    //    weight = max(100, total_generation / 1_000)
+    //    → every 1,000 kWh of lifetime generation = 1 weight unit, floor 100
+    let weight: u64 = {
+        let meter_data = ctx.accounts.meter_account.try_borrow_data()?;
+        require!(
+            meter_data.len() >= 8 + std::mem::size_of::<MeterAccount>(),
+            GovernanceError::InvalidMeterAccount
+        );
+        let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
+        // Validate voter owns the supplied meter
+        let meter_owner = Pubkey::new_from_array(meter.owner);
+        require!(
+            meter_owner == ctx.accounts.voter.key(),
+            GovernanceError::MeterOwnerMismatch
+        );
+        (meter.total_generation / 1_000).max(100)
+    };
 
     // 3. Update proposal totals
     if choice {
-        proposal.votes_for = proposal.votes_for.checked_add(weight).unwrap();
+        proposal.votes_for = proposal.votes_for.checked_add(weight).ok_or(GovernanceError::MathOverflow)?;
     } else {
-        proposal.votes_against = proposal.votes_against.checked_add(weight).unwrap();
+        proposal.votes_against = proposal.votes_against.checked_add(weight).ok_or(GovernanceError::MathOverflow)?;
     }
 
     // 4. Record the vote
@@ -68,10 +106,14 @@ pub fn cast_vote(
     vote_record.voted_at = clock.unix_timestamp;
     vote_record.bump = ctx.bumps.vote_record;
 
-    msg!("🗳️ Vote cast for proposal {}: {} (Weight {})", proposal.proposal_id, if choice { "FOR" } else { "AGAINST" }, weight);
+    emit!(VoteCast {
+        proposal_id: proposal.proposal_id,
+        voter: ctx.accounts.voter.key(),
+        choice,
+        weight,
+        timestamp: clock.unix_timestamp,
+    });
 
-    // 5. Check for early passing (optional quorum logic could go here)
-    
     Ok(())
 }
 
@@ -80,30 +122,35 @@ pub fn execute_proposal(
 ) -> Result<()> {
     let proposal = &mut ctx.accounts.proposal;
     let zone_config = &mut ctx.accounts.zone_config;
+    let min_quorum = ctx.accounts.poa_config.min_quorum_votes;
     let clock = Clock::get()?;
 
-    // 1. Verify voting has ended
+    // 1. Verify voting period has ended
     require!(
         clock.unix_timestamp >= proposal.expires_at,
         GovernanceError::ProposalNotExpired
     );
 
-    // 2. Determine outcome if status is still Active
+    // 2. Auto-finalize if still Active
     if proposal.status == ProposalStatus::Active {
-        if proposal.votes_for > proposal.votes_against {
+        let total_votes = proposal.votes_for.saturating_add(proposal.votes_against);
+        // Quorum check: enough participation?
+        if total_votes < min_quorum {
+            proposal.status = ProposalStatus::Rejected;
+        } else if proposal.votes_for > proposal.votes_against {
             proposal.status = ProposalStatus::Passed;
         } else {
             proposal.status = ProposalStatus::Rejected;
         }
     }
 
-    // 3. Execute if Passed
+    // 4. Require Passed status to execute
     require!(
         proposal.status == ProposalStatus::Passed,
         GovernanceError::InvalidProposalStatus
     );
 
-    // 4. Apply changes to zone_config
+    // 5. Apply changes to zone_config
     match proposal.parameter {
         GridParameter::IncentiveMultiplier => {
             zone_config.incentive_multiplier = proposal.new_value;
@@ -111,16 +158,26 @@ pub fn execute_proposal(
         GridParameter::WheelingCharge => {
             zone_config.wheeling_charge = proposal.new_value;
         }
+        GridParameter::LossFactor => {
+            // loss_factor is a divisor/multiplier; zero would break downstream calculations
+            require!(proposal.new_value > 0, GovernanceError::InvalidParameterType);
+            zone_config.loss_factor = proposal.new_value;
+        }
         GridParameter::MaintenanceMode => {
             zone_config.maintenance_mode = proposal.new_value > 0;
         }
-        _ => return Err(GovernanceError::InvalidParameterType.into()),
     }
 
     zone_config.last_updated = clock.unix_timestamp;
     proposal.status = ProposalStatus::Executed;
 
-    msg!("✅ Proposal executed: Zone {} parameter updated to {}", zone_config.zone_id, proposal.new_value);
+    emit!(ProposalExecuted {
+        proposal_id: proposal.proposal_id,
+        target_zone: zone_config.zone_id,
+        parameter: format!("{:?}", proposal.parameter),
+        new_value: proposal.new_value,
+        timestamp: clock.unix_timestamp,
+    });
 
     Ok(())
 }
@@ -137,6 +194,7 @@ pub fn initialize_zone_config(
     zone_config.zone_id = zone_id;
     zone_config.incentive_multiplier = incentive_multiplier;
     zone_config.wheeling_charge = wheeling_charge;
+    zone_config.loss_factor = 1_000; // 1.000x — no adjustment (scaled by 1000)
     zone_config.maintenance_mode = false;
     zone_config.last_updated = clock.unix_timestamp;
     zone_config.bump = ctx.bumps.zone_config;
@@ -152,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_governance_logic_placeholder() {
-        // This is a placeholder for logic verification 
+        // Placeholder for logic verification
         // In a real Anchor test, we'd use the program-test crate
         assert!(true);
     }
