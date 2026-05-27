@@ -33,7 +33,7 @@ describe("Blockbench Program", () => {
             operationCount: new BN(100),
             concurrency: 10,
             durationSeconds: new BN(3600),
-            recordCount: 0,
+            recordCount: new BN(0),
             fieldCount: 1,
             fieldSize: 100,
             distribution: { uniform: {} },
@@ -120,7 +120,7 @@ describe("Blockbench Program", () => {
             record: recordPda,
             authority: authority.publicKey
         }).view();
-        assert.equal(Buffer.from(value as any).toString(), "test-value");
+        assert.equal(Buffer.from(value as any).toString().replace(/\0/g, ""), "test-value");
     });
 
     it("Records a metric", async () => {
