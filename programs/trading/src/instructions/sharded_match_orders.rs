@@ -14,9 +14,26 @@ pub fn sharded_match_orders(ctx: Context<ShardedMatchOrdersContext>, match_amoun
     let mut trade_record = ctx.accounts.trade_record.load_init()?;
     let clock = Clock::get()?;
 
-    // Validation logic (simplified for TPS)
+    // Validate order statuses
+    require!(
+        buy_order.status == OrderStatus::Active as u8
+            || buy_order.status == OrderStatus::PartiallyFilled as u8,
+        crate::error::TradingError::InactiveBuyOrder
+    );
+    require!(
+        sell_order.status == OrderStatus::Active as u8
+            || sell_order.status == OrderStatus::PartiallyFilled as u8,
+        crate::error::TradingError::InactiveSellOrder
+    );
+    require!(
+        buy_order.price_per_kwh >= sell_order.price_per_kwh,
+        crate::error::TradingError::PriceMismatch
+    );
+
     let clearing_price = sell_order.price_per_kwh;
-    let actual_match_amount = match_amount; 
+    let buy_remaining = buy_order.amount.saturating_sub(buy_order.filled_amount);
+    let sell_remaining = sell_order.amount.saturating_sub(sell_order.filled_amount);
+    let actual_match_amount = match_amount.min(buy_remaining).min(sell_remaining);
 
     buy_order.filled_amount += actual_match_amount;
     sell_order.filled_amount += actual_match_amount;
