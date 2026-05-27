@@ -50,7 +50,6 @@ pub mod oracle {
             oracle_data.max_energy_value = 1000000;
             oracle_data.anomaly_detection_enabled = 1;
             oracle_data.max_reading_deviation_percent = 50;
-            oracle_data.require_consensus = 0;
             oracle_data.max_production_consumption_ratio = 1000; // Default: 10x (for solar farms)
 
             oracle_data.total_valid_readings = 0;
@@ -110,6 +109,18 @@ pub mod oracle {
                 reading_timestamp <= current_time + 60,
                 OracleError::FutureReading
             );
+
+            // Rate limit and outdated reading validation
+            if ctx.accounts.meter_state.total_readings > 0 {
+                require!(
+                    reading_timestamp > ctx.accounts.meter_state.last_reading_timestamp,
+                    OracleError::OutdatedReading
+                );
+                require!(
+                    reading_timestamp >= ctx.accounts.meter_state.last_reading_timestamp.saturating_add(oracle_data.min_reading_interval as i64),
+                    OracleError::RateLimitExceeded
+                );
+            }
 
             // Validation logic (stateless, uses read-only config)
             validate_meter_reading(
@@ -183,13 +194,18 @@ pub mod oracle {
                 OracleError::UnauthorizedGateway
             );
 
+            let current_time = Clock::get()?.unix_timestamp;
+            
             // Ensure we are not clearing a stale or already cleared epoch
             require!(
                 epoch_timestamp > oracle_data.last_cleared_epoch,
                 OracleError::InvalidEpoch
             );
+            require!(
+                epoch_timestamp <= current_time,
+                OracleError::InvalidEpoch
+            );
 
-            let current_time = Clock::get()?.unix_timestamp;
             oracle_data.last_clearing = current_time;
             oracle_data.last_cleared_epoch = epoch_timestamp;
 
@@ -289,7 +305,6 @@ pub mod oracle {
         max_energy_value: u64,
         anomaly_detection_enabled: bool,
         max_reading_deviation_percent: u16,
-        require_consensus: bool,
     ) -> Result<()> {
         compute_fn!("update_validation_config" => {
             let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
@@ -303,7 +318,6 @@ pub mod oracle {
             oracle_data.max_energy_value = max_energy_value;
             oracle_data.anomaly_detection_enabled = if anomaly_detection_enabled { 1 } else { 0 };
             oracle_data.max_reading_deviation_percent = max_reading_deviation_percent;
-            oracle_data.require_consensus = if require_consensus { 1 } else { 0 };
 
             emit!(ValidationConfigUpdated {
                 authority: ctx.accounts.authority.key(),
@@ -370,9 +384,7 @@ pub mod oracle {
                 }
             }
 
-            require!(found_index.is_some(), OracleError::BackupOracleNotFound);
-
-            let index = found_index.unwrap();
+            let index = found_index.ok_or(OracleError::BackupOracleNotFound)?;
 
             for i in index..oracle_data.backup_oracles_count as usize - 1 {
                 oracle_data.backup_oracles[i] = oracle_data.backup_oracles[i + 1];
@@ -454,16 +466,26 @@ fn validate_meter_reading(
     energy_consumed: u64,
     oracle_data: &OracleData,
 ) -> Result<()> {
-    // Range validation
+    // Range validation (only check min bound if value is non-zero to allow unilateral meters)
+    if energy_produced > 0 {
+        require!(
+            energy_produced >= oracle_data.min_energy_value,
+            OracleError::EnergyValueOutOfRange
+        );
+    }
     require!(
-        energy_produced >= oracle_data.min_energy_value
-            && energy_produced <= oracle_data.max_energy_value,
+        energy_produced <= oracle_data.max_energy_value,
         OracleError::EnergyValueOutOfRange
     );
 
+    if energy_consumed > 0 {
+        require!(
+            energy_consumed >= oracle_data.min_energy_value,
+            OracleError::EnergyValueOutOfRange
+        );
+    }
     require!(
-        energy_consumed >= oracle_data.min_energy_value
-            && energy_consumed <= oracle_data.max_energy_value,
+        energy_consumed <= oracle_data.max_energy_value,
         OracleError::EnergyValueOutOfRange
     );
 
@@ -596,7 +618,7 @@ pub struct AggregateReadings<'info> {
 
 #[derive(Accounts)]
 pub struct TriggerMarketClearing<'info> {
-    #[account(mut)]
+    #[account(mut, seeds = [b"oracle_data"], bump)]
     pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
@@ -604,7 +626,7 @@ pub struct TriggerMarketClearing<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateOracleStatus<'info> {
-    #[account(mut)]
+    #[account(mut, seeds = [b"oracle_data"], bump)]
     pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
@@ -612,7 +634,7 @@ pub struct UpdateOracleStatus<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateApiGateway<'info> {
-    #[account(mut)]
+    #[account(mut, seeds = [b"oracle_data"], bump)]
     pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
@@ -620,7 +642,7 @@ pub struct UpdateApiGateway<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateValidationConfig<'info> {
-    #[account(mut)]
+    #[account(mut, seeds = [b"oracle_data"], bump)]
     pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
@@ -628,7 +650,7 @@ pub struct UpdateValidationConfig<'info> {
 
 #[derive(Accounts)]
 pub struct AddBackupOracle<'info> {
-    #[account(mut)]
+    #[account(mut, seeds = [b"oracle_data"], bump)]
     pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
@@ -636,7 +658,7 @@ pub struct AddBackupOracle<'info> {
 
 #[derive(Accounts)]
 pub struct RemoveBackupOracle<'info> {
-    #[account(mut)]
+    #[account(mut, seeds = [b"oracle_data"], bump)]
     pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
