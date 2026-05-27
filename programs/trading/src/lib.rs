@@ -745,12 +745,12 @@ pub mod trading {
         emit!(crate::events::DepthUpdated {
             buy_levels: zone_market.buy_side_depth_count,
             sell_levels: zone_market.sell_side_depth_count,
-            best_bid: if buy_prices.len() > 0 {
+            best_bid: if !buy_prices.is_empty() {
                 buy_prices[0]
             } else {
                 0
             },
-            best_ask: if sell_prices.len() > 0 {
+            best_ask: if !sell_prices.is_empty() {
                 sell_prices[0]
             } else {
                 0
@@ -1023,20 +1023,22 @@ pub mod trading {
             TradingError::MaintenanceMode
         );
 
-        let market = ctx.accounts.market.load()?;
+        let market_fee_bps = {
+            let market = ctx.accounts.market.load()?;
+            market.market_fee_bps as u64
+        };
         let clock = Clock::get()?;
 
         require!(!matches.is_empty(), TradingError::InvalidAmount);
 
         let mut total_volume = 0u64;
-        let market_fee_bps = market.market_fee_bps as u64;
 
         for auction_match in &matches {
             let trade_value = auction_match.amount.saturating_mul(clearing_price);
             let market_fee = trade_value
                 .checked_mul(market_fee_bps)
                 .map(|v| v / 10000)
-                .unwrap_or(0);
+                .ok_or(TradingError::Overflow)?;
 
             total_volume = total_volume.saturating_add(auction_match.amount);
 
@@ -1072,6 +1074,11 @@ pub mod trading {
             TradingError::MaintenanceMode
         );
         let mut market = ctx.accounts.market.load_mut()?;
+        require_keys_eq!(
+            market.authority,
+            ctx.accounts.market_authority.key(),
+            TradingError::UnauthorizedAuthority
+        );
         let mut buy_order = ctx.accounts.buy_order.load_mut()?;
         let mut sell_order = ctx.accounts.sell_order.load_mut()?;
         let clock = Clock::get()?;
@@ -1098,7 +1105,7 @@ pub mod trading {
         let market_fee = total_currency_value
             .checked_mul(market.market_fee_bps as u64)
             .map(|v| v / 10000)
-            .unwrap_or(0);
+            .ok_or(TradingError::Overflow)?;
         let net_seller_amount = total_currency_value
             .saturating_sub(market_fee)
             .saturating_sub(wheeling_charge_val)
@@ -1204,8 +1211,8 @@ pub mod trading {
         if sell_order.filled_amount >= sell_order.amount {
             sell_order.status = OrderStatus::Completed as u8;
         }
-        market.total_volume += amount;
-        market.total_trades += 1;
+        market.total_volume = market.total_volume.saturating_add(amount);
+        market.total_trades = market.total_trades.saturating_add(1);
 
         emit!(crate::events::OrderMatched {
             sell_order: ctx.accounts.sell_order.key(),
@@ -1384,7 +1391,7 @@ pub mod trading {
     #[derive(Accounts)]
     pub struct CancelOrderContext<'info> {
         pub market: AccountLoader<'info, Market>,
-        #[account(mut)]
+        #[account(mut, constraint = zone_market.load()?.market == market.key())]
         pub zone_market: AccountLoader<'info, ZoneMarket>,
         #[account(mut)]
         pub order: AccountLoader<'info, Order>,
@@ -1402,25 +1409,25 @@ pub mod trading {
         #[account(mut)]
         pub sell_order: AccountLoader<'info, Order>,
         /// CHECK: Buyer's token account for currency (Escrow)
-        #[account(mut)]
+        #[account(mut, owner = token_program.key())]
         pub buyer_currency_escrow: UncheckedAccount<'info>,
         /// CHECK: Seller's token account for energy (Escrow)
-        #[account(mut)]
+        #[account(mut, owner = secondary_token_program.key())]
         pub seller_energy_escrow: UncheckedAccount<'info>,
         /// CHECK: Seller's token account for currency (receiver)
-        #[account(mut)]
+        #[account(mut, owner = token_program.key())]
         pub seller_currency_account: UncheckedAccount<'info>,
         /// CHECK: Buyer's token account for energy (receiver)
-        #[account(mut)]
+        #[account(mut, owner = secondary_token_program.key())]
         pub buyer_energy_account: UncheckedAccount<'info>,
         /// CHECK: Fee collector account
-        #[account(mut)]
+        #[account(mut, owner = token_program.key())]
         pub fee_collector: UncheckedAccount<'info>,
         /// CHECK: Wheeling charge collector account
-        #[account(mut)]
+        #[account(mut, owner = token_program.key())]
         pub wheeling_collector: UncheckedAccount<'info>,
         /// CHECK: Loss cost collector account
-        #[account(mut)]
+        #[account(mut, owner = token_program.key())]
         pub loss_collector: UncheckedAccount<'info>,
         pub energy_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
         pub currency_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
@@ -1508,9 +1515,9 @@ pub mod trading {
 
     #[derive(Accounts)]
     pub struct UpdateDepthContext<'info> {
-        #[account(mut)]
+        #[account(mut, has_one = authority)]
         pub market: AccountLoader<'info, Market>,
-        #[account(mut)]
+        #[account(mut, constraint = zone_market.load()?.market == market.key())]
         pub zone_market: AccountLoader<'info, ZoneMarket>,
         #[account(mut)]
         pub authority: Signer<'info>,
@@ -1519,7 +1526,7 @@ pub mod trading {
 
     #[derive(Accounts)]
     pub struct UpdatePriceHistoryContext<'info> {
-        #[account(mut)]
+        #[account(mut, has_one = authority)]
         pub market: AccountLoader<'info, Market>,
         #[account(mut)]
         pub authority: Signer<'info>,
