@@ -1,6 +1,6 @@
 import * as anchor from "@anchor-lang/core";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
-import type { Governance } from "../../target/types/governance.js";
+import type { Governance } from "../../target/types/governance";
 
 export const getGovernancePda = (programId: PublicKey) => {
     return PublicKey.findProgramAddressSync(
