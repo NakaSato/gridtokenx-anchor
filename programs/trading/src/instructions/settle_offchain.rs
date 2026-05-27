@@ -2,8 +2,9 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::pubkey::Pubkey;
 
 const ED25519_ID: Pubkey = Pubkey::new_from_array([
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-]); // Placeholder, will fix if needed
+    3, 125, 70, 214, 124, 147, 251, 190, 18, 249, 66, 143, 131, 141, 64, 255, 5, 112, 116, 73, 39,
+    244, 138, 100, 252, 202, 112, 68, 128, 0, 0, 0,
+]);
 
 const IX_ID: Pubkey = Pubkey::new_from_array([
     6, 167, 213, 23, 25, 44, 92, 142, 224, 137, 211, 236, 12, 137, 234, 123, 14, 153, 162, 115, 140,
@@ -248,7 +249,7 @@ pub fn settle_offchain_match(
 
     // --- 3. SETTLEMENT ---
     let total_currency_value = match_amount.saturating_mul(match_price);
-    let market_fee = total_currency_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).unwrap_or(0);
+    let market_fee = total_currency_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
     let net_seller_amount = total_currency_value.saturating_sub(market_fee).saturating_sub(wheeling_charge_val).saturating_sub(loss_cost_val);
 
     let authority_bump = ctx.bumps.market_authority;
@@ -360,7 +361,7 @@ pub fn batch_settle_offchain_match<'info>(
         require!(m.match_amount <= buyer_rem && m.match_amount <= seller_rem, TradingError::InvalidAmount);
 
         let total_value = m.match_amount.saturating_mul(m.match_price);
-        let market_fee = total_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).unwrap_or(0);
+        let market_fee = total_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
         let net_seller = total_value.saturating_sub(market_fee).saturating_sub(m.wheeling_charge).saturating_sub(m.loss_cost);
 
         // Zone capacity check and update
