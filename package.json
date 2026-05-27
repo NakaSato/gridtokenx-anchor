@@ -5,6 +5,8 @@
   "author": "WIT @GridTokenX",
   "type": "module",
   "scripts": {
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "clean": "./scripts/clean.sh",
