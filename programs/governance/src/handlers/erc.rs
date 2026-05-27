@@ -11,17 +11,28 @@ pub fn issue(
     renewable_source: String,
     validation_data: String,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
-    let erc_certificate = &mut ctx.accounts.erc_certificate;
-    let meter_data = ctx.accounts.meter_account.try_borrow_data()?;
-    require!(
-        meter_data.len() >= 8 + std::mem::size_of::<MeterAccount>(),
-        GovernanceError::InvalidMeterAccount
-    );
-    let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
     let clock = Clock::get()?;
 
-    // Comprehensive validation
+    // --- Read meter data and release borrow BEFORE any CPI ---
+    let (meter_owner, unclaimed_generation) = {
+        let meter_data = ctx.accounts.meter_account.try_borrow_data()?;
+        require!(
+            meter_data.len() >= 8 + std::mem::size_of::<MeterAccount>(),
+            GovernanceError::InvalidMeterAccount
+        );
+        let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
+        let meter_owner = Pubkey::new_from_array(meter.owner);
+        let unclaimed = meter
+            .total_generation
+            .saturating_sub(meter.claimed_erc_generation);
+        (meter_owner, unclaimed)
+        // meter_data borrow dropped here
+    };
+
+    let poa_config = &mut ctx.accounts.poa_config;
+    let erc_certificate = &mut ctx.accounts.erc_certificate;
+
+    // Operational and config validation
     require!(
         poa_config.can_issue_erc(),
         GovernanceError::ErcValidationDisabled
@@ -47,24 +58,32 @@ pub fn issue(
         GovernanceError::ValidationDataTooLong
     );
 
-    // === CRITICAL: PREVENT DOUBLE-CLAIMING ===
-    // Calculate unclaimed generation (total generation minus what's already been claimed)
-    let unclaimed_generation = meter
-        .total_generation
-        .saturating_sub(meter.claimed_erc_generation);
-
-    // Verify sufficient unclaimed generation exists
+    // === PREVENT DOUBLE-CLAIMING ===
     require!(
         energy_amount <= unclaimed_generation,
         GovernanceError::InsufficientUnclaimedGeneration
     );
 
-    // Check if oracle validation is required
+    // Check oracle requirement
     if poa_config.require_oracle_validation {
         require!(
             poa_config.oracle_authority.is_some(),
             GovernanceError::OracleValidationRequired
         );
+    }
+
+    // === CPI: mark energy as claimed in registry (prevents double-claiming) ===
+    {
+        let cpi_accounts = registry::cpi::accounts::MarkErcClaimed {
+            meter_account: ctx.accounts.meter_account.to_account_info(),
+            registry: ctx.accounts.registry.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(
+            ctx.accounts.registry_program.key(),  // Anchor 1.0.0: takes Pubkey
+            cpi_accounts,
+        );
+        registry::cpi::mark_erc_claimed(cpi_ctx, energy_amount)?;
     }
 
     // Initialize certificate
@@ -75,7 +94,7 @@ pub fn issue(
     erc_certificate.id_len = id_slice.len() as u8;
 
     erc_certificate.authority = ctx.accounts.authority.key();
-    erc_certificate.owner = Pubkey::new_from_array(meter.owner); // Use meter owner instead of authority
+    erc_certificate.owner = meter_owner;
     erc_certificate.energy_amount = energy_amount;
 
     let mut source_bytes = [0u8; 64];
@@ -95,16 +114,12 @@ pub fn issue(
     erc_certificate.validated_for_trading = false;
     erc_certificate.expires_at = Some(clock.unix_timestamp + poa_config.erc_validity_period);
 
-    // Initialize new fields
+    // Initialize revocation / transfer tracking fields
     erc_certificate.revocation_reason = [0u8; 128];
     erc_certificate.reason_len = 0;
     erc_certificate.revoked_at = None;
     erc_certificate.transfer_count = 0;
     erc_certificate.last_transferred_at = None;
-
-    // === CRITICAL: UPDATE HIGH-WATER MARK ===
-    // TODO: Registry program update required to track claimed generation. Skipping write for now.
-    // meter.claimed_erc_generation = meter.claimed_erc_generation.saturating_add(energy_amount);
 
     // Update comprehensive statistics
     poa_config.total_ercs_issued = poa_config.total_ercs_issued.saturating_add(1);
@@ -122,7 +137,6 @@ pub fn issue(
         timestamp: clock.unix_timestamp,
     });
 
-    // Logging disabled to save CU - use events instead
     Ok(())
 }
 
@@ -170,7 +184,6 @@ pub fn validate_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
         timestamp: clock.unix_timestamp,
     });
 
-    // Logging disabled to save CU - use events instead
     Ok(())
 }
 
@@ -186,12 +199,15 @@ pub fn revoke(ctx: Context<crate::RevokeErc>, reason: String) -> Result<()> {
         GovernanceError::MaintenanceMode
     );
 
-    // Reason is required
+    // Reason is required and must fit in fixed buffer
     require!(
         !reason.is_empty(),
         GovernanceError::RevocationReasonRequired
     );
-    require!(reason.len() <= 128, GovernanceError::ContactInfoTooLong);
+    require!(
+        reason.len() <= 128,
+        GovernanceError::RevocationReasonTooLong // fixed: was ContactInfoTooLong
+    );
 
     // Certificate must be revocable (Valid or Pending)
     require!(
@@ -230,8 +246,6 @@ pub fn revoke(ctx: Context<crate::RevokeErc>, reason: String) -> Result<()> {
         energy_amount,
         timestamp: clock.unix_timestamp,
     });
-
-    // Logging disabled to save CU - use events instead
 
     Ok(())
 }
