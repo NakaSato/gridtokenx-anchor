@@ -318,7 +318,6 @@ describe("Oracle Program", () => {
         new BN(10000), // maxEnergyValue
         true, // anomalyDetectionEnabled
         75, // maxReadingDeviationPercent
-        false, // requireConsensus
       )
       .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
       .rpc();
