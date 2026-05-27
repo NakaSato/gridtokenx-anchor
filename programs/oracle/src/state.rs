@@ -68,13 +68,12 @@ pub struct OracleData {
     // === 1-byte fields ===
     pub active: u8,                    // 1 byte (1 = active, 0 = inactive)
     pub anomaly_detection_enabled: u8, // 1 byte (1 = enabled, 0 = disabled)
-    pub require_consensus: u8,         // 1 byte (1 = required, 0 = not required)
     pub last_quality_score: u8,        // 1 byte (0-100 quality score)
     pub backup_oracles_count: u8,      // 1 byte
     pub consensus_threshold: u8,       // 1 byte
 
     // Explicit padding to reach 8-byte alignment
-    // u32(4) + u16*2(4) + u8*6(6) = 14 bytes
-    // To align to 8 bytes: need 2 more bytes (14 + 2 = 16, which is divisible by 8)
-    pub _padding: [u8; 2], // 2 bytes explicit padding
+    // u32(4) + u16*2(4) + u8*5(5) = 13 bytes
+    // To align to 8 bytes: need 3 more bytes (13 + 3 = 16, which is divisible by 8)
+    pub _padding: [u8; 3], // 3 bytes explicit padding
 }
