@@ -72,7 +72,13 @@ describe("TPC-C Performance Stress Test", () => {
                 systemProgram: SystemProgram.programId
             }).rpc();
             console.log("✓ Warehouse initialized");
-        } catch (e) { }
+        } catch (e: any) {
+            if (e.message?.includes("already in use")) {
+                console.log("✓ Warehouse already initialized");
+            } else {
+                console.error("! Warehouse init failed:", e.message);
+            }
+        }
 
         // 4. Initialize District
         try {
@@ -85,7 +91,13 @@ describe("TPC-C Performance Stress Test", () => {
                 systemProgram: SystemProgram.programId
             }).rpc();
             console.log("✓ District initialized");
-        } catch (e) { }
+        } catch (e: any) {
+            if (e.message?.includes("already in use")) {
+                console.log("✓ District already initialized");
+            } else {
+                console.error("! District init failed:", e.message);
+            }
+        }
 
         // 5. Initialize Customers
         console.log(`Initializing ${CUSTOMER_COUNT} customers...`);
@@ -106,7 +118,11 @@ describe("TPC-C Performance Stress Test", () => {
                     authority: authority.publicKey,
                     systemProgram: SystemProgram.programId
                 }).rpc();
-            } catch (e) { }
+            } catch (e: any) {
+                if (!e.message?.includes("already in use")) {
+                    console.error(`! Customer ${i} init failed:`, e.message);
+                }
+            }
         }
 
         // 6. Initialize Items and Stocks
@@ -124,7 +140,12 @@ describe("TPC-C Performance Stress Test", () => {
                     authority: authority.publicKey,
                     systemProgram: SystemProgram.programId
                 }).rpc();
-
+            } catch (e: any) {
+                if (!e.message?.includes("already in use")) {
+                    console.error(`! Item ${i} init failed:`, e.message);
+                }
+            }
+            try {
                 await program.methods.initializeStock(
                     W_ID, iId, new BN(100), "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "Data"
                 ).accounts({
@@ -134,7 +155,11 @@ describe("TPC-C Performance Stress Test", () => {
                     authority: authority.publicKey,
                     systemProgram: SystemProgram.programId
                 }).rpc();
-            } catch (e) { }
+            } catch (e: any) {
+                if (!e.message?.includes("already in use")) {
+                    console.error(`! Stock ${i} init failed:`, e.message);
+                }
+            }
         }
         console.log("✓ Setup complete");
     });
@@ -194,7 +219,8 @@ describe("TPC-C Performance Stress Test", () => {
                             latencies.push(Date.now() - txStart);
                             successCount++;
                         })
-                        .catch(_e => {
+                        .catch(e => {
+                            console.error("NewOrder fail:", e);
                             failCount++;
                         });
                 } else {
@@ -216,7 +242,8 @@ describe("TPC-C Performance Stress Test", () => {
                             latencies.push(Date.now() - txStart);
                             successCount++;
                         })
-                        .catch(_e => {
+                        .catch(e => {
+                            console.error("Payment fail:", e);
                             failCount++;
                         });
                 }
