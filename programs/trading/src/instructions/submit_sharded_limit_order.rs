@@ -32,11 +32,8 @@ pub fn submit_limit_order_sharded(
         order.seller = ctx.accounts.authority.key();
     }
 
-    // Update SHARD stats instead of MARKET stats
-    zone_shard.trade_count += 1;
-    zone_shard.volume_accumulated = zone_shard.volume_accumulated.saturating_add(amount);
+    // Track last activity time (trade stats updated during matching, not submission)
     zone_shard.last_update = clock.unix_timestamp;
-    zone_shard.last_clearing_price = price;
 
     emit!(crate::events::LimitOrderSubmitted {
         order_id: ctx.accounts.order.key(),
