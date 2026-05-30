@@ -165,10 +165,10 @@ describe("Governance Program", () => {
           authority: authority.publicKey,
           payer: authority.publicKey,
           energyTokenProgram: SystemProgram.programId,
-          mint: SystemProgram.programId,
-          tokenInfo: SystemProgram.programId,
-          userTokenAccount: SystemProgram.programId,
-          tokenProgram: SystemProgram.programId,
+          mint: authority.publicKey,
+          tokenInfo: authority.publicKey,
+          userTokenAccount: authority.publicKey,
+          tokenProgram: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
           systemProgram: SystemProgram.programId,
         } as any)
         .rpc();
@@ -685,7 +685,7 @@ describe("Governance Program", () => {
           new BN(PROPOSAL_ID_RAW.toString()),  // unique proposal_id
           { incentiveMultiplier: {} },          // GridParameter variant
           new BN(1200),                          // new value: 1.20×
-          new BN(1),                             // voting_period_seconds (1s for test speed)
+          new BN(5),                             // voting_period_seconds (5s for test speed)
         )
         .accounts({
           proposal: proposalPda,
@@ -766,8 +766,8 @@ describe("Governance Program", () => {
       return;
     }
 
-    // Wait for the 1-second voting period to elapse
-    await new Promise((r) => setTimeout(r, 2500));
+    // Wait for the 5-second voting period to elapse
+    await new Promise((r) => setTimeout(r, 5500));
 
     try {
       await govProgram.methods
