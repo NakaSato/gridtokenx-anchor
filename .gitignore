@@ -87,3 +87,12 @@ src/client/
 /debug/**
 /keypairs/**
 *.pid
+
+# Local keypairs (ephemeral, never commit private keys)
+currency-mint.json
+test-wallet-*.json
+
+# Scratch / one-off debug files
+scratch.ts
+scratch2.rs
+check.cjs
