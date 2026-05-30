@@ -577,6 +577,7 @@ describe("Governance Program", () => {
       .rpc();
 
     let config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    // pending_authority is now a flat Pubkey (not Option), cleared state = default (all zeros)
     assert.ok(
       config.pendingAuthority !== null &&
         config.pendingAuthority !== undefined &&
@@ -594,8 +595,12 @@ describe("Governance Program", () => {
       .rpc();
 
     config = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    // pending_authority is a flat Pubkey — cleared state is Pubkey::default() (all zeros)
+    const DEFAULT_PUBKEY = new PublicKey("11111111111111111111111111111111");
     assert.ok(
-      config.pendingAuthority === null || config.pendingAuthority === undefined,
+      config.pendingAuthority === null ||
+        config.pendingAuthority === undefined ||
+        config.pendingAuthority.equals(DEFAULT_PUBKEY),
       "pendingAuthority should be cleared after cancellation",
     );
   });

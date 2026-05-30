@@ -141,6 +141,22 @@ if [[ "$SKIP_BUILD" == "false" ]]; then
     ELAPSED=$(( SECONDS - START_BUILD ))
     success "Build completed in ${ELAPSED}s"
   fi
+  # Sync freshly built .so files from sub-workspaces into target/deploy/.
+  # Anchor 1.x doesn't always copy them when there's a keypair mismatch in the
+  # sub-workspace. Handles hyphenated dir names (e.g. energy-token → energy_token).
+  for prog_dir in programs/*/; do
+    prog_name=$(basename "$prog_dir")
+    so_name="${prog_name//-/_}"   # energy-token → energy_token
+    sub_so="${prog_dir}target/deploy/${so_name}.so"
+    root_so="target/deploy/${so_name}.so"
+    if [[ -f "$sub_so" ]]; then
+      # Always overwrite if the sub-workspace version is newer
+      if [[ ! -f "$root_so" ]] || [[ "$sub_so" -nt "$root_so" ]]; then
+        log "Syncing ${so_name}.so from sub-workspace → target/deploy/"
+        cp "$sub_so" "$root_so"
+      fi
+    fi
+  done
 else
   warn "Skipping build (--skip-build)"
 fi
@@ -251,7 +267,7 @@ done
 set +e
 ANCHOR_PROVIDER_URL="$ANCHOR_PROVIDER_URL" \
 ANCHOR_WALLET="$ANCHOR_WALLET" \
-  npx tsx node_modules/.bin/mocha "${MOCHA_ARGS[@]}"
+  npx mocha -r tsx "${MOCHA_ARGS[@]}"
 TEST_EXIT_CODE=$?
 set -e
 

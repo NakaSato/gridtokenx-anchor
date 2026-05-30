@@ -6,36 +6,16 @@ skip-lint = false
 
 [programs.localnet]
 blockbench = "HPnJW7bUvHuajENb8YjV1GQbQxUYWH9CP6M8BCzg7EjW"
-energy_token = "EzXnJoHSjS6VR7eBwHTkHHAJGqVfRsEvyksqz7uJCBpe"
-governance = "BRQEyx7DHX1Ljx1eNTHUve52aHHwkWckBXGeL9FZPEgZ"
-oracle = "D5MCbSHxhxZTRFyUMdTHcQvjzwjx5Lb8jg9PQ2LTja8S"
-registry = "5xdQsDuGa1AaLVnddGhevvf2bngCvSob4dAepETS7oaJ"
+energy_token = "DBZzN5EZmxDapvnKANmJDymbeYoz2oSmQRUhREGacKDp"
+governance = "3W6fUDWtT2F6Hq7ys3mvp3aHHVKCLHysBonyGAF2FPPR"
+oracle = "3wqSZd23WyNc7C7FnJKiU6PWwTM5GyFBLxpANe5MTj8r"
+registry = "Z4dUwVBUYMYbGkRCNzEyZBwK22LRuEyii6Ci1pW6iLf"
 tpc_benchmark = "374pa4eZxzF6q1niiRAJojhCKPn2mFhPjnWPbkJ3yEoN"
-trading = "DA9TdkcToi5r7oS7X5CddoMBiGNF3sAGqwPQph1CfLwd"
+trading = "yonsbZqm47vgomYFek9a7yJxcgyYTn3f2MLScEA9Wif"
 
 [provider]
 cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-init-governance = "npx ts-node scripts/init-governance.ts"
-init-market = "npx ts-node scripts/init-market.ts"
-init-oracle = "npx ts-node scripts/init-oracle.ts"
-init-poa = "npx ts-node scripts/init-poa.ts"
-init-registry = "npx tsx scripts/init-registry.ts"
-init-sharding = "npx ts-node scripts/initialize-sharding.ts"
-init-shards = "npx tsx scripts/init-shards.ts"
-init-zone-market = "npx ts-node scripts/init-zone-market.ts"
-mint-tokens = "npx ts-node scripts/mint-tokens.ts"
-setup-alts = "npx ts-node scripts/setup-alts.ts"
-test-oracle = "anchor test tests/oracle.ts"
-test-registry = "anchor test tests/registry_sharding.ts"
-update-gateway = "npx ts-node scripts/update-gateway.ts"
 test = "npx mocha -r tsx 'tests/**/*.ts' --timeout 1000000"
-
-[hooks]
-
-[test]
-startup_wait = 10000
-shutdown_wait = 2000
-upgradeable = false
