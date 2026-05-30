@@ -164,9 +164,8 @@ async function main() {
   console.log(`   Total Volume Cleared: ${totalMatchedVol} kWh`);
 }
 
-if (require.main === module) {
-  main().catch(err => {
-    console.error(err);
-    process.exit(1);
-  });
-}
+// Start simulation
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

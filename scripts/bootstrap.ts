@@ -58,6 +58,21 @@ async function main() {
     console.log('  ℹ️  Registry already exists or failed:', e.message);
   }
 
+  // Ensure Oracle Authority is set
+  try {
+    console.log('  Setting Oracle Authority on Registry...');
+    await registryProgram.methods
+      .setOracleAuthority(authority)
+      .accounts({
+        registry: registryPda,
+        authority: authority,
+      } as any)
+      .rpc();
+    console.log('  ✅ Oracle Authority set on Registry to:', authority.toBase58());
+  } catch (e: any) {
+    console.log('  ❌ Failed to set Registry Oracle Authority:', e.message);
+  }
+
   // 2. Initialize Energy Token
   console.log('\n[2/5] Initializing Energy Token Mint...');
   const [tokenInfoPda] = PublicKey.findProgramAddressSync(
@@ -117,7 +132,29 @@ async function main() {
       console.log('  ℹ️  Energy Token already exists or failed:', e.message);
     }
   }
-
+  // 2a. Initialize Staking Vault
+  console.log('\n[2a/5] Initializing Staking Vault...');
+  const [grxVaultPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('grx_vault')],
+    registryProgram.programId
+  );
+  try {
+    await registryProgram.methods
+      .initializeVault()
+      .accounts({
+        registry: registryPda,
+        grxVault: grxVaultPda,
+        grxMint: mintPda,
+        authority: authority,
+        tokenProgram: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+        systemProgram: anchor.web3.SystemProgram.programId,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      } as any)
+      .rpc();
+    console.log('  ✅ Staking Vault initialized:', grxVaultPda.toBase58());
+  } catch (e: any) {
+    console.log('  ℹ️  Staking Vault already exists or failed:', e.message);
+  }
   // 2b. Initialize Currency Token (for payments)
   console.log('\n[2b/5] Initializing Currency Token Mint...');
   
@@ -262,6 +299,34 @@ async function main() {
     console.log('  ✅ Oracle initialized:', oracleDataPda.toBase58());
   } catch (e: any) {
     console.log('  ℹ️  Oracle already exists or failed:', e.message);
+    try {
+      console.log('  Updating Oracle API Gateway to:', apiGateway.toBase58());
+      await oracleProgram.methods
+        .updateApiGateway(apiGateway)
+        .accounts({
+          oracleData: oracleDataPda,
+          authority: authority,
+        })
+        .rpc();
+      console.log('  ✅ Oracle API Gateway updated successfully');
+
+      console.log('  Resetting Oracle Validation Config to defaults...');
+      await oracleProgram.methods
+        .updateValidationConfig(
+          new BN(0), // minEnergyValue
+          new BN(1000000), // maxEnergyValue
+          true, // anomalyDetectionEnabled
+          50, // maxReadingDeviationPercent
+        )
+        .accounts({
+          oracleData: oracleDataPda,
+          authority: authority,
+        })
+        .rpc();
+      console.log('  ✅ Oracle Validation Config reset successfully');
+    } catch (e2: any) {
+      console.log('  ❌ Failed to update Oracle Config:', e2.message);
+    }
   }
 
   console.log('\n🚀 Blockchain bootstrap completed successfully!');
