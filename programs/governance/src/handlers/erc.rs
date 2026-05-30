@@ -67,7 +67,7 @@ pub fn issue(
     // Check oracle requirement
     if poa_config.require_oracle_validation {
         require!(
-            poa_config.oracle_authority.is_some(),
+            poa_config.oracle_authority!= Pubkey::default(),
             GovernanceError::OracleValidationRequired
         );
     }
@@ -127,7 +127,7 @@ pub fn issue(
         .total_energy_certified
         .saturating_add(energy_amount);
     poa_config.last_updated = clock.unix_timestamp;
-    poa_config.last_erc_issued_at = Some(clock.unix_timestamp);
+    poa_config.last_erc_issued_at = clock.unix_timestamp;
 
     emit!(ErcIssued {
         certificate_id,

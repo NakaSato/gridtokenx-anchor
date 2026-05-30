@@ -36,7 +36,7 @@ pub fn handler(ctx: Context<InitializePoa>) -> Result<()> {
     poa_config.require_oracle_validation = false;
 
     // Features
-    poa_config.oracle_authority = None;
+    poa_config.oracle_authority = Pubkey::default();
     poa_config.min_oracle_confidence = 80; // 80% confidence threshold
     poa_config.allow_certificate_transfers = true;
 
@@ -52,12 +52,15 @@ pub fn handler(ctx: Context<InitializePoa>) -> Result<()> {
     // Timestamps
     poa_config.created_at = clock.unix_timestamp;
     poa_config.last_updated = clock.unix_timestamp;
-    poa_config.last_erc_issued_at = None;
+    poa_config.last_erc_issued_at = 0;
 
     // Multi-sig Authority Change (initialize as None)
-    poa_config.pending_authority = None;
-    poa_config.pending_authority_proposed_at = None;
-    poa_config.pending_authority_expires_at = None;
+    poa_config.pending_authority = Pubkey::default();
+    poa_config.pending_authority_proposed_at = 0;
+    poa_config.pending_authority_expires_at = 0;
+
+    // Reserved padding
+    poa_config._reserved = [0u8; 5];
 
     // Validate configuration
     poa_config.validate_config()?;

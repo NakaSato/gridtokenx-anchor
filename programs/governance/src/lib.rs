@@ -9,12 +9,15 @@ mod events;
 mod handlers;
 mod state;
 
+#[cfg(test)]
+mod size_test;
+
 pub use contexts::*;
 pub use errors::*;
 pub use events::*;
 pub use state::*;
 
-declare_id!("BRQEyx7DHX1Ljx1eNTHUve52aHHwkWckBXGeL9FZPEgZ");
+declare_id!("3W6fUDWtT2F6Hq7ys3mvp3aHHVKCLHysBonyGAF2FPPR");
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};

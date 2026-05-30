@@ -44,7 +44,7 @@ pub fn handler(ctx: Context<GetGovernanceStats>) -> Result<GovernanceStats> {
         last_erc_issued_at: poa_config.last_erc_issued_at,
 
         // Authority change status
-        pending_authority_change: poa_config.pending_authority.is_some(),
+        pending_authority_change: poa_config.pending_authority!= Pubkey::default(),
         pending_authority: poa_config.pending_authority,
         pending_authority_expires_at: poa_config.pending_authority_expires_at,
 

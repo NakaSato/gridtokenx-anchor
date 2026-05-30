@@ -4,6 +4,7 @@ pub mod error;
 pub mod events;
 pub mod instructions;
 pub mod state;
+pub mod utils;
 
 // Re-export core types for submodules
 pub use crate::error::TradingError;
@@ -13,6 +14,7 @@ pub use crate::state::{
     BatchConfig, BatchInfo, Market, MarketShard, Order, OrderNullifier, OrderStatus, OrderType,
     PriceLevel, PricePoint, TradeRecord, ZoneMarket, ZoneMarketShard, MAX_DEPTH_LEVELS,
 };
+pub use crate::utils::get_governance_config;
 pub use governance::{ErcCertificate, ErcStatus, PoAConfig};
 
 // ============================================================================
@@ -65,7 +67,7 @@ pub struct MatchPair {
     pub price: u64,
 }
 
-declare_id!("DA9TdkcToi5r7oS7X5CddoMBiGNF3sAGqwPQph1CfLwd");
+declare_id!("yonsbZqm47vgomYFek9a7yJxcgyYTn3f2MLScEA9Wif");
 
 #[program]
 pub mod trading {
@@ -152,7 +154,7 @@ pub mod trading {
         price_per_kwh: u64,
     ) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
         require!(energy_amount > 0, TradingError::InvalidAmount);
@@ -227,7 +229,7 @@ pub mod trading {
         max_price_per_kwh: u64,
     ) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
         require!(energy_amount > 0, TradingError::InvalidAmount);
@@ -276,7 +278,7 @@ pub mod trading {
 
     pub fn match_orders(ctx: Context<MatchOrdersContext>, match_amount: u64) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
         require!(match_amount > 0, TradingError::InvalidAmount);
@@ -365,7 +367,7 @@ pub mod trading {
 
     pub fn cancel_order(ctx: Context<CancelOrderContext>) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
         let _market = ctx.accounts.market.load()?;
@@ -401,7 +403,7 @@ pub mod trading {
 
     pub fn add_order_to_batch(ctx: Context<AddOrderToBatchContext>) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
 
@@ -473,7 +475,7 @@ pub mod trading {
         match_pairs: Vec<MatchPair>,
     ) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
 
@@ -537,7 +539,7 @@ pub mod trading {
         price: u64,
     ) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
         require!(amount > 0, TradingError::InvalidAmount);
@@ -639,7 +641,7 @@ pub mod trading {
         amount: u64,
     ) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
         require!(amount > 0, TradingError::InvalidAmount);
@@ -683,7 +685,7 @@ pub mod trading {
         sell_amounts: Vec<u64>,
     ) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
 
@@ -769,7 +771,7 @@ pub mod trading {
         trade_volume: u64,
     ) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
 
@@ -822,7 +824,7 @@ pub mod trading {
 
     pub fn cancel_batch(ctx: Context<CancelBatchContext>) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
 
@@ -867,7 +869,7 @@ pub mod trading {
         buy_orders: Vec<AuctionOrder>,
     ) -> Result<ClearAuctionResult> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
 
@@ -1019,7 +1021,7 @@ pub mod trading {
         clearing_price: u64,
     ) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
 
@@ -1070,7 +1072,7 @@ pub mod trading {
         loss_cost_val: u64,
     ) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
         let mut market = ctx.accounts.market.load_mut()?;
@@ -1236,7 +1238,7 @@ pub mod trading {
         max_price: u64,
     ) -> Result<()> {
         require!(
-            ctx.accounts.governance_config.is_operational(),
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
         let mut market = ctx.accounts.market.load_mut()?;
@@ -1333,7 +1335,8 @@ pub mod trading {
         #[account(mut)]
         pub authority: Signer<'info>,
         pub system_program: Program<'info, System>,
-        pub governance_config: Account<'info, PoAConfig>,
+        /// CHECK: Manual deserialization to handle length mismatch in localnet
+        pub governance_config: UncheckedAccount<'info>,
     }
 
     #[derive(Accounts)]
@@ -1347,7 +1350,8 @@ pub mod trading {
         #[account(mut)]
         pub authority: Signer<'info>,
         pub system_program: Program<'info, System>,
-        pub governance_config: Account<'info, PoAConfig>,
+        /// CHECK: Manual deserialization to handle length mismatch in localnet
+        pub governance_config: UncheckedAccount<'info>,
     }
 
     #[derive(Accounts)]
@@ -1364,7 +1368,8 @@ pub mod trading {
         #[account(mut)]
         pub authority: Signer<'info>,
         pub system_program: Program<'info, System>,
-        pub governance_config: Account<'info, PoAConfig>,
+        /// CHECK: Manual deserialization to handle length mismatch in localnet
+        pub governance_config: UncheckedAccount<'info>,
     }
 
     #[derive(Accounts)]
@@ -1385,7 +1390,8 @@ pub mod trading {
         #[account(mut)]
         pub authority: Signer<'info>,
         pub system_program: Program<'info, System>,
-        pub governance_config: Account<'info, PoAConfig>,
+        /// CHECK: Manual deserialization to handle length mismatch in localnet
+        pub governance_config: UncheckedAccount<'info>,
     }
 
     #[derive(Accounts)]
@@ -1487,7 +1493,8 @@ pub mod trading {
         #[account(mut)]
         pub authority: Signer<'info>,
         pub system_program: Program<'info, System>,
-        pub governance_config: Account<'info, PoAConfig>,
+        /// CHECK: Manual deserialization to handle length mismatch in localnet
+        pub governance_config: UncheckedAccount<'info>,
     }
 
     #[derive(Accounts)]
@@ -1500,7 +1507,8 @@ pub mod trading {
         #[account(mut)]
         pub authority: Signer<'info>,
         pub system_program: Program<'info, System>,
-        pub governance_config: Account<'info, PoAConfig>,
+        /// CHECK: Manual deserialization to handle length mismatch in localnet
+        pub governance_config: UncheckedAccount<'info>,
     }
 
     #[derive(Accounts)]

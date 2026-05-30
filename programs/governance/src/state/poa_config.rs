@@ -33,7 +33,7 @@ pub struct PoAConfig {
 
     // === Advanced Features ===
     /// Oracle authority for AMI data validation
-    pub oracle_authority: Option<Pubkey>,
+    pub oracle_authority: Pubkey,
     /// Minimum confidence score for oracle validation (0-100)
     pub min_oracle_confidence: u8,
     /// Allow certificate transfers between accounts
@@ -59,15 +59,17 @@ pub struct PoAConfig {
     /// Last configuration update
     pub last_updated: i64,
     /// Last ERC issued timestamp
-    pub last_erc_issued_at: Option<i64>,
+    pub last_erc_issued_at: i64,
 
     // === Multi-sig Authority Change ===
     /// Pending new authority (for 2-step transfer)
-    pub pending_authority: Option<Pubkey>,
+    pub pending_authority: Pubkey,
     /// When the pending authority change was proposed
-    pub pending_authority_proposed_at: Option<i64>,
+    pub pending_authority_proposed_at: i64,
     /// When the pending authority change expires (48 hours)
-    pub pending_authority_expires_at: Option<i64>,
+    pub pending_authority_expires_at: i64,
+    /// Reserved space for future upgrades (and to match on-chain size)
+    pub _reserved: [u8; 5],
 }
 
 impl PoAConfig {
@@ -89,7 +91,7 @@ impl PoAConfig {
         1 +     // require_oracle_validation
 
         // Advanced Features
-        33 +    // oracle_authority (Option<Pubkey>)
+        32 +    // oracle_authority (Pubkey)
         1 +     // min_oracle_confidence
         1 +     // allow_certificate_transfers
 
@@ -105,12 +107,13 @@ impl PoAConfig {
         // Timestamps
         8 +     // created_at
         8 +     // last_updated
-        9 +     // last_erc_issued_at (Option<i64>)
+        8 +     // last_erc_issued_at (i64)
 
         // Multi-sig Authority Change
-        33 +    // pending_authority (Option<Pubkey>)
-        9 +     // pending_authority_proposed_at (Option<i64>)
-        9;      // pending_authority_expires_at (Option<i64>)
+        32 +    // pending_authority (Pubkey)
+        8 +     // pending_authority_proposed_at (i64)
+        8 +      // pending_authority_expires_at (i64)
+        5;      // _reserved
 
     /// Validate that config parameters are within acceptable ranges
     pub fn validate_config(&self) -> Result<()> {
@@ -175,14 +178,14 @@ pub struct GovernanceStats {
     // Timestamps
     pub created_at: i64,
     pub last_updated: i64,
-    pub last_erc_issued_at: Option<i64>,
+    pub last_erc_issued_at: i64,
 
     // Authority change status
     pub pending_authority_change: bool,
-    pub pending_authority: Option<Pubkey>,
-    pub pending_authority_expires_at: Option<i64>,
+    pub pending_authority: Pubkey,
+    pub pending_authority_expires_at: i64,
 
     // Oracle info
-    pub oracle_authority: Option<Pubkey>,
+    pub oracle_authority: Pubkey,
     pub min_oracle_confidence: u8,
 }

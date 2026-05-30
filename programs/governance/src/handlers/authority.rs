@@ -19,7 +19,7 @@ pub fn propose_authority_change(
 
     // Cannot propose if there's already a pending change
     require!(
-        poa_config.pending_authority.is_none(),
+        poa_config.pending_authority == Pubkey::default(),
         GovernanceError::AuthorityChangePending
     );
 
@@ -31,9 +31,9 @@ pub fn propose_authority_change(
 
     // Set pending authority with expiration
     let expires_at = clock.unix_timestamp + AUTHORITY_CHANGE_EXPIRATION;
-    poa_config.pending_authority = Some(new_authority);
-    poa_config.pending_authority_proposed_at = Some(clock.unix_timestamp);
-    poa_config.pending_authority_expires_at = Some(expires_at);
+    poa_config.pending_authority = new_authority;
+    poa_config.pending_authority_proposed_at = clock.unix_timestamp;
+    poa_config.pending_authority_expires_at = expires_at;
     poa_config.last_updated = clock.unix_timestamp;
 
     emit!(AuthorityChangeProposed {
@@ -55,9 +55,8 @@ pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<
     let clock = Clock::get()?;
 
     // Must have a pending authority change
-    let pending = poa_config
-        .pending_authority
-        .ok_or(GovernanceError::NoAuthorityChangePending)?;
+    let pending = poa_config.pending_authority;
+    require!(pending != Pubkey::default(), GovernanceError::NoAuthorityChangePending);
 
     // Caller must be the pending authority
     require!(
@@ -66,7 +65,8 @@ pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<
     );
 
     // Check expiration
-    if let Some(expires_at) = poa_config.pending_authority_expires_at {
+    let expires_at = poa_config.pending_authority_expires_at;
+    if expires_at > 0 {
         require!(
             clock.unix_timestamp < expires_at,
             GovernanceError::AuthorityChangeExpired
@@ -78,9 +78,9 @@ pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<
     poa_config.authority = pending;
 
     // Clear pending state
-    poa_config.pending_authority = None;
-    poa_config.pending_authority_proposed_at = None;
-    poa_config.pending_authority_expires_at = None;
+    poa_config.pending_authority = Pubkey::default();
+    poa_config.pending_authority_proposed_at = 0;
+    poa_config.pending_authority_expires_at = 0;
     poa_config.last_updated = clock.unix_timestamp;
 
     emit!(AuthorityChangeApproved {
@@ -101,14 +101,13 @@ pub fn cancel_authority_change(ctx: Context<CancelAuthorityChange>) -> Result<()
     let clock = Clock::get()?;
 
     // Must have a pending authority change
-    let pending = poa_config
-        .pending_authority
-        .ok_or(GovernanceError::NoAuthorityChangePending)?;
+    let pending = poa_config.pending_authority;
+    require!(pending != Pubkey::default(), GovernanceError::NoAuthorityChangePending);
 
     // Clear pending state
-    poa_config.pending_authority = None;
-    poa_config.pending_authority_proposed_at = None;
-    poa_config.pending_authority_expires_at = None;
+    poa_config.pending_authority = Pubkey::default();
+    poa_config.pending_authority_proposed_at = 0;
+    poa_config.pending_authority_expires_at = 0;
     poa_config.last_updated = clock.unix_timestamp;
 
     emit!(AuthorityChangeCancelled {
@@ -137,7 +136,7 @@ pub fn set_oracle_authority(
     );
 
     // Update oracle configuration
-    poa_config.oracle_authority = Some(oracle_authority);
+    poa_config.oracle_authority = oracle_authority;
     poa_config.min_oracle_confidence = min_confidence;
     poa_config.require_oracle_validation = require_validation;
     poa_config.last_updated = clock.unix_timestamp;

@@ -42,7 +42,7 @@ macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
 
-declare_id!("EzXnJoHSjS6VR7eBwHTkHHAJGqVfRsEvyksqz7uJCBpe");
+declare_id!("DBZzN5EZmxDapvnKANmJDymbeYoz2oSmQRUhREGacKDp");
 
 #[program]
 pub mod energy_token {

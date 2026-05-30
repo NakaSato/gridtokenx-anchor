@@ -56,4 +56,6 @@ pub enum TradingError {
     SlippageExceeded,
     #[msg("Grid capacity exceeded: Transmission bottleneck detected")]
     CapacityExceeded,
+    #[msg("Invalid governance account")]
+    InvalidGovernanceAccount,
 }

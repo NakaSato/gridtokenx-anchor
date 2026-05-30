@@ -1,10 +1,11 @@
 use anchor_lang::prelude::*;
 use crate::state::*;
 use crate::ShardedMatchOrdersContext;
+use crate::utils::get_governance_config;
 
 pub fn sharded_match_orders(ctx: Context<ShardedMatchOrdersContext>, match_amount: u64, _shard_id: u8) -> Result<()> {
     require!(
-        ctx.accounts.governance_config.is_operational(),
+        get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
         crate::error::TradingError::MaintenanceMode
     );
 

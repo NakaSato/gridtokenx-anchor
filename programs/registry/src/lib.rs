@@ -11,7 +11,7 @@ pub use error::RegistryError;
 pub use events::*;
 pub use state::*;
 
-declare_id!("5xdQsDuGa1AaLVnddGhevvf2bngCvSob4dAepETS7oaJ");
+declare_id!("Z4dUwVBUYMYbGkRCNzEyZBwK22LRuEyii6Ci1pW6iLf");
 
 /// Airdrop amount for new users (in smallest token units, 9 decimals = 20 GRX)
 pub const AIRDROP_AMOUNT: u64 = 20_000_000_000; // 20 GRX tokens
