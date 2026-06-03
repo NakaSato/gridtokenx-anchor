@@ -462,6 +462,7 @@ describe("Governance Program", () => {
           poaConfig: poaConfigPda,
           ercCertificate: erc2Pda,
           meterAccount: meterAccountPda,
+          owner: authority.publicKey,
           registry: registryPda,
           registryProgram: regProgram.programId,
           authority: authority.publicKey,
