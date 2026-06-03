@@ -19,3 +19,4 @@ wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "npx mocha -r tsx 'tests/**/*.ts' --timeout 1000000"
+init-zone-config = "npx tsx scripts/init-zone-config.ts"
