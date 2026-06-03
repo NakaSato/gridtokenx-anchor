@@ -13,7 +13,6 @@ pub fn issue(
 ) -> Result<()> {
     let clock = Clock::get()?;
 
-    // --- Read meter data and release borrow BEFORE any CPI ---
     let (meter_owner, unclaimed_generation) = {
         let meter_data = ctx.accounts.meter_account.try_borrow_data()?;
         require!(
@@ -24,9 +23,9 @@ pub fn issue(
         let meter_owner = Pubkey::new_from_array(meter.owner);
         let unclaimed = meter
             .total_generation
-            .saturating_sub(meter.claimed_erc_generation);
+            .saturating_sub(meter.claimed_erc_generation)
+            .saturating_sub(meter.settled_net_generation);
         (meter_owner, unclaimed)
-        // meter_data borrow dropped here
     };
 
     let poa_config = &mut ctx.accounts.poa_config;
