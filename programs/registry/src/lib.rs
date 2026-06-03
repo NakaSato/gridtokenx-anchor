@@ -534,9 +534,11 @@ pub mod registry {
             RegistryError::UnauthorizedAuthority
         );
 
+        // FIX: Subtract settled_net_generation to prevent double-claiming
         let unclaimed = meter
             .total_generation
-            .saturating_sub(meter.claimed_erc_generation);
+            .saturating_sub(meter.claimed_erc_generation)
+            .saturating_sub(meter.settled_net_generation);
         require!(amount <= unclaimed, RegistryError::NoUnsettledBalance);
 
         meter.claimed_erc_generation = meter.claimed_erc_generation.saturating_add(amount);
@@ -615,17 +617,21 @@ fn do_settle_meter(meter: &mut MeterAccount, owner_key: Pubkey) -> Result<u64> {
         .total_generation
         .saturating_sub(meter.total_consumption);
 
-    let new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
+    // FIX: Subtract claimed_erc_generation to prevent double-claiming
+    // Total claims (GRX + ERC) cannot exceed total generation.
+    let new_tokens_to_mint = current_net_gen
+        .saturating_sub(meter.settled_net_generation)
+        .saturating_sub(meter.claimed_erc_generation);
 
     require!(new_tokens_to_mint > 0, RegistryError::NoUnsettledBalance);
 
-    meter.settled_net_generation = current_net_gen;
+    meter.settled_net_generation = meter.settled_net_generation.saturating_add(new_tokens_to_mint);
 
     emit!(MeterBalanceSettled {
         meter_id: bytes32_to_string(&meter.meter_id),
         owner: meter.owner,
         tokens_to_mint: new_tokens_to_mint,
-        total_settled: current_net_gen,
+        total_settled: meter.settled_net_generation,
     });
 
     Ok(new_tokens_to_mint)
