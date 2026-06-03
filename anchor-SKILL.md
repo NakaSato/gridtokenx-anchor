@@ -158,6 +158,9 @@ anchor run test-registry     # → anchor test tests/registry_sharding.ts
 4. **Validator Timers & Time Advancing**:
    In tests verifying temporal invariants (like oracle rate-limiting or chronological monotonicity), avoid relying on wait/sleep routines to advance time. Instead, construct initial test states with timestamps set in the past (e.g. `timestamp.sub(new BN(70))`) to pass validator checks without race conditions.
 
+5. **Validator Apple Silicon Crash (Too Many Open Files)**:
+   If running `solana-test-validator` natively on macOS (Apple M-series), it will crash under load due to aggressive default file descriptor limits. Always tune the system limits before starting the validator by running `ulimit -n 65536` in the terminal or launch script.
+
 Startup: `Anchor.toml` sets `startup_wait = 10000` and `shutdown_wait = 2000` — if you add a program that takes longer to deploy, bump `startup_wait`.
 
 Release profile (in workspace `Cargo.toml`) uses `lto = "fat"`, `codegen-units = 1`, `opt-level = 3`, `strip = true`, `panic = "abort"`, and `overflow-checks = true`. Overflow checks are ON in release — `saturating_*` / `checked_*` arithmetic is not optional, it's enforced. Keep every arithmetic operation explicit.
