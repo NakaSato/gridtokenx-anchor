@@ -12,7 +12,7 @@ pub use crate::error::TradingError;
 pub use crate::instructions::*;
 pub use crate::state::{
     BatchConfig, BatchInfo, Market, MarketShard, Order, OrderNullifier, OrderStatus, OrderType,
-    PriceLevel, PricePoint, TradeRecord, ZoneMarket, ZoneMarketShard, MAX_DEPTH_LEVELS,
+    PriceLevel, PricePoint, TradeRecord, ZoneMarket, ZoneMarketShard, ZoneConfig, MAX_DEPTH_LEVELS,
 };
 pub use crate::utils::get_governance_config;
 pub use governance::{ErcCertificate, ErcStatus, PoAConfig};
@@ -72,6 +72,20 @@ declare_id!("yonsbZqm47vgomYFek9a7yJxcgyYTn3f2MLScEA9Wif");
 #[program]
 pub mod trading {
     use super::*;
+
+    pub fn initialize_zone_config(
+        ctx: Context<InitializeZoneConfig>,
+        zone_id: u32,
+        incentive_multiplier_bps: u64,
+    ) -> Result<()> {
+        let config = &mut ctx.accounts.zone_config;
+        config.zone_id = zone_id;
+        config.incentive_multiplier_bps = incentive_multiplier_bps;
+        config.authority = ctx.accounts.authority.key();
+        config.last_updated = Clock::get()?.unix_timestamp;
+        config.maintenance_mode = 0;
+        Ok(())
+    }
 
     pub fn initialize_program(_ctx: Context<InitializeProgram>) -> Result<()> {
         msg!("Program Initialized");
@@ -1298,6 +1312,15 @@ pub mod trading {
     // ============================================
 
     #[derive(Accounts)]
+    pub struct AggregateShardsContext<'info> {
+        #[account(mut)]
+        pub market: AccountLoader<'info, Market>,
+        #[account(mut)]
+        pub zone_market: AccountLoader<'info, ZoneMarket>,
+        pub authority: Signer<'info>,
+    }
+
+    #[derive(Accounts)]
     pub struct InitializeProgram<'info> {
         #[account(mut)]
         pub authority: Signer<'info>,
@@ -1750,4 +1773,23 @@ mod tests {
         assert!(price > 0);
         assert!(volume > 0);
     }
+}
+
+
+#[derive(Accounts)]
+#[instruction(zone_id: u32)]
+pub struct InitializeZoneConfig<'info> {
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + 128,
+        seeds = [b"zone_config", zone_id.to_le_bytes().as_ref()],
+        bump
+    )]
+    pub zone_config: Account<'info, ZoneConfig>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
 }
