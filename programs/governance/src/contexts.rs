@@ -39,10 +39,23 @@ pub struct IssueErc<'info> {
         bump
     )]
     pub erc_certificate: Account<'info, ErcCertificate>,
-    /// Meter account from registry program - writable so CPI can update claimed_erc_generation
-    /// CHECK: Size and owner validated in handler; written via CPI to registry
-    #[account(mut)]
+    /// Meter account from registry program - stricter validation via owner constraint
+    /// CHECK: Validated via owner constraint and manual deserialization below
+    #[account(
+        mut,
+        owner = registry_program.key() @ GovernanceError::InvalidMeterAccount
+    )]
     pub meter_account: AccountInfo<'info>,
+    /// Meter owner must sign to authorize issuance
+    #[account(
+        constraint = {
+            let data = meter_account.try_borrow_data()?;
+            require!(data.len() >= 8 + std::mem::size_of::<MeterAccount>(), GovernanceError::InvalidMeterAccount);
+            let meter = bytemuck::from_bytes::<MeterAccount>(&data[8..]);
+            Pubkey::from(meter.owner) == owner.key()
+        } @ GovernanceError::UnauthorizedAuthority
+    )]
+    pub owner: Signer<'info>,
     /// Registry singleton PDA ["registry"] - authority must match governance authority
     /// CHECK: Registry authority is validated against governance authority below
     #[account(
