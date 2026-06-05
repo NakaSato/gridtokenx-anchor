@@ -69,6 +69,29 @@ pub struct MatchPair {
 
 declare_id!("yonsbZqm47vgomYFek9a7yJxcgyYTn3f2MLScEA9Wif");
 
+// ============================================================================
+// COMPUTE-UNIT PROFILING MACROS
+// ============================================================================
+// The real `compute_fn!` / `compute_checkpoint!` live in the `compute-debug`
+// crate, which is an optional dependency pulled in only by the `localnet`
+// feature (where the macros also emit `sol_log_compute_units` logs). When
+// `localnet` is off, that crate is absent, so define crate-wide no-op fallbacks.
+// `#[macro_export]` hoists them to the crate root so the `instructions/`
+// submodules (declared above this point) can `use crate::{compute_fn, compute_checkpoint}`.
+#[cfg(not(feature = "localnet"))]
+#[macro_export]
+macro_rules! compute_fn {
+    ($name:expr => $block:block) => {{ $block }};
+}
+#[cfg(not(feature = "localnet"))]
+#[macro_export]
+macro_rules! compute_checkpoint {
+    ($name:expr) => {{}};
+}
+
+#[cfg(feature = "localnet")]
+use compute_debug::{compute_checkpoint, compute_fn};
+
 #[program]
 pub mod trading {
     use super::*;
@@ -78,21 +101,26 @@ pub mod trading {
         zone_id: u32,
         incentive_multiplier_bps: u64,
     ) -> Result<()> {
-        let config = &mut ctx.accounts.zone_config;
-        config.zone_id = zone_id;
-        config.incentive_multiplier_bps = incentive_multiplier_bps;
-        config.authority = ctx.accounts.authority.key();
-        config.last_updated = Clock::get()?.unix_timestamp;
-        config.maintenance_mode = 0;
+        compute_fn!("initialize_zone_config" => {
+            let config = &mut ctx.accounts.zone_config;
+            config.zone_id = zone_id;
+            config.incentive_multiplier_bps = incentive_multiplier_bps;
+            config.authority = ctx.accounts.authority.key();
+            config.last_updated = Clock::get()?.unix_timestamp;
+            config.maintenance_mode = 0;
+        });
         Ok(())
     }
 
     pub fn initialize_program(_ctx: Context<InitializeProgram>) -> Result<()> {
-        msg!("Program Initialized");
+        compute_fn!("initialize_program" => {
+            msg!("Program Initialized");
+        });
         Ok(())
     }
 
     pub fn initialize_market(ctx: Context<InitializeMarketContext>, num_shards: u8) -> Result<()> {
+        compute_fn!("initialize_market" => {
         // Single syscall — reused for both created_at and the emitted event timestamp
         let clock = Clock::get()?;
         let mut market = ctx.accounts.market.load_init()?;
@@ -127,6 +155,7 @@ pub mod trading {
             authority: ctx.accounts.authority.key(),
             timestamp: clock.unix_timestamp,
         });
+        });
         Ok(())
     }
 
@@ -136,6 +165,7 @@ pub mod trading {
         num_shards: u8,
         capacity: u64,
     ) -> Result<()> {
+        compute_fn!("initialize_zone_market" => {
         let mut zone_market = ctx.accounts.zone_market.load_init()?;
         zone_market.market = ctx.accounts.market.key();
         zone_market.zone_id = zone_id;
@@ -150,6 +180,7 @@ pub mod trading {
         // Zero out the arrays
         zone_market.buy_side_depth = [PriceLevel::default(); MAX_DEPTH_LEVELS];
         zone_market.sell_side_depth = [PriceLevel::default(); MAX_DEPTH_LEVELS];
+        });
 
         Ok(())
     }
@@ -167,6 +198,7 @@ pub mod trading {
         energy_amount: u64,
         price_per_kwh: u64,
     ) -> Result<()> {
+        compute_fn!("create_sell_order" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -233,6 +265,7 @@ pub mod trading {
             price_per_kwh,
             timestamp: clock.unix_timestamp,
         });
+        });
         Ok(())
     }
 
@@ -242,6 +275,7 @@ pub mod trading {
         energy_amount: u64,
         max_price_per_kwh: u64,
     ) -> Result<()> {
+        compute_fn!("create_buy_order" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -287,10 +321,12 @@ pub mod trading {
             price_per_kwh: max_price_per_kwh,
             timestamp: clock.unix_timestamp,
         });
+        });
         Ok(())
     }
 
     pub fn match_orders(ctx: Context<MatchOrdersContext>, match_amount: u64) -> Result<()> {
+        compute_fn!("match_orders" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -367,6 +403,7 @@ pub mod trading {
             fee_amount: 0,
             timestamp: clock.unix_timestamp,
         });
+        });
 
         Ok(())
     }
@@ -380,6 +417,7 @@ pub mod trading {
     }
 
     pub fn cancel_order(ctx: Context<CancelOrderContext>) -> Result<()> {
+        compute_fn!("cancel_order" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -412,10 +450,12 @@ pub mod trading {
             user: ctx.accounts.authority.key(),
             timestamp: clock.unix_timestamp,
         });
+        });
         Ok(())
     }
 
     pub fn add_order_to_batch(ctx: Context<AddOrderToBatchContext>) -> Result<()> {
+        compute_fn!("add_order_to_batch" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -480,6 +520,7 @@ pub mod trading {
             batch_id,
             timestamp: clock.unix_timestamp,
         });
+        });
 
         Ok(())
     }
@@ -488,6 +529,7 @@ pub mod trading {
         ctx: Context<ExecuteBatchContext>,
         match_pairs: Vec<MatchPair>,
     ) -> Result<()> {
+        compute_fn!("execute_batch" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -532,6 +574,7 @@ pub mod trading {
             total_volume,
             timestamp: clock.unix_timestamp,
         });
+        });
 
         Ok(())
     }
@@ -552,6 +595,7 @@ pub mod trading {
         amount: u64,
         price: u64,
     ) -> Result<()> {
+        compute_fn!("submit_limit_order" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -633,6 +677,7 @@ pub mod trading {
             amount,
             timestamp: clock.unix_timestamp,
         });
+        });
 
         Ok(())
     }
@@ -654,6 +699,7 @@ pub mod trading {
         side: u8, // 0 = Buy (take asks), 1 = Sell (take bids)
         amount: u64,
     ) -> Result<()> {
+        compute_fn!("submit_market_order" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -685,6 +731,7 @@ pub mod trading {
             amount,
             timestamp: clock.unix_timestamp,
         });
+        });
 
         Ok(())
     }
@@ -698,6 +745,7 @@ pub mod trading {
         sell_prices: Vec<u64>,
         sell_amounts: Vec<u64>,
     ) -> Result<()> {
+        compute_fn!("update_depth" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -773,6 +821,7 @@ pub mod trading {
             },
             timestamp: clock.unix_timestamp,
         });
+        });
 
         Ok(())
     }
@@ -784,6 +833,7 @@ pub mod trading {
         trade_price: u64,
         trade_volume: u64,
     ) -> Result<()> {
+        compute_fn!("update_price_history" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -832,11 +882,13 @@ pub mod trading {
             vwap: market.volume_weighted_price,
             timestamp: current_timestamp,
         });
+        });
 
         Ok(())
     }
 
     pub fn cancel_batch(ctx: Context<CancelBatchContext>) -> Result<()> {
+        compute_fn!("cancel_batch" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -858,6 +910,7 @@ pub mod trading {
             batch_id,
             authority: ctx.accounts.authority.key(),
             timestamp: clock.unix_timestamp,
+        });
         });
 
         Ok(())
@@ -882,6 +935,7 @@ pub mod trading {
         sell_orders: Vec<AuctionOrder>,
         buy_orders: Vec<AuctionOrder>,
     ) -> Result<ClearAuctionResult> {
+        let res = compute_fn!("clear_auction" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -1012,13 +1066,15 @@ pub mod trading {
             timestamp: clock.unix_timestamp,
         });
 
-        Ok(ClearAuctionResult {
+        ClearAuctionResult {
             clearing_price,
             clearing_volume,
             matched_buy_volume,
             matched_sell_volume,
             total_matches,
-        })
+        }
+        });
+        Ok(res)
     }
 
     /// Execute Auction Matches - Atomic Settlement
@@ -1034,6 +1090,7 @@ pub mod trading {
         matches: Vec<AuctionMatch>,
         clearing_price: u64,
     ) -> Result<()> {
+        compute_fn!("execute_auction_matches" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -1074,6 +1131,7 @@ pub mod trading {
         let mut market = ctx.accounts.market.load_mut()?;
         market.total_volume = market.total_volume.saturating_add(total_volume);
         market.total_trades = market.total_trades.saturating_add(matches.len() as u32);
+        });
 
         Ok(())
     }
@@ -1085,6 +1143,7 @@ pub mod trading {
         wheeling_charge_val: u64,
         loss_cost_val: u64,
     ) -> Result<()> {
+        compute_fn!("execute_atomic_settlement" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -1135,6 +1194,7 @@ pub mod trading {
         let buyer_escrow_ai = ctx.accounts.buyer_currency_escrow.to_account_info();
         let escrow_auth_ai = ctx.accounts.escrow_authority.to_account_info();
 
+        compute_checkpoint!("before_settlement_cpis");
         // Currency transfers
         if market_fee > 0 {
             anchor_spl::token_interface::transfer_checked(
@@ -1217,6 +1277,7 @@ pub mod trading {
             amount,
             energy_decimals,
         )?;
+        compute_checkpoint!("after_settlement_cpis");
 
         // Update State
         buy_order.filled_amount += amount;
@@ -1241,6 +1302,7 @@ pub mod trading {
             fee_amount: market_fee,
             timestamp: clock.unix_timestamp,
         });
+        });
         Ok(())
     }
 
@@ -1251,6 +1313,7 @@ pub mod trading {
         min_price: u64,
         max_price: u64,
     ) -> Result<()> {
+        compute_fn!("update_market_params" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
@@ -1276,6 +1339,7 @@ pub mod trading {
             min_price_per_kwh: market.min_price_per_kwh,
             max_price_per_kwh: market.max_price_per_kwh,
             timestamp: now,
+        });
         });
         Ok(())
     }
@@ -1305,6 +1369,22 @@ pub mod trading {
         shard_id: u8,
     ) -> Result<()> {
         instructions::initialize_market_shard(ctx, shard_id)
+    }
+
+    /// One-time creation of the fee/wheeling/loss collector PDAs for a currency mint.
+    pub fn initialize_collectors(ctx: Context<InitializeCollectorsContext>) -> Result<()> {
+        instructions::initialize_collectors(ctx)
+    }
+
+    /// Deposit currency/energy into the caller's per-user escrow PDA (funds the
+    /// off-chain settlement path).
+    pub fn deposit_escrow(ctx: Context<DepositEscrowContext>, amount: u64) -> Result<()> {
+        instructions::deposit_escrow(ctx, amount)
+    }
+
+    /// Withdraw from the caller's own escrow PDA back to their wallet.
+    pub fn withdraw_escrow(ctx: Context<WithdrawEscrowContext>, amount: u64) -> Result<()> {
+        instructions::withdraw_escrow(ctx, amount)
     }
 
     // ============================================
