@@ -8,14 +8,8 @@ pub enum RegistryError {
     UnauthorizedUser,
     #[msg("Unauthorized authority")]
     UnauthorizedAuthority,
-    #[msg("Invalid user status")]
-    InvalidUserStatus,
     #[msg("Invalid meter status")]
     InvalidMeterStatus,
-    #[msg("User not found")]
-    UserNotFound,
-    #[msg("Meter not found")]
-    MeterNotFound,
     #[msg("No unsettled balance to tokenize")]
     NoUnsettledBalance,
     #[msg("Oracle authority not configured")]
@@ -24,6 +18,8 @@ pub enum RegistryError {
     UnauthorizedOracle,
     #[msg("Stale reading - timestamp must be newer than last reading")]
     StaleReading,
+    #[msg("Reading too frequent - minimum interval between readings not met")]
+    ReadingTooFrequent,
     #[msg("Reading too high - exceeds maximum delta limit")]
     ReadingTooHigh,
     #[msg("Meter is already inactive")]
@@ -34,10 +30,14 @@ pub enum RegistryError {
     MathOverflow,
     #[msg("Invalid shard ID - must be less than 16")]
     InvalidShardId,
+    #[msg("Duplicate shard passed to aggregation")]
+    DuplicateShard,
     #[msg("Insufficient staking balance")]
     InsufficientStakingBalance,
     #[msg("Minimum stake requirement not met")]
     MinStakeNotMet,
     #[msg("Unstaking is currently locked")]
     UnstakingLocked,
+    #[msg("Airdrop already claimed for this user")]
+    AirdropAlreadyClaimed,
 }
