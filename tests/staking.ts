@@ -127,11 +127,22 @@ describe("registry_staking", () => {
       TOKEN_2022_PROGRAM_ID
     );
 
-    // Register User
+    // Register User — shard bound in-program to the user's first key byte.
     [userPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("user"), userKeypair.publicKey.toBuffer()],
       program.programId
     );
+    const userShardId = userKeypair.publicKey.toBytes()[0] % 16;
+    const [userShardPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("registry_shard"), Buffer.from([userShardId])],
+      program.programId
+    );
+    try {
+      await program.methods
+        .initializeShard(userShardId)
+        .accounts({ shard: userShardPda, authority, systemProgram: SystemProgram.programId } as any)
+        .rpc();
+    } catch (e) {}
 
     await program.methods
       .registerUser(
@@ -139,11 +150,11 @@ describe("registry_staking", () => {
         0,
         0,
         new BN(0),
-        shardId
+        userShardId
       )
       .accounts({
         userAccount: userPda,
-        registryShard: shardPda,
+        registryShard: userShardPda,
         registry: registryPda,
         authority: userKeypair.publicKey,
         energyTokenProgram: SystemProgram.programId,
