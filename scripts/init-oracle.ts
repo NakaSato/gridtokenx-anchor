@@ -49,7 +49,6 @@ async function main() {
     console.log('   Anomaly Detection:', oracleData.anomalyDetectionEnabled === 1 ? 'Enabled' : 'Disabled');
     console.log('   Min Energy:', oracleData.minEnergyValue.toString());
     console.log('   Max Energy:', oracleData.maxEnergyValue.toString());
-    console.log('   Max Deviation:', oracleData.maxReadingDeviationPercent + '%');
     console.log('   Quality Score:', oracleData.lastQualityScore + '/100');
     console.log('   Created At:', new Date(oracleData.createdAt.toNumber() * 1000).toISOString());
     
