@@ -20,7 +20,8 @@ pub struct Registry {
 #[repr(C)]
 pub struct RegistryShard {
     pub shard_id: u8,
-    pub _padding: [u8; 7],
+    pub bump: u8, // Canonical PDA bump, stored on init to avoid find_program_address re-derivation
+    pub _padding: [u8; 6],
     pub user_count: u64,
     pub meter_count: u64,
 }
@@ -45,7 +46,8 @@ pub struct UserAccount {
     pub status: UserStatus,  // 1 byte (56-57)
     pub validator_status: ValidatorStatus, // 1 byte (57-58)
     pub shard_id: u8,        // 1 byte (58-59)
-    pub _padding3: [u8; 5],  // 5 bytes padding (59-64)
+    pub airdrop_claimed: u8, // 1 byte (59-60) - 0 = unclaimed, 1 = claimed (reclaimed from padding)
+    pub _padding3: [u8; 4],  // 4 bytes padding (60-64)
     pub registered_at: i64,  // 8 bytes (64-72)
     pub meter_count: u32,    // 4 bytes (72-76)
     pub _padding4: [u8; 4],  // 4 bytes padding (76-80) - Alignment for staked_grx
