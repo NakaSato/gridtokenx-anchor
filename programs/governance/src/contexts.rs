@@ -43,7 +43,7 @@ pub struct IssueErc<'info> {
     /// CHECK: Validated via owner constraint and manual deserialization below
     #[account(
         mut,
-        owner = registry_program.key() @ GovernanceError::InvalidMeterAccount
+        owner = registry::ID @ GovernanceError::InvalidMeterAccount
     )]
     pub meter_account: AccountInfo<'info>,
     /// Meter owner must sign to authorize issuance
@@ -73,7 +73,8 @@ pub struct IssueErc<'info> {
     )]
     pub registry: AccountInfo<'info>,
     /// The registry program - used to invoke mark_erc_claimed
-    /// CHECK: Registry program ID; validated implicitly by the CPI invocation
+    /// CHECK: pinned to the real registry program ID
+    #[account(constraint = registry_program.key() == registry::ID @ GovernanceError::InvalidMeterAccount)]
     pub registry_program: AccountInfo<'info>,
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -227,8 +228,11 @@ pub struct CreateProposal<'info> {
     pub proposal: Account<'info, Proposal>,
     #[account(mut)]
     pub proposer: Signer<'info>,
-    /// We need to verify that the proposer has a registered meter in the target zone
-    /// CHECK: Manual validation in handler
+    /// We need to verify that the proposer has a registered meter in the target zone.
+    /// Bound to the registry program so a forged/attacker-owned account cannot stand in
+    /// for a real meter (handler still checks meter.owner == proposer).
+    /// CHECK: program-owner bound here; field-level validation in handler
+    #[account(owner = registry::ID @ GovernanceError::InvalidMeterAccount)]
     pub meter_account: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
@@ -247,8 +251,11 @@ pub struct CastVote<'info> {
     pub vote_record: Account<'info, VoteRecord>,
     #[account(mut)]
     pub voter: Signer<'info>,
-    /// Voter's meter account to determine voting weight
-    /// CHECK: Manual validation in handler
+    /// Voter's meter account to determine voting weight.
+    /// Bound to the registry program so a forged account with an inflated total_generation
+    /// cannot manufacture voting weight (handler still checks meter.owner == voter).
+    /// CHECK: program-owner bound here; field-level validation in handler
+    #[account(owner = registry::ID @ GovernanceError::InvalidMeterAccount)]
     pub meter_account: AccountInfo<'info>,
     pub system_program: Program<'info, System>,
 }
