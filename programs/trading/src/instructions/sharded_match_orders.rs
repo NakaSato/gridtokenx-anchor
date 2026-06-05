@@ -3,7 +3,13 @@ use crate::state::*;
 use crate::ShardedMatchOrdersContext;
 use crate::utils::get_governance_config;
 
+#[cfg(feature = "localnet")]
+use compute_debug::compute_fn;
+#[cfg(not(feature = "localnet"))]
+use crate::compute_fn;
+
 pub fn sharded_match_orders(ctx: Context<ShardedMatchOrdersContext>, match_amount: u64, _shard_id: u8) -> Result<()> {
+    compute_fn!("sharded_match_orders" => {
     require!(
         get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
         crate::error::TradingError::MaintenanceMode
@@ -70,9 +76,10 @@ pub fn sharded_match_orders(ctx: Context<ShardedMatchOrdersContext>, match_amoun
         seller: sell_order.seller,
         amount: actual_match_amount,
         price: clearing_price,
-        total_value: actual_match_amount * clearing_price,
-        fee_amount: 0, 
+        total_value: actual_match_amount.saturating_mul(clearing_price),
+        fee_amount: 0,
         timestamp: clock.unix_timestamp,
+    });
     });
 
     Ok(())
