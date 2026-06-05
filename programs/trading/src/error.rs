@@ -58,4 +58,10 @@ pub enum TradingError {
     CapacityExceeded,
     #[msg("Invalid governance account")]
     InvalidGovernanceAccount,
+    #[msg("Escrow account does not match the expected per-user PDA")]
+    InvalidEscrow,
+    #[msg("Nullifier account does not match the expected per-order PDA")]
+    InvalidNullifier,
+    #[msg("Nullifier authority does not match the signed order owner")]
+    NullifierUserMismatch,
 }
