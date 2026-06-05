@@ -69,7 +69,8 @@ async function main() {
 
   // 0. Register meter in the registry program
   console.log("\n📋 0. Registering meter in Registry...");
-  const shardId = 0;
+  // Meter shard is bound in-program to the owner's first key byte.
+  const shardId = prosumerKey.publicKey.toBytes()[0] % 16;
   const [shardPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("registry_shard"), Buffer.from([shardId])],
     registryProgram.programId
