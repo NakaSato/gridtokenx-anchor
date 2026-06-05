@@ -115,8 +115,10 @@ describe("Governance Program", () => {
       govProgram.programId,
     );
 
-    // 2. Registry: initialize singleton + shard 0 (idempotent)
-    const shardPda = findRegistryShardPda(0, regProgram.programId);
+    // 2. Registry: initialize singleton + the wallet's bound shard (idempotent).
+    //    Shard is bound in-program to authority's first key byte.
+    const shardId = authority.publicKey.toBytes()[0] % 16;
+    const shardPda = findRegistryShardPda(shardId, regProgram.programId);
 
     try {
       await regProgram.methods
@@ -133,7 +135,7 @@ describe("Governance Program", () => {
 
     try {
       await regProgram.methods
-        .initializeShard(0)
+        .initializeShard(shardId)
         .accounts({
           shard: shardPda,
           authority: authority.publicKey,
@@ -156,7 +158,7 @@ describe("Governance Program", () => {
           137_000_000, // lat_e7
           100_500_000, // long_e7
           new BN("617700169958686719"), // h3_index
-          0, // shard_id
+          shardId,
         )
         .accounts({
           userAccount: userAccountPda,
@@ -198,7 +200,7 @@ describe("Governance Program", () => {
 
     try {
       await regProgram.methods
-        .registerMeter(METER_ID, { solar: {} }, 0)
+        .registerMeter(METER_ID, { solar: {} }, shardId)
         .accounts({
           meterAccount: meterAccountPda,
           userAccount: userAccountPda,
