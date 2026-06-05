@@ -29,7 +29,6 @@ describe("Oracle Program", () => {
   const authority = provider.wallet as anchor.Wallet;
 
   const apiGateway = Keypair.generate();
-  const backupOracle = Keypair.generate();
 
   // Unique run tag so meter PDAs are fresh on every test run — prevents
   // cumulative totals from a prior run causing assertion mismatches.
@@ -317,7 +316,6 @@ describe("Oracle Program", () => {
         new BN(10), // minEnergyValue
         new BN(10000), // maxEnergyValue
         true, // anomalyDetectionEnabled
-        75, // maxReadingDeviationPercent
       )
       .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
       .rpc();
@@ -325,36 +323,21 @@ describe("Oracle Program", () => {
     const data: any = await program.account.oracleData.fetch(oracleDataPda);
     assert.equal(data.minEnergyValue.toNumber(), 10);
     assert.equal(data.maxEnergyValue.toNumber(), 10000);
-    assert.equal(data.maxReadingDeviationPercent, 75);
   });
 
-  it("Adds and removes backup oracles", async () => {
-    await program.methods
-      .addBackupOracle(backupOracle.publicKey)
-      .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
-      .rpc();
-
-    let data: any = await program.account.oracleData.fetch(oracleDataPda);
-    assert.equal(
-      data.backupOraclesCount,
-      1,
-      "backupOraclesCount should be 1 after add",
-    );
-    assert.ok(
-      data.backupOracles[0].equals(backupOracle.publicKey),
-      "backupOracles[0] should match the added oracle",
-    );
-
-    await program.methods
-      .removeBackupOracle(backupOracle.publicKey)
-      .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
-      .rpc();
-
-    data = await program.account.oracleData.fetch(oracleDataPda);
-    assert.equal(
-      data.backupOraclesCount,
-      0,
-      "backupOraclesCount should be 0 after remove",
-    );
+  it("Rejects validation config with min > max", async () => {
+    try {
+      await program.methods
+        .updateValidationConfig(
+          new BN(10000), // minEnergyValue > maxEnergyValue
+          new BN(10), // maxEnergyValue
+          true, // anomalyDetectionEnabled
+        )
+        .accounts({ oracleData: oracleDataPda, authority: authority.publicKey })
+        .rpc();
+      assert.fail("should have rejected inverted min/max bounds");
+    } catch (e: any) {
+      assert.match(e.toString(), /InvalidConfiguration/);
+    }
   });
 });
