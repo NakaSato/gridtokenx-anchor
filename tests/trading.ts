@@ -17,12 +17,18 @@ import {
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
   getAccount,
+  getMint,
   mintTo,
   MINT_SIZE
 } from "@solana/spl-token";
 import { expect } from "chai";
 import BN from "bn.js";
 import * as fs from "fs";
+import { computeBudgetPreIxs, simulateConsumedUnits } from "./utils/compute-budget";
+
+// Deterministic CU ceiling for atomic settlement (5 CPIs). Well under the 1.4M
+// per-tx max; surfaces a regression if settlement CU usage creeps past it.
+const SETTLEMENT_CU_LIMIT = 250_000;
 
 describe("trading-settlement", () => {
   const provider = anchor.AnchorProvider.env();
@@ -192,8 +198,8 @@ describe("trading-settlement", () => {
       .signers([consumer])
       .rpc();
 
-    // Execute Settlement
-    await tradingProgram.methods
+    // Execute Settlement with an explicit compute-unit limit
+    const settlementBuilder = tradingProgram.methods
       .executeAtomicSettlement(new BN(100), new BN(55), new BN(1), new BN(1))
       .accounts({
         market: marketPda,
@@ -215,7 +221,16 @@ describe("trading-settlement", () => {
         secondaryTokenProgram: TOKEN_PROGRAM_ID,
         governanceConfig: poaConfigPda,
       } as any)
-      .signers([escrowAuth])
+      .signers([escrowAuth]);
+
+    // Guard CU usage: simulate first, assert it sits under the explicit ceiling.
+    const consumed = await simulateConsumedUnits(settlementBuilder);
+    if (consumed !== null) {
+      expect(consumed, "atomic settlement CU usage").to.be.below(SETTLEMENT_CU_LIMIT);
+    }
+
+    await settlementBuilder
+      .preInstructions(computeBudgetPreIxs(SETTLEMENT_CU_LIMIT))
       .rpc();
 
     // Assertions
@@ -230,5 +245,23 @@ describe("trading-settlement", () => {
     
     expect(Number(sellerBalance.value.amount)).to.be.at.least(5480);
     expect(Number(buyerBalance.value.amount)).to.equal(100);
+  });
+
+  it("Reconciles stored total_supply with canonical mint supply", async () => {
+    // mint_to/burn skip token_info.total_supply on purpose (Sealevel write-lock
+    // avoidance), so it drifts. sync_total_supply is the reconciler — after it runs,
+    // the stored total must equal the canonical Token-2022 mint supply.
+    await energyTokenProgram.methods
+      .syncTotalSupply()
+      .accounts({
+        tokenInfo: energyTokenInfoPda,
+        mint: energyMintPda,
+        authority,
+      } as any)
+      .rpc();
+
+    const info = await energyTokenProgram.account.tokenInfo.fetch(energyTokenInfoPda);
+    const mint = await getMint(provider.connection, energyMintPda, "confirmed", TOKEN_PROGRAM_ID);
+    expect(info.totalSupply.toString(), "stored total_supply vs mint.supply").to.equal(mint.supply.toString());
   });
 });
