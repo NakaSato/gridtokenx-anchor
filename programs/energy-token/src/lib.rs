@@ -1,9 +1,12 @@
 #![allow(deprecated)]
 
 use anchor_lang::prelude::*;
+// Instructions sysvar (Sysvar1nstructions1111111111111111111111111).
+// The previous array decoded to SysvarReoJr2... (wrong address), which made the
+// `address = IX_ID` constraint on sysvar_instructions reject the real sysvar.
 const IX_ID: Pubkey = Pubkey::new_from_array([
-    6, 167, 213, 23, 25, 44, 92, 142, 224, 137, 211, 236, 12, 137, 234, 123, 14, 153, 162, 115, 140,
-    201, 192, 141, 160, 23, 138, 203, 166, 131, 11, 138,
+    6, 167, 213, 23, 24, 123, 209, 102, 53, 218, 212, 4, 85, 253, 194, 192, 193, 36, 198, 143, 33,
+    86, 117, 165, 219, 186, 203, 95, 8, 0, 0, 0,
 ]);
 
 use anchor_spl::{
@@ -69,11 +72,16 @@ pub mod energy_token {
             if ctx.accounts.metadata_program.executable {
                 compute_checkpoint!("before_metaplex_cpi");
 
-                // Create metadata using Metaplex Token Metadata program
+                // The mint's mint-authority is the token_info PDA, so CreateV1 must be
+                // signed by that PDA (the mint itself is not a signer for an existing
+                // mint). The human admin is the metadata update_authority.
+                // NOTE: this branch is unexercised on localnet (no Metaplex program is
+                // loaded), so it is verified only by compilation.
+                let seeds: &[&[u8]] = &[b"token_info_2022", &[ctx.bumps.token_info]];
                 CreateV1CpiBuilder::new(&ctx.accounts.metadata_program.to_account_info())
                     .metadata(&ctx.accounts.metadata.to_account_info())
-                    .mint(&ctx.accounts.mint.to_account_info(), true)
-                    .authority(&ctx.accounts.authority.to_account_info())
+                    .mint(&ctx.accounts.mint.to_account_info(), false)
+                    .authority(&ctx.accounts.token_info.to_account_info())
                     .payer(&ctx.accounts.payer.to_account_info())
                     .update_authority(&ctx.accounts.authority.to_account_info(), true)
                     .system_program(&ctx.accounts.system_program.to_account_info())
@@ -86,7 +94,7 @@ pub mod energy_token {
                     .decimals(9)
                     .token_standard(TokenStandard::Fungible)
                     .print_supply(PrintSupply::Zero)
-                    .invoke()?;
+                    .invoke_signed(&[seeds])?;
 
                 compute_checkpoint!("after_metaplex_cpi");
             }
@@ -103,6 +111,27 @@ pub mod energy_token {
                     token_info.authority == ctx.accounts.authority.key(),
                     EnergyTokenError::UnauthorizedAuthority
                 );
+
+                // REC provenance: when validators are registered, one must co-sign.
+                // Parity with mint_tokens_direct — without this the admin mint path
+                // bypasses the Renewable Energy Certificate proof. The signer is
+                // optional so existing callers keep working while no validators exist.
+                if token_info.rec_validators_count > 0 {
+                    let rec_key = ctx
+                        .accounts
+                        .rec_validator
+                        .as_ref()
+                        .map(|v| v.key())
+                        .ok_or(EnergyTokenError::RecValidatorNotFound)?;
+                    let mut found = false;
+                    for i in 0..token_info.rec_validators_count as usize {
+                        if token_info.rec_validators[i] == rec_key {
+                            found = true;
+                            break;
+                        }
+                    }
+                    require!(found, EnergyTokenError::RecValidatorNotFound);
+                }
             }
             // Cache clock before CPI — avoids an inline syscall inside the emit! macro
             // and ensures the timestamp is captured before the CPI context is consumed.
@@ -182,6 +211,35 @@ pub mod energy_token {
             let index = token_info.rec_validators_count as usize;
             token_info.rec_validators[index] = validator_pubkey;
             token_info.rec_validators_count += 1;
+        });
+        Ok(())
+    }
+
+    /// Remove a REC validator (admin only)
+    ///
+    /// Enables rotation of a compromised or retired validator key. Swap-removes the
+    /// entry with the last slot to keep the array dense.
+    pub fn remove_rec_validator(
+        ctx: Context<AddRecValidator>,
+        validator_pubkey: Pubkey,
+    ) -> Result<()> {
+        compute_fn!("remove_rec_validator" => {
+            let mut token_info = ctx.accounts.token_info.load_mut()?;
+
+            let count = token_info.rec_validators_count as usize;
+            let mut target = None;
+            for i in 0..count {
+                if token_info.rec_validators[i] == validator_pubkey {
+                    target = Some(i);
+                    break;
+                }
+            }
+            let idx = target.ok_or(EnergyTokenError::RemoveValidatorNotFound)?;
+
+            let last = count - 1;
+            token_info.rec_validators[idx] = token_info.rec_validators[last];
+            token_info.rec_validators[last] = Pubkey::default();
+            token_info.rec_validators_count -= 1;
         });
         Ok(())
     }
@@ -347,6 +405,7 @@ pub struct CreateTokenMint<'info> {
     #[account(
         seeds = [b"token_info_2022"],
         bump,
+        constraint = token_info.load()?.authority == authority.key() @ EnergyTokenError::UnauthorizedAuthority,
     )]
     pub token_info: AccountLoader<'info, TokenInfo>,
 
@@ -396,6 +455,9 @@ pub struct MintToWallet<'info> {
     pub destination_owner: AccountInfo<'info>,
 
     pub authority: Signer<'info>,
+
+    /// REC validator co-signer — required only when token_info.rec_validators_count > 0
+    pub rec_validator: Option<Signer<'info>>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
