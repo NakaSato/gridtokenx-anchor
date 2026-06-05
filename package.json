@@ -18,6 +18,7 @@
     "test:smallbank": "anchor test tests/smallbank.ts",
     "test:tpc-stress": "anchor test tests/tpc_stress_test.ts",
     "test:all": "anchor test tests/oracle.ts tests/registry_sharding.ts tests/governance.ts tests/blockbench.ts tests/smallbank.ts tests/tpc_stress_test.ts",
+    "sync-supply": "tsx scripts/sync-supply.ts",
     "simnet": "NO_DNA=1 surfpool start --network mainnet --watch --legacy-anchor-compatibility",
     "simnet:ci": "NO_DNA=1 surfpool start --network mainnet --ci --legacy-anchor-compatibility",
     "deploy:prod": "bash scripts/deploy-production.sh"
