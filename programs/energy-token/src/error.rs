@@ -22,4 +22,6 @@ pub enum EnergyTokenError {
     MaxValidatorsReached,
     #[msg("REC validator not found in the registered list")]
     RecValidatorNotFound,
+    #[msg("Validator to remove not found in the registered list")]
+    RemoveValidatorNotFound,
 }
