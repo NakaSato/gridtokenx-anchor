@@ -40,6 +40,12 @@ fn bytes32_to_string(bytes: &[u8; 32]) -> String {
     String::from_utf8_lossy(&bytes[..len]).to_string()
 }
 
+/// Canonical shard selector — binds an entity to one of the 16 shards by its
+/// first key byte. Matches the SKILL invariant `authority.to_bytes()[0] % num_shards`.
+fn shard_for(key: &Pubkey) -> u8 {
+    key.to_bytes()[0] % 16
+}
+
 /// Helper to convert String to fixed [u8; 32]
 fn string_to_bytes32(s: &str) -> [u8; 32] {
     let mut bytes = [0u8; 32];
@@ -73,10 +79,13 @@ pub mod registry {
     /// Initialize a registry shard for distributed counting
     pub fn initialize_shard(ctx: Context<InitializeShard>, shard_id: u8) -> Result<()> {
         require!(shard_id < 16, RegistryError::InvalidShardId);
-        let mut shard = ctx.accounts.shard.load_init()?;
-        shard.shard_id = shard_id;
-        shard.user_count = 0;
-        shard.meter_count = 0;
+        compute_fn!("initialize_shard" => {
+            let mut shard = ctx.accounts.shard.load_init()?;
+            shard.shard_id = shard_id;
+            shard.bump = ctx.bumps.shard; // cache canonical bump for cheap PDA checks later
+            shard.user_count = 0;
+            shard.meter_count = 0;
+        });
         Ok(())
     }
 
@@ -109,60 +118,72 @@ pub mod registry {
 
     /// Update the registry authority (admin only)
     pub fn update_authority(ctx: Context<UpdateAuthority>, new_authority: Pubkey) -> Result<()> {
-        let mut registry = ctx.accounts.registry.load_mut()?;
-        require_keys_eq!(
-            registry.authority,
-            ctx.accounts.authority.key(),
-            RegistryError::UnauthorizedAuthority
-        );
+        compute_fn!("update_authority" => {
+            let mut registry = ctx.accounts.registry.load_mut()?;
+            require_keys_eq!(
+                registry.authority,
+                ctx.accounts.authority.key(),
+                RegistryError::UnauthorizedAuthority
+            );
 
-        let old_authority = registry.authority;
-        registry.authority = new_authority;
+            let old_authority = registry.authority;
+            registry.authority = new_authority;
 
-        emit!(AuthorityUpdated {
-            old_authority,
-            new_authority,
+            emit!(AuthorityUpdated {
+                old_authority,
+                new_authority,
+            });
         });
-
         Ok(())
     }
 
     /// Aggregate counts from all shards into the global registry (admin only)
     pub fn aggregate_shards(ctx: Context<AggregateShards>) -> Result<()> {
-        let mut registry = ctx.accounts.registry.load_mut()?;
-        require_keys_eq!(
-            registry.authority,
-            ctx.accounts.authority.key(),
-            RegistryError::UnauthorizedAuthority
-        );
+        compute_fn!("aggregate_shards" => {
+            let mut registry = ctx.accounts.registry.load_mut()?;
+            require_keys_eq!(
+                registry.authority,
+                ctx.accounts.authority.key(),
+                RegistryError::UnauthorizedAuthority
+            );
 
-        let mut total_users = 0u64;
-        let mut total_meters = 0u64;
+            let mut total_users = 0u64;
+            let mut total_meters = 0u64;
+            // Bitmask of shard_ids already counted — reject duplicates so a shard
+            // passed twice cannot inflate the totals.
+            let mut seen: u16 = 0;
+            const SHARD_LEN: usize = std::mem::size_of::<RegistryShard>();
 
-        for account_info in ctx.remaining_accounts.iter() {
-            require_keys_eq!(*account_info.owner, crate::ID, RegistryError::UnauthorizedAuthority);
+            for account_info in ctx.remaining_accounts.iter() {
+                require_keys_eq!(*account_info.owner, crate::ID, RegistryError::UnauthorizedAuthority);
 
-            let shard_data = account_info.try_borrow_data()?;
-            if shard_data.len() >= 8 + std::mem::size_of::<RegistryShard>() {
-                let shard = RegistryShard::load_from_bytes(&shard_data[8..])?;
-                
-                let expected_pda = Pubkey::find_program_address(
-                    &[b"registry_shard", &[shard.shard_id]], &crate::ID
-                ).0;
-                require_keys_eq!(account_info.key(), expected_pda, RegistryError::UnauthorizedAuthority);
-                
-                total_users = total_users
-                    .checked_add(shard.user_count)
-                    .ok_or(RegistryError::MathOverflow)?;
-                total_meters = total_meters
-                    .checked_add(shard.meter_count)
-                    .ok_or(RegistryError::MathOverflow)?;
+                let shard_data = account_info.try_borrow_data()?;
+                if shard_data.len() >= 8 + SHARD_LEN {
+                    let shard = RegistryShard::load_from_bytes(&shard_data[8..8 + SHARD_LEN])?;
+
+                    // Validate via the stored canonical bump (create_program_address ~1,651 CU)
+                    // instead of re-deriving with find_program_address (~12,136 CU).
+                    let expected_pda = Pubkey::create_program_address(
+                        &[b"registry_shard", &[shard.shard_id], &[shard.bump]], &crate::ID
+                    ).map_err(|_| RegistryError::UnauthorizedAuthority)?;
+                    require_keys_eq!(account_info.key(), expected_pda, RegistryError::UnauthorizedAuthority);
+
+                    let bit = 1u16 << shard.shard_id;
+                    require!(seen & bit == 0, RegistryError::DuplicateShard);
+                    seen |= bit;
+
+                    total_users = total_users
+                        .checked_add(shard.user_count)
+                        .ok_or(RegistryError::MathOverflow)?;
+                    total_meters = total_meters
+                        .checked_add(shard.meter_count)
+                        .ok_or(RegistryError::MathOverflow)?;
+                }
             }
-        }
 
-        registry.user_count = total_users;
-        registry.meter_count = total_meters;
-
+            registry.user_count = total_users;
+            registry.meter_count = total_meters;
+        });
         Ok(())
     }
 
@@ -177,6 +198,11 @@ pub mod registry {
         shard_id: u8,
     ) -> Result<()> {
         require!(shard_id < 16, RegistryError::InvalidShardId);
+        // Shard is bound to the user's key — caller cannot scatter counts onto arbitrary shards.
+        require!(
+            shard_id == shard_for(&ctx.accounts.authority.key()),
+            RegistryError::InvalidShardId
+        );
         compute_fn!("register_user" => {
             let registry = ctx.accounts.registry.load()?;
             
@@ -191,6 +217,7 @@ pub mod registry {
             );
 
             let user_authority = ctx.accounts.authority.key();
+            let now = Clock::get()?.unix_timestamp;
             let mut user_account = ctx.accounts.user_account.load_init()?;
             let mut shard = ctx.accounts.registry_shard.load_mut()?;
 
@@ -201,11 +228,16 @@ pub mod registry {
             user_account.h3_index = h3_index;
             user_account.status = UserStatus::Active;
             user_account.shard_id = shard_id;
-            user_account.registered_at = Clock::get()?.unix_timestamp;
+            user_account.registered_at = now;
             user_account.meter_count = 0;
+            user_account.airdrop_claimed = 0;
 
             shard.user_count = shard.user_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
 
+            // The welcome airdrop is NOT minted here. A failed mint CPI would abort the
+            // whole transaction (Solana cannot "swallow" a failed CPI), which would block
+            // registration entirely. Registration must always succeed independently; the
+            // airdrop is claimed separately via `claim_airdrop` and is safely retryable.
             emit!(UserRegistered {
                 user: user_authority,
                 user_type,
@@ -213,42 +245,66 @@ pub mod registry {
                 long_e7,
                 h3_index,
             });
+        });
+        Ok(())
+    }
 
-            // Perform automatic airdrop via CPI to energy token program
-            if ctx.accounts.energy_token_program.key() != Pubkey::default() {
-                
-                compute_checkpoint!("before_airdrop_cpi");
+    /// Mint the one-time welcome airdrop to an already-registered user.
+    ///
+    /// Decoupled from `register_user` on purpose: a failed mint CPI aborts its whole
+    /// transaction, so bundling it with registration would let a mint failure roll back
+    /// the user's registration. Here the mint and the `airdrop_claimed` flag commit (or
+    /// roll back) together, leaving the claim safely retryable without touching the user
+    /// record created by `register_user`.
+    pub fn claim_airdrop(ctx: Context<ClaimAirdrop>) -> Result<()> {
+        compute_fn!("claim_airdrop" => {
+            // Authorization: the user signs for themselves, or the registry admin signs for them.
+            let is_user_signing = ctx.accounts.authority.is_signer;
+            let is_admin_signing = {
+                let registry = ctx.accounts.registry.load()?;
+                ctx.accounts.payer.key() == registry.authority
+            };
+            require!(is_user_signing || is_admin_signing, RegistryError::UnauthorizedAuthority);
 
-                // Build CPI context for MintTo Wallet instruction
-                let cpi_accounts = energy_token::cpi::accounts::MintTokensDirect {
-                    token_info: ctx.accounts.token_info.to_account_info(),
-                    mint: ctx.accounts.mint.to_account_info(),
-                    user_token_account: ctx.accounts.user_token_account.to_account_info(),
-                    authority: ctx.accounts.registry.to_account_info(), // Registry PDA signs
-                    registry_authority: ctx.accounts.registry.to_account_info(), // Must match stored registry_authority
-                    rec_validator: ctx.accounts.registry.to_account_info(), // Placeholder since count is 0
-                    token_program: ctx.accounts.token_program.to_account_info(),
-                };
-
-                // let cpi_program = ctx.accounts.energy_token_program.to_account_info();
-
-                // Use the registry pda as the signer
-                let registry_seeds = &[
-                    b"registry".as_ref(),
-                    &[ctx.bumps.registry]
-                ];
-                let signer = &[&registry_seeds[..]];
-
-                let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.energy_token_program.key(), cpi_accounts, signer);
-
-                // Call mint_tokens_direct from the energy token program
-                if energy_token::cpi::mint_tokens_direct(cpi_ctx, AIRDROP_AMOUNT).is_err() {
-                    // Airdrop failure is non-critical, user registration continues
-                    msg!("Warning: Airdrop minting failed for user {}, but registration succeeded", user_authority);
-                }
-
-                compute_checkpoint!("after_airdrop_cpi");
+            // Mark claimed first; if the mint CPI below fails, this write rolls back with
+            // the failed tx, so the flag never desyncs from the actual mint.
+            {
+                let mut user_account = ctx.accounts.user_account.load_mut()?;
+                require!(
+                    user_account.authority == ctx.accounts.authority.key(),
+                    RegistryError::UnauthorizedAuthority
+                );
+                require!(user_account.airdrop_claimed == 0, RegistryError::AirdropAlreadyClaimed);
+                user_account.airdrop_claimed = 1;
             }
+
+            let cpi_accounts = energy_token::cpi::accounts::MintTokensDirect {
+                token_info: ctx.accounts.token_info.to_account_info(),
+                mint: ctx.accounts.mint.to_account_info(),
+                user_token_account: ctx.accounts.user_token_account.to_account_info(),
+                authority: ctx.accounts.registry.to_account_info(), // Registry PDA signs
+                registry_authority: ctx.accounts.registry.to_account_info(), // Must match stored registry_authority
+                rec_validator: ctx.accounts.registry.to_account_info(), // Placeholder when REC count is 0
+                token_program: ctx.accounts.token_program.to_account_info(),
+            };
+            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
+            let signer = &[&registry_seeds[..]];
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.energy_token_program.key(),
+                cpi_accounts,
+                signer,
+            );
+
+            compute_checkpoint!("before_claim_cpi");
+            energy_token::cpi::mint_tokens_direct(cpi_ctx, AIRDROP_AMOUNT)?;
+            compute_checkpoint!("after_claim_cpi");
+
+            let now = Clock::get()?.unix_timestamp;
+            emit!(AirdropClaimed {
+                user: ctx.accounts.authority.key(),
+                amount: AIRDROP_AMOUNT,
+                timestamp: now,
+            });
         });
         Ok(())
     }
@@ -261,11 +317,14 @@ pub mod registry {
         shard_id: u8,
     ) -> Result<()> {
         require!(shard_id < 16, RegistryError::InvalidShardId);
+        let owner = ctx.accounts.owner.key();
+        // Meter co-locates on its owner's shard.
+        require!(shard_id == shard_for(&owner), RegistryError::InvalidShardId);
         compute_fn!("register_meter" => {
-            let owner = ctx.accounts.owner.key();
             let mut meter_account = ctx.accounts.meter_account.load_init()?;
             let mut user_account = ctx.accounts.user_account.load_mut()?;
             let mut shard = ctx.accounts.registry_shard.load_mut()?;
+            let mut registry = ctx.accounts.registry.load_mut()?;
 
             require!(
                 user_account.status == UserStatus::Active,
@@ -294,6 +353,8 @@ pub mod registry {
 
             user_account.meter_count = user_account.meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
             shard.meter_count = shard.meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
+            // New meters are created Active — keep the live counter in sync at registration.
+            registry.active_meter_count = registry.active_meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
 
             emit!(MeterRegistered {
                 meter_id: meter_id.clone(),
@@ -360,6 +421,15 @@ pub mod registry {
                 RegistryError::StaleReading
             );
 
+            // Rate-limit: minimum interval between readings (skipped on first reading).
+            const MIN_READING_INTERVAL_SECS: i64 = 60;
+            if meter_account.last_reading_at > 0 {
+                require!(
+                    reading_timestamp >= meter_account.last_reading_at + MIN_READING_INTERVAL_SECS,
+                    RegistryError::ReadingTooFrequent
+                );
+            }
+
             const MAX_READING_DELTA: u64 = 1_000_000_000_000;
             require!(
                 energy_generated <= MAX_READING_DELTA,
@@ -420,6 +490,7 @@ pub mod registry {
             let mut meter = ctx.accounts.meter_account.load_mut()?;
             let mut user = ctx.accounts.user_account.load_mut()?;
             let mut registry_acc = ctx.accounts.registry.load_mut()?;
+            let mut shard = ctx.accounts.registry_shard.load_mut()?;
 
             require_keys_eq!(
                 ctx.accounts.owner.key(),
@@ -438,6 +509,9 @@ pub mod registry {
 
             meter.status = MeterStatus::Inactive;
             user.meter_count = user.meter_count.saturating_sub(1);
+            // Meter leaves the registry — drop it from its owner's shard count so
+            // aggregate_shards reflects live (non-deactivated) meters.
+            shard.meter_count = shard.meter_count.saturating_sub(1);
 
             emit!(MeterDeactivated {
                 meter_id: bytes32_to_string(&meter.meter_id),
@@ -451,30 +525,37 @@ pub mod registry {
 
     /// Verify if a user is valid and active
     pub fn is_valid_user(ctx: Context<IsValidUser>) -> Result<bool> {
-        let user_account = ctx.accounts.user_account.load()?;
-        Ok(user_account.status == UserStatus::Active)
+        let res = compute_fn!("is_valid_user" => {
+            let user_account = ctx.accounts.user_account.load()?;
+            user_account.status == UserStatus::Active
+        });
+        Ok(res)
     }
 
     /// Verify if a meter is valid and active
     pub fn is_valid_meter(ctx: Context<IsValidMeter>) -> Result<bool> {
-        let meter_account = ctx.accounts.meter_account.load()?;
-        Ok(meter_account.status == MeterStatus::Active)
+        let res = compute_fn!("is_valid_meter" => {
+            let meter_account = ctx.accounts.meter_account.load()?;
+            meter_account.status == MeterStatus::Active
+        });
+        Ok(res)
     }
 
     /// Calculate unsettled net generation ready for tokenization
     /// This is a view function that returns how much energy can be minted as GRID tokens
     pub fn get_unsettled_balance(ctx: Context<GetUnsettledBalance>) -> Result<u64> {
-        let meter = ctx.accounts.meter_account.load()?;
+        let res = compute_fn!("get_unsettled_balance" => {
+            let meter = ctx.accounts.meter_account.load()?;
 
-        // Calculate current net generation (total produced - total consumed)
-        let current_net_gen = meter
-            .total_generation
-            .saturating_sub(meter.total_consumption);
+            // Calculate current net generation (total produced - total consumed)
+            let current_net_gen = meter
+                .total_generation
+                .saturating_sub(meter.total_consumption);
 
-        // Calculate how much hasn't been tokenized yet
-        let unsettled = current_net_gen.saturating_sub(meter.settled_net_generation);
-
-        Ok(unsettled)
+            // Calculate how much hasn't been tokenized yet
+            current_net_gen.saturating_sub(meter.settled_net_generation)
+        });
+        Ok(res)
     }
 
     /// Settle meter balance and prepare for GRID token minting
@@ -524,32 +605,36 @@ pub mod registry {
 
     /// Mark energy as claimed for ERC issuance (authorized by governance/oracle)
     pub fn mark_erc_claimed(ctx: Context<MarkErcClaimed>, amount: u64) -> Result<()> {
-        let mut meter = ctx.accounts.meter_account.load_mut()?;
+        compute_fn!("mark_erc_claimed" => {
+            let mut meter = ctx.accounts.meter_account.load_mut()?;
 
-        // Authorization check - usually either the registry authority or a specific governance program
-        let registry = ctx.accounts.registry.load()?;
-        require!(
-            ctx.accounts.authority.key() == registry.authority
-                || ctx.accounts.authority.key() == registry.oracle_authority,
-            RegistryError::UnauthorizedAuthority
-        );
+            // Authorization check - usually either the registry authority or a specific governance program
+            let registry = ctx.accounts.registry.load()?;
+            require!(
+                ctx.accounts.authority.key() == registry.authority
+                    || ctx.accounts.authority.key() == registry.oracle_authority,
+                RegistryError::UnauthorizedAuthority
+            );
 
-        // FIX: Subtract settled_net_generation to prevent double-claiming
-        let unclaimed = meter
-            .total_generation
-            .saturating_sub(meter.claimed_erc_generation)
-            .saturating_sub(meter.settled_net_generation);
-        require!(amount <= unclaimed, RegistryError::NoUnsettledBalance);
+            // Bound ERC claims against NET generation (same base as do_settle_meter),
+            // so combined GRID + ERC claims can never exceed net generation.
+            let net_gen = meter
+                .total_generation
+                .saturating_sub(meter.total_consumption);
+            let unclaimed = net_gen
+                .saturating_sub(meter.claimed_erc_generation)
+                .saturating_sub(meter.settled_net_generation);
+            require!(amount <= unclaimed, RegistryError::NoUnsettledBalance);
 
-        meter.claimed_erc_generation = meter.claimed_erc_generation.saturating_add(amount);
+            meter.claimed_erc_generation = meter.claimed_erc_generation.saturating_add(amount);
 
-        emit!(ErcClaimed {
-            meter_id: bytes32_to_string(&meter.meter_id),
-            owner: meter.owner,
-            amount,
-            total_claimed: meter.claimed_erc_generation,
+            emit!(ErcClaimed {
+                meter_id: bytes32_to_string(&meter.meter_id),
+                owner: meter.owner,
+                amount,
+                total_claimed: meter.claimed_erc_generation,
+            });
         });
-
         Ok(())
     }
 
@@ -562,40 +647,43 @@ pub mod registry {
     // TODO: Add unstake_grx and slash_validator instructions
     pub fn stake_grx(ctx: Context<StakeGrx>, amount: u64) -> Result<()> {
         require!(amount > 0, RegistryError::MinStakeNotMet);
+        compute_fn!("stake_grx" => {
+            let cpi_accounts = token_interface::TransferChecked {
+                from: ctx.accounts.user_grx_ata.to_account_info(),
+                to: ctx.accounts.grx_vault.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
+                mint: ctx.accounts.grx_mint.to_account_info(),
+            };
+            let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
 
-        let cpi_accounts = token_interface::TransferChecked {
-            from: ctx.accounts.user_grx_ata.to_account_info(),
-            to: ctx.accounts.grx_vault.to_account_info(),
-            authority: ctx.accounts.authority.to_account_info(),
-            mint: ctx.accounts.grx_mint.to_account_info(),
-        };
-        let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
+            compute_checkpoint!("before_stake_transfer_cpi");
+            token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.grx_mint.decimals)?;
+            compute_checkpoint!("after_stake_transfer_cpi");
 
-        token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.grx_mint.decimals)?;
-
-        let mut user_account = ctx.accounts.user_account.load_mut()?;
-        user_account.staked_grx = user_account
-            .staked_grx
-            .checked_add(amount)
-            .ok_or(RegistryError::MathOverflow)?;
-        user_account.last_stake_at = Clock::get()?.unix_timestamp;
-
+            let mut user_account = ctx.accounts.user_account.load_mut()?;
+            user_account.staked_grx = user_account
+                .staked_grx
+                .checked_add(amount)
+                .ok_or(RegistryError::MathOverflow)?;
+            user_account.last_stake_at = Clock::get()?.unix_timestamp;
+        });
         Ok(())
     }
 
     /// Register as a validator (requires at least 10,000 GRX staked)
     pub fn register_validator(ctx: Context<RegisterValidator>) -> Result<()> {
-        let mut user_account = ctx.accounts.user_account.load_mut()?;
+        compute_fn!("register_validator" => {
+            let mut user_account = ctx.accounts.user_account.load_mut()?;
 
-        // Minimum stake requirement: 10,000 GRX
-        const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000;
-        require!(
-            user_account.staked_grx >= MIN_VALIDATOR_STAKE,
-            RegistryError::MinStakeNotMet
-        );
+            // Minimum stake requirement: 10,000 GRX
+            const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000;
+            require!(
+                user_account.staked_grx >= MIN_VALIDATOR_STAKE,
+                RegistryError::MinStakeNotMet
+            );
 
-        user_account.validator_status = ValidatorStatus::Active;
-
+            user_account.validator_status = ValidatorStatus::Active;
+        });
         Ok(())
     }
 }
@@ -695,7 +783,32 @@ pub struct RegisterUser<'info> {
     pub registry_shard: AccountLoader<'info, RegistryShard>,
 
     #[account(
+        seeds = [b"registry"],
+        bump,
+    )]
+    pub registry: AccountLoader<'info, Registry>,
+
+    /// CHECK: The user's public key. Authorization checked in instruction body.
+    pub authority: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Accounts for the decoupled welcome airdrop. Mirrors the energy-token
+/// `mint_tokens_direct` CPI inputs; the registry PDA signs the mint.
+#[derive(Accounts)]
+pub struct ClaimAirdrop<'info> {
+    #[account(
         mut,
+        seeds = [b"user", authority.key().as_ref()],
+        bump
+    )]
+    pub user_account: AccountLoader<'info, UserAccount>,
+
+    #[account(
         seeds = [b"registry"],
         bump,
     )]
@@ -722,8 +835,6 @@ pub struct RegisterUser<'info> {
     pub token_info: AccountInfo<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
-
-    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -752,7 +863,7 @@ pub struct RegisterMeter<'info> {
     )]
     pub registry_shard: AccountLoader<'info, RegistryShard>,
 
-    #[account(mut)]
+    #[account(mut, seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
 
     #[account(mut)]
@@ -763,7 +874,7 @@ pub struct RegisterMeter<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateUserStatus<'info> {
-    #[account(mut)]
+    #[account(mut, seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
 
     #[account(mut)]
@@ -774,6 +885,7 @@ pub struct UpdateUserStatus<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateMeterReading<'info> {
+    #[account(seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
 
     #[account(mut)]
@@ -800,7 +912,7 @@ pub struct UpdateAuthority<'info> {
 
 #[derive(Accounts)]
 pub struct SetMeterStatus<'info> {
-    #[account(mut)]
+    #[account(mut, seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
 
     #[account(mut)]
@@ -817,8 +929,17 @@ pub struct DeactivateMeter<'info> {
     #[account(mut)]
     pub user_account: AccountLoader<'info, UserAccount>,
 
-    #[account(mut)]
+    #[account(mut, seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
+
+    // Owner's shard — seeds bind to `owner` so the count is decremented on the
+    // same shard `register_meter` incremented (shard = owner first byte % 16).
+    #[account(
+        mut,
+        seeds = [b"registry_shard".as_ref(), &[owner.key().to_bytes()[0] % 16]],
+        bump
+    )]
+    pub registry_shard: AccountLoader<'info, RegistryShard>,
 
     pub owner: Signer<'info>,
 }
@@ -889,12 +1010,13 @@ pub struct SettleAndMintTokens<'info> {
 pub struct MarkErcClaimed<'info> {
     #[account(mut)]
     pub meter_account: AccountLoader<'info, MeterAccount>,
+    #[account(seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
     pub authority: Signer<'info>,
 }
 #[derive(Accounts)]
 pub struct AggregateShards<'info> {
-    #[account(mut)]
+    #[account(mut, seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
 
     pub authority: Signer<'info>,
