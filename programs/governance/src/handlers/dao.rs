@@ -15,6 +15,12 @@ pub fn create_proposal(
     let proposal = &mut ctx.accounts.proposal;
     let clock = Clock::get()?;
 
+    // Voting period must be positive (a non-positive period would expire in the past)
+    require!(
+        voting_period_seconds > 0,
+        GovernanceError::InvalidProposalStatus
+    );
+
     // Validate that the proposer owns the supplied meter account
     {
         let meter_data = ctx.accounts.meter_account.try_borrow_data()?;
@@ -22,7 +28,9 @@ pub fn create_proposal(
             meter_data.len() >= 8 + std::mem::size_of::<MeterAccount>(),
             GovernanceError::InvalidMeterAccount
         );
-        let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
+        let meter = bytemuck::from_bytes::<MeterAccount>(
+            &meter_data[8..8 + std::mem::size_of::<MeterAccount>()],
+        );
         let meter_owner = Pubkey::new_from_array(meter.owner);
         require!(
             meter_owner == ctx.accounts.proposer.key(),
@@ -38,7 +46,10 @@ pub fn create_proposal(
     proposal.votes_for = 0;
     proposal.votes_against = 0;
     proposal.status = ProposalStatus::Active;
-    proposal.expires_at = clock.unix_timestamp + voting_period_seconds;
+    proposal.expires_at = clock
+        .unix_timestamp
+        .checked_add(voting_period_seconds)
+        .ok_or(GovernanceError::MathOverflow)?;
     proposal.bump = ctx.bumps.proposal;
 
     emit!(ProposalCreated {
@@ -81,7 +92,9 @@ pub fn cast_vote(
             meter_data.len() >= 8 + std::mem::size_of::<MeterAccount>(),
             GovernanceError::InvalidMeterAccount
         );
-        let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
+        let meter = bytemuck::from_bytes::<MeterAccount>(
+            &meter_data[8..8 + std::mem::size_of::<MeterAccount>()],
+        );
         // Validate voter owns the supplied meter
         let meter_owner = Pubkey::new_from_array(meter.owner);
         require!(
