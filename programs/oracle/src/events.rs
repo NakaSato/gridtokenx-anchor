@@ -41,20 +41,6 @@ pub struct ValidationConfigUpdated {
 }
 
 #[event]
-pub struct BackupOracleAdded {
-    pub authority: Pubkey,
-    pub backup_oracle: Pubkey,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct BackupOracleRemoved {
-    pub authority: Pubkey,
-    pub backup_oracle: Pubkey,
-    pub timestamp: i64,
-}
-
-#[event]
 pub struct MeterReadingRejected {
     pub meter_id: String,
     pub energy_produced: u64,
