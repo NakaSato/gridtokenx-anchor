@@ -2,6 +2,11 @@ use anchor_lang::prelude::*;
 use crate::SubmitLimitOrderShardedContext;
 use crate::state::*;
 
+#[cfg(feature = "localnet")]
+use compute_debug::compute_fn;
+#[cfg(not(feature = "localnet"))]
+use crate::compute_fn;
+
 pub fn submit_limit_order_sharded(
     ctx: Context<SubmitLimitOrderShardedContext>,
     order_id_val: u64,
@@ -10,6 +15,7 @@ pub fn submit_limit_order_sharded(
     price: u64,
     _shard_id: u8,
 ) -> Result<()> {
+    compute_fn!("submit_limit_order_sharded" => {
     let clock = Clock::get()?;
     let mut order = ctx.accounts.order.load_init()?;
     let mut zone_shard = ctx.accounts.zone_shard.load_mut()?;
@@ -41,6 +47,7 @@ pub fn submit_limit_order_sharded(
         price,
         amount,
         timestamp: clock.unix_timestamp,
+    });
     });
 
     Ok(())
