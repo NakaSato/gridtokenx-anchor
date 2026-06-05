@@ -65,14 +65,19 @@ describe("governance-dao-integration", () => {
   async function registerUserWithMeter(user: Keypair, meterId: string): Promise<{ meterPda: PublicKey }> {
     const [userPda] = PublicKey.findProgramAddressSync([Buffer.from("user"), user.publicKey.toBuffer()], registryProgram.programId);
     const [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], registryProgram.programId);
-    const [shardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([shardId])], registryProgram.programId);
+    // Shard bound in-program to the user's first key byte — derive + ensure inited.
+    const userShardId = user.publicKey.toBytes()[0] % 16;
+    const [shardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([userShardId])], registryProgram.programId);
+    try {
+        await registryProgram.methods.initializeShard(userShardId).accounts({ shard: shardPda, authority, systemProgram: SystemProgram.programId } as any).rpc();
+    } catch (e) {}
     const [meterPda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), user.publicKey.toBuffer(), Buffer.from(meterId)], registryProgram.programId);
 
     // Fund user
     await provider.sendAndConfirm(new Transaction().add(SystemProgram.transfer({ fromPubkey: authority, toPubkey: user.publicKey, lamports: 0.1 * LAMPORTS_PER_SOL })));
 
     // Register User (ignore airdrop for this test by providing dummy accounts)
-    await registryProgram.methods.registerUser({ prosumer: {} }, 0, 0, new BN(0), shardId).accounts({
+    await registryProgram.methods.registerUser({ prosumer: {} }, 0, 0, new BN(0), userShardId).accounts({
         userAccount: userPda,
         registryShard: shardPda,
         registry: registryPda,
@@ -87,7 +92,7 @@ describe("governance-dao-integration", () => {
     } as any).rpc();
 
     // Register Meter
-    await registryProgram.methods.registerMeter(meterId, { solar: {} }, shardId).accounts({
+    await registryProgram.methods.registerMeter(meterId, { solar: {} }, userShardId).accounts({
         meterAccount: meterPda,
         userAccount: userPda,
         registryShard: shardPda,
