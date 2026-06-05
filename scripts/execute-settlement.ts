@@ -21,6 +21,7 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import * as fs from "fs";
+import { sizedComputeBudgetPreIxs } from "../tests/utils/compute-budget";
 
 async function ensureAta(
     connection: anchor.web3.Connection,
@@ -202,7 +203,7 @@ async function main() {
   // 7. Execute Atomic Settlement
   console.log(`\n⚡ Executing Atomic Settlement...`);
   try {
-    const tx = await tradingProgram.methods
+    const settlementBuilder = tradingProgram.methods
       .executeAtomicSettlement(
         new BN(100), // amount
         new BN(55),  // price
@@ -229,8 +230,14 @@ async function main() {
         secondaryTokenProgram: TOKEN_PROGRAM_ID,
         governanceConfig: poaConfigPda,
       } as any)
-      .signers([escrowAuth])
-      .rpc();
+      .signers([escrowAuth]);
+
+    // Size a compute-unit limit from a dry-run simulation (+10% headroom) and
+    // attach a small priority fee so the 5-CPI settlement has deterministic budget.
+    const budgetIxs = await sizedComputeBudgetPreIxs(settlementBuilder, {
+      microLamports: 1_000,
+    });
+    const tx = await settlementBuilder.preInstructions(budgetIxs).rpc();
 
     console.log(`   ✅ Settlement successful! Tx: ${tx}`);
     
