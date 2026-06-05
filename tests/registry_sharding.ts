@@ -50,7 +50,8 @@ describe("registry_sharding", () => {
       console.log("Registry already initialized");
     }
 
-    for (let i = 0; i < 4; i++) {
+    // Init all 16 shards — users now bind to shard = pubkey[0] % 16, so any shard may be hit.
+    for (let i = 0; i < 16; i++) {
       const [shardPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("registry_shard"), Buffer.from([i])],
         program.programId
@@ -74,7 +75,8 @@ describe("registry_sharding", () => {
   it("Registers users across different shards", async () => {
     for (let i = 0; i < 4; i++) {
         const userKeypair = Keypair.generate();
-        const shardId = i;
+        // Shard is bound in-program to the user's first key byte.
+        const shardId = userKeypair.publicKey.toBytes()[0] % 16;
         const [shardPda] = PublicKey.findProgramAddressSync(
             [Buffer.from("registry_shard"), Buffer.from([shardId])],
             program.programId
@@ -128,7 +130,7 @@ describe("registry_sharding", () => {
 
   it("Aggregates shard counts into the global registry", async () => {
     const shardPdas = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 16; i++) {
         const [shardPda] = PublicKey.findProgramAddressSync(
             [Buffer.from("registry_shard"), Buffer.from([i])],
             program.programId
