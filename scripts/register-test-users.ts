@@ -73,7 +73,20 @@ async function main() {
     const keypair = Keypair.generate();
     console.log(`\n👤 Registering ${user.name}...`);
     console.log(`   Public Key: ${keypair.publicKey.toBase58()}`);
-    
+
+    // Shard is bound in-program to the user's first key byte — derive + ensure inited.
+    const userShardId = keypair.publicKey.toBytes()[0] % 16;
+    const [userShardPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("registry_shard"), Buffer.from([userShardId])],
+      registryProgram.programId
+    );
+    try {
+      await registryProgram.methods
+        .initializeShard(userShardId)
+        .accounts({ shard: userShardPda, authority, systemProgram: SystemProgram.programId } as any)
+        .rpc();
+    } catch (e) { /* already initialized */ }
+
     // Save keypair for future use
     fs.writeFileSync(`test-wallet-${user.name.toLowerCase()}.json`, JSON.stringify(Array.from(keypair.secretKey)));
 
@@ -111,6 +124,13 @@ async function main() {
       continue;
     }
 
+    const userPda = PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), keypair.publicKey.toBuffer()],
+      registryProgram.programId
+    )[0];
+
+    // Registration no longer mints the airdrop inline (a failed mint CPI would abort
+    // it). register_user only creates the user record.
     try {
       await registryProgram.methods
         .registerUser(
@@ -118,11 +138,32 @@ async function main() {
           13000000, // Lat
           100000000, // Long
           new anchor.BN("89283082803ffff", 16), // H3 Index
-          shardId
+          userShardId
         )
         .accounts({
-          userAccount: PublicKey.findProgramAddressSync([Buffer.from("user"), keypair.publicKey.toBuffer()], registryProgram.programId)[0],
-          registryShard: shardPda,
+          userAccount: userPda,
+          registryShard: userShardPda,
+          registry: registryPda,
+          authority: keypair.publicKey,
+          payer: authority,
+          systemProgram: SystemProgram.programId,
+        } as any)
+        .rpc();
+
+      console.log(`   ✅ ${user.name} registered successfully!`);
+    } catch (e: any) {
+      console.error(`   ❌ Failed to register ${user.name}:`, e.message);
+      continue;
+    }
+
+    // Claim the welcome airdrop in a separate, retryable transaction. Admin-signed
+    // (payer is the registry authority); a mint failure here cannot roll back the
+    // registration above.
+    try {
+      await registryProgram.methods
+        .claimAirdrop()
+        .accounts({
+          userAccount: userPda,
           registry: registryPda,
           authority: keypair.publicKey,
           payer: authority,
@@ -131,13 +172,12 @@ async function main() {
           userTokenAccount: userAta,
           tokenInfo: tokenInfoPda,
           tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
         } as any)
         .rpc();
-      
-      console.log(`   ✅ ${user.name} registered successfully!`);
+
+      console.log(`   🎁 ${user.name} airdrop claimed`);
     } catch (e: any) {
-      console.error(`   ❌ Failed to register ${user.name}:`, e.message);
+      console.error(`   ⚠️ Airdrop claim failed for ${user.name} (registration intact, retryable):`, e.message);
     }
   }
 
