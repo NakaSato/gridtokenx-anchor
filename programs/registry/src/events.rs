@@ -9,6 +9,13 @@ pub struct RegistryInitialized {
 }
 
 #[event]
+pub struct AirdropClaimed {
+    pub user: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
 pub struct UserRegistered {
     pub user: Pubkey,
     pub user_type: UserType,
