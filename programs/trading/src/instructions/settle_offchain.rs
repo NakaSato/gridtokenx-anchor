@@ -6,11 +6,19 @@ const ED25519_ID: Pubkey = Pubkey::new_from_array([
     244, 138, 100, 252, 202, 112, 68, 128, 0, 0, 0,
 ]);
 
+// Instructions sysvar: Sysvar1nstructions1111111111111111111111111
 const IX_ID: Pubkey = Pubkey::new_from_array([
-    6, 167, 213, 23, 25, 44, 92, 142, 224, 137, 211, 236, 12, 137, 234, 123, 14, 153, 162, 115, 140,
-    201, 192, 141, 160, 23, 138, 203, 166, 131, 11, 138,
+    6, 167, 213, 23, 24, 123, 209, 102, 53, 218, 212, 4, 85, 253, 194, 192, 193, 36, 198, 143, 33,
+    86, 117, 165, 219, 186, 203, 95, 8, 0, 0, 0,
 ]);
 
+// Minimal correct parser for the Instructions sysvar. Per-instruction layout is:
+//   num_accounts: u16
+//   per account: flags u8 + pubkey [u8;32]   (33 bytes)
+//   program_id: [u8;32]
+//   data_len: u16
+//   data: [u8; data_len]
+// Only program_id + data are needed for ed25519 verification.
 fn load_instruction_at_checked(
     index: usize,
     sysvar_info: &AccountInfo,
@@ -18,46 +26,49 @@ fn load_instruction_at_checked(
     if sysvar_info.key != &IX_ID {
         return Err(ProgramError::IncorrectProgramId.into());
     }
-    
     let data = sysvar_info.try_borrow_data()?;
-    let num_instructions = u16::from_le_bytes(data[0..2].try_into().map_err(|_| ProgramError::InvalidInstructionData)?);
-    if index >= num_instructions as usize {
-        return Err(ProgramError::InvalidInstructionData.into());
+    let bad = || -> anchor_lang::error::Error { ProgramError::InvalidInstructionData.into() };
+
+    let read_u16 = |buf: &[u8], at: usize| -> Result<usize> {
+        let slice = buf.get(at..at + 2).ok_or_else(bad)?;
+        Ok(u16::from_le_bytes([slice[0], slice[1]]) as usize)
+    };
+
+    let num_instructions = read_u16(&data, 0)?;
+    if index >= num_instructions {
+        return Err(bad());
     }
-    
-    let offset = u16::from_le_bytes(data[2 + index * 2..4 + index * 2].try_into().map_err(|_| ProgramError::InvalidInstructionData)?) as usize;
-    let ix_data = &data[offset..];
-    
-    let mut pos = 0;
-    let num_accounts = u16::from_le_bytes(ix_data[pos..pos+2].try_into().map_err(|_| ProgramError::InvalidInstructionData)?) as usize;
+    let mut pos = read_u16(&data, 2 + index * 2)?;
+
+    let num_accounts = read_u16(&data, pos)?;
     pos += 2;
-    
-    let mut accounts = Vec::with_capacity(num_accounts);
-    for _ in 0..num_accounts {
-        let pubkey = Pubkey::new_from_array(ix_data[pos..pos+32].try_into().map_err(|_| ProgramError::InvalidInstructionData)?);
-        let is_signer = ix_data[pos+32] != 0;
-        let is_writable = ix_data[pos+33] != 0;
-        accounts.push(anchor_lang::solana_program::instruction::AccountMeta { pubkey, is_signer, is_writable });
-        pos += 34;
-    }
-    
-    let program_id = Pubkey::new_from_array(ix_data[pos..pos+32].try_into().map_err(|_| ProgramError::InvalidInstructionData)?);
+    pos = pos
+        .checked_add(num_accounts.checked_mul(33).ok_or_else(bad)?)
+        .ok_or_else(bad)?;
+
+    let program_id = Pubkey::new_from_array(
+        data.get(pos..pos + 32).ok_or_else(bad)?.try_into().map_err(|_| bad())?,
+    );
     pos += 32;
-    
-    let data_len = u32::from_le_bytes(ix_data[pos..pos+4].try_into().map_err(|_| ProgramError::InvalidInstructionData)?) as usize;
-    pos += 4;
-    
-    let ix_payload = ix_data[pos..pos+data_len].to_vec();
-    
-    Ok(anchor_lang::solana_program::instruction::Instruction { 
-        program_id, 
-        accounts, 
-        data: ix_payload 
+
+    let data_len = read_u16(&data, pos)?;
+    pos += 2;
+    let payload = data.get(pos..pos + data_len).ok_or_else(bad)?.to_vec();
+
+    Ok(anchor_lang::solana_program::instruction::Instruction {
+        program_id,
+        accounts: Vec::new(),
+        data: payload,
     })
 }
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use crate::state::*;
 use crate::error::TradingError;
+
+#[cfg(feature = "localnet")]
+use compute_debug::{compute_checkpoint, compute_fn};
+#[cfg(not(feature = "localnet"))]
+use crate::{compute_checkpoint, compute_fn};
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct OffchainOrderPayload {
@@ -87,9 +98,13 @@ impl OffchainOrderPayload {
 #[derive(Accounts)]
 #[instruction(buyer_payload: OffchainOrderPayload, seller_payload: OffchainOrderPayload)]
 pub struct SettleOffchainMatchContext<'info> {
+    // Bound to the canonical singleton market PDA — blocks substituting a fee=0 market.
+    #[account(seeds = [b"market"], bump)]
     pub market: AccountLoader<'info, Market>,
+    // Must belong to `market` — blocks substituting a zero-capacity / wrong-zone book.
+    #[account(mut, constraint = zone_market.load()?.market == market.key())]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
-    
+
     #[account(
         init_if_needed,
         payer = payer,
@@ -108,28 +123,83 @@ pub struct SettleOffchainMatchContext<'info> {
     )]
     pub seller_nullifier: Box<Account<'info, OrderNullifier>>,
 
-    #[account(mut)]
-    pub buyer_currency_account: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(mut)]
-    pub seller_currency_account: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(mut)]
-    pub seller_energy_account: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(mut)]
-    pub buyer_energy_account: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    #[account(mut)]
-    pub fee_collector: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(mut)]
-    pub wheeling_collector: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(mut)]
-    pub loss_collector: Box<InterfaceAccount<'info, TokenAccount>>,
-
     pub currency_mint: Box<InterfaceAccount<'info, Mint>>,
     pub energy_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    /// CHECK: PDA authority for the market
+    /// CHECK: global escrow authority PDA — signs the transfer CPIs.
     #[account(seeds = [b"market_authority"], bump)]
     pub market_authority: UncheckedAccount<'info>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+    pub secondary_token_program: Interface<'info, TokenInterface>,
+
+    // --- Per-user escrows: address is fully derived from the SIGNED payload user + mint,
+    // so settlement can never be aimed at a victim's funds. ---
+    #[account(
+        mut,
+        seeds = [b"escrow", buyer_payload.user.as_ref(), currency_mint.key().as_ref()],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
+    pub buyer_currency_escrow: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [b"escrow", seller_payload.user.as_ref(), currency_mint.key().as_ref()],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
+    pub seller_currency_escrow: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [b"escrow", seller_payload.user.as_ref(), energy_mint.key().as_ref()],
+        bump,
+        token::mint = energy_mint,
+        token::authority = market_authority,
+        token::token_program = secondary_token_program,
+    )]
+    pub seller_energy_escrow: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [b"escrow", buyer_payload.user.as_ref(), energy_mint.key().as_ref()],
+        bump,
+        token::mint = energy_mint,
+        token::authority = market_authority,
+        token::token_program = secondary_token_program,
+    )]
+    pub buyer_energy_escrow: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    // Protocol collectors — bound to seed PDAs so fees can't be redirected.
+    #[account(
+        mut,
+        seeds = [b"fee_collector", currency_mint.key().as_ref()],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
+    pub fee_collector: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [b"wheeling_collector", currency_mint.key().as_ref()],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
+    pub wheeling_collector: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [b"loss_collector", currency_mint.key().as_ref()],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
+    pub loss_collector: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -151,8 +221,6 @@ pub struct SettleOffchainMatchContext<'info> {
     /// CHECK: Instructions sysvar to verify Ed25519 sigs
     #[account(address = IX_ID)]
     pub sysvar_instructions: UncheckedAccount<'info>,
-    pub token_program: Interface<'info, TokenInterface>,
-    pub secondary_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
 
@@ -169,12 +237,14 @@ pub struct BatchMatchPair {
 #[derive(Accounts)]
 #[instruction(matches: Vec<BatchMatchPair>)]
 pub struct SettleOffchainMatchBatchContext<'info> {
+    #[account(seeds = [b"market"], bump)]
     pub market: AccountLoader<'info, Market>,
+    #[account(mut, constraint = zone_market.load()?.market == market.key())]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
     pub currency_mint: Box<InterfaceAccount<'info, Mint>>,
     pub energy_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    /// CHECK: PDA authority for the market
+    /// CHECK: global escrow authority PDA — signs the transfer CPIs.
     #[account(seeds = [b"market_authority"], bump)]
     pub market_authority: UncheckedAccount<'info>,
 
@@ -183,11 +253,32 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     #[account(mut)]
     pub zone_shard: AccountLoader<'info, ZoneMarketShard>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"fee_collector", currency_mint.key().as_ref()],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
     pub fee_collector: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"wheeling_collector", currency_mint.key().as_ref()],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
     pub wheeling_collector: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"loss_collector", currency_mint.key().as_ref()],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
     pub loss_collector: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(mut)]
@@ -210,13 +301,14 @@ pub fn settle_offchain_match(
     wheeling_charge_val: u64,
     loss_cost_val: u64,
 ) -> Result<()> {
+    compute_fn!("settle_offchain_match" => {
     // --- 1. Ed25519 SIGNATURE VERIFICATION ---
     let sysvar_info = &ctx.accounts.sysvar_instructions;
-    
+
     // Verify Buyer Signature
     let buyer_msg = buyer_payload.get_message();
     verify_ed25519_signature(sysvar_info, 0, &buyer_payload.user, &buyer_msg)?;
-    
+
     // Verify Seller Signature
     let seller_msg = seller_payload.get_message();
     verify_ed25519_signature(sysvar_info, 1, &seller_payload.user, &seller_msg)?;
@@ -227,7 +319,7 @@ pub fn settle_offchain_match(
     require!(match_price >= seller_payload.price_per_kwh, TradingError::SlippageExceeded);
     require!(buyer_payload.side == 0, TradingError::InvalidOrderSide);
     require!(seller_payload.side == 1, TradingError::InvalidOrderSide);
-    
+
     let clock = Clock::get()?;
     require!(buyer_payload.expires_at == 0 || clock.unix_timestamp < buyer_payload.expires_at, TradingError::OrderExpired);
     require!(seller_payload.expires_at == 0 || clock.unix_timestamp < seller_payload.expires_at, TradingError::OrderExpired);
@@ -237,7 +329,13 @@ pub fn settle_offchain_match(
     let mut market_shard = ctx.accounts.market_shard.load_mut()?;
     let mut zone_shard = ctx.accounts.zone_shard.load_mut()?;
 
-    if zone_market.capacity > 0 && seller_payload.zone_id != zone_market.zone_id {
+    // Capacity throttles cross-zone (wheeling) flow; intra-zone trades are exempt because
+    // they consume no inter-zone transmission line. A trade is cross-zone if EITHER leg is
+    // remote relative to this zone_market — checking only the seller lets a remote-buyer /
+    // local-seller trade bypass the throttle.
+    if zone_market.capacity > 0
+        && (seller_payload.zone_id != zone_market.zone_id || buyer_payload.zone_id != zone_market.zone_id)
+    {
         let new_total_flow = zone_market.committed_flow.checked_add(match_amount).ok_or(TradingError::Overflow)?;
         require!(new_total_flow <= zone_market.capacity, TradingError::CapacityExceeded);
         zone_market.committed_flow = new_total_flow;
@@ -256,54 +354,91 @@ pub fn settle_offchain_match(
     let authority_seeds = &[b"market_authority".as_ref(), &[authority_bump]];
     let signer = &[&authority_seeds[..]];
 
-    anchor_spl::token_interface::transfer_checked(
-        CpiContext::new_with_signer(ctx.accounts.token_program.key(), anchor_spl::token_interface::TransferChecked {
-            from: ctx.accounts.buyer_currency_account.to_account_info(),
-            mint: ctx.accounts.currency_mint.to_account_info(),
-            to: ctx.accounts.fee_collector.to_account_info(),
-            authority: ctx.accounts.market_authority.to_account_info(),
-        }, signer),
-        market_fee,
-        ctx.accounts.currency_mint.decimals
-    )?;
+    compute_checkpoint!("before_settle_cpis");
+    // Currency: buyer escrow -> fee collector
+    if market_fee > 0 {
+        anchor_spl::token_interface::transfer_checked(
+            CpiContext::new_with_signer(ctx.accounts.token_program.key(), anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.buyer_currency_escrow.to_account_info(),
+                mint: ctx.accounts.currency_mint.to_account_info(),
+                to: ctx.accounts.fee_collector.to_account_info(),
+                authority: ctx.accounts.market_authority.to_account_info(),
+            }, signer),
+            market_fee,
+            ctx.accounts.currency_mint.decimals
+        )?;
+    }
 
-    anchor_spl::token_interface::transfer_checked(
-        CpiContext::new_with_signer(ctx.accounts.token_program.key(), anchor_spl::token_interface::TransferChecked {
-            from: ctx.accounts.buyer_currency_account.to_account_info(),
-            mint: ctx.accounts.currency_mint.to_account_info(),
-            to: ctx.accounts.seller_currency_account.to_account_info(),
-            authority: ctx.accounts.market_authority.to_account_info(),
-        }, signer),
-        net_seller_amount,
-        ctx.accounts.currency_mint.decimals
-    )?;
+    // Currency: buyer escrow -> wheeling collector
+    if wheeling_charge_val > 0 {
+        anchor_spl::token_interface::transfer_checked(
+            CpiContext::new_with_signer(ctx.accounts.token_program.key(), anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.buyer_currency_escrow.to_account_info(),
+                mint: ctx.accounts.currency_mint.to_account_info(),
+                to: ctx.accounts.wheeling_collector.to_account_info(),
+                authority: ctx.accounts.market_authority.to_account_info(),
+            }, signer),
+            wheeling_charge_val,
+            ctx.accounts.currency_mint.decimals
+        )?;
+    }
 
+    // Currency: buyer escrow -> loss collector
+    if loss_cost_val > 0 {
+        anchor_spl::token_interface::transfer_checked(
+            CpiContext::new_with_signer(ctx.accounts.token_program.key(), anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.buyer_currency_escrow.to_account_info(),
+                mint: ctx.accounts.currency_mint.to_account_info(),
+                to: ctx.accounts.loss_collector.to_account_info(),
+                authority: ctx.accounts.market_authority.to_account_info(),
+            }, signer),
+            loss_cost_val,
+            ctx.accounts.currency_mint.decimals
+        )?;
+    }
+
+    // Currency: buyer escrow -> seller escrow (net)
+    if net_seller_amount > 0 {
+        anchor_spl::token_interface::transfer_checked(
+            CpiContext::new_with_signer(ctx.accounts.token_program.key(), anchor_spl::token_interface::TransferChecked {
+                from: ctx.accounts.buyer_currency_escrow.to_account_info(),
+                mint: ctx.accounts.currency_mint.to_account_info(),
+                to: ctx.accounts.seller_currency_escrow.to_account_info(),
+                authority: ctx.accounts.market_authority.to_account_info(),
+            }, signer),
+            net_seller_amount,
+            ctx.accounts.currency_mint.decimals
+        )?;
+    }
+
+    // Energy: seller escrow -> buyer escrow
     anchor_spl::token_interface::transfer_checked(
         CpiContext::new_with_signer(ctx.accounts.secondary_token_program.key(), anchor_spl::token_interface::TransferChecked {
-            from: ctx.accounts.seller_energy_account.to_account_info(),
+            from: ctx.accounts.seller_energy_escrow.to_account_info(),
             mint: ctx.accounts.energy_mint.to_account_info(),
-            to: ctx.accounts.buyer_energy_account.to_account_info(),
+            to: ctx.accounts.buyer_energy_escrow.to_account_info(),
             authority: ctx.accounts.market_authority.to_account_info(),
         }, signer),
         match_amount,
         ctx.accounts.energy_mint.decimals
     )?;
+    compute_checkpoint!("after_settle_cpis");
 
     // --- 4. STATE UPDATE ---
-    ctx.accounts.buyer_nullifier.filled_amount += match_amount;
+    ctx.accounts.buyer_nullifier.filled_amount = ctx.accounts.buyer_nullifier.filled_amount.saturating_add(match_amount);
     ctx.accounts.buyer_nullifier.order_id = buyer_payload.order_id;
     ctx.accounts.buyer_nullifier.authority = buyer_payload.user;
     ctx.accounts.buyer_nullifier.bump = ctx.bumps.buyer_nullifier;
 
-    ctx.accounts.seller_nullifier.filled_amount += match_amount;
+    ctx.accounts.seller_nullifier.filled_amount = ctx.accounts.seller_nullifier.filled_amount.saturating_add(match_amount);
     ctx.accounts.seller_nullifier.order_id = seller_payload.order_id;
     ctx.accounts.seller_nullifier.authority = seller_payload.user;
     ctx.accounts.seller_nullifier.bump = ctx.bumps.seller_nullifier;
 
-    market_shard.volume_accumulated += match_amount;
-    market_shard.order_count += 1;
-    zone_shard.volume_accumulated += match_amount;
-    zone_shard.trade_count += 1;
+    market_shard.volume_accumulated = market_shard.volume_accumulated.saturating_add(match_amount);
+    market_shard.order_count = market_shard.order_count.saturating_add(1);
+    zone_shard.volume_accumulated = zone_shard.volume_accumulated.saturating_add(match_amount);
+    zone_shard.trade_count = zone_shard.trade_count.saturating_add(1);
     zone_shard.last_clearing_price = match_price;
     zone_shard.last_update = clock.unix_timestamp;
 
@@ -318,6 +453,7 @@ pub fn settle_offchain_match(
         fee_amount: market_fee,
         timestamp: clock.unix_timestamp,
     });
+    });
 
     Ok(())
 }
@@ -326,9 +462,10 @@ pub fn batch_settle_offchain_match<'info>(
     ctx: Context<'info, SettleOffchainMatchBatchContext<'info>>,
     matches: Vec<BatchMatchPair>,
 ) -> Result<()> {
+    compute_fn!("batch_settle_offchain_match" => {
     let match_count = matches.len();
     require!(match_count > 0 && match_count <= 4, TradingError::BatchTooLarge);
-    
+
     let sysvar_info = &ctx.accounts.sysvar_instructions;
     let remaining_accounts = ctx.remaining_accounts;
     require!(remaining_accounts.len() == match_count * 6, TradingError::InvalidAmount);
@@ -338,6 +475,13 @@ pub fn batch_settle_offchain_match<'info>(
     let mut zone_market = ctx.accounts.zone_market.load_mut()?;
     let mut market_shard = ctx.accounts.market_shard.load_mut()?;
     let mut zone_shard = ctx.accounts.zone_shard.load_mut()?;
+
+    // Hoist keys/program ids out of the loop to avoid repeated borrows.
+    let program_id = ctx.program_id;
+    let currency_mint_key = ctx.accounts.currency_mint.key();
+    let energy_mint_key = ctx.accounts.energy_mint.key();
+    let token_prog_key = ctx.accounts.token_program.key();
+    let sec_token_prog_key = ctx.accounts.secondary_token_program.key();
 
     let authority_seeds = &[b"market_authority".as_ref(), &[ctx.bumps.market_authority]];
     let signer = &[&authority_seeds[..]];
@@ -349,13 +493,56 @@ pub fn batch_settle_offchain_match<'info>(
         verify_ed25519_signature(sysvar_info, (i * 2 + 1) as u16, &m.seller_payload.user, &m.seller_payload.get_message())?;
 
         let offset = i * 6;
+
+        // --- ACCOUNT BINDING: every remaining account must be the canonical PDA for the
+        // SIGNED payload, otherwise an attacker could substitute a victim escrow (theft)
+        // or an unrelated nullifier (replay). Address derivation is the binding. ---
+        let buyer_null_key = remaining_accounts[offset].key();
+        require_keys_eq!(
+            buyer_null_key,
+            Pubkey::find_program_address(&[b"nullifier", m.buyer_payload.user.as_ref(), &m.buyer_payload.order_id], program_id).0,
+            TradingError::InvalidNullifier
+        );
+        require_keys_eq!(
+            remaining_accounts[offset + 1].key(),
+            Pubkey::find_program_address(&[b"nullifier", m.seller_payload.user.as_ref(), &m.seller_payload.order_id], program_id).0,
+            TradingError::InvalidNullifier
+        );
+        require_keys_eq!(
+            remaining_accounts[offset + 2].key(),
+            Pubkey::find_program_address(&[b"escrow", m.buyer_payload.user.as_ref(), currency_mint_key.as_ref()], program_id).0,
+            TradingError::InvalidEscrow
+        );
+        require_keys_eq!(
+            remaining_accounts[offset + 3].key(),
+            Pubkey::find_program_address(&[b"escrow", m.seller_payload.user.as_ref(), currency_mint_key.as_ref()], program_id).0,
+            TradingError::InvalidEscrow
+        );
+        require_keys_eq!(
+            remaining_accounts[offset + 4].key(),
+            Pubkey::find_program_address(&[b"escrow", m.seller_payload.user.as_ref(), energy_mint_key.as_ref()], program_id).0,
+            TradingError::InvalidEscrow
+        );
+        require_keys_eq!(
+            remaining_accounts[offset + 5].key(),
+            Pubkey::find_program_address(&[b"escrow", m.buyer_payload.user.as_ref(), energy_mint_key.as_ref()], program_id).0,
+            TradingError::InvalidEscrow
+        );
+        // Light SPL-ownership checks (defense-in-depth, mirrors execute_atomic_settlement).
+        require_keys_eq!(*remaining_accounts[offset + 2].owner, token_prog_key, TradingError::InvalidEscrow);
+        require_keys_eq!(*remaining_accounts[offset + 3].owner, token_prog_key, TradingError::InvalidEscrow);
+        require_keys_eq!(*remaining_accounts[offset + 4].owner, sec_token_prog_key, TradingError::InvalidEscrow);
+        require_keys_eq!(*remaining_accounts[offset + 5].owner, sec_token_prog_key, TradingError::InvalidEscrow);
+
         let mut buyer_nullifier: Account<'info, OrderNullifier> = Account::try_from(&remaining_accounts[offset])?;
         let mut seller_nullifier: Account<'info, OrderNullifier> = Account::try_from(&remaining_accounts[offset + 1])?;
+        require_keys_eq!(buyer_nullifier.authority, m.buyer_payload.user, TradingError::NullifierUserMismatch);
+        require_keys_eq!(seller_nullifier.authority, m.seller_payload.user, TradingError::NullifierUserMismatch);
 
         require!(m.match_amount > 0, TradingError::InvalidAmount);
         require!(m.match_price <= m.buyer_payload.price_per_kwh, TradingError::SlippageExceeded);
         require!(m.match_price >= m.seller_payload.price_per_kwh, TradingError::SlippageExceeded);
-        
+
         let buyer_rem = m.buyer_payload.energy_amount.saturating_sub(buyer_nullifier.filled_amount);
         let seller_rem = m.seller_payload.energy_amount.saturating_sub(seller_nullifier.filled_amount);
         require!(m.match_amount <= buyer_rem && m.match_amount <= seller_rem, TradingError::InvalidAmount);
@@ -364,17 +551,21 @@ pub fn batch_settle_offchain_match<'info>(
         let market_fee = total_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
         let net_seller = total_value.saturating_sub(market_fee).saturating_sub(m.wheeling_charge).saturating_sub(m.loss_cost);
 
-        // Zone capacity check and update
-        if zone_market.capacity > 0 && m.seller_payload.zone_id != zone_market.zone_id {
+        // Zone capacity check and update (cross-zone wheeling flow only — see single path).
+        // Cross-zone if EITHER leg is remote relative to this zone_market.
+        if zone_market.capacity > 0
+            && (m.seller_payload.zone_id != zone_market.zone_id || m.buyer_payload.zone_id != zone_market.zone_id)
+        {
             let new_total_flow = zone_market.committed_flow.checked_add(m.match_amount).ok_or(TradingError::Overflow)?;
             require!(new_total_flow <= zone_market.capacity, TradingError::CapacityExceeded);
             zone_market.committed_flow = new_total_flow;
         }
 
         // Transfers
+        compute_checkpoint!("before_settle_cpis");
         if market_fee > 0 {
             anchor_spl::token_interface::transfer_checked(
-                CpiContext::new_with_signer(ctx.accounts.token_program.key(), anchor_spl::token_interface::TransferChecked {
+                CpiContext::new_with_signer(token_prog_key, anchor_spl::token_interface::TransferChecked {
                     from: remaining_accounts[offset + 2].to_account_info(),
                     mint: ctx.accounts.currency_mint.to_account_info(),
                     to: ctx.accounts.fee_collector.to_account_info(),
@@ -384,18 +575,44 @@ pub fn batch_settle_offchain_match<'info>(
             )?;
         }
 
-        anchor_spl::token_interface::transfer_checked(
-            CpiContext::new_with_signer(ctx.accounts.token_program.key(), anchor_spl::token_interface::TransferChecked {
-                from: remaining_accounts[offset + 2].to_account_info(),
-                mint: ctx.accounts.currency_mint.to_account_info(),
-                to: remaining_accounts[offset + 3].to_account_info(),
-                authority: ctx.accounts.market_authority.to_account_info(),
-            }, signer),
-            net_seller, ctx.accounts.currency_mint.decimals
-        )?;
+        if m.wheeling_charge > 0 {
+            anchor_spl::token_interface::transfer_checked(
+                CpiContext::new_with_signer(token_prog_key, anchor_spl::token_interface::TransferChecked {
+                    from: remaining_accounts[offset + 2].to_account_info(),
+                    mint: ctx.accounts.currency_mint.to_account_info(),
+                    to: ctx.accounts.wheeling_collector.to_account_info(),
+                    authority: ctx.accounts.market_authority.to_account_info(),
+                }, signer),
+                m.wheeling_charge, ctx.accounts.currency_mint.decimals
+            )?;
+        }
+
+        if m.loss_cost > 0 {
+            anchor_spl::token_interface::transfer_checked(
+                CpiContext::new_with_signer(token_prog_key, anchor_spl::token_interface::TransferChecked {
+                    from: remaining_accounts[offset + 2].to_account_info(),
+                    mint: ctx.accounts.currency_mint.to_account_info(),
+                    to: ctx.accounts.loss_collector.to_account_info(),
+                    authority: ctx.accounts.market_authority.to_account_info(),
+                }, signer),
+                m.loss_cost, ctx.accounts.currency_mint.decimals
+            )?;
+        }
+
+        if net_seller > 0 {
+            anchor_spl::token_interface::transfer_checked(
+                CpiContext::new_with_signer(token_prog_key, anchor_spl::token_interface::TransferChecked {
+                    from: remaining_accounts[offset + 2].to_account_info(),
+                    mint: ctx.accounts.currency_mint.to_account_info(),
+                    to: remaining_accounts[offset + 3].to_account_info(),
+                    authority: ctx.accounts.market_authority.to_account_info(),
+                }, signer),
+                net_seller, ctx.accounts.currency_mint.decimals
+            )?;
+        }
 
         anchor_spl::token_interface::transfer_checked(
-            CpiContext::new_with_signer(ctx.accounts.secondary_token_program.key(), anchor_spl::token_interface::TransferChecked {
+            CpiContext::new_with_signer(sec_token_prog_key, anchor_spl::token_interface::TransferChecked {
                 from: remaining_accounts[offset + 4].to_account_info(),
                 mint: ctx.accounts.energy_mint.to_account_info(),
                 to: remaining_accounts[offset + 5].to_account_info(),
@@ -403,14 +620,15 @@ pub fn batch_settle_offchain_match<'info>(
             }, signer),
             m.match_amount, ctx.accounts.energy_mint.decimals
         )?;
+        compute_checkpoint!("after_settle_cpis");
 
-        buyer_nullifier.filled_amount += m.match_amount;
-        buyer_nullifier.exit(ctx.program_id)?;
-        seller_nullifier.filled_amount += m.match_amount;
-        seller_nullifier.exit(ctx.program_id)?;
+        buyer_nullifier.filled_amount = buyer_nullifier.filled_amount.saturating_add(m.match_amount);
+        buyer_nullifier.exit(program_id)?;
+        seller_nullifier.filled_amount = seller_nullifier.filled_amount.saturating_add(m.match_amount);
+        seller_nullifier.exit(program_id)?;
 
-        market_shard.volume_accumulated += m.match_amount;
-        zone_shard.volume_accumulated += m.match_amount;
+        market_shard.volume_accumulated = market_shard.volume_accumulated.saturating_add(m.match_amount);
+        zone_shard.volume_accumulated = zone_shard.volume_accumulated.saturating_add(m.match_amount);
         zone_shard.last_clearing_price = m.match_price;
         zone_shard.last_update = clock.unix_timestamp;
 
@@ -426,6 +644,7 @@ pub fn batch_settle_offchain_match<'info>(
             timestamp: clock.unix_timestamp,
         });
     }
+    });
     Ok(())
 }
 
@@ -442,7 +661,7 @@ fn verify_ed25519_signature(
         return Err(ProgramError::IncorrectProgramId.into());
     }
 
-    let pubkey_offset = 16; 
+    let pubkey_offset = 16;
     let _signature_offset = 48;
     let message_offset = 112;
 
