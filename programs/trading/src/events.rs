@@ -127,3 +127,19 @@ pub struct AuctionCleared {
     pub matched_orders: u32,
     pub timestamp: i64,
 }
+
+#[event]
+pub struct EscrowDeposited {
+    pub user: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct EscrowWithdrawn {
+    pub user: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
