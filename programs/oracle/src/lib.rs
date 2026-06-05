@@ -49,21 +49,13 @@ pub mod oracle {
             oracle_data.min_energy_value = 0;
             oracle_data.max_energy_value = 1000000;
             oracle_data.anomaly_detection_enabled = 1;
-            oracle_data.max_reading_deviation_percent = 50;
             oracle_data.max_production_consumption_ratio = 1000; // Default: 10x (for solar farms)
 
             oracle_data.total_valid_readings = 0;
             oracle_data.total_rejected_readings = 0;
-            oracle_data.average_reading_interval = 300;
             oracle_data.last_quality_score = 100;
             oracle_data.quality_score_updated_at = now;
 
-            oracle_data.backup_oracles_count = 0;
-            oracle_data.consensus_threshold = 2;
-            oracle_data.last_consensus_timestamp = 0;
-
-            oracle_data.last_energy_produced = 0;
-            oracle_data.last_energy_consumed = 0;
             oracle_data.total_global_energy_produced = 0;
             oracle_data.total_global_energy_consumed = 0;
             oracle_data.min_reading_interval = 60;
@@ -76,7 +68,10 @@ pub mod oracle {
     /// Submit meter reading data from AMI (only via Chain Bridge)
     ///
     /// Sealevel-optimized: oracle_data is read-only (config), writes go to per-meter MeterState PDA.
-    /// This allows readings for different meters to execute in parallel on separate CPU cores.
+    /// This lets readings for different meters touch disjoint write sets. NOTE: the per-tx fee
+    /// payer (the chain_bridge authority, also the `mut` rent payer here) is always write-locked,
+    /// so submissions sharing one gateway signer still serialize. Per-meter PDAs only parallelize
+    /// across distinct fee payers.
     pub fn submit_meter_reading(
         ctx: Context<SubmitMeterReading>,
         meter_id: String,
@@ -304,7 +299,6 @@ pub mod oracle {
         min_energy_value: u64,
         max_energy_value: u64,
         anomaly_detection_enabled: bool,
-        max_reading_deviation_percent: u16,
     ) -> Result<()> {
         compute_fn!("update_validation_config" => {
             let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
@@ -314,10 +308,15 @@ pub mod oracle {
                 OracleError::UnauthorizedAuthority
             );
 
+            // Reject inverted bounds — min > max would silently reject every reading.
+            require!(
+                min_energy_value <= max_energy_value,
+                OracleError::InvalidConfiguration
+            );
+
             oracle_data.min_energy_value = min_energy_value;
             oracle_data.max_energy_value = max_energy_value;
             oracle_data.anomaly_detection_enabled = if anomaly_detection_enabled { 1 } else { 0 };
-            oracle_data.max_reading_deviation_percent = max_reading_deviation_percent;
 
             emit!(ValidationConfigUpdated {
                 authority: ctx.accounts.authority.key(),
@@ -325,81 +324,6 @@ pub mod oracle {
             });
         });
 
-        Ok(())
-    }
-
-    /// Add backup oracle (admin only)
-    pub fn add_backup_oracle(ctx: Context<AddBackupOracle>, backup_oracle: Pubkey) -> Result<()> {
-        compute_fn!("add_backup_oracle" => {
-            let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
-
-            require!(
-                ctx.accounts.authority.key() == oracle_data.authority,
-                OracleError::UnauthorizedAuthority
-            );
-
-            require!(
-                oracle_data.backup_oracles_count < 10,
-                OracleError::MaxBackupOraclesReached
-            );
-
-            for i in 0..oracle_data.backup_oracles_count as usize {
-                require!(
-                    oracle_data.backup_oracles[i] != backup_oracle,
-                    OracleError::BackupOracleAlreadyExists
-                );
-            }
-
-            let index = oracle_data.backup_oracles_count as usize;
-            oracle_data.backup_oracles[index] = backup_oracle;
-            oracle_data.backup_oracles_count += 1;
-
-            emit!(BackupOracleAdded {
-                authority: ctx.accounts.authority.key(),
-                backup_oracle,
-                timestamp: Clock::get()?.unix_timestamp,
-            });
-        });
-        Ok(())
-    }
-
-    /// Remove backup oracle (admin only)
-    pub fn remove_backup_oracle(
-        ctx: Context<RemoveBackupOracle>,
-        backup_oracle: Pubkey,
-    ) -> Result<()> {
-        compute_fn!("remove_backup_oracle" => {
-            let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
-
-            require!(
-                ctx.accounts.authority.key() == oracle_data.authority,
-                OracleError::UnauthorizedAuthority
-            );
-
-            let mut found_index: Option<usize> = None;
-            for i in 0..oracle_data.backup_oracles_count as usize {
-                if oracle_data.backup_oracles[i] == backup_oracle {
-                    found_index = Some(i);
-                    break;
-                }
-            }
-
-            let index = found_index.ok_or(OracleError::BackupOracleNotFound)?;
-
-            for i in index..oracle_data.backup_oracles_count as usize - 1 {
-                oracle_data.backup_oracles[i] = oracle_data.backup_oracles[i + 1];
-            }
-
-            let last_index = oracle_data.backup_oracles_count as usize - 1;
-            oracle_data.backup_oracles[last_index] = Pubkey::default();
-            oracle_data.backup_oracles_count -= 1;
-
-            emit!(BackupOracleRemoved {
-                authority: ctx.accounts.authority.key(),
-                backup_oracle,
-                timestamp: Clock::get()?.unix_timestamp,
-            });
-        });
         Ok(())
     }
 
@@ -436,7 +360,7 @@ pub mod oracle {
             oracle_data.last_reading_timestamp = current_time;
 
             // Update quality score inline
-            let total = oracle_data.total_valid_readings + oracle_data.total_rejected_readings;
+            let total = oracle_data.total_valid_readings.saturating_add(oracle_data.total_rejected_readings);
             if total > 0 {
                 let success_rate = oracle_data.total_valid_readings
                     .saturating_mul(100)
@@ -507,63 +431,6 @@ fn validate_meter_reading(
         }
     }
 
-    Ok(())
-}
-
-/// Helper function to update the oracle's quality score based on reading validity.
-/// Reserved for future batch processing optimization when we enable global counter updates.
-#[allow(dead_code)]
-fn update_quality_score(oracle_data: &mut OracleData, _is_valid: bool) -> Result<()> {
-    let total_readings = oracle_data.total_valid_readings + oracle_data.total_rejected_readings;
-
-    if total_readings > 0 {
-        // Success rate calculation using integer math (scaled by 100)
-        let success_rate = oracle_data
-            .total_valid_readings
-            .checked_mul(100)
-            .ok_or(ProgramError::ArithmeticOverflow)?
-            .checked_div(total_readings)
-            .ok_or(ProgramError::ArithmeticOverflow)?;
-
-        oracle_data.last_quality_score = success_rate as u8;
-        oracle_data.quality_score_updated_at = Clock::get()?.unix_timestamp;
-    }
-
-    Ok(())
-}
-
-/// Helper function to update the weighted moving average of meter reading intervals.
-/// Reserved for future batch processing optimization when we enable global counter updates.
-#[allow(dead_code)]
-fn update_reading_interval(oracle_data: &mut OracleData, new_interval: u32) -> Result<()> {
-    // Weighted Moving Average (WMA) for reading interval stability
-    //
-    // Formula: WMA = (old_average × 0.8) + (new_interval × 0.2)
-    // Purpose: Smooth out fluctuations in meter reading intervals
-    // - 80% weight on historical average → prevents oscillation from recent spikes
-    // - 20% weight on new reading → responsive to gradual trend changes
-    //
-    // Example:
-    // - If average was 300s and new reading is 600s (double):
-    //   WMA = (300 × 0.8) + (600 × 0.2) = 240 + 120 = 360s
-    //   (gradual adjustment, not sudden jump to 600s)
-
-    if oracle_data.average_reading_interval > 0 {
-        // Integer WMA: (old_average * 4 + new_interval) / 5
-        // This is equivalent to (old * 0.8) + (new * 0.2)
-        let weighted_sum = (oracle_data.average_reading_interval as u64)
-            .checked_mul(4)
-            .ok_or(ProgramError::ArithmeticOverflow)?
-            .checked_add(new_interval as u64)
-            .ok_or(ProgramError::ArithmeticOverflow)?
-            .checked_div(5)
-            .ok_or(ProgramError::ArithmeticOverflow)?;
-
-        oracle_data.average_reading_interval = weighted_sum as u32;
-    } else {
-        // Initialize with first reading
-        oracle_data.average_reading_interval = new_interval;
-    }
     Ok(())
 }
 
@@ -642,22 +509,6 @@ pub struct UpdateApiGateway<'info> {
 
 #[derive(Accounts)]
 pub struct UpdateValidationConfig<'info> {
-    #[account(mut, seeds = [b"oracle_data"], bump)]
-    pub oracle_data: AccountLoader<'info, OracleData>,
-
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct AddBackupOracle<'info> {
-    #[account(mut, seeds = [b"oracle_data"], bump)]
-    pub oracle_data: AccountLoader<'info, OracleData>,
-
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct RemoveBackupOracle<'info> {
     #[account(mut, seeds = [b"oracle_data"], bump)]
     pub oracle_data: AccountLoader<'info, OracleData>,
 
