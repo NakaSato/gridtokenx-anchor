@@ -316,7 +316,6 @@ async function main() {
           new BN(0), // minEnergyValue
           new BN(1000000), // maxEnergyValue
           true, // anomalyDetectionEnabled
-          50, // maxReadingDeviationPercent
         )
         .accounts({
           oracleData: oracleDataPda,
