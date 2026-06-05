@@ -78,6 +78,13 @@ describe("oracle-metering-integration", () => {
 
   it("Full Metering Lifecycle: Register -> Submit -> Settle -> Mint", async () => {
     const user = Keypair.generate();
+    // Shard is bound in-program to the user's first key byte — derive + init it.
+    const userShardId = user.publicKey.toBytes()[0] % 16;
+    const [userShardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([userShardId])], registryProgram.programId);
+    try {
+      await registryProgram.methods.initializeShard(userShardId).accounts({ shard: userShardPda, authority, systemProgram: SystemProgram.programId } as any).rpc();
+    } catch (e) {}
+
     const [userAccountPda] = PublicKey.findProgramAddressSync([Buffer.from("user"), user.publicKey.toBuffer()], registryProgram.programId);
     const [meterAccountPda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), user.publicKey.toBuffer(), Buffer.from(meterId)], registryProgram.programId);
     const [meterStatePda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), Buffer.from(meterId)], oracleProgram.programId);
@@ -96,10 +103,10 @@ describe("oracle-metering-integration", () => {
     // 1. Register User
     console.log("   Registering user...");
     await registryProgram.methods
-      .registerUser({ prosumer: {} }, 0, 0, new BN(0), shardId)
+      .registerUser({ prosumer: {} }, 0, 0, new BN(0), userShardId)
       .accounts({
         userAccount: userAccountPda,
-        registryShard: registryShardPda,
+        registryShard: userShardPda,
         registry: registryPda,
         authority: user.publicKey,
         payer: authority,
@@ -115,11 +122,11 @@ describe("oracle-metering-integration", () => {
     // 2. Register Meter
     console.log("   Registering meter...");
     await registryProgram.methods
-      .registerMeter(meterId, { solar: {} }, shardId)
+      .registerMeter(meterId, { solar: {} }, userShardId)
       .accounts({
         meterAccount: meterAccountPda,
         userAccount: userAccountPda,
-        registryShard: registryShardPda,
+        registryShard: userShardPda,
         registry: registryPda,
         owner: user.publicKey,
         systemProgram: SystemProgram.programId,
