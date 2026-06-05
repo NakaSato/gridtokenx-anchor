@@ -842,7 +842,7 @@ pub struct ClaimAirdrop<'info> {
 pub struct RegisterMeter<'info> {
     #[account(
         init,
-        payer = owner,
+        payer = payer,
         space = 8 + std::mem::size_of::<MeterAccount>(),
         seeds = [b"meter", owner.key().as_ref(), meter_id.as_bytes()],
         bump
@@ -866,8 +866,15 @@ pub struct RegisterMeter<'info> {
     #[account(mut, seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
 
+    /// CHECK: The user's wallet pubkey. Non-signing in the custodial-bridge model
+    /// (the user's key is Vault-custodied; the bridge's `payer` funds + signs).
+    /// Safe: the handler enforces `owner == user_account.authority` and the
+    /// meter/user PDAs are seeded by `owner.key()`, so a meter can only ever be
+    /// created under its true owner's registered account.
+    pub owner: AccountInfo<'info>,
+
     #[account(mut)]
-    pub owner: Signer<'info>,
+    pub payer: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }
