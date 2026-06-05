@@ -83,7 +83,8 @@ describe("sharding-performance", () => {
     for (let i = 0; i < count; i++) {
         const user = Keypair.generate();
         users.push(user);
-        const shardId = (startShard + i) % SHARD_COUNT;
+        // Shard bound in-program to the user's first key byte; random keys still spread across all 16.
+        const shardId = user.publicKey.toBytes()[0] % SHARD_COUNT;
         const [userPda] = PublicKey.findProgramAddressSync([Buffer.from("user"), user.publicKey.toBuffer()], registryProgram.programId);
         const [shardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([shardId])], registryProgram.programId);
 
@@ -118,13 +119,14 @@ describe("sharding-performance", () => {
 
   it("test_shard_aggregation_small: Register 2 users and aggregate", async () => {
     await registerUsers(2);
-    const shard0Pda = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([0])], registryProgram.programId)[0];
-    const shard1Pda = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([1])], registryProgram.programId)[0];
-    
-    await registryProgram.methods.aggregateShards().remainingAccounts([
-        { pubkey: shard0Pda, isWritable: false, isSigner: false },
-        { pubkey: shard1Pda, isWritable: false, isSigner: false },
-    ]).accounts({
+    // Users bind to random shards now — aggregate the full set so both are counted.
+    const remainingAccounts = [];
+    for (let i = 0; i < SHARD_COUNT; i++) {
+        const [shardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([i])], registryProgram.programId);
+        remainingAccounts.push({ pubkey: shardPda, isWritable: false, isSigner: false });
+    }
+
+    await registryProgram.methods.aggregateShards().remainingAccounts(remainingAccounts).accounts({
         registry: registryPda,
         authority: authority,
     } as any).rpc();
