@@ -1,6 +1,11 @@
 use anchor_lang::prelude::*;
 use crate::state::*;
 
+#[cfg(feature = "localnet")]
+use compute_debug::compute_fn;
+#[cfg(not(feature = "localnet"))]
+use crate::compute_fn;
+
 #[derive(Accounts)]
 #[instruction(shard_id: u8)]
 pub struct InitializeMarketShardContext<'info> {
@@ -21,12 +26,14 @@ pub struct InitializeMarketShardContext<'info> {
 }
 
 pub fn initialize_market_shard(ctx: Context<InitializeMarketShardContext>, shard_id: u8) -> Result<()> {
+    compute_fn!("initialize_market_shard" => {
     let mut market_shard = ctx.accounts.market_shard.load_init()?;
     market_shard.shard_id = shard_id;
     market_shard.market = ctx.accounts.market.key();
     market_shard.volume_accumulated = 0;
     market_shard.order_count = 0;
     market_shard.last_update = Clock::get()?.unix_timestamp;
-    
+    });
+
     Ok(())
 }
