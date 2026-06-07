@@ -1,0 +1,2 @@
+timestamp,git_commit,cluster,tx_count,concurrency,success,fail,duration_s,throughput_tps,lat_mean_ms,lat_stddev_ms,lat_p50_ms,lat_p95_ms,lat_p99_ms,lat_ci95_ms,cu_mean,cu_p95,cu_max
+2026-06-07T09:19:08.221Z,58cfc7925a66aad94c34d8dcaf9b41dd83add15f,3.1.10,500,40,500,0,16.7250,29.8954,1057.79,411.8895773722561,900,1707,2071,36.10371329373853,21508.458,30044,37535

@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-06-07T09:17:08.630Z",
+  "benchmark": "TPC-C",
+  "metadata": {
+    "timestamp": "2026-06-07T09:17:08.630Z",
+    "gitCommit": "58cfc7925a66aad94c34d8dcaf9b41dd83add15f",
+    "gitDirty": false,
+    "clusterVersion": "3.1.10",
+    "node": "v24.16.0",
+    "os": "Darwin 25.5.0",
+    "arch": "arm64",
+    "cpu": "Apple M2",
+    "cores": 8
+  },
+  "workloadMix": "50% NewOrder / 50% Payment",
+  "txCount": 500,
+  "concurrency": 5,
+  "successCount": 500,
+  "failCount": 0,
+  "successRate": 1,
+  "durationSeconds": 57.69,
+  "throughputTps": 8.667013347200555,
+  "latencyMs": {
+    "n": 500,
+    "mean": 575.004,
+    "stddev": 88.34614914152324,
+    "min": 456,
+    "max": 1088,
+    "p50": 554,
+    "p95": 726.0999999999999,
+    "p99": 880.0799999999981,
+    "p999": 1088,
+    "ci95": 7.743881405206601
+  },
+  "computeUnits": {
+    "n": 325,
+    "mean": 21262.73846153846,
+    "stddev": 5198.875347507129,
+    "min": 15175,
+    "max": 37286,
+    "p50": 22535,
+    "p95": 30035,
+    "p99": 34183.999999999985,
+    "p999": 36880.675999999985,
+    "ci95": 565.2281663808914
+  }
+}
