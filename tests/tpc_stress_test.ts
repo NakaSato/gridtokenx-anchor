@@ -11,6 +11,7 @@ import {
 } from "@solana/web3.js";
 import { assert } from "chai";
 import type { TpcBenchmark } from "../target/types/tpc_benchmark";
+import { summarize, collectMetadata } from "./utils/bench";
 
 describe("TPC-C Performance Stress Test", () => {
     const provider = anchor.AnchorProvider.env();
@@ -165,11 +166,13 @@ describe("TPC-C Performance Stress Test", () => {
     });
 
     it("Runs TPC-C Workload Mix (NewOrder and Payment)", async () => {
-        const TX_COUNT = 200;
-        const CONCURRENCY = 10;
+        // Env-tunable so the same harness serves CI smoke runs and paper-grade runs.
+        const TX_COUNT = parseInt(process.env.TPC_TX_COUNT ?? "200", 10);
+        const CONCURRENCY = parseInt(process.env.TPC_CONCURRENCY ?? "10", 10);
         console.log(`\n--- STARTING TPC-C STRESS TEST (${TX_COUNT} TXs, Concurrency: ${CONCURRENCY}) ---\n`);
 
         const latencies: number[] = [];
+        const signatures: string[] = [];
         let successCount = 0;
         let failCount = 0;
         const startTime = Date.now();
@@ -215,8 +218,9 @@ describe("TPC-C Performance Stress Test", () => {
                         } as any)
                         .remainingAccounts(remainingAccounts)
                         .rpc()
-                        .then(() => {
+                        .then((sig) => {
                             latencies.push(Date.now() - txStart);
+                            signatures.push(sig);
                             successCount++;
                         })
                         .catch(e => {
@@ -238,8 +242,9 @@ describe("TPC-C Performance Stress Test", () => {
                             systemProgram: SystemProgram.programId
                         } as any)
                         .rpc()
-                        .then(() => {
+                        .then((sig) => {
                             latencies.push(Date.now() - txStart);
+                            signatures.push(sig);
                             successCount++;
                         })
                         .catch(e => {
@@ -256,45 +261,66 @@ describe("TPC-C Performance Stress Test", () => {
 
         const endTime = Date.now();
         const duration = (endTime - startTime) / 1000;
-        const avgLatency = latencies.length > 0
-            ? latencies.reduce((a, b) => a + b, 0) / latencies.length
-            : 0;
-        const p95Latency = latencies.length > 0
-            ? latencies.sort((a, b) => a - b)[Math.floor(latencies.length * 0.95)]
-            : 0;
+        // summarize() copies before sorting (the old `latencies.sort()[floor(n*0.95)]`
+        // mutated the array and could index out of bounds at p95).
+        const lat = summarize(latencies);
         const tps = successCount / duration;
 
+        // Compute-unit capture, post-hoc and off the latency path.
+        const cuSamples: number[] = [];
+        for (const sig of signatures) {
+            try {
+                const tx = await provider.connection.getTransaction(sig, {
+                    commitment: "confirmed",
+                    maxSupportedTransactionVersion: 0,
+                });
+                const consumed = tx?.meta?.computeUnitsConsumed;
+                if (typeof consumed === "number") cuSamples.push(consumed);
+            } catch {
+                /* best-effort */
+            }
+        }
+        const cu = cuSamples.length > 0 ? summarize(cuSamples) : null;
+
+        const timestamp = new Date().toISOString();
+        const metadata = await collectMetadata(provider.connection, timestamp);
         const results = {
-            timestamp: new Date().toISOString(),
+            timestamp,
             benchmark: "TPC-C",
+            metadata,
+            workloadMix: "50% NewOrder / 50% Payment",
             txCount: TX_COUNT,
             concurrency: CONCURRENCY,
             successCount,
             failCount,
-            successRate: ((successCount / TX_COUNT) * 100).toFixed(1) + "%",
-            duration,
-            tps,
-            avgLatencyMs: avgLatency,
-            p95LatencyMs: p95Latency,
+            successRate: successCount / TX_COUNT,
+            durationSeconds: duration,
+            throughputTps: tps,
+            latencyMs: lat,
+            computeUnits: cu,
         };
 
         console.log(`\n\n--- TPC-C STRESS TEST RESULTS ---`);
+        console.log(`commit ${metadata.gitCommit.slice(0, 8)}${metadata.gitDirty ? "-dirty" : ""}  cluster ${metadata.clusterVersion}`);
         console.log(`Duration:       ${duration.toFixed(2)}s`);
-        console.log(`Success Count:  ${successCount} / ${TX_COUNT}`);
-        console.log(`Fail Count:     ${failCount}`);
-        console.log(`Throughput:     ${tps.toFixed(2)} TPS`);
-        console.log(`Avg Latency:    ${avgLatency.toFixed(2)}ms`);
-        console.log(`P95 Latency:    ${p95Latency.toFixed(2)}ms`);
+        console.log(`Success:        ${successCount} / ${TX_COUNT} (${(100 * successCount / TX_COUNT).toFixed(1)}%)  fail ${failCount}`);
+        console.log(`Throughput:     ${tps.toFixed(2)} TPS @ concurrency ${CONCURRENCY}`);
+        console.log(`Latency ms:     mean ${lat.mean.toFixed(2)}  stddev ${lat.stddev.toFixed(2)}  p50 ${lat.p50.toFixed(2)}  p95 ${lat.p95.toFixed(2)}  p99 ${lat.p99.toFixed(2)}  ci95 ±${lat.ci95.toFixed(2)}`);
+        console.log(`CU/tx:          ${cu ? `mean ${cu.mean.toFixed(0)}  p95 ${cu.p95.toFixed(0)}  max ${cu.max.toFixed(0)}` : "n/a"}`);
         console.log(`---------------------------------\n`);
 
-        // Persist results for CI tracking
+        // Persist JSON (full distribution + metadata) and a one-row CSV.
         const resultsDir = path.join(process.cwd(), 'test-results', 'tpc');
-        if (!fs.existsSync(resultsDir)) {
-            fs.mkdirSync(resultsDir, { recursive: true });
-        }
-        const filepath = path.join(resultsDir, `tpc-c-results-${Date.now()}.json`);
-        fs.writeFileSync(filepath, JSON.stringify(results, null, 2));
-        console.log(`Results saved to: ${filepath}`);
+        fs.mkdirSync(resultsDir, { recursive: true });
+        const stamp = timestamp.replace(/[:.]/g, "-");
+        fs.writeFileSync(path.join(resultsDir, `tpc-c-${stamp}.json`), JSON.stringify(results, null, 2));
+        const csvCols = ["timestamp", "git_commit", "cluster", "tx_count", "concurrency", "success", "fail", "duration_s", "throughput_tps",
+            "lat_mean_ms", "lat_stddev_ms", "lat_p50_ms", "lat_p95_ms", "lat_p99_ms", "lat_ci95_ms", "cu_mean", "cu_p95", "cu_max"];
+        const csvRow = [timestamp, metadata.gitCommit, metadata.clusterVersion, TX_COUNT, CONCURRENCY, successCount, failCount,
+            duration.toFixed(4), tps.toFixed(4), lat.mean, lat.stddev, lat.p50, lat.p95, lat.p99, lat.ci95,
+            cu?.mean ?? "", cu?.p95 ?? "", cu?.max ?? ""].join(",");
+        fs.writeFileSync(path.join(resultsDir, `tpc-c-${stamp}.csv`), csvCols.join(",") + "\n" + csvRow + "\n");
+        console.log(`Results saved to: ${resultsDir}/tpc-c-${stamp}.{json,csv}`);
 
         assert.isAtLeast(successCount, TX_COUNT * 0.8, "Success rate should be at least 80%");
         assert.isAbove(tps, 5, "Throughput should exceed 5 TPS");

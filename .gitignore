@@ -96,3 +96,6 @@ test-wallet-*.json
 scratch.ts
 scratch2.rs
 check.cjs
+
+# Local benchmark validator ledger
+.bench-ledger/

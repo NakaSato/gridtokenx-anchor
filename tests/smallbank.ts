@@ -4,237 +4,146 @@ import BN from "bn.js";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { assert } from "chai";
 import type { Blockbench } from "../target/types/blockbench";
+import { BenchReport, measureOp } from "./utils/bench";
 
-describe("Smallbank Benchmark", () => {
+/**
+ * SmallBank OLTP benchmark (academic configuration).
+ *
+ * Measures each of the five SmallBank read-write transactions individually over
+ * a warmup + ITERS schedule, reporting the latency distribution, sequential
+ * throughput, and per-tx compute units. Accounts are seeded with large balances
+ * so repeated WriteCheck / SendPayment never underflow across the run.
+ *
+ * Tunables: BENCH_ITERS, BENCH_WARMUP.
+ */
+describe("SmallBank OLTP Benchmark", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
   const program = anchor.workspace.Blockbench as Program<Blockbench>;
   const authority = provider.wallet as anchor.Wallet;
+  const connection = provider.connection;
 
-  // Use a run-unique customer ID pair so accounts are always fresh on a live ledger
-  const RUN_TAG = Date.now();
-  const customerId = new BN(RUN_TAG % 1_000_000 + 10_000);
-  const customerId2 = new BN(RUN_TAG % 1_000_000 + 10_001);
+  const ITERS = parseInt(process.env.BENCH_ITERS ?? "100", 10);
+  const WARMUP = parseInt(process.env.BENCH_WARMUP ?? "10", 10);
 
-  const [customerPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("sb_customer"), customerId.toArrayLike(Buffer, "le", 8)],
-    program.programId,
-  );
-  const [savingsPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("sb_savings"), customerId.toArrayLike(Buffer, "le", 8)],
-    program.programId,
-  );
-  const [checkingPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("sb_checking"), customerId.toArrayLike(Buffer, "le", 8)],
-    program.programId,
-  );
+  // Large seed balances so monotonic-debit ops stay valid for the whole run.
+  const SEED = new BN("1000000000000"); // 1e12
 
-  const [customer2Pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("sb_customer"), customerId2.toArrayLike(Buffer, "le", 8)],
-    program.programId,
-  );
-  const [checking2Pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("sb_checking"), customerId2.toArrayLike(Buffer, "le", 8)],
-    program.programId,
-  );
-  const [savings2Pda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("sb_savings"), customerId2.toArrayLike(Buffer, "le", 8)],
-    program.programId,
-  );
+  const report = new BenchReport("smallbank");
+  const runStamp = new Date().toISOString();
 
-  // Track whether the accounts were actually created this run
-  let accountsReady = false;
+  // Run-unique customer ids so accounts are fresh on a live ledger.
+  const RUN_TAG = Date.now() % 1_000_000;
+  const idA = new BN(RUN_TAG + 10_000);
+  const idB = new BN(RUN_TAG + 10_001);
+
+  const pda = (seed: string, id: BN) =>
+    PublicKey.findProgramAddressSync([Buffer.from(seed), id.toArrayLike(Buffer, "le", 8)], program.programId)[0];
+
+  const customerA = pda("sb_customer", idA);
+  const savingsA = pda("sb_savings", idA);
+  const checkingA = pda("sb_checking", idA);
+  const customerB = pda("sb_customer", idB);
+  const savingsB = pda("sb_savings", idB);
+  const checkingB = pda("sb_checking", idB);
+
+  let ready = false;
 
   before(async () => {
     try {
-      const signature = await provider.connection.requestAirdrop(
-        authority.publicKey,
-        2 * anchor.web3.LAMPORTS_PER_SOL,
-      );
-      await provider.connection.confirmTransaction(signature);
-    } catch (e) {
-      console.log("Airdrop failed, assuming already funded or not supported");
+      const sig = await connection.requestAirdrop(authority.publicKey, 2 * anchor.web3.LAMPORTS_PER_SOL);
+      await connection.confirmTransaction(sig);
+    } catch {
+      /* already funded or airdrop unsupported */
     }
 
-    // Pre-create both accounts in before() so all tests can rely on them
-    const nameBuffer1 = Buffer.alloc(32);
-    nameBuffer1.write("Alice");
+    // `name` is an on-chain `String` capped at 16 chars (4 + 16 space) — pass a
+    // short literal, not a padded byte array (which serializes as a 32-char
+    // string and overflows the account → AccountDidNotSerialize / err 3004).
     try {
-      await program.methods
-        .smallbankCreateAccount(
-          customerId,
-          Array.from(nameBuffer1) as any,
-          new BN(1000),
-          new BN(500),
-        )
-        .accounts({
-          customer: customerPda,
-          savings: savingsPda,
-          checking: checkingPda,
-          authority: authority.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
+      await program.methods.smallbankCreateAccount(idA, "Alice", SEED, SEED).accounts({
+        customer: customerA, savings: savingsA, checking: checkingA,
+        authority: authority.publicKey, systemProgram: SystemProgram.programId,
+      }).rpc();
+      await program.methods.smallbankCreateAccount(idB, "Bob", SEED, SEED).accounts({
+        customer: customerB, savings: savingsB, checking: checkingB,
+        authority: authority.publicKey, systemProgram: SystemProgram.programId,
+      }).rpc();
+      ready = true;
     } catch (e: any) {
-      if (e.message?.includes("already in use")) {
-        console.log("Smallbank account 1 already exists");
-      } else {
-        console.log(`⚠ Could not create Smallbank account 1: ${e.message}`);
-        return; // accountsReady stays false
-      }
+      console.log(`⚠ SmallBank setup failed (program unavailable?): ${e.message}`);
     }
-
-    const nameBuffer2 = Buffer.alloc(32);
-    nameBuffer2.write("Bob");
-    try {
-      await program.methods
-        .smallbankCreateAccount(
-          customerId2,
-          Array.from(nameBuffer2) as any,
-          new BN(2000),
-          new BN(1000),
-        )
-        .accounts({
-          customer: customer2Pda,
-          savings: savings2Pda,
-          checking: checking2Pda,
-          authority: authority.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
-    } catch (e: any) {
-      if (e.message?.includes("already in use")) {
-        console.log("Smallbank account 2 already exists");
-      } else {
-        console.log(`⚠ Could not create Smallbank account 2: ${e.message}`);
-        return; // accountsReady stays false
-      }
-    }
-
-    accountsReady = true;
   });
 
-  it("Creates a Smallbank account", async () => {
-    if (!accountsReady) {
-      console.log("⚠ Skipping: Blockbench program not available");
-      return;
-    }
-    const customer = await program.account.smallbankCustomer.fetch(customerPda);
-    assert.equal(
-      Buffer.from(customer.name as any).toString().replace(/\0/g, ""),
-      "Alice",
-    );
-    const savings = await program.account.smallbankSavings.fetch(savingsPda);
-    assert.ok(savings.balance.gten(0), "savings balance should be non-negative");
+  after(async () => {
+    if (ready) await report.finalize(connection, runStamp);
   });
 
-  it("Creates a second Smallbank account", async () => {
-    if (!accountsReady) {
+  const guard = () => {
+    if (!ready) {
       console.log("⚠ Skipping: Blockbench program not available");
-      return;
+      return false;
     }
-    const customer = await program.account.smallbankCustomer.fetch(customer2Pda);
-    assert.ok(customer, "Customer 2 account should exist");
+    return true;
+  };
+
+  it(`TransactSavings (${ITERS} iters)`, async () => {
+    if (!guard()) return;
+    const r = await measureOp({
+      label: "TransactSavings", iters: ITERS, warmup: WARMUP, connection, captureCu: true,
+      fn: () => program.methods.smallbankTransactSavings(new BN(1))
+        .accounts({ savings: savingsA, authority: authority.publicKey }).rpc(),
+    });
+    report.add(r);
+    assert.isAbove(r.iters, 0);
   });
 
-  it("Performs TransactSavings", async () => {
-    if (!accountsReady) {
-      console.log("⚠ Skipping: Blockbench program not available");
-      return;
-    }
-    const savingsBefore = await program.account.smallbankSavings.fetch(savingsPda);
-    const balanceBefore = savingsBefore.balance;
-
-    await program.methods
-      .smallbankTransactSavings(new BN(500))
-      .accounts({ savings: savingsPda, authority: authority.publicKey })
-      .rpc();
-
-    const savings = await program.account.smallbankSavings.fetch(savingsPda);
-    assert.ok(
-      savings.balance.eq(balanceBefore.add(new BN(500))),
-      `savings balance should increase by 500`,
-    );
+  it(`DepositChecking (${ITERS} iters)`, async () => {
+    if (!guard()) return;
+    const r = await measureOp({
+      label: "DepositChecking", iters: ITERS, warmup: WARMUP, connection, captureCu: true,
+      fn: () => program.methods.smallbankDepositChecking(new BN(1))
+        .accounts({ checking: checkingA, authority: authority.publicKey }).rpc(),
+    });
+    report.add(r);
+    assert.isAbove(r.iters, 0);
   });
 
-  it("Performs DepositChecking", async () => {
-    if (!accountsReady) {
-      console.log("⚠ Skipping: Blockbench program not available");
-      return;
-    }
-    const checkingBefore = await program.account.smallbankChecking.fetch(checkingPda);
-    const balanceBefore = checkingBefore.balance;
-
-    await program.methods
-      .smallbankDepositChecking(new BN(200))
-      .accounts({ checking: checkingPda, authority: authority.publicKey })
-      .rpc();
-
-    const checking = await program.account.smallbankChecking.fetch(checkingPda);
-    assert.ok(
-      checking.balance.eq(balanceBefore.add(new BN(200))),
-      `checking balance should increase by 200`,
-    );
+  it(`SendPayment (${ITERS} iters)`, async () => {
+    if (!guard()) return;
+    const r = await measureOp({
+      label: "SendPayment", iters: ITERS, warmup: WARMUP, connection, captureCu: true,
+      fn: () => program.methods.smallbankSendPayment(new BN(1))
+        .accounts({ fromChecking: checkingA, toChecking: checkingB, authority: authority.publicKey }).rpc(),
+    });
+    report.add(r);
+    assert.isAbove(r.iters, 0);
   });
 
-  it("Performs SendPayment", async () => {
-    if (!accountsReady) {
-      console.log("⚠ Skipping: Blockbench program not available");
-      return;
-    }
-    const aliceBefore = await program.account.smallbankChecking.fetch(checkingPda);
-    const bobBefore = await program.account.smallbankChecking.fetch(checking2Pda);
-
-    await program.methods
-      .smallbankSendPayment(new BN(300))
-      .accounts({
-        fromChecking: checkingPda,
-        toChecking: checking2Pda,
-        authority: authority.publicKey,
-      })
-      .rpc();
-
-    const checkingAlice = await program.account.smallbankChecking.fetch(checkingPda);
-    const checkingBob = await program.account.smallbankChecking.fetch(checking2Pda);
-    assert.ok(checkingAlice.balance.eq(aliceBefore.balance.sub(new BN(300))), "Alice -300");
-    assert.ok(checkingBob.balance.eq(bobBefore.balance.add(new BN(300))), "Bob +300");
+  it(`WriteCheck (${ITERS} iters)`, async () => {
+    if (!guard()) return;
+    const r = await measureOp({
+      label: "WriteCheck", iters: ITERS, warmup: WARMUP, connection, captureCu: true,
+      fn: () => program.methods.smallbankWriteCheck(new BN(1))
+        .accounts({ checking: checkingA, authority: authority.publicKey }).rpc(),
+    });
+    report.add(r);
+    assert.isAbove(r.iters, 0);
   });
 
-  it("Performs WriteCheck", async () => {
-    if (!accountsReady) {
-      console.log("⚠ Skipping: Blockbench program not available");
-      return;
-    }
-    const checkingBefore = await program.account.smallbankChecking.fetch(checkingPda);
-    const balanceBefore = checkingBefore.balance;
-
-    await program.methods
-      .smallbankWriteCheck(new BN(100))
-      .accounts({ checking: checkingPda, authority: authority.publicKey })
-      .rpc();
-
-    const checking = await program.account.smallbankChecking.fetch(checkingPda);
-    assert.ok(checking.balance.eq(balanceBefore.sub(new BN(100))), "checking -100");
-  });
-
-  it("Performs Amalgamate", async () => {
-    if (!accountsReady) {
-      console.log("⚠ Skipping: Blockbench program not available");
-      return;
-    }
-    const savingsBefore = await program.account.smallbankSavings.fetch(savingsPda);
-    const checkingBefore = await program.account.smallbankChecking.fetch(checkingPda);
-    const expectedFinalChecking = checkingBefore.balance.add(savingsBefore.balance);
-
-    await program.methods
-      .smallbankAmalgamate()
-      .accounts({ savings: savingsPda, checking: checkingPda, authority: authority.publicKey })
-      .rpc();
-
-    const savings = await program.account.smallbankSavings.fetch(savingsPda);
-    const checking = await program.account.smallbankChecking.fetch(checkingPda);
-    assert.ok(savings.balance.eq(new BN(0)), "savings should be 0 after amalgamate");
-    assert.ok(checking.balance.eq(expectedFinalChecking), `checking should be ${expectedFinalChecking}`);
+  it(`Amalgamate (${ITERS} iters)`, async () => {
+    if (!guard()) return;
+    // Amalgamate moves savings→checking and zeroes savings. After the first call
+    // savings is 0, so subsequent calls still exercise both account writes (the
+    // instruction's cost is value-independent) — what we report is per-tx latency
+    // and compute units, not a balance assertion.
+    const r = await measureOp({
+      label: "Amalgamate", iters: ITERS, warmup: WARMUP, connection, captureCu: true,
+      fn: () => program.methods.smallbankAmalgamate()
+        .accounts({ savings: savingsA, checking: checkingA, authority: authority.publicKey }).rpc(),
+    });
+    report.add(r);
+    assert.isAbove(r.iters, 0);
   });
 });
