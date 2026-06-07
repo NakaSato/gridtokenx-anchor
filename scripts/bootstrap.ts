@@ -94,7 +94,7 @@ async function main() {
         mint: mintPda,
         authority: authority, // Local wallet signs for initialization
         systemProgram: anchor.web3.SystemProgram.programId,
-        tokenProgram: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+        tokenProgram: new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'),
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       } as any)
       .rpc();
@@ -120,7 +120,7 @@ async function main() {
             mint: mintPda,
             authority: authority,
             systemProgram: anchor.web3.SystemProgram.programId,
-            tokenProgram: new PublicKey('TokenzQdBNbLqP5VEhdkThp9Dz9L33itf29V7D3fR65'), // Standard Token-2022
+            tokenProgram: new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'), // Standard Token-2022
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           })
           .rpc();
@@ -146,7 +146,7 @@ async function main() {
         grxVault: grxVaultPda,
         grxMint: mintPda,
         authority: authority,
-        tokenProgram: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+        tokenProgram: new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'),
         systemProgram: anchor.web3.SystemProgram.programId,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       } as any)
