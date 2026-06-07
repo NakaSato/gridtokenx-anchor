@@ -67,7 +67,7 @@ pub struct MatchPair {
     pub price: u64,
 }
 
-declare_id!("yonsbZqm47vgomYFek9a7yJxcgyYTn3f2MLScEA9Wif");
+declare_id!("CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX");
 
 // ============================================================================
 // COMPUTE-UNIT PROFILING MACROS
