@@ -24,17 +24,12 @@ test-skip-zk = []
 anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
 anchor-spl = { version = "1.0.0", features = ["metadata"] }
 
-
-constant_time_eq = "0.3.1"
+# Build-constraint pins (NOT used directly in src): force an SBF-compatible blake3
+# via the solana-blake3-hasher transitive chain, and pin proc-macro-crate for the
+# anchor-derive toolchain. Do not remove — removing breaks SBF resolution.
 blake3 = "=1.5.5"
-
 proc-macro-crate = "^3.4.0"
-indexmap = "2.7"
 
-sha2 = "0.10"
-hmac = "0.12"
-base64 = "0.21"
-hex = "0.4"
 bytemuck = { version = "1.16", features = ["derive"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }
 governance = { path = "../governance", features = ["cpi"] }

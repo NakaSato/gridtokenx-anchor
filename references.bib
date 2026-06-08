@@ -1,0 +1,150 @@
+% references.bib — GridTokenX Anchor (on-chain Solana programs)
+% Academic-citable benchmarks, standards, and frameworks referenced by this repo.
+% Benchmark citations are inline in programs/{blockbench,tpc-benchmark}/src and
+% tests/{blockbench,smallbank,tpc_stress_test}.ts; see BENCHMARKS.md + ARCHITECTURE.md.
+
+% ---------------------------------------------------------------------------
+% Benchmark workloads (ported to the Solana account model)
+% ---------------------------------------------------------------------------
+
+@inproceedings{dinh2017blockbench,
+  author    = {Dinh, Tien Tuan Anh and Wang, Ji and Chen, Gang and Liu, Rui
+               and Ooi, Beng Chin and Tan, Kian-Lee},
+  title     = {{BLOCKBENCH}: A Framework for Analyzing Private Blockchains},
+  booktitle = {Proceedings of the 2017 ACM International Conference on
+               Management of Data (SIGMOD '17)},
+  year      = {2017},
+  pages     = {1085--1100},
+  publisher = {ACM},
+  doi       = {10.1145/3035918.3064033}
+}
+
+@inproceedings{cooper2010ycsb,
+  author    = {Cooper, Brian F. and Silberstein, Adam and Tam, Erwin
+               and Ramakrishnan, Raghu and Sears, Russell},
+  title     = {Benchmarking Cloud Serving Systems with {YCSB}},
+  booktitle = {Proceedings of the 1st ACM Symposium on Cloud Computing (SoCC '10)},
+  year      = {2010},
+  pages     = {143--154},
+  publisher = {ACM},
+  doi       = {10.1145/1807128.1807152}
+}
+
+@inproceedings{cahill2008smallbank,
+  author    = {Cahill, Michael J. and R{\"o}hm, Uwe and Fekete, Alan D.},
+  title     = {Serializable Isolation for Snapshot Databases},
+  booktitle = {Proceedings of the 2008 ACM SIGMOD International Conference on
+               Management of Data (SIGMOD '08)},
+  year      = {2008},
+  pages     = {729--738},
+  publisher = {ACM},
+  doi       = {10.1145/1376616.1376690},
+  note      = {Origin of the SmallBank OLTP workload.}
+}
+
+@techreport{tpcc2010,
+  author      = {{Transaction Processing Performance Council}},
+  title       = {{TPC Benchmark C}, Standard Specification, Version 5.11},
+  institution = {Transaction Processing Performance Council},
+  year        = {2010},
+  type        = {Standard Specification},
+  howpublished = {\url{http://www.tpc.org/tpcc/}}
+}
+
+% ---------------------------------------------------------------------------
+% Platform / frameworks (no canonical paper — cite by URL/version)
+% ---------------------------------------------------------------------------
+
+@misc{yakovenko2018solana,
+  author       = {Yakovenko, Anatoly},
+  title        = {{Solana}: A new architecture for a high performance blockchain},
+  year         = {2018},
+  howpublished = {\url{https://solana.com/solana-whitepaper.pdf}},
+  note         = {Proof-of-History consensus whitepaper}
+}
+
+@misc{anchor,
+  author       = {{Anchor contributors}},
+  title        = {{Anchor}: a framework for Solana's Sealevel runtime},
+  howpublished = {\url{https://www.anchor-lang.com}},
+  note         = {anchor-lang / anchor-spl 1.0.0}
+}
+
+@misc{metaplex,
+  author       = {{Metaplex Foundation}},
+  title        = {{Token Metadata} Program},
+  howpublished = {\url{https://developers.metaplex.com/token-metadata}},
+  note         = {mpl-token-metadata 5.1.2-alpha.2}
+}
+
+% ---------------------------------------------------------------------------
+% Cryptographic primitives (actually exercised on-chain)
+% ---------------------------------------------------------------------------
+% NOTE: trading/Cargo.toml also lists blake3, sha2, hmac, constant_time_eq —
+% these are NOT referenced in any program src (build pins / leftovers), so they
+% are intentionally omitted. The only on-chain signature primitive is Ed25519,
+% verified via Solana's native Ed25519 program + instructions-sysvar
+% introspection (programs/trading/src/instructions/settle_offchain.rs:4,651).
+
+@article{bernstein2012ed25519,
+  author  = {Bernstein, Daniel J. and Duif, Niels and Lange, Tanja
+             and Schwabe, Peter and Yang, Bo-Yin},
+  title   = {High-speed high-security signatures},
+  journal = {Journal of Cryptographic Engineering},
+  year    = {2012},
+  volume  = {2},
+  number  = {2},
+  pages   = {77--89},
+  doi     = {10.1007/s13389-012-0027-1},
+  note    = {Ed25519; off-chain order/match signature verification in trading}
+}
+
+@techreport{rfc8032,
+  author      = {Josefsson, Simon and Liusvaara, Ilari},
+  title       = {Edwards-Curve Digital Signature Algorithm ({EdDSA})},
+  institution = {Internet Engineering Task Force (IETF)},
+  year        = {2017},
+  number      = {RFC 8032},
+  doi         = {10.17487/RFC8032}
+}
+
+% ---------------------------------------------------------------------------
+% Market-mechanism theory (trading program economic design)
+% ---------------------------------------------------------------------------
+% CDA: submit_limit_order / submit_market_order (programs/trading/src/lib.rs:589).
+% Uniform-price clearing: clear_auction + find_clearing_point (lib.rs:919,1679).
+
+@article{smith1962experimental,
+  author  = {Smith, Vernon L.},
+  title   = {An Experimental Study of Competitive Market Behavior},
+  journal = {Journal of Political Economy},
+  year    = {1962},
+  volume  = {70},
+  number  = {2},
+  pages   = {111--137},
+  doi     = {10.1086/258609},
+  note    = {Continuous double auction — experimental foundation}
+}
+
+@incollection{friedman1993double,
+  author    = {Friedman, Daniel},
+  title     = {The Double Auction Market: Institutions, Theories, and Evidence},
+  booktitle = {The Double Auction Market: Institutions, Theories, and Evidence},
+  editor    = {Friedman, Daniel and Rust, John},
+  publisher = {Addison-Wesley},
+  year      = {1993},
+  pages     = {3--25},
+  note      = {CDA mechanism; basis for trading order-book matching}
+}
+
+@article{vickrey1961counterspeculation,
+  author  = {Vickrey, William},
+  title   = {Counterspeculation, Auctions, and Competitive Sealed Tenders},
+  journal = {The Journal of Finance},
+  year    = {1961},
+  volume  = {16},
+  number  = {1},
+  pages   = {8--37},
+  doi     = {10.1111/j.1540-6261.1961.tb02789.x},
+  note    = {Uniform-price auction; basis for clear_auction supply/demand intersection}
+}

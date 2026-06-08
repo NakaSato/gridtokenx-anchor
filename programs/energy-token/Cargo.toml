@@ -25,6 +25,5 @@ anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
 anchor-spl = { version = "1.0.0", features = ["metadata"] }
 spl-token = "4.0.0"
 mpl-token-metadata = "5.1.2-alpha.2"
-base64 = "0.21"
 bytemuck = { version = "1.16", features = ["derive"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }
