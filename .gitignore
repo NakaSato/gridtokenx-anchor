@@ -67,6 +67,10 @@ Cargo.lock
 **/*.rs.bk
 target/
 
+# Non-pnpm lockfiles (repo uses pnpm — see packageManager in package.json)
+package-lock.json
+yarn.lock
+
 # Logs
 logs/
 *.log
