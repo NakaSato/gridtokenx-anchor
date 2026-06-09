@@ -27,3 +27,8 @@ spl-token = "4.0.0"
 mpl-token-metadata = "5.1.2-alpha.2"
 bytemuck = { version = "1.16", features = ["derive"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }
+
+# Solana release builds default to overflow-checks=off (silent wrapping).
+# Force checked arithmetic so bare +=/-= panic instead of corrupting state.
+[profile.release]
+overflow-checks = true

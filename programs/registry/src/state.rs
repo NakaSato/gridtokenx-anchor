@@ -24,6 +24,7 @@ pub struct RegistryShard {
     pub _padding: [u8; 6],
     pub user_count: u64,
     pub meter_count: u64,
+    pub active_meter_count: u64, // Meters currently Active on this shard; global total reconciled via aggregate_shards
 }
 
 impl RegistryShard {

@@ -249,7 +249,10 @@ describe("Oracle Program", () => {
   // ── 4. Market clearing ────────────────────────────────────────────────────
 
   it("Triggers market clearing", async () => {
-    const epochTimestamp = await getOnChainTimestamp();
+    // Epochs must align to 15-minute (900s) boundaries — the program rejects
+    // arbitrary timestamps. Align the on-chain time down to the current window.
+    const now = await getOnChainTimestamp();
+    const epochTimestamp = now.sub(now.mod(new BN(900)));
 
     await program.methods
       .triggerMarketClearing(epochTimestamp)

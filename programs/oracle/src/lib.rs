@@ -200,6 +200,12 @@ pub mod oracle {
                 epoch_timestamp <= current_time,
                 OracleError::InvalidEpoch
             );
+            // Epochs are 15-minute market-clearing windows; reject timestamps that
+            // don't fall on a 900-second boundary so "epoch" can't be arbitrary.
+            require!(
+                epoch_timestamp % 900 == 0,
+                OracleError::InvalidEpoch
+            );
 
             oracle_data.last_clearing = current_time;
             oracle_data.last_cleared_epoch = epoch_timestamp;

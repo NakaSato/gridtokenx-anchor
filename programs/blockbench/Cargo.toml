@@ -23,3 +23,8 @@ idl-build = ["anchor-lang/idl-build"]
 [dependencies]
 anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }
+
+# Solana release builds default to overflow-checks=off (silent wrapping).
+# Force checked arithmetic so bare +=/-= panic instead of corrupting state.
+[profile.release]
+overflow-checks = true

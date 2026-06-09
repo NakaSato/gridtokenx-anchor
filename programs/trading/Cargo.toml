@@ -33,3 +33,8 @@ proc-macro-crate = "^3.4.0"
 bytemuck = { version = "1.16", features = ["derive"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }
 governance = { path = "../governance", features = ["cpi"] }
+
+# Solana release builds default to overflow-checks=off (silent wrapping).
+# Force checked arithmetic so bare +=/-= panic instead of corrupting state.
+[profile.release]
+overflow-checks = true

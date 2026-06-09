@@ -85,6 +85,7 @@ pub mod registry {
             shard.bump = ctx.bumps.shard; // cache canonical bump for cheap PDA checks later
             shard.user_count = 0;
             shard.meter_count = 0;
+            shard.active_meter_count = 0;
         });
         Ok(())
     }
@@ -149,6 +150,7 @@ pub mod registry {
 
             let mut total_users = 0u64;
             let mut total_meters = 0u64;
+            let mut total_active_meters = 0u64;
             // Bitmask of shard_ids already counted — reject duplicates so a shard
             // passed twice cannot inflate the totals.
             let mut seen: u16 = 0;
@@ -178,11 +180,15 @@ pub mod registry {
                     total_meters = total_meters
                         .checked_add(shard.meter_count)
                         .ok_or(RegistryError::MathOverflow)?;
+                    total_active_meters = total_active_meters
+                        .checked_add(shard.active_meter_count)
+                        .ok_or(RegistryError::MathOverflow)?;
                 }
             }
 
             registry.user_count = total_users;
             registry.meter_count = total_meters;
+            registry.active_meter_count = total_active_meters;
         });
         Ok(())
     }
@@ -324,7 +330,6 @@ pub mod registry {
             let mut meter_account = ctx.accounts.meter_account.load_init()?;
             let mut user_account = ctx.accounts.user_account.load_mut()?;
             let mut shard = ctx.accounts.registry_shard.load_mut()?;
-            let mut registry = ctx.accounts.registry.load_mut()?;
 
             require!(
                 user_account.status == UserStatus::Active,
@@ -353,8 +358,10 @@ pub mod registry {
 
             user_account.meter_count = user_account.meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
             shard.meter_count = shard.meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
-            // New meters are created Active — keep the live counter in sync at registration.
-            registry.active_meter_count = registry.active_meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
+            // New meters are created Active — count on the shard, NOT the global Registry.
+            // Writing the global account here would take a write lock on every registration
+            // and serialize the hot path; aggregate_shards reconciles the global total.
+            shard.active_meter_count = shard.active_meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
 
             emit!(MeterRegistered {
                 meter_id: meter_id.clone(),
@@ -458,18 +465,26 @@ pub mod registry {
     pub fn set_meter_status(ctx: Context<SetMeterStatus>, new_status: MeterStatus) -> Result<()> {
         compute_fn!("set_meter_status" => {
             let mut meter = ctx.accounts.meter_account.load_mut()?;
-            let mut registry_acc = ctx.accounts.registry.load_mut()?;
+            let registry_acc = ctx.accounts.registry.load()?;
+            let mut shard = ctx.accounts.registry_shard.load_mut()?;
 
             let is_owner = ctx.accounts.authority.key() == meter.owner;
             let is_admin = ctx.accounts.authority.key() == registry_acc.authority;
             require!(is_owner || is_admin, RegistryError::UnauthorizedUser);
 
+            // Active counting lives on the owner's shard (see register_meter); the
+            // global Registry stays read-only here and is reconciled via aggregate_shards.
+            require!(
+                shard.shard_id == shard_for(&meter.owner),
+                RegistryError::InvalidShardId
+            );
+
             let old_status = meter.status;
 
             if old_status == MeterStatus::Active && new_status != MeterStatus::Active {
-                registry_acc.active_meter_count = registry_acc.active_meter_count.saturating_sub(1);
+                shard.active_meter_count = shard.active_meter_count.saturating_sub(1);
             } else if old_status != MeterStatus::Active && new_status == MeterStatus::Active {
-                registry_acc.active_meter_count = registry_acc.active_meter_count.saturating_add(1);
+                shard.active_meter_count = shard.active_meter_count.saturating_add(1);
             }
 
             meter.status = new_status;
@@ -489,7 +504,6 @@ pub mod registry {
         compute_fn!("deactivate_meter" => {
             let mut meter = ctx.accounts.meter_account.load_mut()?;
             let mut user = ctx.accounts.user_account.load_mut()?;
-            let mut registry_acc = ctx.accounts.registry.load_mut()?;
             let mut shard = ctx.accounts.registry_shard.load_mut()?;
 
             require_keys_eq!(
@@ -504,7 +518,8 @@ pub mod registry {
             );
 
             if meter.status == MeterStatus::Active {
-                registry_acc.active_meter_count = registry_acc.active_meter_count.saturating_sub(1);
+                // Per-shard count; global total reconciled via aggregate_shards.
+                shard.active_meter_count = shard.active_meter_count.saturating_sub(1);
             }
 
             meter.status = MeterStatus::Inactive;
@@ -863,7 +878,9 @@ pub struct RegisterMeter<'info> {
     )]
     pub registry_shard: AccountLoader<'info, RegistryShard>,
 
-    #[account(mut, seeds = [b"registry"], bump)]
+    // Read-only on purpose: a `mut` here would take a Sealevel write lock on the
+    // global Registry for every registration, serializing the hot path.
+    #[account(seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
 
     /// CHECK: The user's wallet pubkey. Non-signing in the custodial-bridge model
@@ -919,11 +936,20 @@ pub struct UpdateAuthority<'info> {
 
 #[derive(Accounts)]
 pub struct SetMeterStatus<'info> {
-    #[account(mut, seeds = [b"registry"], bump)]
+    #[account(seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
 
     #[account(mut)]
     pub meter_account: AccountLoader<'info, MeterAccount>,
+
+    // Owner's shard — handler verifies shard_id == shard_for(meter.owner), so the
+    // Active count moves on the same shard register_meter incremented.
+    #[account(
+        mut,
+        seeds = [b"registry_shard".as_ref(), &[meter_account.load()?.owner.to_bytes()[0] % 16]],
+        bump
+    )]
+    pub registry_shard: AccountLoader<'info, RegistryShard>,
 
     pub authority: Signer<'info>,
 }
@@ -936,7 +962,7 @@ pub struct DeactivateMeter<'info> {
     #[account(mut)]
     pub user_account: AccountLoader<'info, UserAccount>,
 
-    #[account(mut, seeds = [b"registry"], bump)]
+    #[account(seeds = [b"registry"], bump)]
     pub registry: AccountLoader<'info, Registry>,
 
     // Owner's shard — seeds bind to `owner` so the count is decremented on the

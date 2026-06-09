@@ -26,3 +26,8 @@ anchor-spl = { version = "1.0.0", features = ["metadata"] }
 bytemuck = { version = "1.20.0", features = ["derive"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }
 registry = { path = "../registry", features = ["cpi"] }
+
+# Solana release builds default to overflow-checks=off (silent wrapping).
+# Force checked arithmetic so bare +=/-= panic instead of corrupting state.
+[profile.release]
+overflow-checks = true

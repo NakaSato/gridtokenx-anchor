@@ -15,7 +15,10 @@ pub struct Market {
     pub total_trades: u32,          // 4
     pub market_fee_bps: u16,        // 2
     pub clearing_enabled: u8,       // 1
-    pub locked: u8,                 // 1 (Re-entrancy Guard)
+    // Reserved byte (formerly an unenforced "re-entrancy guard" — Solana's runtime
+    // already forbids CPI re-entrancy, so the flag was never read or written).
+    // Kept to preserve the on-chain layout.
+    pub _reserved_guard: u8,        // 1
     pub _padding1: [u8; 4],         // 4 -> 80
     pub min_price_per_kwh: u64,     // 8 — minimum allowed price (must be > 0)
     pub max_price_per_kwh: u64,     // 8 — maximum allowed price (0 = no cap)
