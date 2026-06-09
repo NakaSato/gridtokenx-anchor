@@ -52,7 +52,7 @@ Every on-chain struct in `state.rs` / `state/*.rs` is zero-copy and Pod-compatib
 
 - Keep `#[repr(C)]` on the struct
 - Manually insert `_paddingN: [u8; N]` to align every field (8-byte for `u64`/`i64`, 4-byte for `u32`, etc.)
-- Enums in zero-copy structs: mark `#[repr(u8)]` and implement `bytemuck::Zeroable + bytemuck::Pod` manually (see `registry/src/state.rs`: `UserType`, `UserStatus`, `MeterType`, `MeterStatus`, `ValidatorStatus`)
+- Enums in zero-copy structs: the existing registry enums (`UserType`, `UserStatus`, `MeterType`, `MeterStatus`, `ValidatorStatus` in `registry/src/state.rs`) use hand-written `unsafe impl bytemuck::Pod` on `#[repr(u8)]` enums. **This is technically unsound** — `Pod` requires every bit pattern to be valid, but a 2-variant enum only has 2 valid bytes; a corrupted or forged account byte is UB on read. It survives today because Anchor's owner+discriminator checks gate the load. **For new code prefer a raw `u8` field + `TryFrom<u8>` accessor** (the pattern `trading::Order.order_type` uses) instead of copying the unsafe impls.
 - Use `AccountLoader<'info, T>` + `load()` / `load_mut()` / `load_init()` — never `Account<'info, T>` on a zero-copy struct
 - Space: `8 + std::mem::size_of::<T>()` (zero-copy) or manual `T::LEN` (regular `#[account]`: `ErcCertificate::LEN`, `PoAConfig::LEN`, `OrderNullifier::LEN`)
 
@@ -78,7 +78,8 @@ Most important architectural rule. High-frequency writes (meter readings, trades
 
 - Config accounts (`OracleData`, `Registry`, `Market`, `TokenInfo`, `PoAConfig`) load read-only on hot paths
 - Writes go to per-entity PDAs: `MeterState` (`[b"meter", meter_id]`), `Order` (`[b"order", authority, order_id]`), `OrderNullifier` (`[b"nullifier", user, order_id]`), `RegistryShard` / `MarketShard` / `ZoneMarketShard`
-- Aggregation via periodic admin instruction: `aggregate_readings` (oracle), `aggregate_shards` (registry). Global totals (`total_supply`, `total_readings`, `total_volume_global`) are **stale on purpose** — never read mid-transaction assuming current. Live count: `sync_total_supply` in `energy_token`.
+- Aggregation via periodic admin instruction: `aggregate_readings` (oracle), `aggregate_shards` (registry). Global totals (`total_supply`, `total_readings`, `total_volume_global`, `Registry.active_meter_count`) are **stale on purpose** — never read mid-transaction assuming current. Live count: `sync_total_supply` in `energy_token`.
+- Worked example: meter Active-counting lives on `RegistryShard.active_meter_count` (the owner's shard, `shard_for(owner)`); `register_meter` / `set_meter_status` / `deactivate_meter` write the shard while the global `Registry` stays read-only in their contexts, and `aggregate_shards` reconciles `Registry.active_meter_count`. A `mut` on the global account would take a Sealevel write lock per registration and serialize the hot path — this exact regression was shipped once and fixed.
 - `num_shards` = 16 in registry, variable-per-market in trading. Shard select: `authority.to_bytes()[0] % num_shards` (`trading/src/state/market.rs::get_shard_id`).
 
 **New high-frequency instruction → config read-only, per-entity PDA for state, add to an existing aggregation job.**
@@ -158,7 +159,8 @@ Tests use `AnchorProvider` against a live validator (import from `@anchor-lang/c
 3. **Precompiled benchmarks** (`blockbench`, `tpc_benchmark`) must stay in `Anchor.toml [programs.localnet]` so the test validator deploys them on startup.
 4. **Time in tests**: don't `sleep` to advance time. Construct initial states with past timestamps (e.g. `timestamp.sub(new BN(70))`) to pass rate-limit / monotonicity checks without races.
 5. **Apple Silicon validator crash**: `solana-test-validator` on M-series panics under load ("Too many open files"). Run `ulimit -n 65536` before launching (the superproject `scripts/app.sh` handles this).
-6. **Arithmetic**: use `checked_*` / `saturating_*` for every on-chain arithmetic op — overflow in a program is a silent correctness bug. Keep it explicit.
+6. **Arithmetic**: use `checked_*` / `saturating_*` for every on-chain arithmetic op. Every program's `Cargo.toml` also sets `[profile.release] overflow-checks = true` (cargo build-sbf defaults to off, which silently wraps), so any bare `+`/`-`/`*` that slips through panics instead of corrupting state. **New programs must include the same profile block.**
+7. **Oracle epochs are 900-second-aligned**: `trigger_market_clearing` rejects any `epoch_timestamp` where `epoch_timestamp % 900 != 0` (and any epoch ≤ `last_cleared_epoch` or in the future). Tests must align: `now.sub(now.mod(new BN(900)))`.
 
 ## Common tasks
 

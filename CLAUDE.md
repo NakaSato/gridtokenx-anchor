@@ -8,8 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Deep references (read before non-trivial edits)
 
-- **`anchor-SKILL.md`** — the authoritative deep-dive on program invariants (zero-copy layouts, sharding, CPI, compute profiling). **Caveat: its version numbers and program-ID table are stale.** Always treat `Anchor.toml` (program IDs) and each program's `Cargo.toml` (crate versions) as source of truth.
-- **`docs/`** — VitePress site. Per-program docs in `docs/programs/` (`oracle.md`, `registry.md`, `trading.md`, `governance.md`, `energy-token.md`), protocol math in `docs/equations.md`, clearing/settlement in `docs/programs/auction-clearing.md` + `transaction-settlement.md`. Serve with `npm run docs:dev`.
+- **`SKILL.md`** — the authoritative deep-dive on program invariants (zero-copy layouts, sharding, CPI, compute profiling). **Caveat: its version numbers and program-ID table are stale.** Always treat `Anchor.toml` (program IDs) and each program's `Cargo.toml` (crate versions) as source of truth.
+- **`ARCHITECTURE.md`** — component map for this repo; **`RUNTIME-ARCHITECTURE.md`** — runtime/SVM measurement context; **`BENCHMARKS.md`** — canonical benchmark results. (The former `docs/` VitePress site was removed; `npm run docs:dev` no longer has a target.)
 
 ---
 
@@ -18,8 +18,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 There is **no root `Cargo.toml` workspace** — each program in `programs/*` is its own crate, plus shared crates in `shared/`. Anchor drives the build via `Anchor.toml`.
 
 ```bash
-anchor build                      # build all 5 programs to target/deploy + target/types
-anchor test                       # build, spin up local validator, deploy, run mocha suite
+anchor build                      # build all programs (Anchor 1.0 emits programs/<p>/target/deploy/<p>.so;
+                                  #   copy to root target/deploy/ for scripts/run-tests.sh — see SKILL.md gotcha #1)
+anchor test                       # build, spin up validator, deploy, run mocha suite
+                                  #   NOTE: Anchor 1.0 spawns `surfpool` as the test validator — if it's not
+                                  #   installed, use ./scripts/run-tests.sh (solana-test-validator) instead
 anchor keys sync                  # regenerate program IDs (then update declare_id! in each lib.rs)
 
 # Per-suite (each spins its own validator via anchor test):
@@ -82,3 +85,4 @@ Crate versions: `anchor-lang` / `anchor-spl` = **1.0.0** (not the 0.30.x the SKI
 4. **`compute-debug` feature.** Each handler wraps its body in `compute_fn!("label" => { ... })`; no-op in release. Preserve when adding instructions (CU profiling vs 200k default / 1.4M max budget).
 5. **Hoist `Clock::get()` before `emit!`** — `let now = Clock::get()?.unix_timestamp;` then emit. Avoids a sysvar syscall inside macro expansion.
 6. Changing a program ID requires `anchor keys sync` **and** updating `declare_id!` in that program's `lib.rs`.
+7. **Every program's `Cargo.toml` sets `[profile.release] overflow-checks = true`** (cargo build-sbf defaults to off → silent wrapping). New programs must include the same block; still prefer `checked_*`/`saturating_*` explicitly.
