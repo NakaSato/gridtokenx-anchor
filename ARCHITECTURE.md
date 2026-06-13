@@ -28,7 +28,7 @@ Five production programs plus two benchmark programs. Program IDs are authoritat
 
 | Program | Program ID | Responsibility |
 | :--- | :--- | :--- |
-| `energy-token` | `6FZKcVKCLFSNLMxypFJGU4K14xUBnxNW9VAuKGhmqjGX` | GRID (1 kWh = 1 GRID) + GRX SPL mints; REC-validator-gated mint/settle; Token-2022 + Metaplex metadata |
+| `energy-token` | `6FZKcVKCLFSNLMxypFJGU4K14xUBnxNW9VAuKGhmqjGX` | GRID (1 kWh = 1 GRID) + GRX SPL mints; REC-validator-gated mint/settle; idempotent generation mint keyed by a per-`(meter, window)` `GenerationMintRecord` PDA (`mint_generation`); Token-2022 + Metaplex metadata |
 | `governance` | `FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS` | PoA authority (authority/config/dao/erc/stats handlers); ERC-1155-style RECs; 2-step authority transfer |
 | `oracle` | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU` | AMI-gateway bridge; per-meter PDA state; 15-min market-clearing epochs |
 | `registry` | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7` | User + meter accounts; 16-shard counter; staking + validator registration; 20 GRX new-user airdrop |
@@ -62,10 +62,12 @@ trading  → governance          (read PoA config, ERC certificates)
 
 ## 5. Load-Bearing Invariants
 
-1. **Zero-copy state.** Every `state.rs` struct is `#[account(zero_copy)] #[repr(C)]` + Pod, with
-   manual `_paddingN: [u8; N]` for alignment. Use `AccountLoader` + `load()/load_mut()/load_init()`.
+1. **Zero-copy state.** Every hot-path `state.rs` struct is `#[account(zero_copy)] #[repr(C)]` + Pod,
+   with manual `_paddingN: [u8; N]` for alignment. Use `AccountLoader` + `load()/load_mut()/load_init()`.
    Recount padding by hand when adding fields. Space = `8 + size_of::<T>()` (zero-copy) or `T::LEN`
-   (regular `#[account]`).
+   (regular `#[account]`). **Exception:** `energy-token`'s `GenerationMintRecord` is a regular
+   `#[account]` (Borsh, `Account<'info, _>`, space `8 + LEN`), not zero-copy — it is a tiny
+   `init_if_needed` idempotency marker, never a hot-path write, so it skips the Pod/padding rules.
 2. **No `String` in zero-copy.** Use `[u8; N]` + `*_len: u8`; convert via
    `registry::string_to_bytes32` / `bytes32_to_string`; rehydrate events with
    `String::from_utf8_lossy(&b[..len]).into_owned()`.
