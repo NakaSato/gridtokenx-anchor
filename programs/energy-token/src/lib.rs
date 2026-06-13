@@ -164,6 +164,97 @@ pub mod energy_token {
         Ok(())
     }
 
+    /// Idempotent generation mint, keyed by `(meter_id, window_start_ms)`.
+    ///
+    /// Identical mint semantics to [`mint_to_wallet`] (authority + REC-validator
+    /// checks, Token-2022 `mint_to` CPI), but gated on a per-window
+    /// [`GenerationMintRecord`] PDA. The Aggregator Bridge calls this once per
+    /// settlement window; if the same window is replayed (crash between submit and
+    /// eviction, or a Redis outage that defeated the bridge's `MINTED_SET` guard),
+    /// the record already exists with `minted == true` and the call short-circuits
+    /// to a no-op success — no second mint. This is the authoritative exactly-once
+    /// guard; the bridge-side marker is only a fast path.
+    ///
+    /// Per-instruction (not per-transaction) so a replayed recipient batched with
+    /// fresh ones no-ops without aborting the whole transaction and starving its
+    /// chunk-mates.
+    pub fn mint_generation(
+        ctx: Context<MintGeneration>,
+        meter_id: [u8; 16],
+        window_start_ms: i64,
+        amount: u64,
+    ) -> Result<()> {
+        compute_fn!("mint_generation" => {
+            // Idempotency: this (meter, window) already minted — no-op success.
+            // Must be the first check so a replay never re-runs the mint CPI.
+            if ctx.accounts.mint_record.minted {
+                return Ok(());
+            }
+
+            {
+                let token_info = ctx.accounts.token_info.load()?;
+                require!(
+                    token_info.authority == ctx.accounts.authority.key(),
+                    EnergyTokenError::UnauthorizedAuthority
+                );
+
+                // REC provenance: parity with mint_to_wallet — when validators are
+                // registered, one must co-sign.
+                if token_info.rec_validators_count > 0 {
+                    let rec_key = ctx
+                        .accounts
+                        .rec_validator
+                        .as_ref()
+                        .map(|v| v.key())
+                        .ok_or(EnergyTokenError::RecValidatorNotFound)?;
+                    let mut found = false;
+                    for i in 0..token_info.rec_validators_count as usize {
+                        if token_info.rec_validators[i] == rec_key {
+                            found = true;
+                            break;
+                        }
+                    }
+                    require!(found, EnergyTokenError::RecValidatorNotFound);
+                }
+            }
+
+            let now = Clock::get()?.unix_timestamp;
+            let cpi_accounts = token_interface::MintTo {
+                mint: ctx.accounts.mint.to_account_info(),
+                to: ctx.accounts.destination.to_account_info(),
+                authority: ctx.accounts.token_info.to_account_info(),
+            };
+            let seeds = &[b"token_info_2022".as_ref(), &[ctx.bumps.token_info]];
+            let signer = &[&seeds[..]];
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                cpi_accounts,
+                signer,
+            );
+
+            compute_checkpoint!("before_mint_cpi");
+            token_interface::mint_to(cpi_ctx, amount)?;
+            compute_checkpoint!("after_mint_cpi");
+
+            // Stamp the record only AFTER a successful mint, so a failed mint leaves
+            // the window un-minted and retryable (the account exists with
+            // minted == false; the next attempt re-runs the CPI).
+            let record = &mut ctx.accounts.mint_record;
+            record.meter_id = meter_id;
+            record.window_start_ms = window_start_ms;
+            record.amount = amount;
+            record.minted = true;
+            record.bump = ctx.bumps.mint_record;
+
+            emit!(TokensMinted {
+                recipient: ctx.accounts.destination.key(),
+                amount,
+                timestamp: now,
+            });
+        });
+        Ok(())
+    }
+
     /// Initialize the energy token program
     pub fn initialize_token(
         ctx: Context<InitializeToken>,
@@ -453,6 +544,59 @@ pub struct MintToWallet<'info> {
 
     /// CHECK: The owner of the destination token account
     pub destination_owner: AccountInfo<'info>,
+
+    pub authority: Signer<'info>,
+
+    /// REC validator co-signer — required only when token_info.rec_validators_count > 0
+    pub rec_validator: Option<Signer<'info>>,
+
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(meter_id: [u8; 16], window_start_ms: i64)]
+pub struct MintGeneration<'info> {
+    #[account(
+        mut,
+        constraint = mint.key() == token_info.load()?.mint @ EnergyTokenError::UnauthorizedAuthority,
+    )]
+    pub mint: InterfaceAccount<'info, MintInterface>,
+
+    #[account(
+        seeds = [b"token_info_2022"],
+        bump,
+        constraint = token_info.load()?.authority == authority.key() @ EnergyTokenError::UnauthorizedAuthority,
+    )]
+    pub token_info: AccountLoader<'info, TokenInfo>,
+
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = destination_owner,
+        token::token_program = token_program,
+    )]
+    pub destination: Box<InterfaceAccount<'info, TokenAccountInterface>>,
+
+    /// CHECK: The owner of the destination token account
+    pub destination_owner: AccountInfo<'info>,
+
+    /// Per-(meter, window) idempotency guard. `init_if_needed` so the first mint
+    /// creates it and a replay finds it already present; the `minted` flag (checked
+    /// in the handler before any mint) makes re-entry a no-op, closing the standard
+    /// init_if_needed re-init footgun.
+    #[account(
+        init_if_needed,
+        payer = payer,
+        space = 8 + GenerationMintRecord::LEN,
+        seeds = [b"gen_mint", meter_id.as_ref(), &window_start_ms.to_le_bytes()],
+        bump,
+    )]
+    pub mint_record: Account<'info, GenerationMintRecord>,
 
     pub authority: Signer<'info>,
 
