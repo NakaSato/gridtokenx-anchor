@@ -132,6 +132,7 @@ Lifecycle / load simulations: `simulate-trading.ts`, `simulate-market-clearing.t
 
 | File | Covers |
 | :--- | :--- |
+| `RUNTIME-ARCHITECTURE.md` | How the programs execute: SVM runtime, CPI, security model, protocol flow, consensus/validator topology |
 | `CLAUDE.md` | LLM working rules for this submodule |
 | `SKILL.md` / `anchor-SKILL.md` | Deep dive on program invariants — **version/ID table is stale**, defer to `Anchor.toml` + `Cargo.toml` |
 | `BENCHMARKS.md` | Benchmark methodology and results |
