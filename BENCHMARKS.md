@@ -65,7 +65,7 @@ samples. Not program errors.
 two orders of magnitude faster than write paths, and consumes no on-chain CU.
 
 **Reading:** `do_nothing` (648 CU) is the Anchor dispatch + signature-verify
-floor. `cpu_heavy_sort` (256-element sort) is ~9.6k CU. A single keyed insert
+floor. `cpu_heavy_sort` (64-element sort) is ~9.6k CU. A single keyed insert
 of a value record is ~12.9k CU — well inside the 200k default CU budget.
 
 ---
