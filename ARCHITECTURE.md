@@ -85,7 +85,7 @@ trading  → governance          (read PoA config, ERC certificates)
 
 ## 6. Versions (source of truth: each `Cargo.toml`)
 
-- `anchor-lang` / `anchor-spl` = **1.0.0** (not the 0.30.x the `anchor-SKILL.md` mentions).
+- `anchor-lang` / `anchor-spl` = **1.0.0** (not the 0.30.x the `SKILL.md` mentions).
 - TS tests import from **`@anchor-lang/core`** (not `@coral-xyz/anchor`).
 
 ## 7. Build & Test
@@ -134,6 +134,6 @@ Lifecycle / load simulations: `simulate-trading.ts`, `simulate-market-clearing.t
 | :--- | :--- |
 | `RUNTIME-ARCHITECTURE.md` | How the programs execute: SVM runtime, CPI, security model, protocol flow, consensus/validator topology |
 | `CLAUDE.md` | LLM working rules for this submodule |
-| `SKILL.md` / `anchor-SKILL.md` | Deep dive on program invariants — **version/ID table is stale**, defer to `Anchor.toml` + `Cargo.toml` |
+| `SKILL.md` | Deep dive on program invariants — **version/ID table is stale**, defer to `Anchor.toml` + `Cargo.toml` |
 | `BENCHMARKS.md` | Benchmark methodology and results |
 | `Anchor.toml` | Authoritative program IDs, toolchain, scripts |
