@@ -21,7 +21,7 @@ code lives in `shared/`. Anchor drives the build via `Anchor.toml`.
 
 ## 2. Programs
 
-Five production programs plus two benchmark programs. Program IDs are authoritative in
+Six production programs plus two benchmark programs. Program IDs are authoritative in
 `Anchor.toml [programs.localnet]` (the table below is a snapshot — trust `Anchor.toml`).
 
 ### Production
@@ -31,8 +31,9 @@ Five production programs plus two benchmark programs. Program IDs are authoritat
 | `energy-token` | `6FZKcVKCLFSNLMxypFJGU4K14xUBnxNW9VAuKGhmqjGX` | GRID (1 kWh = 1 GRID) + GRX SPL mints; REC-validator-gated mint/settle; idempotent generation mint keyed by a per-`(meter, window)` `GenerationMintRecord` PDA (`mint_generation`); Token-2022 + Metaplex metadata |
 | `governance` | `FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS` | PoA authority (authority/config/dao/erc/stats handlers); ERC-1155-style RECs; 2-step authority transfer |
 | `oracle` | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU` | AMI-gateway bridge; per-meter PDA state; 15-min market-clearing epochs |
-| `registry` | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7` | User + meter accounts; 16-shard counter; staking + validator registration; 20 GRX new-user airdrop |
+| `registry` | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7` | User + meter accounts; 16-shard counter; staking + validator registration + slashing (slashed bonds go only to the configured `slash_destination`, Active validators only); 20 GRX new-user airdrop |
 | `trading` | `CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX` | Order book + CDA; sharded order submit; off-chain-signed match settlement (`settle_offchain.rs`); auction clearing |
+| `treasury` | `FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn` | GRX↔THBG (THB-pegged stablecoin, 6dp) swap with reserve-attested peg invariant; redeem bounded by `swap_vault` collateral + tracked supply; GRX staking (MasterChef accumulator); non-custodial baht-settlement accounting (`record_settlement`) |
 
 ### Benchmark (not part of the production protocol)
 
@@ -56,6 +57,7 @@ Cross-program invocation via path deps with `features = ["cpi"]`:
 ```
 registry → energy-token        (airdrop / mint on registration)
 trading  → governance          (read PoA config, ERC certificates)
+trading  → treasury            (optional record_settlement; non-custodial, fires only when treasury accounts are passed)
 ```
 
 `trading` re-exports `governance::{ErcCertificate, ErcStatus, PoAConfig}` directly.

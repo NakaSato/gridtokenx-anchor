@@ -67,13 +67,24 @@ programs/
 ├── governance/     PoA authority (handlers/: authority, config, dao, erc, stats); ERC-1155-style RECs; 2-step authority transfer
 ├── oracle/         AMI-gateway bridge; per-meter PDA state; 15-min market-clearing epochs
 ├── registry/       user + meter accounts; 16-shard counter; staking + validator registration
-└── trading/        order book + CDA; sharded order submit; off-chain-signed match settlement (settle_offchain.rs)
+├── trading/        order book + CDA; sharded order submit; off-chain-signed match settlement (settle_offchain.rs)
+└── treasury/       GRX↔THBG (THB-pegged stablecoin) swap, GRX staking, baht-denominated settlement accounting
 shared/
 ├── core/           shared on-chain types/version
 └── compute-debug/  compute-unit profiling macros (feature-gated)
 ```
 
-**CPI graph** (path deps, `features = ["cpi"]`): `registry → energy-token`, `trading → governance`.
+**CPI graph** (path deps, `features = ["cpi"]`): `registry → energy-token`, `trading → governance`, `trading → treasury` (optional `record_settlement` — non-custodial; fires only when treasury accounts are passed to `settle_offchain_match`).
+
+### Treasury program
+
+- **Token:** THBG = THB-pegged stablecoin, 6 decimals, mint authority = treasury PDA (`[b"treasury"]`).
+- **Swap** (`swap_grx_for_thbg`): the baht-settlement primitive. `thbg_out = grx_in × grx_per_thbg_rate / 1e9 − fee`. Peg invariants: (1) reserve attestation fresh (`now − attestation_ts ≤ attestation_ttl`); (2) `thbg_supply + minted ≤ attested_reserve`. Custodian refreshes the reserve via `update_attestation`.
+- **Redeem** (`redeem_thbg_for_grx`): burns THBG, returns GRX from `swap_vault` at the current rate. Collateral guards: `thbg_in ≤ thbg_supply` (`SupplyUnderflow`) and `grx_out ≤ swap_vault.amount` (`InsufficientVault`) — a rate change via `set_params` can never let a redeemer drain more GRX than the vault holds.
+- **Staking** (`stake_grx`/`unstake_grx`/`claim_rewards`/`fund_rewards`): MasterChef accumulator (`acc_reward_per_share`, ×1e12); rewards paid in GRX from `reward_pool`. **Staked GRX lives in its own vault and never backs the peg.**
+- **Three GRX vaults** (separate PDAs): `swap_vault` (redemption collateral), `stake_vault` (staker custody), `reward_vault` (reward pool).
+- **`record_settlement`**: non-custodial CPI from trading; bumps `total_settled_thbg`, authorized by the `settlement_recorder` signer (= trading `market_authority` PDA). Init via `scripts/init-treasury.ts`; test `tests/treasury.ts` (`npm run test:treasury`).
+- **Slash redistribution (registry → treasury):** registry's `slash_validator` sends slashed bonds to a configured `slash_destination` — point it at the treasury `reward_vault` (wired by `init-treasury.ts` via `registry::set_slash_destination`). The registry refuses to slash until the destination is set, only slashes accounts whose `validator_status == Active`, and only sends to the configured destination — no misroute. It's a token transfer, not a CPI into treasury; redistribute to stakers afterward via `fund_rewards`.
 
 Crate versions: `anchor-lang` / `anchor-spl` = **1.0.0** (not the 0.30.x the SKILL file mentions). TS tests import from **`@anchor-lang/core`** (not `@coral-xyz/anchor`).
 

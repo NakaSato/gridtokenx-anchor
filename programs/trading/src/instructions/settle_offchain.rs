@@ -222,6 +222,15 @@ pub struct SettleOffchainMatchContext<'info> {
     #[account(address = IX_ID)]
     pub sysvar_instructions: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
+
+    // --- Optional treasury wiring (baht-denominated settlement) ---
+    // When both are supplied, the settlement currency must be the treasury's THBG
+    // mint and the trade value is recorded via a non-custodial CPI (moves no funds,
+    // so the escrow / ed25519 / replay-nullifier guarantees are untouched). Omitting
+    // them keeps the legacy generic-currency settlement working unchanged.
+    pub treasury_program: Option<Program<'info, treasury::program::Treasury>>,
+    #[account(mut)]
+    pub treasury_state: Option<AccountLoader<'info, treasury::Treasury>>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -423,6 +432,30 @@ pub fn settle_offchain_match(
         ctx.accounts.energy_mint.decimals
     )?;
     compute_checkpoint!("after_settle_cpis");
+
+    // --- 3b. TREASURY: record the baht-denominated settlement (optional, non-custodial) ---
+    if let (Some(treasury_program), Some(treasury_state)) =
+        (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state)
+    {
+        // The seller was just paid in `currency_mint`; require it IS the THBG mint so
+        // this is genuinely a baht-denominated payout, not an arbitrary token.
+        require_keys_eq!(
+            ctx.accounts.currency_mint.key(),
+            treasury_state.load()?.thbg_mint,
+            TradingError::TreasuryCurrencyMismatch
+        );
+        treasury::cpi::record_settlement(
+            CpiContext::new_with_signer(
+                treasury_program.key(),
+                treasury::cpi::accounts::RecordSettlement {
+                    treasury: treasury_state.to_account_info(),
+                    recorder: ctx.accounts.market_authority.to_account_info(),
+                },
+                signer,
+            ),
+            total_currency_value,
+        )?;
+    }
 
     // --- 4. STATE UPDATE ---
     ctx.accounts.buyer_nullifier.filled_amount = ctx.accounts.buyer_nullifier.filled_amount.saturating_add(match_amount);

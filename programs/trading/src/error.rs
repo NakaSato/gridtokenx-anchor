@@ -64,4 +64,6 @@ pub enum TradingError {
     InvalidNullifier,
     #[msg("Nullifier authority does not match the signed order owner")]
     NullifierUserMismatch,
+    #[msg("Settlement currency mint is not the treasury THBG mint")]
+    TreasuryCurrencyMismatch,
 }

@@ -9,10 +9,12 @@ pub struct Registry {
     pub authority: Pubkey,
     pub oracle_authority: Pubkey, // Authorized oracle (Option -> Pubkey for ZeroCopy)
     pub has_oracle_authority: u8, // Track if oracle_authority is valid (u8 for Pod)
-    pub _padding: [u8; 7],        // Alignment
+    pub has_slash_destination: u8, // Track if slash_destination is configured (u8 for Pod)
+    pub _padding: [u8; 6],        // Alignment
     pub user_count: u64,
     pub meter_count: u64,
     pub active_meter_count: u64, // Track active meters separately
+    pub slash_destination: Pubkey, // Allowed sink for slashed validator bonds (e.g. treasury reward_vault)
 }
 
 /// RegistryShard account for distributed counters

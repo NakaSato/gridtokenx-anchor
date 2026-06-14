@@ -65,6 +65,7 @@ pub mod registry {
             let mut registry = ctx.accounts.registry.load_init()?;
             registry.authority = ctx.accounts.authority.key();
             registry.has_oracle_authority = 0;
+            registry.has_slash_destination = 0;
             registry.user_count = 0;
             registry.meter_count = 0;
             registry.active_meter_count = 0;
@@ -112,6 +113,35 @@ pub mod registry {
             emit!(OracleAuthoritySet {
                 old_oracle,
                 new_oracle: oracle,
+            });
+        });
+        Ok(())
+    }
+
+    /// Set the allowed destination for slashed validator bonds (admin only).
+    /// `slash_validator` will refuse to send the bond anywhere else, so a slash
+    /// cannot be misrouted (point this at the treasury `reward_vault`).
+    pub fn set_slash_destination(ctx: Context<SetSlashDestination>, destination: Pubkey) -> Result<()> {
+        compute_fn!("set_slash_destination" => {
+            let mut registry = ctx.accounts.registry.load_mut()?;
+            require_keys_eq!(
+                registry.authority,
+                ctx.accounts.authority.key(),
+                RegistryError::UnauthorizedAuthority
+            );
+
+            let old_destination = if registry.has_slash_destination == 1 {
+                Some(registry.slash_destination)
+            } else {
+                None
+            };
+
+            registry.slash_destination = destination;
+            registry.has_slash_destination = 1;
+
+            emit!(SlashDestinationSet {
+                old_destination,
+                new_destination: destination,
             });
         });
         Ok(())
@@ -690,8 +720,6 @@ pub mod registry {
         compute_fn!("register_validator" => {
             let mut user_account = ctx.accounts.user_account.load_mut()?;
 
-            // Minimum stake requirement: 10,000 GRX
-            const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000;
             require!(
                 user_account.staked_grx >= MIN_VALIDATOR_STAKE,
                 RegistryError::MinStakeNotMet
@@ -701,7 +729,145 @@ pub mod registry {
         });
         Ok(())
     }
+
+    /// Withdraw staked GRX back to the staker's ATA.
+    ///
+    /// Guards:
+    /// - cannot unstake more than is staked;
+    /// - an *active* validator cannot drop below `MIN_VALIDATOR_STAKE` without first
+    ///   stepping down (prevents an under-bonded validator continuing to act).
+    pub fn unstake_grx(ctx: Context<UnstakeGrx>, amount: u64) -> Result<()> {
+        require!(amount > 0, RegistryError::MinStakeNotMet);
+        compute_fn!("unstake_grx" => {
+            {
+                let user_account = ctx.accounts.user_account.load()?;
+                require!(
+                    user_account.staked_grx >= amount,
+                    RegistryError::InsufficientStakingBalance
+                );
+                // An Active validator must keep at least the minimum bond.
+                if user_account.validator_status == ValidatorStatus::Active {
+                    let remaining = user_account.staked_grx.saturating_sub(amount);
+                    require!(remaining >= MIN_VALIDATOR_STAKE, RegistryError::MinStakeNotMet);
+                }
+            }
+
+            let cpi_accounts = token_interface::TransferChecked {
+                from: ctx.accounts.grx_vault.to_account_info(),
+                to: ctx.accounts.user_grx_ata.to_account_info(),
+                authority: ctx.accounts.registry.to_account_info(), // Registry PDA owns the vault
+                mint: ctx.accounts.grx_mint.to_account_info(),
+            };
+            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
+            let signer = &[&registry_seeds[..]];
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                cpi_accounts,
+                signer,
+            );
+
+            compute_checkpoint!("before_unstake_transfer_cpi");
+            token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.grx_mint.decimals)?;
+            compute_checkpoint!("after_unstake_transfer_cpi");
+
+            let mut user_account = ctx.accounts.user_account.load_mut()?;
+            user_account.staked_grx = user_account
+                .staked_grx
+                .checked_sub(amount)
+                .ok_or(RegistryError::MathOverflow)?;
+
+            let now = Clock::get()?.unix_timestamp;
+            emit!(Unstaked {
+                user: ctx.accounts.authority.key(),
+                amount,
+                remaining_stake: user_account.staked_grx,
+                timestamp: now,
+            });
+        });
+        Ok(())
+    }
+
+    /// Slash a validator's bond for proven misbehaviour (PoA authority only).
+    ///
+    /// The slashed GRX moves out of the registry vault to `slash_destination` — point it at
+    /// the treasury `reward_vault` so honest stakers receive it (call `treasury::fund_rewards`
+    /// afterwards), per the node design's "redistributed to honest stakers" rule.
+    ///
+    /// The target validator is identified by `target_authority`; its `UserAccount` PDA is
+    /// passed mutably. The slashed amount is capped at the validator's staked balance.
+    pub fn slash_validator(ctx: Context<SlashValidator>, amount: u64) -> Result<()> {
+        require!(amount > 0, RegistryError::MinStakeNotMet);
+        // PoA gate: only the registry authority may slash, and only to the configured
+        // slash destination (e.g. treasury reward_vault) so a slash cannot be misrouted.
+        {
+            let registry = ctx.accounts.registry.load()?;
+            require_keys_eq!(
+                ctx.accounts.authority.key(),
+                registry.authority,
+                RegistryError::UnauthorizedAuthority
+            );
+            require!(
+                registry.has_slash_destination == 1,
+                RegistryError::SlashDestinationNotSet
+            );
+            require_keys_eq!(
+                ctx.accounts.slash_destination.key(),
+                registry.slash_destination,
+                RegistryError::InvalidSlashDestination
+            );
+        }
+        compute_fn!("slash_validator" => {
+            let slashed = {
+                let user_account = ctx.accounts.target_user_account.load()?;
+                // Only an active validator can be slashed — never a plain staker or an
+                // already-slashed account.
+                require!(
+                    user_account.validator_status == ValidatorStatus::Active,
+                    RegistryError::NotActiveValidator
+                );
+                require!(
+                    user_account.staked_grx > 0,
+                    RegistryError::InsufficientStakingBalance
+                );
+                amount.min(user_account.staked_grx)
+            };
+
+            let cpi_accounts = token_interface::TransferChecked {
+                from: ctx.accounts.grx_vault.to_account_info(),
+                to: ctx.accounts.slash_destination.to_account_info(),
+                authority: ctx.accounts.registry.to_account_info(),
+                mint: ctx.accounts.grx_mint.to_account_info(),
+            };
+            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
+            let signer = &[&registry_seeds[..]];
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                cpi_accounts,
+                signer,
+            );
+
+            compute_checkpoint!("before_slash_transfer_cpi");
+            token_interface::transfer_checked(cpi_ctx, slashed, ctx.accounts.grx_mint.decimals)?;
+            compute_checkpoint!("after_slash_transfer_cpi");
+
+            let mut user_account = ctx.accounts.target_user_account.load_mut()?;
+            user_account.staked_grx = user_account.staked_grx.saturating_sub(slashed);
+            user_account.validator_status = ValidatorStatus::Slashed;
+
+            let now = Clock::get()?.unix_timestamp;
+            emit!(ValidatorSlashed {
+                validator: ctx.accounts.target_authority.key(),
+                slashed_amount: slashed,
+                remaining_stake: user_account.staked_grx,
+                timestamp: now,
+            });
+        });
+        Ok(())
+    }
 }
+
+/// Minimum GRX bond (9 decimals) required to hold the validator role: 10,000 GRX.
+pub const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000;
 
 // Internal helpers
 fn do_settle_meter(meter: &mut MeterAccount, owner_key: Pubkey) -> Result<u64> {
@@ -927,6 +1093,14 @@ pub struct SetOracleAuthority<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetSlashDestination<'info> {
+    #[account(mut)]
+    pub registry: AccountLoader<'info, Registry>,
+
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
 pub struct UpdateAuthority<'info> {
     #[account(mut)]
     pub registry: AccountLoader<'info, Registry>,
@@ -1139,4 +1313,90 @@ pub struct RegisterValidator<'info> {
     pub user_account: AccountLoader<'info, UserAccount>,
 
     pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct UnstakeGrx<'info> {
+    #[account(
+        mut,
+        seeds = [b"user", authority.key().as_ref()],
+        bump,
+        has_one = authority,
+    )]
+    pub user_account: AccountLoader<'info, UserAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"grx_vault"],
+        bump,
+        token::mint = grx_mint,
+        token::authority = registry,
+        token::token_program = token_program,
+    )]
+    pub grx_vault: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        seeds = [b"registry"],
+        bump,
+    )]
+    pub registry: AccountLoader<'info, Registry>,
+
+    #[account(
+        mut,
+        token::mint = grx_mint,
+        token::authority = authority,
+        token::token_program = token_program,
+    )]
+    pub user_grx_ata: InterfaceAccount<'info, TokenAccount>,
+
+    pub grx_mint: InterfaceAccount<'info, Mint>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct SlashValidator<'info> {
+    /// CHECK: the validator being slashed; only used to derive its UserAccount PDA and label the event.
+    pub target_authority: UncheckedAccount<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"user", target_authority.key().as_ref()],
+        bump,
+    )]
+    pub target_user_account: AccountLoader<'info, UserAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"grx_vault"],
+        bump,
+        token::mint = grx_mint,
+        token::authority = registry,
+        token::token_program = token_program,
+    )]
+    pub grx_vault: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        seeds = [b"registry"],
+        bump,
+    )]
+    pub registry: AccountLoader<'info, Registry>,
+
+    /// Destination for the slashed bond (e.g. treasury `reward_vault`).
+    #[account(
+        mut,
+        token::mint = grx_mint,
+        token::token_program = token_program,
+    )]
+    pub slash_destination: InterfaceAccount<'info, TokenAccount>,
+
+    pub grx_mint: InterfaceAccount<'info, Mint>,
+
+    /// PoA authority — must equal `registry.authority`.
+    pub authority: Signer<'info>,
+
+    pub token_program: Interface<'info, TokenInterface>,
 }
