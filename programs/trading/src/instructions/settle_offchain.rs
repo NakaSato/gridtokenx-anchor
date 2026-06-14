@@ -299,6 +299,13 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub secondary_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
+
+    // --- Optional treasury wiring (baht-denominated settlement) ---
+    // When both are supplied, the settlement currency must be the treasury's THBG
+    // mint and the batch's gross settled value is recorded with a single CPI.
+    pub treasury_program: Option<Program<'info, treasury::program::Treasury>>,
+    #[account(mut)]
+    pub treasury_state: Option<AccountLoader<'info, treasury::Treasury>>,
 }
 
 pub fn settle_offchain_match(
@@ -437,8 +444,11 @@ pub fn settle_offchain_match(
     if let (Some(treasury_program), Some(treasury_state)) =
         (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state)
     {
-        // The seller was just paid in `currency_mint`; require it IS the THBG mint so
-        // this is genuinely a baht-denominated payout, not an arbitrary token.
+        // Require the settlement currency IS the THBG mint so this is genuinely a
+        // baht-denominated settlement, not an arbitrary token. Records the GROSS
+        // settled value (total THBG leaving buyer escrow = seller payout + fee +
+        // wheeling + loss), so the counter reconciles to on-chain escrow outflow —
+        // not the seller's net receipt.
         require_keys_eq!(
             ctx.accounts.currency_mint.key(),
             treasury_state.load()?.thbg_mint,
@@ -519,6 +529,10 @@ pub fn batch_settle_offchain_match<'info>(
     let authority_seeds = &[b"market_authority".as_ref(), &[ctx.bumps.market_authority]];
     let signer = &[&authority_seeds[..]];
 
+    // Accumulate the gross settled value across the batch; recorded once after the
+    // loop via a single treasury CPI (cheaper than one CPI per match).
+    let mut batch_total_value: u64 = 0;
+
     for (i, m) in matches.iter().enumerate() {
         // Verify signatures for each pair in the batch
         // Instructions: [Ed25519_Buyer_0, Ed25519_Seller_0, Ed25519_Buyer_1, Ed25519_Seller_1, ..., Program_IX]
@@ -583,6 +597,7 @@ pub fn batch_settle_offchain_match<'info>(
         let total_value = m.match_amount.saturating_mul(m.match_price);
         let market_fee = total_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
         let net_seller = total_value.saturating_sub(market_fee).saturating_sub(m.wheeling_charge).saturating_sub(m.loss_cost);
+        batch_total_value = batch_total_value.checked_add(total_value).ok_or(TradingError::Overflow)?;
 
         // Zone capacity check and update (cross-zone wheeling flow only — see single path).
         // Cross-zone if EITHER leg is remote relative to this zone_market.
@@ -676,6 +691,31 @@ pub fn batch_settle_offchain_match<'info>(
             fee_amount: market_fee,
             timestamp: clock.unix_timestamp,
         });
+    }
+
+    // --- TREASURY: record the batch's gross baht-denominated settlement value with a
+    // single CPI (optional, non-custodial). Mirrors the single-match path. ---
+    if let (Some(treasury_program), Some(treasury_state)) =
+        (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state)
+    {
+        if batch_total_value > 0 {
+            require_keys_eq!(
+                currency_mint_key,
+                treasury_state.load()?.thbg_mint,
+                TradingError::TreasuryCurrencyMismatch
+            );
+            treasury::cpi::record_settlement(
+                CpiContext::new_with_signer(
+                    treasury_program.key(),
+                    treasury::cpi::accounts::RecordSettlement {
+                        treasury: treasury_state.to_account_info(),
+                        recorder: ctx.accounts.market_authority.to_account_info(),
+                    },
+                    signer,
+                ),
+                batch_total_value,
+            )?;
+        }
     }
     });
     Ok(())
