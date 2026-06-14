@@ -30,13 +30,13 @@ Program IDs (from `Anchor.toml` — verified to match `declare_id!` in each `lib
 
 | Program        | ID                                              |
 | -------------- | ----------------------------------------------- |
-| `energy_token` | `DBZzN5EZmxDapvnKANmJDymbeYoz2oSmQRUhREGacKDp`   |
-| `governance`   | `3W6fUDWtT2F6Hq7ys3mvp3aHHVKCLHysBonyGAF2FPPR`   |
-| `oracle`       | `3wqSZd23WyNc7C7FnJKiU6PWwTM5GyFBLxpANe5MTj8r`   |
-| `registry`     | `Z4dUwVBUYMYbGkRCNzEyZBwK22LRuEyii6Ci1pW6iLf`    |
-| `trading`      | `yonsbZqm47vgomYFek9a7yJxcgyYTn3f2MLScEA9Wif`    |
-| `blockbench`   | `HPnJW7bUvHuajENb8YjV1GQbQxUYWH9CP6M8BCzg7EjW`   |
-| `tpc_benchmark`| `374pa4eZxzF6q1niiRAJojhCKPn2mFhPjnWPbkJ3yEoN`   |
+| `energy_token` | `6FZKcVKCLFSNLMxypFJGU4K14xUBnxNW9VAuKGhmqjGX`   |
+| `governance`   | `FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS`   |
+| `oracle`       | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU`   |
+| `registry`     | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7`   |
+| `trading`      | `CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX`   |
+| `blockbench`   | `9AM4JkvUkK8ZfRneTAQVahFgPe9rEisNkB9byRfZ4TwT`   |
+| `tpc_benchmark`| `ELv3cWARDqNLgv7A7dochy2CC4Ke9wdgAHvkU3wCwQha`   |
 
 ## Invariants — read before touching any program
 
