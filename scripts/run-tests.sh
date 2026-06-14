@@ -12,6 +12,7 @@
 #   all        (default) oracle + registry_sharding + governance
 #   oracle     oracle tests only
 #   registry   registry sharding tests only
+#   staking    registry staking / unstake / slash / withdraw-slashed tests only
 #   governance governance ERC + authority tests
 #   tpc-stress TPC-C stress benchmark (requires tpc_benchmark .so)
 #
@@ -93,6 +94,9 @@ case "$SUITE" in
   registry)
     TEST_FILES=("tests/registry_sharding.ts")
     ;;
+  staking)
+    TEST_FILES=("tests/staking.ts")
+    ;;
   governance)
     TEST_FILES=("tests/governance.ts")
     ;;
@@ -106,7 +110,7 @@ case "$SUITE" in
     TEST_FILES=("tests/smallbank.ts")
     ;;
   *)
-    die "Unknown suite: $SUITE. Valid suites: all, oracle, registry, governance, tpc-stress, blockbench, smallbank"
+    die "Unknown suite: $SUITE. Valid suites: all, oracle, registry, staking, governance, tpc-stress, blockbench, smallbank"
     ;;
 esac
 

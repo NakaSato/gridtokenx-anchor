@@ -13,8 +13,15 @@ pub use state::*;
 
 declare_id!("FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7");
 
-/// Airdrop amount for new users (in smallest token units, 9 decimals = 20 GRX)
-pub const AIRDROP_AMOUNT: u64 = 20_000_000_000; // 20 GRX tokens
+/// Airdrop amount for new users (in smallest token units, 9 decimals = 10 GRX)
+pub const AIRDROP_AMOUNT: u64 = 10_000_000_000; // 10 GRX tokens
+
+/// Minimum GRX stake (smallest units) required to hold an Active validator slot.
+/// Falling below this on unstake/slash demotes the validator.
+pub const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000; // 10,000 GRX
+
+/// Cooldown after the most recent `stake_grx` before tokens can be unstaked.
+pub const UNSTAKE_COOLDOWN_SECS: i64 = 24 * 60 * 60; // 24h
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
@@ -659,7 +666,6 @@ pub mod registry {
     }
 
     /// Stake GRX tokens to participate in the network
-    // TODO: Add unstake_grx and slash_validator instructions
     pub fn stake_grx(ctx: Context<StakeGrx>, amount: u64) -> Result<()> {
         require!(amount > 0, RegistryError::MinStakeNotMet);
         compute_fn!("stake_grx" => {
@@ -676,11 +682,17 @@ pub mod registry {
             compute_checkpoint!("after_stake_transfer_cpi");
 
             let mut user_account = ctx.accounts.user_account.load_mut()?;
+            let was_empty = user_account.staked_grx == 0;
             user_account.staked_grx = user_account
                 .staked_grx
                 .checked_add(amount)
                 .ok_or(RegistryError::MathOverflow)?;
-            user_account.last_stake_at = Clock::get()?.unix_timestamp;
+            // Anchor the unstake cooldown to when the position was first opened,
+            // not to every top-up — otherwise a tiny add re-locks the whole
+            // balance for another full cooldown. Resets only after a full unstake.
+            if was_empty {
+                user_account.last_stake_at = Clock::get()?.unix_timestamp;
+            }
         });
         Ok(())
     }
@@ -690,14 +702,176 @@ pub mod registry {
         compute_fn!("register_validator" => {
             let mut user_account = ctx.accounts.user_account.load_mut()?;
 
-            // Minimum stake requirement: 10,000 GRX
-            const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000;
+            // A slashed validator is permanently barred from self-reinstatement;
+            // restaking must not silently undo a slash. Reinstatement, if ever
+            // desired, belongs in an explicit admin-gated instruction.
+            require!(
+                user_account.validator_status != ValidatorStatus::Slashed,
+                RegistryError::ValidatorAlreadySlashed
+            );
+
             require!(
                 user_account.staked_grx >= MIN_VALIDATOR_STAKE,
                 RegistryError::MinStakeNotMet
             );
 
             user_account.validator_status = ValidatorStatus::Active;
+        });
+        Ok(())
+    }
+
+    /// Withdraw previously staked GRX back to the user's ATA.
+    ///
+    /// Enforces a cooldown since the last `stake_grx`, decrements the stake, and
+    /// demotes an Active validator to Suspended if the remaining stake drops below
+    /// `MIN_VALIDATOR_STAKE`. The registry PDA signs the vault → user transfer.
+    pub fn unstake_grx(ctx: Context<UnstakeGrx>, amount: u64) -> Result<()> {
+        require!(amount > 0, RegistryError::InsufficientStakingBalance);
+        compute_fn!("unstake_grx" => {
+            let now = Clock::get()?.unix_timestamp;
+
+            // Read-then-drop the loader borrow before the CPI; re-borrow after.
+            let (staked, last_stake_at) = {
+                let user_account = ctx.accounts.user_account.load()?;
+                (user_account.staked_grx, user_account.last_stake_at)
+            };
+            require!(amount <= staked, RegistryError::InsufficientStakingBalance);
+            require!(
+                now.saturating_sub(last_stake_at) >= UNSTAKE_COOLDOWN_SECS,
+                RegistryError::UnstakingLocked
+            );
+
+            // Registry PDA is the vault authority — sign the withdrawal.
+            let bump = ctx.bumps.registry;
+            let signer_seeds: &[&[u8]] = &[b"registry".as_ref(), &[bump]];
+            let signer = &[signer_seeds];
+
+            let cpi_accounts = token_interface::TransferChecked {
+                from: ctx.accounts.grx_vault.to_account_info(),
+                to: ctx.accounts.user_grx_ata.to_account_info(),
+                authority: ctx.accounts.registry.to_account_info(),
+                mint: ctx.accounts.grx_mint.to_account_info(),
+            };
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                cpi_accounts,
+                signer,
+            );
+
+            compute_checkpoint!("before_unstake_transfer_cpi");
+            token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.grx_mint.decimals)?;
+            compute_checkpoint!("after_unstake_transfer_cpi");
+
+            let mut user_account = ctx.accounts.user_account.load_mut()?;
+            let remaining = user_account
+                .staked_grx
+                .checked_sub(amount)
+                .ok_or(RegistryError::MathOverflow)?;
+            user_account.staked_grx = remaining;
+
+            // Demote a validator that no longer meets the minimum stake.
+            if user_account.validator_status == ValidatorStatus::Active
+                && remaining < MIN_VALIDATOR_STAKE
+            {
+                user_account.validator_status = ValidatorStatus::Suspended;
+            }
+
+            emit!(GrxUnstaked {
+                user: ctx.accounts.authority.key(),
+                amount,
+                remaining_staked: remaining,
+                timestamp: now,
+            });
+        });
+        Ok(())
+    }
+
+    /// Slash a validator's staked GRX (registry authority only).
+    ///
+    /// Reduces the target's recorded stake and marks them `Slashed`. The slashed
+    /// tokens stay in the vault but are accounted into `registry.slashed_pool`,
+    /// so the admin can later sweep exactly the forfeited amount via
+    /// `withdraw_slashed` without touching honest stakers' deposits. `amount` is
+    /// capped at the validator's current stake.
+    pub fn slash_validator(ctx: Context<SlashValidator>, amount: u64) -> Result<()> {
+        require!(amount > 0, RegistryError::InsufficientStakingBalance);
+        compute_fn!("slash_validator" => {
+            let now = Clock::get()?.unix_timestamp;
+
+            let mut user_account = ctx.accounts.user_account.load_mut()?;
+
+            // Only registered validators are slashable. Rejects plain stakers
+            // (status None) and blocks double-slashing an already-Slashed target.
+            require!(
+                matches!(
+                    user_account.validator_status,
+                    ValidatorStatus::Active | ValidatorStatus::Suspended
+                ),
+                RegistryError::NotAValidator
+            );
+
+            // Cap the slash at the available stake — never underflow.
+            let slashed = amount.min(user_account.staked_grx);
+            let remaining = user_account.staked_grx.saturating_sub(slashed);
+            user_account.staked_grx = remaining;
+            user_account.validator_status = ValidatorStatus::Slashed;
+
+            // Track the forfeited tokens so they don't become orphaned surplus.
+            let mut registry = ctx.accounts.registry.load_mut()?;
+            registry.slashed_pool = registry.slashed_pool.saturating_add(slashed);
+
+            emit!(ValidatorSlashed {
+                validator: user_account.authority,
+                slashed_amount: slashed,
+                remaining_staked: remaining,
+                timestamp: now,
+            });
+        });
+        Ok(())
+    }
+
+    /// Sweep forfeited (slashed) GRX out of the vault (registry authority only).
+    ///
+    /// Bounded by `registry.slashed_pool`, so the admin can only ever withdraw
+    /// tokens that were forfeited by slashing — never honest stakers' deposits.
+    /// The registry PDA signs the vault → destination transfer.
+    pub fn withdraw_slashed(ctx: Context<WithdrawSlashed>, amount: u64) -> Result<()> {
+        require!(amount > 0, RegistryError::InsufficientStakingBalance);
+        compute_fn!("withdraw_slashed" => {
+            // Bound the withdrawal to the forfeited pool before moving any tokens.
+            {
+                let registry = ctx.accounts.registry.load()?;
+                require!(
+                    amount <= registry.slashed_pool,
+                    RegistryError::InsufficientStakingBalance
+                );
+            }
+
+            let bump = ctx.bumps.registry;
+            let signer_seeds: &[&[u8]] = &[b"registry".as_ref(), &[bump]];
+            let signer = &[signer_seeds];
+
+            let cpi_accounts = token_interface::TransferChecked {
+                from: ctx.accounts.grx_vault.to_account_info(),
+                to: ctx.accounts.destination.to_account_info(),
+                authority: ctx.accounts.registry.to_account_info(),
+                mint: ctx.accounts.grx_mint.to_account_info(),
+            };
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                cpi_accounts,
+                signer,
+            );
+
+            compute_checkpoint!("before_withdraw_slashed_cpi");
+            token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.grx_mint.decimals)?;
+            compute_checkpoint!("after_withdraw_slashed_cpi");
+
+            let mut registry = ctx.accounts.registry.load_mut()?;
+            registry.slashed_pool = registry
+                .slashed_pool
+                .checked_sub(amount)
+                .ok_or(RegistryError::MathOverflow)?;
         });
         Ok(())
     }
@@ -1139,4 +1313,104 @@ pub struct RegisterValidator<'info> {
     pub user_account: AccountLoader<'info, UserAccount>,
 
     pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct UnstakeGrx<'info> {
+    #[account(
+        mut,
+        seeds = [b"user", authority.key().as_ref()],
+        bump,
+        has_one = authority,
+    )]
+    pub user_account: AccountLoader<'info, UserAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"grx_vault"],
+        bump,
+        token::mint = grx_mint,
+        token::authority = registry,
+        token::token_program = token_program,
+    )]
+    pub grx_vault: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        seeds = [b"registry"],
+        bump,
+    )]
+    pub registry: AccountLoader<'info, Registry>,
+
+    #[account(
+        mut,
+        token::mint = grx_mint,
+        token::authority = authority,
+        token::token_program = token_program,
+    )]
+    pub user_grx_ata: InterfaceAccount<'info, TokenAccount>,
+
+    pub grx_mint: InterfaceAccount<'info, Mint>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct SlashValidator<'info> {
+    /// Target validator's authority — used only for PDA derivation.
+    /// CHECK: not read or written; constrains the `user_account` seeds.
+    pub target: UncheckedAccount<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"user", target.key().as_ref()],
+        bump,
+    )]
+    pub user_account: AccountLoader<'info, UserAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"registry"],
+        bump,
+        has_one = authority @ RegistryError::UnauthorizedAuthority,
+    )]
+    pub registry: AccountLoader<'info, Registry>,
+
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawSlashed<'info> {
+    #[account(
+        mut,
+        seeds = [b"registry"],
+        bump,
+        has_one = authority @ RegistryError::UnauthorizedAuthority,
+    )]
+    pub registry: AccountLoader<'info, Registry>,
+
+    #[account(
+        mut,
+        seeds = [b"grx_vault"],
+        bump,
+        token::mint = grx_mint,
+        token::authority = registry,
+        token::token_program = token_program,
+    )]
+    pub grx_vault: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        token::mint = grx_mint,
+        token::token_program = token_program,
+    )]
+    pub destination: InterfaceAccount<'info, TokenAccount>,
+
+    pub grx_mint: InterfaceAccount<'info, Mint>,
+
+    pub authority: Signer<'info>,
+
+    pub token_program: Interface<'info, TokenInterface>,
 }

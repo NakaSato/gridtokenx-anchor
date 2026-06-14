@@ -40,4 +40,8 @@ pub enum RegistryError {
     UnstakingLocked,
     #[msg("Airdrop already claimed for this user")]
     AirdropAlreadyClaimed,
+    #[msg("Validator has been slashed and cannot re-register")]
+    ValidatorAlreadySlashed,
+    #[msg("Target is not an active or suspended validator")]
+    NotAValidator,
 }

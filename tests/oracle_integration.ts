@@ -184,7 +184,7 @@ describe("oracle-metering-integration", () => {
     // 6. Verify Final Balance
     const balance = await provider.connection.getTokenAccountBalance(userAta);
     // Net = 1000 - 200 = 800
-    // Plus 20 GRX (20,000,000,000) from airdrop
+    // Plus 10 GRX (10,000,000,000) from airdrop
     // 800 units = 800 (if 1:1) or 800 * 10^decimals? 
     // registry.rs: new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
     // 800 units minted.

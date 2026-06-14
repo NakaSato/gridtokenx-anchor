@@ -13,6 +13,7 @@ pub struct Registry {
     pub user_count: u64,
     pub meter_count: u64,
     pub active_meter_count: u64, // Track active meters separately
+    pub slashed_pool: u64,       // Forfeited GRX held in the vault from slashing, awaiting admin sweep
 }
 
 /// RegistryShard account for distributed counters

@@ -89,3 +89,19 @@ pub struct ErcClaimed {
     pub amount: u64,
     pub total_claimed: u64,
 }
+
+#[event]
+pub struct GrxUnstaked {
+    pub user: Pubkey,
+    pub amount: u64,
+    pub remaining_staked: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct ValidatorSlashed {
+    pub validator: Pubkey,
+    pub slashed_amount: u64,
+    pub remaining_staked: u64,
+    pub timestamp: i64,
+}
