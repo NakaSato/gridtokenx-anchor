@@ -77,7 +77,7 @@ shared/
 
 Crate versions: `anchor-lang` / `anchor-spl` = **1.0.0** (not the 0.30.x the SKILL file mentions). TS tests import from **`@anchor-lang/core`** (not `@coral-xyz/anchor`).
 
-### Load-bearing invariants (summary — full detail in `anchor-SKILL.md`)
+### Load-bearing invariants (summary — full detail in `SKILL.md`)
 
 1. **Zero-copy state.** Every `state.rs` struct is `#[account(zero_copy)] #[repr(C)]` + Pod, with manual `_paddingN: [u8; N]` for alignment. Use `AccountLoader` + `load()/load_mut()/load_init()`. Recount padding by hand when adding fields. Space = `8 + size_of::<T>()` (zero-copy) or manual `T::LEN` (regular `#[account]`).
 2. **No `String` in zero-copy.** Use `[u8; N]` + `*_len: u8`; convert via `registry::string_to_bytes32` / `bytes32_to_string`; rehydrate events with `String::from_utf8_lossy(&b[..len]).into_owned()`.
@@ -86,3 +86,9 @@ Crate versions: `anchor-lang` / `anchor-spl` = **1.0.0** (not the 0.30.x the SKI
 5. **Hoist `Clock::get()` before `emit!`** — `let now = Clock::get()?.unix_timestamp;` then emit. Avoids a sysvar syscall inside macro expansion.
 6. Changing a program ID requires `anchor keys sync` **and** updating `declare_id!` in that program's `lib.rs`.
 7. **Every program's `Cargo.toml` sets `[profile.release] overflow-checks = true`** (cargo build-sbf defaults to off → silent wrapping). New programs must include the same block; still prefer `checked_*`/`saturating_*` explicitly.
+
+## Search Tooling
+
+> **Use `rg` (ripgrep), never `grep`.** When shelling out to search files, run `rg` —
+> it respects `.gitignore`, skips binaries, and is far faster than `grep`/`find -exec grep`.
+> Reserve plain `grep` only for piping non-file streams.
