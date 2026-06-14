@@ -177,9 +177,9 @@ partially filled across transactions but never over-filled or replayed.
 
 GRID tokens represent physical energy (1 kWh = 1 GRID), so minting is gated behind
 registered REC validators in energy-token. Validators are added/removed by the admin
-(`programs/energy-token/src/lib.rs:189`, `lib.rs:222`); when any validator is registered
+(`programs/energy-token/src/lib.rs:280`, `lib.rs:313`); when any validator is registered
 (`rec_validators_count > 0`, `lib.rs:119`), mint paths require the signing key to appear in
-the validator set (`lib.rs:127`–`128`), with the same gate on REC mint (`lib.rs:305`).
+the validator set (`lib.rs:127`–`128`), with the same gate on the generation-mint path (`lib.rs:203`).
 
 ### 4.5 Trust boundary summary
 
@@ -259,7 +259,7 @@ measurements.
 | Question | Read |
 | :--- | :--- |
 | What are the programs / IDs / invariants? | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
-| Zero-copy layout, sharding, CU profiling detail | `anchor-SKILL.md` (versions/IDs stale — trust `Anchor.toml`) |
+| Zero-copy layout, sharding, CU profiling detail | `SKILL.md` (versions/IDs stale — trust `Anchor.toml`) |
 | Benchmark methodology + results | [`BENCHMARKS.md`](BENCHMARKS.md) |
 | Settlement math / clearing | `programs/trading/src/instructions/settle_offchain.rs` |
 | Platform-wide rules (Chain Bridge, gateways) | superproject `../CLAUDE.md`, `../ARCHITECTURE.md` |
