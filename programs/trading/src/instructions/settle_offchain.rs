@@ -362,7 +362,9 @@ pub fn settle_offchain_match(
     require!(match_amount <= buyer_remaining && match_amount <= seller_remaining, TradingError::InvalidAmount);
 
     // --- 3. SETTLEMENT ---
-    let total_currency_value = match_amount.saturating_mul(match_price);
+    // checked_mul, not saturating: clamping a money product to u64::MAX would pay out
+    // and record a garbage value instead of rejecting an impossible match.
+    let total_currency_value = match_amount.checked_mul(match_price).ok_or(TradingError::Overflow)?;
     let market_fee = total_currency_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
     let net_seller_amount = total_currency_value.saturating_sub(market_fee).saturating_sub(wheeling_charge_val).saturating_sub(loss_cost_val);
 
@@ -594,7 +596,7 @@ pub fn batch_settle_offchain_match<'info>(
         let seller_rem = m.seller_payload.energy_amount.saturating_sub(seller_nullifier.filled_amount);
         require!(m.match_amount <= buyer_rem && m.match_amount <= seller_rem, TradingError::InvalidAmount);
 
-        let total_value = m.match_amount.saturating_mul(m.match_price);
+        let total_value = m.match_amount.checked_mul(m.match_price).ok_or(TradingError::Overflow)?;
         let market_fee = total_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
         let net_seller = total_value.saturating_sub(market_fee).saturating_sub(m.wheeling_charge).saturating_sub(m.loss_cost);
         batch_total_value = batch_total_value.checked_add(total_value).ok_or(TradingError::Overflow)?;

@@ -38,8 +38,12 @@ pub struct Treasury {
 
     pub swap_fee_bps: u16, // 2 — fee on swap output, basis points
 
-    pub paused: u8,            // 1 — 1 = swaps/redeems halted
-    pub bump: u8,              // 1
+    pub paused: u8, // 1 — 1 = swaps/redeems halted
+    pub bump: u8,   // 1 — treasury PDA bump, also the mint/transfer signer seed
+    // Canonical bumps for the mint + vault PDAs are stored on purpose: account
+    // constraints validate via `bump = treasury.X_bump` (create_program_address,
+    // ~1 hash) instead of bare `bump` (find_program_address bump search, ~12k CU)
+    // on the swap/stake/redeem hot paths. Same convention as registry's stored bumps.
     pub thbg_mint_bump: u8,    // 1
     pub swap_vault_bump: u8,   // 1
     pub stake_vault_bump: u8,  // 1
