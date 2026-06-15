@@ -57,6 +57,13 @@ pub struct MarketParamsUpdated {
 }
 
 #[event]
+pub struct SettlementThbgMintSet {
+    pub authority: Pubkey,
+    pub thbg_mint: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
 pub struct BatchExecuted {
     pub authority: Pubkey,
     pub batch_id: u64,

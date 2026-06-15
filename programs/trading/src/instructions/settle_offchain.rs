@@ -442,31 +442,38 @@ pub fn settle_offchain_match(
     )?;
     compute_checkpoint!("after_settle_cpis");
 
-    // --- 3b. TREASURY: record the baht-denominated settlement (optional, non-custodial) ---
-    if let (Some(treasury_program), Some(treasury_state)) =
-        (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state)
-    {
-        // Require the settlement currency IS the THBG mint so this is genuinely a
-        // baht-denominated settlement, not an arbitrary token. Records the GROSS
-        // settled value (total THBG leaving buyer escrow = seller payout + fee +
-        // wheeling + loss), so the counter reconciles to on-chain escrow outflow —
-        // not the seller's net receipt.
-        require_keys_eq!(
-            ctx.accounts.currency_mint.key(),
-            treasury_state.load()?.thbg_mint,
-            TradingError::TreasuryCurrencyMismatch
-        );
-        treasury::cpi::record_settlement(
-            CpiContext::new_with_signer(
-                treasury_program.key(),
-                treasury::cpi::accounts::RecordSettlement {
-                    treasury: treasury_state.to_account_info(),
-                    recorder: ctx.accounts.market_authority.to_account_info(),
-                },
-                signer,
-            ),
-            total_currency_value,
-        )?;
+    // --- 3b. TREASURY: record the baht-denominated settlement (non-custodial) ---
+    // Policy: if this market is configured to settle in THBG and this match uses that
+    // currency, recording is MANDATORY — the treasury accounts must be passed.
+    let recording_required = market.has_settlement_thbg_mint == 1
+        && ctx.accounts.currency_mint.key() == market.settlement_thbg_mint;
+    match (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state) {
+        (Some(treasury_program), Some(treasury_state)) => {
+            // Require the settlement currency IS the THBG mint so this is genuinely a
+            // baht-denominated settlement, not an arbitrary token. Records the GROSS
+            // settled value (total THBG leaving buyer escrow = seller payout + fee +
+            // wheeling + loss), so the counter reconciles to on-chain escrow outflow —
+            // not the seller's net receipt.
+            require_keys_eq!(
+                ctx.accounts.currency_mint.key(),
+                treasury_state.load()?.thbg_mint,
+                TradingError::TreasuryCurrencyMismatch
+            );
+            treasury::cpi::record_settlement(
+                CpiContext::new_with_signer(
+                    treasury_program.key(),
+                    treasury::cpi::accounts::RecordSettlement {
+                        treasury: treasury_state.to_account_info(),
+                        recorder: ctx.accounts.market_authority.to_account_info(),
+                    },
+                    signer,
+                ),
+                total_currency_value,
+            )?;
+        }
+        _ => {
+            require!(!recording_required, TradingError::TreasurySettlementRequired);
+        }
     }
 
     // --- 4. STATE UPDATE ---
@@ -696,27 +703,34 @@ pub fn batch_settle_offchain_match<'info>(
     }
 
     // --- TREASURY: record the batch's gross baht-denominated settlement value with a
-    // single CPI (optional, non-custodial). Mirrors the single-match path. ---
-    if let (Some(treasury_program), Some(treasury_state)) =
-        (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state)
-    {
-        if batch_total_value > 0 {
+    // single CPI (non-custodial). Mirrors the single-match path. ---
+    // Policy: if this market settles in THBG and the batch currency is that mint,
+    // recording is MANDATORY — the treasury accounts must be passed.
+    let recording_required = market.has_settlement_thbg_mint == 1
+        && currency_mint_key == market.settlement_thbg_mint;
+    match (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state) {
+        (Some(treasury_program), Some(treasury_state)) => {
             require_keys_eq!(
                 currency_mint_key,
                 treasury_state.load()?.thbg_mint,
                 TradingError::TreasuryCurrencyMismatch
             );
-            treasury::cpi::record_settlement(
-                CpiContext::new_with_signer(
-                    treasury_program.key(),
-                    treasury::cpi::accounts::RecordSettlement {
-                        treasury: treasury_state.to_account_info(),
-                        recorder: ctx.accounts.market_authority.to_account_info(),
-                    },
-                    signer,
-                ),
-                batch_total_value,
-            )?;
+            if batch_total_value > 0 {
+                treasury::cpi::record_settlement(
+                    CpiContext::new_with_signer(
+                        treasury_program.key(),
+                        treasury::cpi::accounts::RecordSettlement {
+                            treasury: treasury_state.to_account_info(),
+                            recorder: ctx.accounts.market_authority.to_account_info(),
+                        },
+                        signer,
+                    ),
+                    batch_total_value,
+                )?;
+            }
+        }
+        _ => {
+            require!(!recording_required, TradingError::TreasurySettlementRequired);
         }
     }
     });

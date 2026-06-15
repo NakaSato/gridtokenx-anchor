@@ -97,6 +97,26 @@ async function main() {
     console.error('⚠️  set_slash_destination failed (is registry initialized?):', e.message);
   }
 
+  // Make baht-settlement recording MANDATORY for the THBG-denominated market: once
+  // set, settle_offchain_match / batch_settle_offchain_match reject THBG settlements
+  // that don't pass the treasury accounts (no silent skip of the settled-value counter).
+  const [marketPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('market')],
+    tradingProgram.programId,
+  );
+  try {
+    const policyTx = await tradingProgram.methods
+      .setSettlementThbgMint(thbgMint)
+      .accounts({
+        market: marketPda,
+        authority: authority.publicKey,
+      })
+      .rpc();
+    console.log('✅ Market settlement THBG mint set (recording mandatory). TX:', policyTx);
+  } catch (e: any) {
+    console.error('⚠️  set_settlement_thbg_mint failed (is the market initialized & are you its authority?):', e.message);
+  }
+
   const t = await treasuryProgram.account.treasury.fetch(treasuryPda);
   console.log('\n📊 Treasury:');
   console.log('   authority         :', t.authority.toBase58());

@@ -66,4 +66,6 @@ pub enum TradingError {
     NullifierUserMismatch,
     #[msg("Settlement currency mint is not the treasury THBG mint")]
     TreasuryCurrencyMismatch,
+    #[msg("This market settles in THBG: the treasury accounts are required to record the settlement")]
+    TreasurySettlementRequired,
 }
