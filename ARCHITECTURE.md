@@ -29,8 +29,8 @@ Six production programs plus two benchmark programs. Program IDs are authoritati
 | Program | Program ID | Responsibility |
 | :--- | :--- | :--- |
 | `energy-token` | `6FZKcVKCLFSNLMxypFJGU4K14xUBnxNW9VAuKGhmqjGX` | GRID (1 kWh = 1 GRID) + GRX SPL mints; REC-validator-gated mint/settle; idempotent generation mint keyed by a per-`(meter, window)` `GenerationMintRecord` PDA (`mint_generation`); Token-2022 + Metaplex metadata |
-| `governance` | `FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS` | PoA authority (authority/config/dao/erc/stats handlers); ERC-1155-style RECs; 2-step authority transfer |
-| `oracle` | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU` | AMI-gateway bridge; per-meter PDA state; 15-min market-clearing epochs |
+| `governance` | `FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS` | PoA authority (authority/config/dao/erc/stats handlers); ERC-1155-style RECs; 2-step authority transfer; PoA aggregator allow-list (`AggregatorEntry` PDA, `admit_aggregator`/`revoke_aggregator`) |
+| `oracle` | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU` | AMI-gateway bridge; per-meter PDA state; 15-min market-clearing epochs; node-facing instructions accept the chain bridge **or** an admitted aggregator (`AggregatorEntry` validated against governance) |
 | `registry` | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7` | User + meter accounts; 16-shard counter; staking + validator registration + slashing (slashed bonds go only to the configured `slash_destination`, Active validators only); unstake cooldown + validator demote-on-unstake; 20 GRX new-user airdrop |
 | `trading` | `CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX` | Order book + CDA; sharded order submit; off-chain-signed match settlement (`settle_offchain.rs`); auction clearing |
 | `treasury` | `FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn` | GRX↔THBG (THB-pegged stablecoin, 6dp) swap with reserve-attested peg invariant; redeem bounded by `swap_vault` collateral + tracked supply; GRX staking (MasterChef accumulator); non-custodial baht-settlement accounting (`record_settlement`) |
@@ -58,9 +58,12 @@ Cross-program invocation via path deps with `features = ["cpi"]`:
 registry → energy-token        (airdrop / mint on registration)
 trading  → governance          (read PoA config, ERC certificates)
 trading  → treasury            (optional record_settlement; non-custodial, fires only when treasury accounts are passed)
+oracle   → governance          (types + ID only, no CPI invoke: validate an admitted aggregator's `AggregatorEntry` PDA)
 ```
 
-`trading` re-exports `governance::{ErcCertificate, ErcStatus, PoAConfig}` directly.
+`trading` re-exports `governance::{ErcCertificate, ErcStatus, PoAConfig}` directly. `oracle`
+deserializes `governance::AggregatorEntry` and derives its PDA against `governance::ID` to
+authorize admitted aggregator nodes — no instruction is invoked.
 
 **Two GRX staking systems (intentional, not duplication).** `registry` staking is a
 **validator security bond** (no yield, `MIN_VALIDATOR_STAKE`-gated, slashed for
@@ -142,6 +145,7 @@ Lifecycle / load simulations: `simulate-trading.ts`, `simulate-market-clearing.t
 | File | Covers |
 | :--- | :--- |
 | `RUNTIME-ARCHITECTURE.md` | How the programs execute: SVM runtime, CPI, security model, protocol flow, consensus/validator topology |
+| `node-validator.md` | Off-chain validator/aggregator node design: PoA admission, the governance aggregator allow-list, and how the oracle authorizes admitted nodes |
 | `CLAUDE.md` | LLM working rules for this submodule |
 | `SKILL.md` | Deep dive on program invariants — **version/ID table is stale**, defer to `Anchor.toml` + `Cargo.toml` |
 | `BENCHMARKS.md` | Benchmark methodology and results |

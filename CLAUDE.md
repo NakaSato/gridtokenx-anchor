@@ -76,7 +76,7 @@ shared/
 └── compute-debug/  compute-unit profiling macros (feature-gated)
 ```
 
-**CPI graph** (path deps, `features = ["cpi"]`): `registry → energy-token`, `trading → governance`, `trading → treasury` (optional `record_settlement` — non-custodial; fires only when treasury accounts are passed to `settle_offchain_match`).
+**CPI graph** (path deps, `features = ["cpi"]`): `registry → energy-token`, `trading → governance`, `trading → treasury` (optional `record_settlement` — non-custodial; fires only when treasury accounts are passed to `settle_offchain_match`), `oracle → governance` (types + ID only, no CPI invoke — validates an admitted aggregator's `AggregatorEntry` PDA to authorize node-facing oracle instructions).
 
 ### Treasury program
 
