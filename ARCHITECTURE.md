@@ -24,6 +24,18 @@ code lives in `shared/`. Anchor drives the build via `Anchor.toml`.
 Six production programs plus two benchmark programs. Program IDs are authoritative in
 `Anchor.toml [programs.localnet]` (the table below is a snapshot — trust `Anchor.toml`).
 
+Each program has a per-program reference document under
+[`docs/programs/`](docs/programs/README.md) (identity, state model, instruction set,
+invariants, CPI, events, errors, testing — all `path:line`-cited):
+[`energy-token`](docs/programs/energy-token.md) ·
+[`governance`](docs/programs/governance.md) ·
+[`oracle`](docs/programs/oracle.md) ·
+[`registry`](docs/programs/registry.md) ·
+[`trading`](docs/programs/trading.md) ·
+[`treasury`](docs/programs/treasury.md) ·
+[`blockbench`](docs/programs/blockbench.md) ·
+[`tpc-benchmark`](docs/programs/tpc-benchmark.md).
+
 ### Production
 
 | Program | Program ID | Responsibility |
@@ -144,6 +156,7 @@ Lifecycle / load simulations: `simulate-trading.ts`, `simulate-market-clearing.t
 
 | File | Covers |
 | :--- | :--- |
+| `docs/programs/` | Per-program reference docs (one per program) — identity, state, instructions, invariants, CPI, events, errors, testing; see [`docs/programs/README.md`](docs/programs/README.md) |
 | `RUNTIME-ARCHITECTURE.md` | How the programs execute: SVM runtime, CPI, security model, protocol flow, consensus/validator topology |
 | `node-validator.md` | Off-chain validator/aggregator node design: PoA admission, the governance aggregator allow-list, and how the oracle authorizes admitted nodes |
 | `CLAUDE.md` | LLM working rules for this submodule |
