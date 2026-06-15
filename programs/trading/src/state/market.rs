@@ -25,7 +25,7 @@ pub struct Market {
 
     // === BATCH PROCESSING ===
     pub batch_config: BatchConfig, // 24
-    pub current_batch: BatchInfo,  // 1640
+    pub current_batch: BatchInfo,  // 1064 (8+4+4+8+8+8 + 32*32)
     pub has_current_batch: u8,
     pub _padding_batch: [u8; 7],
 

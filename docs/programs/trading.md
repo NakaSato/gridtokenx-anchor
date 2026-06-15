@@ -79,7 +79,7 @@ Defined at `market.rs:6-56`. PDA seed: `[b"market"]` (`lib.rs:1435`). There is a
 | `min_price_per_kwh` | `u64` | Minimum allowed price (must be > 0). | `market.rs:23` |
 | `max_price_per_kwh` | `u64` | Maximum allowed price (0 = no cap). | `market.rs:24` |
 | `batch_config` | `BatchConfig` | Batch processing parameters (24 bytes). | `market.rs:27` |
-| `current_batch` | `BatchInfo` | Active batch (1640 bytes). | `market.rs:28` |
+| `current_batch` | `BatchInfo` | Active batch (1064 bytes: `8 + 4 + 4 + 8 + 8 + 8 + 32×32`). | `market.rs:28` |
 | `has_current_batch` | `u8` | Whether a batch is open. | `market.rs:29` |
 | `_padding_batch` | `[u8; 7]` | Alignment. | `market.rs:30` |
 | `_padding_depth_1..3` | `[u8;512]`,`[u8;256]`,`[u8;128]` | Reserved (depth moved to `ZoneMarket`). | `market.rs:33-35` |
