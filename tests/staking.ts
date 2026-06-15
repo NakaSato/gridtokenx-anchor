@@ -381,9 +381,10 @@ describe("registry_staking", () => {
   });
 
   // Skipped on a live validator: unstake_grx enforces the 24h UNSTAKE_COOLDOWN_SECS
-  // and AnchorProvider.env() offers no clock control. Needs a Bankrun/litesvm port
-  // that can warp the clock past the cooldown to exercise the happy path.
-  it.skip("unstakes once no longer an Active validator (needs clock warp)", async () => {
+  // and AnchorProvider.env() offers no clock control. The happy path (successful
+  // unstake + Active->Suspended demote) is covered by the clock-warped litesvm port
+  // in tests/staking_unstake_litesvm.ts (npm run test:staking-litesvm).
+  it.skip("unstakes once no longer an Active validator (see litesvm port)", async () => {
     // Status is now Slashed; the only thing blocking unstake here is the cooldown.
     const amount = new BN(1_000_000_000_000); // 1,000 GRX
     const stakedBefore = (await program.account.userAccount.fetch(userPda)).stakedGrx;

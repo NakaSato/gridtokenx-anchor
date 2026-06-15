@@ -14,6 +14,7 @@
     "test:oracle": "anchor test tests/oracle.ts",
     "test:registry": "anchor test tests/registry_sharding.ts",
     "test:staking": "anchor test tests/staking.ts",
+    "test:staking-litesvm": "mocha -r tsx tests/staking_unstake_litesvm.ts --timeout 1000000",
     "test:governance": "anchor test tests/governance.ts",
     "test:blockbench": "anchor test tests/blockbench.ts",
     "test:smallbank": "anchor test tests/smallbank.ts",
