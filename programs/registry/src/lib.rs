@@ -13,8 +13,15 @@ pub use state::*;
 
 declare_id!("FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7");
 
-/// Airdrop amount for new users (in smallest token units, 9 decimals = 20 GRX)
-pub const AIRDROP_AMOUNT: u64 = 20_000_000_000; // 20 GRX tokens
+/// Airdrop amount for new users (in smallest token units, 9 decimals = 10 GRX)
+pub const AIRDROP_AMOUNT: u64 = 10_000_000_000; // 10 GRX tokens
+
+/// Minimum GRX stake (smallest units) required to hold an Active validator slot.
+/// Falling below this on unstake/slash demotes the validator.
+pub const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000; // 10,000 GRX
+
+/// Cooldown after the most recent `stake_grx` before tokens can be unstaked.
+pub const UNSTAKE_COOLDOWN_SECS: i64 = 24 * 60 * 60; // 24h
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
@@ -689,7 +696,6 @@ pub mod registry {
     }
 
     /// Stake GRX tokens to participate in the network
-    // TODO: Add unstake_grx and slash_validator instructions
     pub fn stake_grx(ctx: Context<StakeGrx>, amount: u64) -> Result<()> {
         require!(amount > 0, RegistryError::MinStakeNotMet);
         compute_fn!("stake_grx" => {
@@ -706,11 +712,17 @@ pub mod registry {
             compute_checkpoint!("after_stake_transfer_cpi");
 
             let mut user_account = ctx.accounts.user_account.load_mut()?;
+            let was_empty = user_account.staked_grx == 0;
             user_account.staked_grx = user_account
                 .staked_grx
                 .checked_add(amount)
                 .ok_or(RegistryError::MathOverflow)?;
-            user_account.last_stake_at = Clock::get()?.unix_timestamp;
+            // Anchor the unstake cooldown to when the position was first opened,
+            // not to every top-up — otherwise a tiny add re-locks the whole
+            // balance for another full cooldown. Resets only after a full unstake.
+            if was_empty {
+                user_account.last_stake_at = Clock::get()?.unix_timestamp;
+            }
         });
         Ok(())
     }
@@ -719,6 +731,14 @@ pub mod registry {
     pub fn register_validator(ctx: Context<RegisterValidator>) -> Result<()> {
         compute_fn!("register_validator" => {
             let mut user_account = ctx.accounts.user_account.load_mut()?;
+
+            // A slashed validator is permanently barred from self-reinstatement;
+            // restaking must not silently undo a slash. Reinstatement, if ever
+            // desired, belongs in an explicit admin-gated instruction.
+            require!(
+                user_account.validator_status != ValidatorStatus::Slashed,
+                RegistryError::ValidatorAlreadySlashed
+            );
 
             require!(
                 user_account.staked_grx >= MIN_VALIDATOR_STAKE,
@@ -730,36 +750,38 @@ pub mod registry {
         Ok(())
     }
 
-    /// Withdraw staked GRX back to the staker's ATA.
+    /// Withdraw previously staked GRX back to the user's ATA.
     ///
-    /// Guards:
-    /// - cannot unstake more than is staked;
-    /// - an *active* validator cannot drop below `MIN_VALIDATOR_STAKE` without first
-    ///   stepping down (prevents an under-bonded validator continuing to act).
+    /// Enforces a cooldown since the last `stake_grx`, decrements the stake, and
+    /// demotes an Active validator to Suspended if the remaining stake drops below
+    /// `MIN_VALIDATOR_STAKE`. The registry PDA signs the vault → user transfer.
     pub fn unstake_grx(ctx: Context<UnstakeGrx>, amount: u64) -> Result<()> {
-        require!(amount > 0, RegistryError::MinStakeNotMet);
+        require!(amount > 0, RegistryError::InsufficientStakingBalance);
         compute_fn!("unstake_grx" => {
-            {
+            let now = Clock::get()?.unix_timestamp;
+
+            // Read-then-drop the loader borrow before the CPI; re-borrow after.
+            let (staked, last_stake_at) = {
                 let user_account = ctx.accounts.user_account.load()?;
-                require!(
-                    user_account.staked_grx >= amount,
-                    RegistryError::InsufficientStakingBalance
-                );
-                // An Active validator must keep at least the minimum bond.
-                if user_account.validator_status == ValidatorStatus::Active {
-                    let remaining = user_account.staked_grx.saturating_sub(amount);
-                    require!(remaining >= MIN_VALIDATOR_STAKE, RegistryError::MinStakeNotMet);
-                }
-            }
+                (user_account.staked_grx, user_account.last_stake_at)
+            };
+            require!(amount <= staked, RegistryError::InsufficientStakingBalance);
+            require!(
+                now.saturating_sub(last_stake_at) >= UNSTAKE_COOLDOWN_SECS,
+                RegistryError::UnstakingLocked
+            );
+
+            // Registry PDA is the vault authority — sign the withdrawal.
+            let bump = ctx.bumps.registry;
+            let signer_seeds: &[&[u8]] = &[b"registry".as_ref(), &[bump]];
+            let signer = &[signer_seeds];
 
             let cpi_accounts = token_interface::TransferChecked {
                 from: ctx.accounts.grx_vault.to_account_info(),
                 to: ctx.accounts.user_grx_ata.to_account_info(),
-                authority: ctx.accounts.registry.to_account_info(), // Registry PDA owns the vault
+                authority: ctx.accounts.registry.to_account_info(),
                 mint: ctx.accounts.grx_mint.to_account_info(),
             };
-            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
-            let signer = &[&registry_seeds[..]];
             let cpi_ctx = CpiContext::new_with_signer(
                 ctx.accounts.token_program.key(),
                 cpi_accounts,
@@ -771,16 +793,23 @@ pub mod registry {
             compute_checkpoint!("after_unstake_transfer_cpi");
 
             let mut user_account = ctx.accounts.user_account.load_mut()?;
-            user_account.staked_grx = user_account
+            let remaining = user_account
                 .staked_grx
                 .checked_sub(amount)
                 .ok_or(RegistryError::MathOverflow)?;
+            user_account.staked_grx = remaining;
 
-            let now = Clock::get()?.unix_timestamp;
+            // Demote a validator that no longer meets the minimum stake.
+            if user_account.validator_status == ValidatorStatus::Active
+                && remaining < MIN_VALIDATOR_STAKE
+            {
+                user_account.validator_status = ValidatorStatus::Suspended;
+            }
+
             emit!(Unstaked {
                 user: ctx.accounts.authority.key(),
                 amount,
-                remaining_stake: user_account.staked_grx,
+                remaining_stake: remaining,
                 timestamp: now,
             });
         });
@@ -865,9 +894,6 @@ pub mod registry {
         Ok(())
     }
 }
-
-/// Minimum GRX bond (9 decimals) required to hold the validator role: 10,000 GRX.
-pub const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000;
 
 // Internal helpers
 fn do_settle_meter(meter: &mut MeterAccount, owner_key: Pubkey) -> Result<u64> {

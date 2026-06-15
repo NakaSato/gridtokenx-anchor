@@ -59,7 +59,7 @@ npm run simnet:ci   # --ci (headless, fast)
 
 ## Architecture
 
-Five Anchor programs forming a P2P energy-trading platform on a **permissioned PoA** Solana cluster (localnet). Program IDs live in `Anchor.toml [programs.localnet]`.
+**Five core** Anchor programs forming a P2P energy-trading platform on a **permissioned PoA** Solana cluster (localnet), plus **two benchmark crates** (`blockbench`, `tpc-benchmark`). All 7 program IDs live in `Anchor.toml [programs.localnet]`.
 
 ```
 programs/
@@ -68,7 +68,9 @@ programs/
 ├── oracle/         AMI-gateway bridge; per-meter PDA state; 15-min market-clearing epochs
 ├── registry/       user + meter accounts; 16-shard counter; staking + validator registration
 ├── trading/        order book + CDA; sharded order submit; off-chain-signed match settlement (settle_offchain.rs)
-└── treasury/       GRX↔THBG (THB-pegged stablecoin) swap, GRX staking, baht-denominated settlement accounting
+├── treasury/      GRX↔THBG (THB-pegged stablecoin) swap, GRX staking, baht-denominated settlement accounting
+├── blockbench/     benchmark harness (BlockBench OLTP/smallbank — npm run test:blockbench / test:smallbank)
+└── tpc-benchmark/  benchmark harness (TPC-C stress — npm run test:tpc-stress)
 shared/
 ├── core/           shared on-chain types/version
 └── compute-debug/  compute-unit profiling macros (feature-gated)

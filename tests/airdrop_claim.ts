@@ -13,7 +13,7 @@ import BN from "bn.js";
 import * as fs from "fs";
 import * as os from "os";
 
-const AIRDROP_AMOUNT = 20_000_000_000; // 20 GRX (see registry AIRDROP_AMOUNT)
+const AIRDROP_AMOUNT = 10_000_000_000; // 10 GRX (see registry AIRDROP_AMOUNT)
 
 /**
  * The welcome airdrop is decoupled from register_user: a failed mint CPI aborts its

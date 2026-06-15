@@ -46,4 +46,6 @@ pub enum RegistryError {
     InvalidSlashDestination,
     #[msg("Target is not an active validator")]
     NotActiveValidator,
+    #[msg("Validator has been slashed and cannot re-register")]
+    ValidatorAlreadySlashed,
 }

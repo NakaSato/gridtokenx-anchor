@@ -93,7 +93,7 @@ transaction's account locks and compute budget. Two production CPI edges exist:
 
 ### 3.1 registry → energy-token (registration airdrop)
 
-When a new user registers, the registry program mints the 20 GRX airdrop by CPI into
+When a new user registers, the registry program mints the 10 GRX airdrop by CPI into
 energy-token. The registry signs the CPI **as its own PDA** using
 `CpiContext::new_with_signer` with the `[b"registry", bump]` seeds
 (`programs/registry/src/lib.rs:298`), then calls
@@ -198,7 +198,7 @@ A full market cycle touches all five programs:
 
 ```
 1. Registration   registry: create user PDA on shard (key[0] % 16)
-                  └─CPI→ energy-token: mint 20 GRX airdrop (PDA-signed)
+                  └─CPI→ energy-token: mint 10 GRX airdrop (PDA-signed)
 2. Telemetry      oracle: AMI gateway submits readings → per-meter MeterState PDA
                   (parallel across meters; 15-min market-clearing epochs)
 3. Order entry    trading: submit_order → per-order PDA on order shard
