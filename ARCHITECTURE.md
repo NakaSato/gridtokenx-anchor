@@ -62,6 +62,13 @@ trading  → treasury            (optional record_settlement; non-custodial, fir
 
 `trading` re-exports `governance::{ErcCertificate, ErcStatus, PoAConfig}` directly.
 
+**Two GRX staking systems (intentional, not duplication).** `registry` staking is a
+**validator security bond** (no yield, `MIN_VALIDATOR_STAKE`-gated, slashed for
+misbehavior; vault `[b"grx_vault"]`, on `UserAccount.staked_grx`). `treasury` staking
+is **yield staking** (MasterChef rewards funded by swap fees; vault `[b"stake_vault"]`,
+on `StakePosition`). They share lock/unlock/slash plumbing but are different products
+with separate vaults/positions and are not reconciled — a user may hold both.
+
 ## 5. Load-Bearing Invariants
 
 1. **Zero-copy state.** Every hot-path `state.rs` struct is `#[account(zero_copy)] #[repr(C)]` + Pod,
