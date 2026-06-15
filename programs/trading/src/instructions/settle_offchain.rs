@@ -222,6 +222,15 @@ pub struct SettleOffchainMatchContext<'info> {
     #[account(address = IX_ID)]
     pub sysvar_instructions: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
+
+    // --- Optional treasury wiring (baht-denominated settlement) ---
+    // When both are supplied, the settlement currency must be the treasury's THBG
+    // mint and the trade value is recorded via a non-custodial CPI (moves no funds,
+    // so the escrow / ed25519 / replay-nullifier guarantees are untouched). Omitting
+    // them keeps the legacy generic-currency settlement working unchanged.
+    pub treasury_program: Option<Program<'info, treasury::program::Treasury>>,
+    #[account(mut)]
+    pub treasury_state: Option<AccountLoader<'info, treasury::Treasury>>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -290,6 +299,13 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub secondary_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
+
+    // --- Optional treasury wiring (baht-denominated settlement) ---
+    // When both are supplied, the settlement currency must be the treasury's THBG
+    // mint and the batch's gross settled value is recorded with a single CPI.
+    pub treasury_program: Option<Program<'info, treasury::program::Treasury>>,
+    #[account(mut)]
+    pub treasury_state: Option<AccountLoader<'info, treasury::Treasury>>,
 }
 
 pub fn settle_offchain_match(
@@ -346,7 +362,9 @@ pub fn settle_offchain_match(
     require!(match_amount <= buyer_remaining && match_amount <= seller_remaining, TradingError::InvalidAmount);
 
     // --- 3. SETTLEMENT ---
-    let total_currency_value = match_amount.saturating_mul(match_price);
+    // checked_mul, not saturating: clamping a money product to u64::MAX would pay out
+    // and record a garbage value instead of rejecting an impossible match.
+    let total_currency_value = match_amount.checked_mul(match_price).ok_or(TradingError::Overflow)?;
     let market_fee = total_currency_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
     let net_seller_amount = total_currency_value.saturating_sub(market_fee).saturating_sub(wheeling_charge_val).saturating_sub(loss_cost_val);
 
@@ -424,6 +442,40 @@ pub fn settle_offchain_match(
     )?;
     compute_checkpoint!("after_settle_cpis");
 
+    // --- 3b. TREASURY: record the baht-denominated settlement (non-custodial) ---
+    // Policy: if this market is configured to settle in THBG and this match uses that
+    // currency, recording is MANDATORY — the treasury accounts must be passed.
+    let recording_required = market.has_settlement_thbg_mint == 1
+        && ctx.accounts.currency_mint.key() == market.settlement_thbg_mint;
+    match (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state) {
+        (Some(treasury_program), Some(treasury_state)) => {
+            // Require the settlement currency IS the THBG mint so this is genuinely a
+            // baht-denominated settlement, not an arbitrary token. Records the GROSS
+            // settled value (total THBG leaving buyer escrow = seller payout + fee +
+            // wheeling + loss), so the counter reconciles to on-chain escrow outflow —
+            // not the seller's net receipt.
+            require_keys_eq!(
+                ctx.accounts.currency_mint.key(),
+                treasury_state.load()?.thbg_mint,
+                TradingError::TreasuryCurrencyMismatch
+            );
+            treasury::cpi::record_settlement(
+                CpiContext::new_with_signer(
+                    treasury_program.key(),
+                    treasury::cpi::accounts::RecordSettlement {
+                        treasury: treasury_state.to_account_info(),
+                        recorder: ctx.accounts.market_authority.to_account_info(),
+                    },
+                    signer,
+                ),
+                total_currency_value,
+            )?;
+        }
+        _ => {
+            require!(!recording_required, TradingError::TreasurySettlementRequired);
+        }
+    }
+
     // --- 4. STATE UPDATE ---
     ctx.accounts.buyer_nullifier.filled_amount = ctx.accounts.buyer_nullifier.filled_amount.saturating_add(match_amount);
     ctx.accounts.buyer_nullifier.order_id = buyer_payload.order_id;
@@ -486,6 +538,10 @@ pub fn batch_settle_offchain_match<'info>(
     let authority_seeds = &[b"market_authority".as_ref(), &[ctx.bumps.market_authority]];
     let signer = &[&authority_seeds[..]];
 
+    // Accumulate the gross settled value across the batch; recorded once after the
+    // loop via a single treasury CPI (cheaper than one CPI per match).
+    let mut batch_total_value: u64 = 0;
+
     for (i, m) in matches.iter().enumerate() {
         // Verify signatures for each pair in the batch
         // Instructions: [Ed25519_Buyer_0, Ed25519_Seller_0, Ed25519_Buyer_1, Ed25519_Seller_1, ..., Program_IX]
@@ -547,9 +603,10 @@ pub fn batch_settle_offchain_match<'info>(
         let seller_rem = m.seller_payload.energy_amount.saturating_sub(seller_nullifier.filled_amount);
         require!(m.match_amount <= buyer_rem && m.match_amount <= seller_rem, TradingError::InvalidAmount);
 
-        let total_value = m.match_amount.saturating_mul(m.match_price);
+        let total_value = m.match_amount.checked_mul(m.match_price).ok_or(TradingError::Overflow)?;
         let market_fee = total_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
         let net_seller = total_value.saturating_sub(market_fee).saturating_sub(m.wheeling_charge).saturating_sub(m.loss_cost);
+        batch_total_value = batch_total_value.checked_add(total_value).ok_or(TradingError::Overflow)?;
 
         // Zone capacity check and update (cross-zone wheeling flow only — see single path).
         // Cross-zone if EITHER leg is remote relative to this zone_market.
@@ -643,6 +700,38 @@ pub fn batch_settle_offchain_match<'info>(
             fee_amount: market_fee,
             timestamp: clock.unix_timestamp,
         });
+    }
+
+    // --- TREASURY: record the batch's gross baht-denominated settlement value with a
+    // single CPI (non-custodial). Mirrors the single-match path. ---
+    // Policy: if this market settles in THBG and the batch currency is that mint,
+    // recording is MANDATORY — the treasury accounts must be passed.
+    let recording_required = market.has_settlement_thbg_mint == 1
+        && currency_mint_key == market.settlement_thbg_mint;
+    match (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state) {
+        (Some(treasury_program), Some(treasury_state)) => {
+            require_keys_eq!(
+                currency_mint_key,
+                treasury_state.load()?.thbg_mint,
+                TradingError::TreasuryCurrencyMismatch
+            );
+            if batch_total_value > 0 {
+                treasury::cpi::record_settlement(
+                    CpiContext::new_with_signer(
+                        treasury_program.key(),
+                        treasury::cpi::accounts::RecordSettlement {
+                            treasury: treasury_state.to_account_info(),
+                            recorder: ctx.accounts.market_authority.to_account_info(),
+                        },
+                        signer,
+                    ),
+                    batch_total_value,
+                )?;
+            }
+        }
+        _ => {
+            require!(!recording_required, TradingError::TreasurySettlementRequired);
+        }
     }
     });
     Ok(())

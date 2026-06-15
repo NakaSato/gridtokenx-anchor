@@ -40,4 +40,10 @@ pub enum RegistryError {
     UnstakingLocked,
     #[msg("Airdrop already claimed for this user")]
     AirdropAlreadyClaimed,
+    #[msg("Slash destination is not configured — call set_slash_destination first")]
+    SlashDestinationNotSet,
+    #[msg("Slash destination does not match the configured destination")]
+    InvalidSlashDestination,
+    #[msg("Target is not an active validator")]
+    NotActiveValidator,
 }

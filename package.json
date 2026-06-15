@@ -17,6 +17,7 @@
     "test:blockbench": "anchor test tests/blockbench.ts",
     "test:smallbank": "anchor test tests/smallbank.ts",
     "test:tpc-stress": "anchor test tests/tpc_stress_test.ts",
+    "test:treasury": "anchor test tests/treasury.ts",
     "test:all": "anchor test tests/oracle.ts tests/registry_sharding.ts tests/governance.ts tests/blockbench.ts tests/smallbank.ts tests/tpc_stress_test.ts",
     "sync-supply": "tsx scripts/sync-supply.ts",
     "simnet": "NO_DNA=1 surfpool start --network mainnet --watch --legacy-anchor-compatibility",

@@ -61,6 +61,12 @@ pub struct OracleAuthoritySet {
 }
 
 #[event]
+pub struct SlashDestinationSet {
+    pub old_destination: Option<Pubkey>,
+    pub new_destination: Pubkey,
+}
+
+#[event]
 pub struct MeterStatusUpdated {
     pub meter_id: String,
     pub owner: Pubkey,
@@ -88,4 +94,20 @@ pub struct ErcClaimed {
     pub owner: Pubkey,
     pub amount: u64,
     pub total_claimed: u64,
+}
+
+#[event]
+pub struct Unstaked {
+    pub user: Pubkey,
+    pub amount: u64,
+    pub remaining_stake: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct ValidatorSlashed {
+    pub validator: Pubkey,
+    pub slashed_amount: u64,
+    pub remaining_stake: u64,
+    pub timestamp: i64,
 }
