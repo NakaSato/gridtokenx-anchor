@@ -712,17 +712,17 @@ pub mod registry {
             compute_checkpoint!("after_stake_transfer_cpi");
 
             let mut user_account = ctx.accounts.user_account.load_mut()?;
-            let was_empty = user_account.staked_grx == 0;
             user_account.staked_grx = user_account
                 .staked_grx
                 .checked_add(amount)
                 .ok_or(RegistryError::MathOverflow)?;
-            // Anchor the unstake cooldown to when the position was first opened,
-            // not to every top-up — otherwise a tiny add re-locks the whole
-            // balance for another full cooldown. Resets only after a full unstake.
-            if was_empty {
-                user_account.last_stake_at = Clock::get()?.unix_timestamp;
-            }
+            // Re-anchor the unstake cooldown to the most recent stake/top-up on
+            // EVERY stake. Anchoring only to the first deposit let a staker keep a
+            // dust balance permanently staked so `last_stake_at` never refreshed,
+            // then stake-large-and-immediately-unstake-large with zero cooldown —
+            // escaping the slashing window. Every fresh GRX must serve the full
+            // cooldown before it can leave the vault.
+            user_account.last_stake_at = Clock::get()?.unix_timestamp;
         });
         Ok(())
     }

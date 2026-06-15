@@ -269,4 +269,59 @@ describe("registry_staking unstake (litesvm, clock-warped)", () => {
     // Remaining stake (9,900 GRX) < MIN_VALIDATOR_STAKE -> demoted.
     expect(Object.keys(u.validatorStatus)[0]).to.equal("suspended");
   });
+
+  // Regression: the dust-stake cooldown bypass. stake_grx must re-anchor
+  // last_stake_at on EVERY stake (not only on the 0 -> nonzero transition).
+  // The account still holds ~9,900 GRX (nonzero) from the prior test, so this
+  // top-up is exactly the "add onto an existing balance" case the old code
+  // failed to re-lock. With the fix, an immediate unstake at the same clock
+  // must be rejected by the 24h cooldown — UnstakingLocked.
+  it("re-locks the cooldown on a top-up onto an existing balance", async () => {
+    const topUp = GRX(50);
+    const stakedBefore = new BN(fetchUser().stakedGrx.toString());
+    expect(stakedBefore.gtn(0), "account must already hold a nonzero stake").to.equal(true);
+
+    // No clock advance: stake_grx sets last_stake_at = current (warped) clock,
+    // and the unstake below runs at the same timestamp => cooldown not elapsed.
+    const stakeIx = await program.methods
+      .stakeGrx(topUp)
+      .accounts({
+        registry: registryPda,
+        userAccount: userPda,
+        grxVault: vaultPda,
+        userGrxAta: userAta,
+        grxMint: mint.publicKey,
+        authority: user.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+      })
+      .instruction();
+    send([stakeIx], [user]);
+
+    const unstakeIx = await program.methods
+      .unstakeGrx(topUp)
+      .accounts({
+        userAccount: userPda,
+        grxVault: vaultPda,
+        registry: registryPda,
+        userGrxAta: userAta,
+        grxMint: mint.publicKey,
+        authority: user.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+      })
+      .instruction();
+
+    let locked = false;
+    try {
+      send([unstakeIx], [user]);
+    } catch (e) {
+      locked = true;
+      expect(String(e)).to.match(/UnstakingLocked/);
+    }
+    expect(locked, "top-up must re-anchor the cooldown (no instant unstake)").to.equal(true);
+
+    // Stake is unchanged (the unstake was rejected), balance still held in vault.
+    expect(fetchUser().stakedGrx.toString()).to.equal(
+      stakedBefore.add(topUp).toString()
+    );
+  });
 });
