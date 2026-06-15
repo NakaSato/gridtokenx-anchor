@@ -12,7 +12,7 @@
 #   all        (default) oracle + registry_sharding + governance
 #   oracle     oracle tests only
 #   registry   registry sharding tests only
-#   staking    registry staking / unstake / slash / withdraw-slashed tests only
+#   staking    registry staking / unstake (cooldown) / slash tests only
 #   governance governance ERC + authority tests
 #   tpc-stress TPC-C stress benchmark (requires tpc_benchmark .so)
 #
