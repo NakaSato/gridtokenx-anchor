@@ -25,6 +25,9 @@ anchor-lang = { version = "1.0.0", features = ["init-if-needed"] }
 anchor-spl = { version = "1.0.0", features = ["metadata"] }
 bytemuck = { version = "1.20.0", features = ["derive"] }
 compute-debug = { path = "../../shared/compute-debug", optional = true }
+# Types + program ID only (no CPI calls) to authorize admitted aggregators against
+# governance's PoA allow-list. `cpi` feature pulls in `no-entrypoint` (no duplicate entrypoint).
+governance = { path = "../governance", features = ["cpi"] }
 
 # Solana release builds default to overflow-checks=off (silent wrapping).
 # Force checked arithmetic so bare +=/-= panic instead of corrupting state.

@@ -144,3 +144,17 @@ pub struct ProposalExecuted {
     pub new_value: u64,
     pub timestamp: i64,
 }
+
+#[event]
+pub struct AggregatorAdmitted {
+    pub authority: Pubkey,
+    pub aggregator: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct AggregatorRevoked {
+    pub authority: Pubkey,
+    pub aggregator: Pubkey,
+    pub timestamp: i64,
+}

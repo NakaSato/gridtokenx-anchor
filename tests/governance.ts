@@ -851,4 +851,93 @@ describe("Governance Program", () => {
       );
     }
   });
+
+  // ── Aggregator allow-list (PoA admission of off-chain validator nodes) ──────
+
+  describe("aggregator allow-list", () => {
+    const aggregator = Keypair.generate();
+    const aggregatorEntryPda = PublicKey.findProgramAddressSync(
+      [Buffer.from("aggregator"), aggregator.publicKey.toBuffer()],
+      govProgram.programId,
+    )[0];
+
+    it("admits an aggregator (authority only)", async () => {
+      await govProgram.methods
+        .admitAggregator(aggregator.publicKey)
+        .accounts({
+          poaConfig: poaConfigPda,
+          aggregatorEntry: aggregatorEntryPda,
+          authority: authority.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+
+      const entry = await govProgram.account.aggregatorEntry.fetch(aggregatorEntryPda);
+      assert.ok(entry.aggregator.equals(aggregator.publicKey));
+      assert.equal(entry.active, true);
+      assert.ok(entry.admittedAt.toNumber() > 0);
+    });
+
+    it("rejects admission from a non-authority", async () => {
+      const intruder = Keypair.generate();
+      const sig = await provider.connection.requestAirdrop(
+        intruder.publicKey,
+        LAMPORTS_PER_SOL,
+      );
+      await provider.connection.confirmTransaction(sig);
+
+      const victim = Keypair.generate();
+      const victimEntry = PublicKey.findProgramAddressSync(
+        [Buffer.from("aggregator"), victim.publicKey.toBuffer()],
+        govProgram.programId,
+      )[0];
+
+      try {
+        await govProgram.methods
+          .admitAggregator(victim.publicKey)
+          .accounts({
+            poaConfig: poaConfigPda,
+            aggregatorEntry: victimEntry,
+            authority: intruder.publicKey,
+            systemProgram: SystemProgram.programId,
+          })
+          .signers([intruder])
+          .rpc();
+        assert.fail("Should have been rejected for non-authority");
+      } catch (e: any) {
+        assert.ok(
+          e.message?.includes("UnauthorizedAuthority") ||
+            e.message?.includes("has_one") ||
+            e.message?.includes("ConstraintHasOne"),
+          `Expected UnauthorizedAuthority, got: ${e.message}`,
+        );
+      }
+    });
+
+    it("revokes an admitted aggregator and re-admits it", async () => {
+      await govProgram.methods
+        .revokeAggregator()
+        .accounts({
+          poaConfig: poaConfigPda,
+          aggregatorEntry: aggregatorEntryPda,
+          authority: authority.publicKey,
+        })
+        .rpc();
+      let entry = await govProgram.account.aggregatorEntry.fetch(aggregatorEntryPda);
+      assert.equal(entry.active, false);
+
+      // Idempotent re-admission flips it back to active (init_if_needed).
+      await govProgram.methods
+        .admitAggregator(aggregator.publicKey)
+        .accounts({
+          poaConfig: poaConfigPda,
+          aggregatorEntry: aggregatorEntryPda,
+          authority: authority.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+      entry = await govProgram.account.aggregatorEntry.fetch(aggregatorEntryPda);
+      assert.equal(entry.active, true);
+    });
+  });
 });

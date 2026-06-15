@@ -191,6 +191,15 @@ pub mod energy_token {
                 return Ok(());
             }
 
+            // Window-unit reconciliation: the off-chain node aligns 15-min windows to
+            // wall-clock (oracle checks `epoch % 900 == 0` in *seconds*). This PDA keys on
+            // `window_start_ms` (*milliseconds*), so enforce the same boundary in ms:
+            // 900 s = 900_000 ms. Rejects unaligned/garbage windows before minting.
+            require!(
+                window_start_ms > 0 && window_start_ms % 900_000 == 0,
+                EnergyTokenError::MisalignedWindow
+            );
+
             {
                 let token_info = ctx.accounts.token_info.load()?;
                 require!(

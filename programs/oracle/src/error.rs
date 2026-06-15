@@ -26,4 +26,6 @@ pub enum OracleError {
     InvalidEpoch,
     #[msg("Meter ID exceeds maximum length of 32 bytes")]
     MeterIdTooLong,
+    #[msg("Aggregator is not on the governance allow-list, inactive, or entry mismatched")]
+    AggregatorNotAdmitted,
 }

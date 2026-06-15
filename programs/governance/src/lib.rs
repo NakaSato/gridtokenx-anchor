@@ -162,6 +162,20 @@ pub mod governance {
         })
     }
 
+    // === AGGREGATOR ALLOW-LIST (PoA admission of off-chain validator nodes) ===
+
+    pub fn admit_aggregator(ctx: Context<AdmitAggregator>, aggregator: Pubkey) -> Result<()> {
+        compute_fn!("admit_aggregator" => {
+            handlers::aggregator::admit_aggregator(ctx, aggregator)
+        })
+    }
+
+    pub fn revoke_aggregator(ctx: Context<RevokeAggregator>) -> Result<()> {
+        compute_fn!("revoke_aggregator" => {
+            handlers::aggregator::revoke_aggregator(ctx)
+        })
+    }
+
     // === DAO GOVERNANCE ===
 
     pub fn initialize_zone_config(

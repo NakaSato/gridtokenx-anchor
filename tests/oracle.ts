@@ -9,6 +9,8 @@ import {
 } from "@solana/web3.js";
 import { assert } from "chai";
 import { Oracle } from "../target/types/oracle";
+import type { Governance } from "../target/types/governance";
+import { initializeGovernance, getGovernancePda } from "./utils/governance";
 
 /// Derive a meter PDA from its string ID
 function findMeterPda(
@@ -194,6 +196,8 @@ describe("Oracle Program", () => {
       .accounts({
         oracleData: oracleDataPda,
         authority: apiGateway.publicKey,
+        // Chain-bridge path: no aggregator allow-list entry needed.
+        aggregatorEntry: null,
       })
       .signers([apiGateway])
       .rpc();
@@ -259,6 +263,8 @@ describe("Oracle Program", () => {
       .accounts({
         oracleData: oracleDataPda,
         authority: apiGateway.publicKey,
+        // Chain-bridge path: no aggregator allow-list entry needed.
+        aggregatorEntry: null,
       })
       .signers([apiGateway])
       .rpc();
@@ -342,5 +348,109 @@ describe("Oracle Program", () => {
     } catch (e: any) {
       assert.match(e.toString(), /InvalidConfiguration/);
     }
+  });
+
+  // ── Aggregator allow-list auth (oracle ↔ governance PoA) ────────────────────
+
+  describe("admitted-aggregator auth path", () => {
+    const govProgram = anchor.workspace.Governance as Program<Governance>;
+    const aggregator = Keypair.generate();
+    let aggregatorEntryPda: PublicKey;
+
+    before(async () => {
+      // Fund the aggregator so it can pay tx fees when it signs aggregate_readings.
+      const sig = await provider.connection.requestAirdrop(
+        aggregator.publicKey,
+        2 * LAMPORTS_PER_SOL,
+      );
+      const latest = await provider.connection.getLatestBlockhash();
+      await provider.connection.confirmTransaction({ signature: sig, ...latest });
+
+      // Governance singleton (idempotent) + admit the aggregator.
+      await initializeGovernance(provider, govProgram);
+      aggregatorEntryPda = PublicKey.findProgramAddressSync(
+        [Buffer.from("aggregator"), aggregator.publicKey.toBuffer()],
+        govProgram.programId,
+      )[0];
+      await govProgram.methods
+        .admitAggregator(aggregator.publicKey)
+        .accounts({
+          poaConfig: getGovernancePda(govProgram.programId),
+          aggregatorEntry: aggregatorEntryPda,
+          authority: authority.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    });
+
+    it("lets an admitted aggregator call aggregate_readings", async () => {
+      const before: any = await program.account.oracleData.fetch(oracleDataPda);
+      await program.methods
+        .aggregateReadings(new BN(10), new BN(5), new BN(1), new BN(0))
+        .accounts({
+          oracleData: oracleDataPda,
+          authority: aggregator.publicKey,
+          aggregatorEntry: aggregatorEntryPda,
+        })
+        .signers([aggregator])
+        .rpc();
+      const after: any = await program.account.oracleData.fetch(oracleDataPda);
+      assert.equal(
+        after.totalGlobalEnergyProduced.toNumber() -
+          before.totalGlobalEnergyProduced.toNumber(),
+        10,
+      );
+    });
+
+    it("rejects a non-admitted signer with no allow-list entry", async () => {
+      const intruder = Keypair.generate();
+      const sig = await provider.connection.requestAirdrop(
+        intruder.publicKey,
+        LAMPORTS_PER_SOL,
+      );
+      const latest = await provider.connection.getLatestBlockhash();
+      await provider.connection.confirmTransaction({ signature: sig, ...latest });
+
+      try {
+        await program.methods
+          .aggregateReadings(new BN(1), new BN(1), new BN(1), new BN(0))
+          .accounts({
+            oracleData: oracleDataPda,
+            authority: intruder.publicKey,
+            aggregatorEntry: null,
+          })
+          .signers([intruder])
+          .rpc();
+        assert.fail("should have rejected a non-bridge signer with no entry");
+      } catch (e: any) {
+        assert.match(e.toString(), /UnauthorizedGateway/);
+      }
+    });
+
+    it("rejects an aggregator whose entry was revoked", async () => {
+      await govProgram.methods
+        .revokeAggregator()
+        .accounts({
+          poaConfig: getGovernancePda(govProgram.programId),
+          aggregatorEntry: aggregatorEntryPda,
+          authority: authority.publicKey,
+        })
+        .rpc();
+
+      try {
+        await program.methods
+          .aggregateReadings(new BN(1), new BN(1), new BN(1), new BN(0))
+          .accounts({
+            oracleData: oracleDataPda,
+            authority: aggregator.publicKey,
+            aggregatorEntry: aggregatorEntryPda,
+          })
+          .signers([aggregator])
+          .rpc();
+        assert.fail("should have rejected a revoked aggregator");
+      } catch (e: any) {
+        assert.match(e.toString(), /AggregatorNotAdmitted/);
+      }
+    });
   });
 });

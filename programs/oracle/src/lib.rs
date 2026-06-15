@@ -184,10 +184,11 @@ pub mod oracle {
 
             require!(oracle_data.active == 1, OracleError::OracleInactive);
 
-            require!(
-                ctx.accounts.authority.key() == oracle_data.chain_bridge,
-                OracleError::UnauthorizedGateway
-            );
+            authorize_node_caller(
+                ctx.accounts.authority.key(),
+                oracle_data.chain_bridge,
+                ctx.accounts.aggregator_entry.as_ref().map(|a| a.as_ref()),
+            )?;
 
             let current_time = Clock::get()?.unix_timestamp;
             
@@ -349,10 +350,11 @@ pub mod oracle {
 
             require!(oracle_data.active == 1, OracleError::OracleInactive);
 
-            require!(
-                ctx.accounts.authority.key() == oracle_data.chain_bridge,
-                OracleError::UnauthorizedGateway
-            );
+            authorize_node_caller(
+                ctx.accounts.authority.key(),
+                oracle_data.chain_bridge,
+                ctx.accounts.aggregator_entry.as_ref().map(|a| a.as_ref()),
+            )?;
 
             // Single Clock::get() syscall — reused for last_reading_timestamp,
             // quality_score_updated_at, and the emitted event timestamp.
@@ -388,6 +390,31 @@ pub mod oracle {
 
         Ok(())
     }
+}
+
+/// Authorize a caller of the node-facing oracle instructions: either the configured
+/// chain bridge, or an aggregator admitted to governance's PoA allow-list (proven by
+/// passing its `AggregatorEntry` PDA, which is validated against the governance program).
+fn authorize_node_caller(
+    signer: Pubkey,
+    chain_bridge: Pubkey,
+    aggregator_entry: Option<&AccountInfo>,
+) -> Result<()> {
+    if signer == chain_bridge {
+        return Ok(());
+    }
+    let entry_ai = aggregator_entry.ok_or(OracleError::UnauthorizedGateway)?;
+    require_keys_eq!(*entry_ai.owner, governance::ID, OracleError::AggregatorNotAdmitted);
+    let (expected, _) =
+        Pubkey::find_program_address(&[b"aggregator", signer.as_ref()], &governance::ID);
+    require_keys_eq!(entry_ai.key(), expected, OracleError::AggregatorNotAdmitted);
+    let data = entry_ai.try_borrow_data()?;
+    let entry = governance::AggregatorEntry::try_deserialize(&mut &data[..])?;
+    require!(
+        entry.active && entry.aggregator == signer,
+        OracleError::AggregatorNotAdmitted
+    );
+    Ok(())
 }
 
 // Validation functions
@@ -487,6 +514,10 @@ pub struct AggregateReadings<'info> {
     pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
+
+    /// CHECK: optional governance `AggregatorEntry` PDA, validated in-handler when the
+    /// caller is an admitted aggregator rather than the chain bridge.
+    pub aggregator_entry: Option<UncheckedAccount<'info>>,
 }
 
 #[derive(Accounts)]
@@ -495,6 +526,10 @@ pub struct TriggerMarketClearing<'info> {
     pub oracle_data: AccountLoader<'info, OracleData>,
 
     pub authority: Signer<'info>,
+
+    /// CHECK: optional governance `AggregatorEntry` PDA, validated in-handler when the
+    /// caller is an admitted aggregator rather than the chain bridge.
+    pub aggregator_entry: Option<UncheckedAccount<'info>>,
 }
 
 #[derive(Accounts)]

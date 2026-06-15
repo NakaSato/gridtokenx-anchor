@@ -213,6 +213,51 @@ pub struct SetOracleAuthority<'info> {
     pub authority: Signer<'info>,
 }
 
+// ========== AGGREGATOR ALLOW-LIST ==========
+
+#[derive(Accounts)]
+#[instruction(aggregator: Pubkey)]
+pub struct AdmitAggregator<'info> {
+    #[account(
+        seeds = [b"poa_config"],
+        bump,
+        has_one = authority @ GovernanceError::UnauthorizedAuthority
+    )]
+    pub poa_config: Account<'info, PoAConfig>,
+
+    #[account(
+        init_if_needed,
+        payer = authority,
+        space = 8 + AggregatorEntry::LEN,
+        seeds = [b"aggregator", aggregator.as_ref()],
+        bump
+    )]
+    pub aggregator_entry: Account<'info, AggregatorEntry>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RevokeAggregator<'info> {
+    #[account(
+        seeds = [b"poa_config"],
+        bump,
+        has_one = authority @ GovernanceError::UnauthorizedAuthority
+    )]
+    pub poa_config: Account<'info, PoAConfig>,
+
+    #[account(
+        mut,
+        seeds = [b"aggregator", aggregator_entry.aggregator.as_ref()],
+        bump = aggregator_entry.bump
+    )]
+    pub aggregator_entry: Account<'info, AggregatorEntry>,
+
+    pub authority: Signer<'info>,
+}
+
 // ========== DAO GOVERNANCE ==========
 
 #[derive(Accounts)]

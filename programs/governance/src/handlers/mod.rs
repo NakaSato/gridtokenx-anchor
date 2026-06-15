@@ -1,3 +1,4 @@
+pub mod aggregator;
 pub mod authority;
 pub mod config;
 pub mod dao;

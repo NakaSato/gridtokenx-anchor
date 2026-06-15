@@ -24,4 +24,6 @@ pub enum EnergyTokenError {
     RecValidatorNotFound,
     #[msg("Validator to remove not found in the registered list")]
     RemoveValidatorNotFound,
+    #[msg("Window start must be a positive 15-minute (900_000 ms) boundary")]
+    MisalignedWindow,
 }
