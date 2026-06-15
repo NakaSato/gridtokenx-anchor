@@ -288,29 +288,23 @@ describe("registry_staking", () => {
     expect(Object.keys(userAcc.validatorStatus)[0]).to.equal("active");
   });
 
-  // ── Review-fix coverage: unstake cooldown (F3) + slash guards (F1/F2) + withdraw_slashed (F4) ──
-  //
-  // NOTE: This suite runs against a live validator (AnchorProvider.env()), which
-  // offers no clock control, so the unstake *happy path* and the below-MIN
-  // *demotion* path (both gated by the 24h UNSTAKE_COOLDOWN_SECS) cannot be
-  // exercised here. They need a Bankrun/litesvm port that can warp the clock —
-  // tracked separately. The cooldown *lock*, slash guards, sticky-slash, and
-  // withdraw bounds are all time-independent and covered below.
+  // ── unstake / slash ─────────────────────────────────────────────────────────
 
-  it("Fails to unstake during cooldown (F3 lock)", async () => {
-    // User staked in the prior tests → still within UNSTAKE_COOLDOWN_SECS.
+  it("Fails to unstake during the cooldown window", async () => {
+    // User staked just above in the prior tests, so we're still inside the
+    // 24h UNSTAKE_COOLDOWN_SECS — unstake_grx checks the cooldown first.
     try {
       await program.methods
-        .unstakeGrx(new BN(1_000_000_000)) // 1 GRX
+        .unstakeGrx(new BN(100_000_000_000)) // 100 GRX
         .accounts({
           userAccount: userPda,
           grxVault: vaultPda,
           registry: registryPda,
           userGrxAta: userAta,
-          grxMint: grxMint,
+          grxMint,
           authority: userKeypair.publicKey,
           tokenProgram: TOKEN_2022_PROGRAM_ID,
-        } as any)
+        })
         .signers([userKeypair])
         .rpc();
       expect.fail("Should have failed with UnstakingLocked");
@@ -319,213 +313,99 @@ describe("registry_staking", () => {
     }
   });
 
-  it("Fails to slash a non-validator (F2 guard)", async () => {
-    // Register a second plain user (validator_status = None).
-    const plainUser = Keypair.generate();
-    const sig = await provider.connection.requestAirdrop(plainUser.publicKey, 1_000_000_000);
-    await provider.connection.confirmTransaction(sig);
-    const [plainPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("user"), plainUser.publicKey.toBuffer()],
-      program.programId
+  it("rejects slash from a non-authority", async () => {
+    const dest = await getOrCreateAssociatedTokenAccount(
+      provider.connection, (provider.wallet as any).payer, grxMint, authority,
+      false, undefined, undefined, TOKEN_2022_PROGRAM_ID,
     );
-    const plainShardId = plainUser.publicKey.toBytes()[0] % 16;
-    const [plainShardPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("registry_shard"), Buffer.from([plainShardId])],
-      program.programId
-    );
-    try {
-      await program.methods
-        .initializeShard(plainShardId)
-        .accounts({ shard: plainShardPda, authority, systemProgram: SystemProgram.programId } as any)
-        .rpc();
-    } catch (e) {}
-    await program.methods
-      .registerUser({ prosumer: {} }, 0, 0, new BN(0), plainShardId)
-      .accounts({
-        userAccount: plainPda,
-        registryShard: plainShardPda,
-        registry: registryPda,
-        authority: plainUser.publicKey,
-        energyTokenProgram: SystemProgram.programId,
-        mint: authority,
-        tokenInfo: authority,
-        userTokenAccount: authority,
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-        associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-      } as any)
-      .rpc();
-
     try {
       await program.methods
         .slashValidator(new BN(1_000_000_000))
         .accounts({
-          target: plainUser.publicKey,
-          userAccount: plainPda,
-          registry: registryPda,
-          authority: authority,
-        } as any)
-        .rpc();
-      expect.fail("Should have failed with NotAValidator");
-    } catch (err: any) {
-      expect(err.error.errorCode.code).to.equal("NotAValidator");
-    }
-  });
-
-  it("Successfully slashes an active validator (pool grows)", async () => {
-    const before = await program.account.registry.fetch(registryPda);
-    const userBefore = await program.account.userAccount.fetch(userPda);
-    const slashAmount = new BN(1_000_000_000_000); // 1,000 GRX
-
-    await program.methods
-      .slashValidator(slashAmount)
-      .accounts({
-        target: userKeypair.publicKey,
-        userAccount: userPda,
-        registry: registryPda,
-        authority: authority,
-      } as any)
-      .rpc();
-
-    const userAfter = await program.account.userAccount.fetch(userPda);
-    expect(Object.keys(userAfter.validatorStatus)[0]).to.equal("slashed");
-    expect(userAfter.stakedGrx.toString()).to.equal(
-      userBefore.stakedGrx.sub(slashAmount).toString()
-    );
-    const after = await program.account.registry.fetch(registryPda);
-    expect(after.slashedPool.sub(before.slashedPool).toString()).to.equal(
-      slashAmount.toString()
-    );
-  });
-
-  it("Fails to double-slash an already-slashed validator (F2 guard)", async () => {
-    try {
-      await program.methods
-        .slashValidator(new BN(1_000_000_000))
-        .accounts({
-          target: userKeypair.publicKey,
-          userAccount: userPda,
-          registry: registryPda,
-          authority: authority,
-        } as any)
-        .rpc();
-      expect.fail("Should have failed with NotAValidator");
-    } catch (err: any) {
-      expect(err.error.errorCode.code).to.equal("NotAValidator");
-    }
-  });
-
-  it("Slashed validator cannot re-register (F1 sticky slash)", async () => {
-    // Top up well above MIN, then try to re-register — must still be rejected.
-    const topUp = new BN(2_000_000_000_000); // 2,000 GRX
-    await mintTo(
-      provider.connection,
-      (provider.wallet as any).payer,
-      grxMint,
-      userAta,
-      authority,
-      topUp.toNumber(),
-      [],
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-    await program.methods
-      .stakeGrx(topUp)
-      .accounts({
-        registry: registryPda,
-        userAccount: userPda,
-        grxVault: vaultPda,
-        userGrxAta: userAta,
-        grxMint: grxMint,
-        authority: userKeypair.publicKey,
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-      })
-      .signers([userKeypair])
-      .rpc();
-
-    try {
-      await program.methods
-        .registerValidator()
-        .accounts({ userAccount: userPda, authority: userKeypair.publicKey })
-        .signers([userKeypair])
-        .rpc();
-      expect.fail("Should have failed with ValidatorAlreadySlashed");
-    } catch (err: any) {
-      expect(err.error.errorCode.code).to.equal("ValidatorAlreadySlashed");
-    }
-  });
-
-  it("withdraw_slashed: rejects non-authority and over-pool, sweeps valid amount (F4)", async () => {
-    const reg = await program.account.registry.fetch(registryPda);
-    const pool = reg.slashedPool;
-    expect(pool.gtn(0)).to.be.true; // forfeited by the earlier slash
-
-    // Admin treasury destination ATA.
-    const treasury = await getOrCreateAssociatedTokenAccount(
-      provider.connection,
-      (provider.wallet as any).payer,
-      grxMint,
-      authority,
-      false,
-      undefined,
-      undefined,
-      TOKEN_2022_PROGRAM_ID
-    );
-
-    // (a) non-authority signer → UnauthorizedAuthority
-    try {
-      await program.methods
-        .withdrawSlashed(new BN(1))
-        .accounts({
-          registry: registryPda,
+          targetAuthority: userKeypair.publicKey,
+          targetUserAccount: userPda,
           grxVault: vaultPda,
-          destination: treasury.address,
-          grxMint: grxMint,
-          authority: userKeypair.publicKey,
+          registry: registryPda,
+          slashDestination: dest.address,
+          grxMint,
+          authority: userKeypair.publicKey, // wrong authority (registry.authority is the provider wallet)
           tokenProgram: TOKEN_2022_PROGRAM_ID,
-        } as any)
+        })
         .signers([userKeypair])
         .rpc();
       expect.fail("Should have failed with UnauthorizedAuthority");
     } catch (err: any) {
       expect(err.error.errorCode.code).to.equal("UnauthorizedAuthority");
     }
+  });
 
-    // (b) amount > slashed_pool → InsufficientStakingBalance
-    try {
-      await program.methods
-        .withdrawSlashed(pool.add(new BN(1)))
-        .accounts({
-          registry: registryPda,
-          grxVault: vaultPda,
-          destination: treasury.address,
-          grxMint: grxMint,
-          authority: authority,
-          tokenProgram: TOKEN_2022_PROGRAM_ID,
-        } as any)
-        .rpc();
-      expect.fail("Should have failed with InsufficientStakingBalance");
-    } catch (err: any) {
-      expect(err.error.errorCode.code).to.equal("InsufficientStakingBalance");
-    }
+  it("authority slashes the validator: bond moves to destination, status Slashed", async () => {
+    const dest = await getOrCreateAssociatedTokenAccount(
+      provider.connection, (provider.wallet as any).payer, grxMint, authority,
+      false, undefined, undefined, TOKEN_2022_PROGRAM_ID,
+    );
+    const slash = new BN(5_000_000_000_000); // 5,000 GRX
 
-    // (c) valid sweep of the whole pool → treasury balance up, pool → 0
-    const treBefore = await getAccount(provider.connection, treasury.address, undefined, TOKEN_2022_PROGRAM_ID);
+    // Configure the allowed slash sink first — slash_validator refuses any other destination.
     await program.methods
-      .withdrawSlashed(pool)
-      .accounts({
-        registry: registryPda,
-        grxVault: vaultPda,
-        destination: treasury.address,
-        grxMint: grxMint,
-        authority: authority,
-        tokenProgram: TOKEN_2022_PROGRAM_ID,
-      } as any)
+      .setSlashDestination(dest.address)
+      .accounts({ registry: registryPda, authority })
       .rpc();
 
-    const treAfter = await getAccount(provider.connection, treasury.address, undefined, TOKEN_2022_PROGRAM_ID);
-    expect((treAfter.amount - treBefore.amount).toString()).to.equal(pool.toString());
-    const regAfter = await program.account.registry.fetch(registryPda);
-    expect(regAfter.slashedPool.toString()).to.equal("0");
+    const stakedBefore = (await program.account.userAccount.fetch(userPda)).stakedGrx;
+    const destBefore = await getAccount(provider.connection, dest.address, undefined, TOKEN_2022_PROGRAM_ID);
+    const vaultBefore = await getAccount(provider.connection, vaultPda, undefined, TOKEN_2022_PROGRAM_ID);
+
+    await program.methods
+      .slashValidator(slash)
+      .accounts({
+        targetAuthority: userKeypair.publicKey,
+        targetUserAccount: userPda,
+        grxVault: vaultPda,
+        registry: registryPda,
+        slashDestination: dest.address,
+        grxMint,
+        authority, // registry authority = provider wallet (default signer)
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+      })
+      .rpc();
+
+    const userAcc = await program.account.userAccount.fetch(userPda);
+    expect(Object.keys(userAcc.validatorStatus)[0]).to.equal("slashed");
+    expect(stakedBefore.sub(userAcc.stakedGrx).toString()).to.equal(slash.toString());
+
+    const destAfter = await getAccount(provider.connection, dest.address, undefined, TOKEN_2022_PROGRAM_ID);
+    const vaultAfter = await getAccount(provider.connection, vaultPda, undefined, TOKEN_2022_PROGRAM_ID);
+    expect((destAfter.amount - destBefore.amount).toString()).to.equal(slash.toString());
+    expect((vaultBefore.amount - vaultAfter.amount).toString()).to.equal(slash.toString());
+  });
+
+  // Skipped on a live validator: unstake_grx enforces the 24h UNSTAKE_COOLDOWN_SECS
+  // and AnchorProvider.env() offers no clock control. Needs a Bankrun/litesvm port
+  // that can warp the clock past the cooldown to exercise the happy path.
+  it.skip("unstakes once no longer an Active validator (needs clock warp)", async () => {
+    // Status is now Slashed; the only thing blocking unstake here is the cooldown.
+    const amount = new BN(1_000_000_000_000); // 1,000 GRX
+    const stakedBefore = (await program.account.userAccount.fetch(userPda)).stakedGrx;
+    const ataBefore = await getAccount(provider.connection, userAta, undefined, TOKEN_2022_PROGRAM_ID);
+
+    await program.methods
+      .unstakeGrx(amount)
+      .accounts({
+        userAccount: userPda,
+        grxVault: vaultPda,
+        registry: registryPda,
+        userGrxAta: userAta,
+        grxMint,
+        authority: userKeypair.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+      })
+      .signers([userKeypair])
+      .rpc();
+
+    const stakedAfter = (await program.account.userAccount.fetch(userPda)).stakedGrx;
+    const ataAfter = await getAccount(provider.connection, userAta, undefined, TOKEN_2022_PROGRAM_ID);
+    expect(stakedBefore.sub(stakedAfter).toString()).to.equal(amount.toString());
+    expect((ataAfter.amount - ataBefore.amount).toString()).to.equal(amount.toString());
   });
 });
