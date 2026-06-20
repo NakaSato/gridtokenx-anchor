@@ -3,16 +3,39 @@
 // which writes a per-(zone,batch) SettlementRecord (Merkle root + VAT) and bumps
 // total_settled_thbg.
 //
-// ⚠️ RUNTIME-UNVERIFIED SCAFFOLD. This test is structurally complete (exact
-// account layout + remaining_accounts order from settle_offchain.rs), but it was
-// NOT run to green in-session — it needs a stable validator (the long settle path
-// is sensitive to validator ws-pubsub flakiness) and the full THBG setup. Run via
-// the recipe in docs/proposed/implementation-plan.md:
+// ⚠️ RUNTIME-UNVERIFIED SCAFFOLD — partially debugged on a live validator.
+// Run via the recipe in docs/proposed/implementation-plan.md:
 //   SOLANA_VALIDATOR_TTL=0 just solana-up
 //   anchor deploy --provider.cluster http://localhost:8899
 //   npx tsx scripts/bootstrap.ts && npx tsx scripts/init-treasury.ts
 //   npx mocha -r tsx tests/batch_settle_thbg.ts --timeout 1000000
-// Expect first-run fixes (this is a scaffold, not a verified test).
+//
+// Setup is now green after three first-run fixes:
+//   1. fundThbg: arg is a THBG *target*; overfund GRX ~300× to clear the
+//      grx_per_thbg_rate (×0.004) + 25 bps fee (was funding ~40 THBG when 10k
+//      was deposited → TransferChecked insufficient funds).
+//   2. createAtaFor → idempotent (energy ATAs were created twice for sellers).
+//   3. Legacy Transaction ctor: `recentBlockhash`, not `blockhash` (the ALT
+//      bootstrap txs were unsigned otherwise).
+//
+// BLOCKER A — RESOLVED (was a stale deployed binary, not a test bug): the
+// remaining_accounts.len() == match_count*6 check failed only because the
+// deployed trading.so predated commit e416842 (which added the 3 treasury
+// optional accounts to SettleOffchainMatchBatchContext). A `cargo build-sbf`
+// of trading + redeploy of the fresh .so fixes the account count. ALWAYS
+// redeploy the current build before running this — see the recipe above.
+//
+// BLOCKER B — OPEN, needs a PROGRAM change (not fixable in this test): the
+// batch handler reads each OrderNullifier via `Account::try_from`
+// (settle_offchain.rs:602) and only ever *updates* filled_amount — it never
+// creates the PDA. The single path uses `init_if_needed`; the batch path has
+// no init (remaining_accounts can't use the macro) and there is no standalone
+// init-nullifier instruction. So batch_settle_offchain_match fails with
+// AccountNotInitialized (3012) for any fresh off-chain match. The test cannot
+// pre-create these PDAs itself (only the owning program may create them).
+// Fix options (design call): (a) add a manual create_account CPI for the two
+// nullifiers inside the batch loop; (b) add an init_nullifier instruction the
+// client calls per order first. Until then this stays RUNTIME-UNVERIFIED.
 
 import * as anchor from "@anchor-lang/core";
 import { Program } from "@anchor-lang/core";
@@ -35,6 +58,7 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
+  createAssociatedTokenAccountIdempotentInstruction,
   getAccount,
 } from "@solana/spl-token";
 import { expect } from "chai";
@@ -116,8 +140,10 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
 
   async function createAtaFor(mint: PublicKey, owner: PublicKey): Promise<PublicKey> {
     const a = ata(mint, owner);
+    // Idempotent: some owners get the same ATA created twice (e.g. an energy ATA
+    // made directly, then again inside fundThbg) — don't fail on the second pass.
     await provider.sendAndConfirm(new Transaction().add(
-      createAssociatedTokenAccountInstruction(authority, a, owner, mint, TOKEN_2022_PROGRAM_ID)
+      createAssociatedTokenAccountIdempotentInstruction(authority, a, owner, mint, TOKEN_2022_PROGRAM_ID)
     ));
     return a;
   }
@@ -129,8 +155,12 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
     } as any).signers([kp]).rpc();
   }
 
-  // Give `user` THBG by minting GRX → swapping GRX→THBG.
-  async function fundThbg(kp: Keypair, grx: number): Promise<PublicKey> {
+  // Give `user` at least `thbgTarget` THBG by minting GRX → swapping GRX→THBG.
+  // swap_grx_for_thbg: thbg_out = grx_in × grx_per_thbg_rate / 1e9 − fee, with
+  // rate = 4_000_000 (⇒ ×0.004) and a 25 bps fee. So ~250 GRX yields ~1 THBG;
+  // overfund GRX 300× the THBG target to clear the rate + fee with margin.
+  async function fundThbg(kp: Keypair, thbgTarget: number): Promise<PublicKey> {
+    const grx = thbgTarget * 300;
     const grxAta = await createAtaFor(energyMintPda, kp.publicKey);
     await mintEnergyTo(grxAta, kp.publicKey, grx);
     const thbgAta = await createAtaFor(thbgMint, kp.publicKey);
@@ -239,13 +269,13 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
     const extendAltIx = AddressLookupTableProgram.extendLookupTable({ payer: authority, authority, lookupTable: altAddress, addresses: altAddrs });
     {
       const { blockhash } = await provider.connection.getLatestBlockhash("confirmed");
-      const tx = new Transaction({ feePayer: authority, blockhash } as any).add(createAltIx, extendAltIx);
+      const tx = new Transaction({ feePayer: authority, recentBlockhash: blockhash } as any).add(createAltIx, extendAltIx);
       tx.sign(payer);
       await provider.connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
     }
     for (let w = 0; w < 3; w++) {
       const { blockhash } = await provider.connection.getLatestBlockhash("confirmed");
-      const tx = new Transaction({ feePayer: authority, blockhash } as any).add(SystemProgram.transfer({ fromPubkey: authority, toPubkey: authority, lamports: 1 }));
+      const tx = new Transaction({ feePayer: authority, recentBlockhash: blockhash } as any).add(SystemProgram.transfer({ fromPubkey: authority, toPubkey: authority, lamports: 1 }));
       tx.sign(payer);
       await provider.connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
       await new Promise((r) => setTimeout(r, 400));
