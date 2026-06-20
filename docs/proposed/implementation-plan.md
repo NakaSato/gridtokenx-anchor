@@ -59,23 +59,35 @@ Tests:
 
 Goal: enrich settlement recording with a tamper-evidence root + VAT audit data. **Per-batch**, commit-only (no on-chain verification) — matches the continuous CDA, not a per-epoch root.
 
-- [ ] T2.1 Add `SettlementRecord` zero-copy PDA, seeds `[b"settlement", zone_id, batch_id]`: `merkle_root[32]`, `total_value`, `vat_amount`, `vat_rate_bps`, `zone_id`, `batch_id`, `committed_ts`, `recorder`, `_paddingN`. Manual padding; `8 + size_of`.
-- [ ] T2.2 Extend `record_settlement(value)` → `record_settlement(value, merkle_root, vat_amount, vat_rate_bps, zone_id, batch_id)`; init/load the per-batch `SettlementRecord`; keep the `total_settled_thbg` bump.
-- [ ] T2.3 Trading call sites (`settle_offchain_match`, `batch_settle_offchain_match`) pass root + VAT; batch records its own root per batch.
-- [ ] T2.4 `set_vat_rate_bps` admin (default 700; rate is a parameter — reduced 7% expires 30 Sep 2026).
-- [ ] T2.5 Emit settlement event carrying value/VAT/rate/root for off-chain e-Tax + verifier.
-- [ ] T2.6 `compute_fn!`; hoist Clock; per-`(zone,batch)` PDA → parallel writes, no global write-lock.
+### §2a — treasury commitment instruction — DONE (commit 930bf52)
 
-Tests:
-- [ ] Record persists root/VAT/zone/batch; two zones write in parallel.
-- [ ] `total_settled_thbg` still bumped by gross; `TreasurySettlementRequired` policy intact.
-- [ ] VAT rate adjustable; default 700 bps; event exposes value/VAT/rate.
+- [x] T2a.1 `SettlementRecord` zero-copy PDA (112B, hand-padded), seeds `[b"settlement", zone_id, batch_id]`: `merkle_root[32]`, `recorder`, `total_value`, `vat_amount`, `committed_ts`, `batch_id`, `zone_id`, `vat_rate_bps`, `bump`, `_padding`.
+- [x] T2a.2 `record_settlement_batch(value, merkle_root, vat_amount, vat_rate_bps, zone_id, batch_id)` — bumps `total_settled_thbg`, inits the per-batch `SettlementRecord`, authorized by `settlement_recorder`. VAT rate per-batch (no Treasury-struct change). `compute_fn!` + Clock hoisted.
+- [x] T2a.3 `SettlementBatchRecorded` event (value/VAT/rate/root/total).
+- [x] Tests (`tests/settlement_commitment_litesvm.ts`, litesvm, 3 passing): commit+total bump; recorder gate; duplicate-`(zone,batch)` rejected.
+
+### §2b — wire trading batch path → treasury commitment — TODO (needs validator/CI)
+
+> **Verification note:** the batch settle path (`SettleOffchainMatchBatchContext`) moves escrow funds and is ~20 accounts + 2 Ed25519 verify ixs per match. It is **not** litesvm-testable cheaply; its test runs under `anchor test` (live validator), like `tests/escrow_settlement.ts`. Do this task only where a validator/CI is available — compile-only is insufficient for a CPI-init account-threading change (PDA-seed / signer / account-order errors surface at runtime, not compile).
+
+- [ ] T2b.1 Add args to `batch_settle_offchain_match`: `merkle_root: [u8;32]`, `vat_amount: u64`, `vat_rate_bps: u16`, `batch_id: u64`. (`zone_id` from `zone_market.zone_id`.)
+- [ ] T2b.2 Add to `SettleOffchainMatchBatchContext`: `settlement_record` (the treasury PDA, `UncheckedAccount`, mut), `payer: Signer` (mut), `system_program: Program<System>`. (`treasury_program`/`treasury_state` already present, Optional.)
+- [ ] T2b.3 In the post-loop treasury block (`settle_offchain.rs:~711`), replace `treasury::cpi::record_settlement(value)` with `treasury::cpi::record_settlement_batch(value, merkle_root, vat_amount, vat_rate_bps, zone_market.zone_id, batch_id)` and CPI accounts `RecordSettlementBatch { treasury, settlement_record, recorder: market_authority, payer, system_program }`, `new_with_signer` with the `market_authority` seeds. Keep the `TreasurySettlementRequired` policy + `TreasuryCurrencyMismatch` check.
+- [ ] T2b.4 Single `settle_offchain_match` stays on `record_settlement` (per-batch commitment only — a root over one match is pointless).
+- [ ] T2b.5 Client/`scripts`: derive the `settlement_record` PDA `[b"settlement", zone_id_le, batch_id_le]` under the **treasury** program id and pass it.
+
+Tests (anchor-provider / CI, mirror `tests/escrow_settlement.ts`):
+- [ ] Batch THBG settle writes the `SettlementRecord` (root/VAT/zone/batch) and bumps `total_settled_thbg` by gross.
+- [ ] `TreasurySettlementRequired` still fires when treasury accounts omitted on a THBG market.
+- [ ] `TreasuryCurrencyMismatch` on wrong currency.
+- [ ] CU under budget (batch + CPI-init).
 - [ ] Off-chain: rebuild root from match leaves == on-chain root.
-- [ ] CU under budget.
 
 ## §3 — Feasibility spike (GATE — before any trustless work) — DO THIRD
 
 Goal: prove or kill the trustless fraud-proof path **before** spending on it. PoC only, throwaway.
+
+> **Verification note:** CU measurement (T3.2) requires on-chain execution — run under a live validator / `anchor test`, not litesvm.
 
 - [ ] T3.1 Prototype sparse/indexed Merkle tree giving **proof-of-exclusion** (to prove a dropped match). Confirm leaf/index scheme.
 - [ ] T3.2 Measure on-chain CU of: Ed25519 meter-sig verify (instruction introspection, as `settle_offchain` does) + Merkle inclusion/exclusion verify, per challenge.
