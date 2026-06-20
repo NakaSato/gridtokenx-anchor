@@ -168,8 +168,21 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   the 1232-byte packet (`RangeError: encoding overruns Uint8Array` at
   `MessageV0.serialize`). A real per-match marginal-CU curve therefore needs a
   packaging change (pre-verified signature accounts, or an off-chain aggregated
-  multisig), not just more matches per call. Still TODO: a TPS sweep over this
-  path, and that batch-CU curve once the signature packaging is reworked.
+  multisig), not just more matches per call.
+  **Batch-settle TPS (single authority, `tests/batch_settle_tps.ts`):** an
+  open-loop submission sweep (pre-seed + pre-build all settle txs, then fire with
+  `conc` in flight and poll to confirmed; goodput-style — dropped txs re-fired) on
+  the same validator gives **~0.5 TPS, flat across concurrency** (conc 5 → 0.51,
+  conc 10 → 0.58 TPS; N=10/level, 100% goodput, 0 on-chain reverts, CU ≈ 86–89k).
+  Throughput does **not** scale with concurrency and every level needs a second
+  re-fire round, because all settles by one authority hit the **same**
+  `marketShard` + `zoneShard` PDA (shard byte = `payer.to_bytes()[0]`, constant
+  for a single payer) → same-slot write contention drops the losers. This is the
+  expected single-node, single-shard write-contention signature; the load-free
+  per-trade cost (CU) is the figure to cite. Still TODO: **multi-authority**
+  settlement (distinct payers → distinct shards) to actually exercise Sealevel
+  parallelism, a true open-loop (no per-round confirm barrier) for peak TPS, and
+  the batch-CU curve once the signature packaging is reworked.
 - **[CRIT]** **Multi-validator** (3–4 PoA nodes). A single validator measures
   no consensus cost, yet "block-time is the bottleneck" is the headline claim.
 - **[CRIT]** **Open-loop load** (fix arrival rate λ, ramp to saturation) and

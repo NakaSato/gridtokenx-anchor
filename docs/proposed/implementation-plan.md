@@ -116,7 +116,8 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
 - [ ] `TreasuryCurrencyMismatch` (6030) on wrong currency — needs a 2nd currency mint + market reconfig (alt-currency escrows); heavier, deferred.
 - [x] CU under budget (batch + CPI-init) — 1-match batch settle ≈ **80–92k CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. ~12k spread is `find_program_address` bump-seek noise on fresh keypairs, not ledger drift. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
 - [x] Batch-CU curve at >1 match — **single-tx cap = 1 match** (per-match inline Ed25519 verify ix data can't go in an ALT; 2 matches overrun the 1232-byte packet). A real marginal curve needs reworked sig packaging — documented in `BENCHMARKS.md`.
-- [ ] TPS sweep over the batch settle path; per-match marginal CU once sig packaging reworked (multi-tx or pre-verified sig accounts).
+- [x] TPS sweep over the batch settle path (`tests/batch_settle_tps.ts`) — open-loop goodput, single authority: **~0.5 TPS, flat** (conc 5→0.51, 10→0.58; N=10, 100% goodput, 0 reverts, CU ≈86–89k). No concurrency scaling + always 1 retry round = single-shard write contention (one payer → one `marketShard`/`zoneShard`). Recorded in `BENCHMARKS.md`.
+- [ ] Multi-authority settle sweep (distinct payers → distinct shards) for Sealevel parallelism; true open-loop (no per-round barrier) for peak TPS; per-match marginal CU once sig packaging reworked.
 
 ## §3 — Feasibility spike (GATE — before any trustless work) — DO THIRD
 
