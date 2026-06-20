@@ -93,6 +93,13 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   // and the local ledger persists across runs, so a fixed id collides on re-run.
   let nextBatchId = Date.now() % 1_000_000;
   const freshBatchId = () => new BN(nextBatchId++);
+  // BENCH_TPS_SHARD_SPREAD=1 spreads settles across all shards (shardByte =
+  // cursor % num_shards) instead of pinning one shard (payer[0] % num_shards).
+  // market_shard/zone_shard carry NO seeds constraint (settle_offchain.rs:260),
+  // so the client freely chooses the shard — this isolates whether the per-shard
+  // PDA or the GLOBAL treasury_state/collectors are the settlement bottleneck.
+  const SHARD_SPREAD = process.env.BENCH_TPS_SHARD_SPREAD === "1";
+  let shardCursor = 0;
 
   const tpda = (p: Program<any>, seed: string) =>
     PublicKey.findProgramAddressSync([Buffer.from(seed)], p.programId)[0];
@@ -193,8 +200,11 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
 
     const marketAcct: any = await trading.account.market.fetch(marketPda);
     const zoneAcct: any = await trading.account.zoneMarket.fetch(zoneMarketPda);
-    const mShardByte = authority.toBuffer()[0] % (Number(marketAcct.numShards) || 16);
-    const zShardByte = authority.toBuffer()[0] % (Number(zoneAcct.numShards) || 16);
+    const mNum = Number(marketAcct.numShards) || 16;
+    const zNum = Number(zoneAcct.numShards) || 16;
+    const mShardByte = SHARD_SPREAD ? (shardCursor % mNum) : (authority.toBuffer()[0] % mNum);
+    const zShardByte = SHARD_SPREAD ? (shardCursor % zNum) : (authority.toBuffer()[0] % zNum);
+    if (SHARD_SPREAD) shardCursor++;
     const marketShardPda = PublicKey.findProgramAddressSync([Buffer.from("market_shard"), marketPda.toBuffer(), Buffer.from([mShardByte])], trading.programId)[0];
     const zoneShardPda = PublicKey.findProgramAddressSync([Buffer.from("zone_shard"), zoneMarketPda.toBuffer(), Buffer.from([zShardByte])], trading.programId)[0];
     try { await trading.methods.initializeMarketShard(mShardByte).accounts({ market: marketPda, marketShard: marketShardPda, payer: authority, systemProgram: SystemProgram.programId } as any).rpc(); } catch {}
@@ -392,7 +402,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       }
       const cuMean = cuN ? Math.round(cuSum / cuN) : 0;
       rows.push({ conc, tps, wallMs, ok, fail, cuMean, rounds: roundsUsed, dropped, reverted });
-      console.log(`  [BENCH_BATCH_TPS] conc=${conc} N=${N} ok=${ok} fail=${fail} (dropped=${dropped} reverted=${reverted}) rounds=${roundsUsed} wall_ms=${Math.round(wallMs)} tps=${tps.toFixed(2)} cu_mean=${cuMean}`);
+      console.log(`  [BENCH_BATCH_TPS] spread=${SHARD_SPREAD ? 1 : 0} conc=${conc} N=${N} ok=${ok} fail=${fail} (dropped=${dropped} reverted=${reverted}) rounds=${roundsUsed} wall_ms=${Math.round(wallMs)} tps=${tps.toFixed(2)} cu_mean=${cuMean}`);
     }
 
     console.log("  [BENCH_BATCH_TPS] conc | tps | wall_ms | ok/fail | rounds | dropped | reverted | cu_mean");

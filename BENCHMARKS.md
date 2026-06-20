@@ -175,13 +175,20 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   the same validator gives **~0.5 TPS, flat across concurrency** (conc 5 → 0.51,
   conc 10 → 0.58 TPS; N=10/level, 100% goodput, 0 on-chain reverts, CU ≈ 86–89k).
   Throughput does **not** scale with concurrency and every level needs a second
-  re-fire round, because all settles by one authority hit the **same**
-  `marketShard` + `zoneShard` PDA (shard byte = `payer.to_bytes()[0]`, constant
-  for a single payer) → same-slot write contention drops the losers. This is the
-  expected single-node, single-shard write-contention signature; the load-free
-  per-trade cost (CU) is the figure to cite. Still TODO: **multi-authority**
-  settlement (distinct payers → distinct shards) to actually exercise Sealevel
-  parallelism, a true open-loop (no per-round confirm barrier) for peak TPS, and
+  re-fire round. **The bottleneck is NOT the shard.** Spreading the settles across
+  all 16 shards (`BENCH_TPS_SHARD_SPREAD=1`; `market_shard`/`zone_shard` carry no
+  seeds constraint — `settle_offchain.rs:260` — so the client picks the shard)
+  gave the *same* numbers (0.59 / 0.57 TPS, still 2 rounds). The serialization is
+  the set of **global writable accounts every settle touches regardless of shard**:
+  `treasury_state` (the `total_settled_thbg` accumulator bumped by
+  `record_settlement_batch`) and the three fixed `fee`/`wheeling`/`loss` collector
+  token accounts (one PDA each per currency). Settlement is therefore
+  global-write-bound by design — sharding parallelizes *order submission* (per-
+  entity PDAs on the hot path), but settlement reconciles into global totals. The
+  load-free per-trade cost (CU) is the figure to cite. To actually parallelize
+  settlement you'd need to shard the treasury accumulator + collectors too, or
+  amortize more matches per CPI (blocked by the 1-match single-tx cap above).
+  Still TODO: a true open-loop (no per-round confirm barrier) for peak TPS, and
   the batch-CU curve once the signature packaging is reworked.
 - **[CRIT]** **Multi-validator** (3–4 PoA nodes). A single validator measures
   no consensus cost, yet "block-time is the bottleneck" is the headline claim.
