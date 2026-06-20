@@ -554,7 +554,7 @@ pub struct MintToWallet<'info> {
     pub destination: Box<InterfaceAccount<'info, TokenAccountInterface>>,
 
     /// CHECK: The owner of the destination token account
-    pub destination_owner: AccountInfo<'info>,
+    pub destination_owner: UncheckedAccount<'info>,
 
     pub authority: Signer<'info>,
 
@@ -594,7 +594,7 @@ pub struct MintGeneration<'info> {
     pub destination: Box<InterfaceAccount<'info, TokenAccountInterface>>,
 
     /// CHECK: The owner of the destination token account
-    pub destination_owner: AccountInfo<'info>,
+    pub destination_owner: UncheckedAccount<'info>,
 
     /// Per-(meter, window) idempotency guard. `init_if_needed` so the first mint
     /// creates it and a replay finds it already present; the `minted` flag (checked

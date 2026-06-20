@@ -45,7 +45,7 @@ pub struct IssueErc<'info> {
         mut,
         owner = registry::ID @ GovernanceError::InvalidMeterAccount
     )]
-    pub meter_account: AccountInfo<'info>,
+    pub meter_account: UncheckedAccount<'info>,
     /// Meter owner must sign to authorize issuance
     #[account(
         constraint = {
@@ -71,11 +71,11 @@ pub struct IssueErc<'info> {
             true
         }
     )]
-    pub registry: AccountInfo<'info>,
+    pub registry: UncheckedAccount<'info>,
     /// The registry program - used to invoke mark_erc_claimed
     /// CHECK: pinned to the real registry program ID
     #[account(constraint = registry_program.key() == registry::ID @ GovernanceError::InvalidMeterAccount)]
-    pub registry_program: AccountInfo<'info>,
+    pub registry_program: UncheckedAccount<'info>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -135,7 +135,7 @@ pub struct TransferErc<'info> {
     pub current_owner: Signer<'info>,
     /// New owner to transfer to
     /// CHECK: This is the new owner address, validated in handler
-    pub new_owner: AccountInfo<'info>,
+    pub new_owner: UncheckedAccount<'info>,
 }
 
 // ========== GOVERNANCE CONFIG ==========
@@ -278,7 +278,7 @@ pub struct CreateProposal<'info> {
     /// for a real meter (handler still checks meter.owner == proposer).
     /// CHECK: program-owner bound here; field-level validation in handler
     #[account(owner = registry::ID @ GovernanceError::InvalidMeterAccount)]
-    pub meter_account: AccountInfo<'info>,
+    pub meter_account: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -301,7 +301,7 @@ pub struct CastVote<'info> {
     /// cannot manufacture voting weight (handler still checks meter.owner == voter).
     /// CHECK: program-owner bound here; field-level validation in handler
     #[account(owner = registry::ID @ GovernanceError::InvalidMeterAccount)]
-    pub meter_account: AccountInfo<'info>,
+    pub meter_account: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 

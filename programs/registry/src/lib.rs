@@ -996,7 +996,7 @@ pub struct RegisterUser<'info> {
     pub registry: AccountLoader<'info, Registry>,
 
     /// CHECK: The user's public key. Authorization checked in instruction body.
-    pub authority: AccountInfo<'info>,
+    pub authority: UncheckedAccount<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -1022,24 +1022,24 @@ pub struct ClaimAirdrop<'info> {
     pub registry: AccountLoader<'info, Registry>,
 
     /// CHECK: The user's public key. Authorization checked in instruction body.
-    pub authority: AccountInfo<'info>,
+    pub authority: UncheckedAccount<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
 
     /// CHECK: The energy token program.
-    pub energy_token_program: AccountInfo<'info>,
+    pub energy_token_program: UncheckedAccount<'info>,
 
     /// CHECK: The energy token mint.
     #[account(mut)]
-    pub mint: AccountInfo<'info>,
+    pub mint: UncheckedAccount<'info>,
 
     /// CHECK: The user's token account (ATA).
     #[account(mut)]
-    pub user_token_account: AccountInfo<'info>,
+    pub user_token_account: UncheckedAccount<'info>,
 
     /// CHECK: The token info account (mint authority).
-    pub token_info: AccountInfo<'info>,
+    pub token_info: UncheckedAccount<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }
@@ -1080,7 +1080,7 @@ pub struct RegisterMeter<'info> {
     /// Safe: the handler enforces `owner == user_account.authority` and the
     /// meter/user PDAs are seeded by `owner.key()`, so a meter can only ever be
     /// created under its true owner's registered account.
-    pub owner: AccountInfo<'info>,
+    pub owner: UncheckedAccount<'info>,
 
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -1209,15 +1209,15 @@ pub struct SettleAndMintTokens<'info> {
 
     /// CHECK: Energy token program's token_info PDA
     #[account(mut)]
-    pub token_info: AccountInfo<'info>,
+    pub token_info: UncheckedAccount<'info>,
 
     /// CHECK: Energy token mint account
     #[account(mut)]
-    pub mint: AccountInfo<'info>,
+    pub mint: UncheckedAccount<'info>,
 
     /// CHECK: User's token account for receiving minted tokens
     #[account(mut)]
-    pub user_token_account: AccountInfo<'info>,
+    pub user_token_account: UncheckedAccount<'info>,
 
     /// CHECK: Authority that can mint tokens (usually program authority)
     /// We use the Registry account itself as the authority signer
@@ -1230,14 +1230,14 @@ pub struct SettleAndMintTokens<'info> {
 
     /// The energy token program
     /// CHECK: This is validated by the CPI call
-    pub energy_token_program: AccountInfo<'info>,
+    pub energy_token_program: UncheckedAccount<'info>,
 
     /// CHECK: SPL Token program
-    pub token_program: AccountInfo<'info>,
+    pub token_program: UncheckedAccount<'info>,
 
     /// CHECK: REC Validator co-signer (required when validators are registered in token_info)
     /// For registry->energy_token CPI, this can be the meter_owner or a separate validator
-    pub rec_validator: AccountInfo<'info>,
+    pub rec_validator: UncheckedAccount<'info>,
 }
 #[derive(Accounts)]
 pub struct MarkErcClaimed<'info> {
