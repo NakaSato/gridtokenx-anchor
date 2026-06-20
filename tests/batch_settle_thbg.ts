@@ -314,6 +314,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
       (await treasury.account.treasury.fetch(treasuryPda)).totalSettledThbg.toString()
     );
 
+    let settleSig: string | null = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash("confirmed");
       const msg = new TransactionMessage({ payerKey: authority, recentBlockhash: blockhash, instructions: [buyerEd, sellerEd, settleIx] }).compileToV0Message([alt]);
@@ -323,6 +324,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
         const sig = await provider.connection.sendTransaction(vtx, { skipPreflight: true });
         const conf = await provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
         if (conf.value.err) throw new Error("batch settle failed: " + JSON.stringify(conf.value.err));
+        settleSig = sig;
         break;
       } catch (e) {
         if (attempt === 4) throw e;
@@ -350,6 +352,17 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     // Buyer received the energy; total settled advanced.
     const buyerEngEscrow = escrowPda(buyer.publicKey, energyMintPda);
     expect(Number((await getAccount(provider.connection, buyerEngEscrow, undefined, TOKEN_2022_PROGRAM_ID)).amount)).to.equal(1 + matchAmount);
+
+    // §2b CU datapoint: batch settle of 1 match (escrow×3 + nullifier create×2 +
+    // 2 Ed25519 verifies + record_settlement_batch CPI). Capture the consumed CU
+    // and assert it stays inside the 1.4M max budget. (Single-match settle_offchain
+    // is ~103k CU per BENCHMARKS.md; the batch path adds the CPI + nullifier inits.)
+    expect(settleSig, "settle sig captured for CU read").to.not.be.null;
+    const txMeta = await provider.connection.getTransaction(settleSig!, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+    const cu = txMeta?.meta?.computeUnitsConsumed ?? 0;
+    console.log(`  [BENCH_BATCH_SETTLE_CU] matches=1 cu=${cu}`);
+    expect(cu, "batch settle CU recorded").to.be.greaterThan(0);
+    expect(cu, "batch settle CU under 1.4M max budget").to.be.lessThan(1_400_000);
   });
 
   it("rejects a THBG-market batch that omits the treasury accounts (TreasurySettlementRequired)", async () => {

@@ -114,7 +114,8 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
 - [x] `TreasurySettlementRequired` (6031) fires when treasury/settlement_record omitted on a THBG market — asserted via send + `conf.value.err` `Custom:6031`.
 - [x] Assert `total_settled_thbg` bumped by gross — happy-path captures the cumulative pre/post settle and asserts the delta == `total_value` (= `matchAmount*matchPrice`), not the VAT-adjusted/escrow-net figure. 2/2 on-chain.
 - [ ] `TreasuryCurrencyMismatch` (6030) on wrong currency — needs a 2nd currency mint + market reconfig (alt-currency escrows); heavier, deferred.
-- [ ] CU under budget (batch + CPI-init). Off-chain: rebuilt root == on-chain root.
+- [x] CU under budget (batch + CPI-init) — 1-match batch settle = **80 207 CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
+- [ ] Batch-CU curve at >1 match counts (per-match marginal CU); TPS sweep over the batch settle path.
 
 ## §3 — Feasibility spike (GATE — before any trustless work) — DO THIRD
 

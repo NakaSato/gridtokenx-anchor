@@ -150,8 +150,13 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   transfers + escrow/nullifier writes dominate, so the generic-OLTP figure
   materially *understates* per-trade compute. The §2b **batch** path
   (`batch_settle_offchain_match` → treasury `record_settlement_batch`) is also
-  on-chain verified now (`tests/batch_settle_thbg.ts`). Still TODO: a TPS sweep
-  over this path, and a batch-CU datapoint at varying match counts.
+  on-chain verified now (`tests/batch_settle_thbg.ts`). **Batch CU, 1 match =
+  80 207 CU** (`BENCH_BATCH_SETTLE_CU` probe, both mints Token-2022, +
+  `record_settlement_batch` CPI + 2 in-loop nullifier creates), captured against
+  the same validator. Lower than the 103 363 single-match figure above because
+  that run paid a classic-SPL→Token-2022 cross-program currency leg; here both
+  legs are Token-2022. Still TODO: a TPS sweep over this path, and the batch-CU
+  curve at >1 match counts (per-match marginal CU).
 - **[CRIT]** **Multi-validator** (3–4 PoA nodes). A single validator measures
   no consensus cost, yet "block-time is the bottleneck" is the headline claim.
 - **[CRIT]** **Open-loop load** (fix arrival rate λ, ramp to saturation) and
