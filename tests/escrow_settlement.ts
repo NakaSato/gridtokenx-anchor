@@ -465,6 +465,27 @@ describe("escrow-settlement", () => {
     }
     if (!sig) throw lastErr;
 
+    // BENCH (paper review #3): record the real compute-units the settle_offchain_match
+    // settlement tx consumes. This is the meaningful on-chain cost metric — deterministic
+    // and validator-independent, unlike localnet wall latency (the paper treats slot time
+    // as a design target, not a measurement). Grep mocha output for `BENCH_SETTLE_CU`.
+    {
+      const txInfo = await provider.connection.getTransaction(sig, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+      const cu = txInfo?.meta?.computeUnitsConsumed ?? null;
+      console.log(
+        "BENCH_SETTLE_CU " +
+          JSON.stringify({
+            instruction: "settle_offchain_match",
+            compute_units: cu,
+            match_amount: matchAmount,
+            price: matchPrice,
+          })
+      );
+    }
+
     // total = 100*50 = 5000; fee = 5000*25/10000 = 12; wheeling=1; loss=1; net = 4986.
     // seller/buyer escrows use fresh keys each run (seeded with 1), so absolute checks hold.
     const sellerCurEscrow = escrowPda(seller.kp.publicKey, currencyMint);
