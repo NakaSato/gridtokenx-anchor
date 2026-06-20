@@ -74,7 +74,7 @@ Goal: enrich settlement recording with a tamper-evidence root + VAT audit data. 
 - [x] T2b.2 Added `settlement_record: Option<UncheckedAccount>` (mut) to `SettleOffchainMatchBatchContext` (`payer`/`system_program`/`treasury_*` already present). **(compile-verified)**
 - [x] T2b.3 Post-loop treasury block now calls `treasury::cpi::record_settlement_batch(value, merkle_root, vat_amount, vat_rate_bps, zone_market.zone_id, batch_id)` with `RecordSettlementBatch { treasury, settlement_record, recorder: market_authority, payer, system_program }`, `new_with_signer`. `TreasurySettlementRequired`/`TreasuryCurrencyMismatch` preserved; `settlement_record` required when recording fires. **(compile-verified; IDL confirms args + account)**
 - [x] T2b.4 Single `settle_offchain_match` left on `record_settlement` (per-batch commitment only).
-- [ ] T2b.5 Client/`scripts`: derive the `settlement_record` PDA `[b"settlement", zone_id_le, batch_id_le]` under the **treasury** program id and pass it. **(pending — needs the batch caller path)**
+- [x] T2b.5 Client PDA helper added: `scripts/settlement-pda.ts` → `settlementRecordPda(zoneId, batchId)` derives `[b"settlement", zone_id_le(u32), batch_id_le(u64)]` under the treasury program. **Verified** it matches the litesvm test's on-chain-confirmed derivation (`HHYQ…` for zone 301/batch 42). Wiring it into an actual batch-settle caller still needs the off-chain match flow (validator-bound).
 
 > **Verification status:** §2b is **compile-verified** end-to-end (trading→treasury CPI resolves; `anchor build` exit 0; IDL shows the new args + `settlement_record`). It is **not runtime-tested** — the batch settle path needs a live validator (`anchor test`). The CI test below is still TODO.
 
