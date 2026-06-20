@@ -967,6 +967,156 @@ pub mod registry {
         });
         Ok(())
     }
+
+    /// Multi-victim variant of `slash_validator` (T1.3): slash an Active validator's
+    /// bond by `slash_bps` and distribute the capped compensation **pro-rata across
+    /// several harmed parties** by their proven loss, routing the remainder to the
+    /// configured fund. The single-victim `slash_validator` above is unchanged.
+    ///
+    /// Victim token accounts are passed as `remaining_accounts` (all GRX, all `mut`),
+    /// in the same order as `victim_losses` (the per-victim governance-attested loss).
+    /// Let `total_loss = Σ victim_losses` and `pool = min(slash_amount, total_loss)`;
+    /// victim `i` receives `pool * victim_losses[i] / total_loss` (integer division —
+    /// rounding dust falls to the fund). The fund receives `slash_amount − Σ paid`.
+    /// Value invariant: `slash_amount == Σ paid + fund_amount`.
+    pub fn slash_validator_multi<'info>(
+        ctx: Context<'info, SlashValidatorMulti<'info>>,
+        slash_bps: u16,
+        victim_losses: Vec<u64>,
+    ) -> Result<()> {
+        require!(
+            slash_bps > 0 && slash_bps <= 10_000,
+            RegistryError::InvalidSlashFraction
+        );
+        require!(
+            victim_losses.len() == ctx.remaining_accounts.len(),
+            RegistryError::VictimCountMismatch
+        );
+        // PoA gate — authority + configured destination, identical to slash_validator.
+        {
+            let registry = ctx.accounts.registry.load()?;
+            require_keys_eq!(
+                ctx.accounts.authority.key(),
+                registry.authority,
+                RegistryError::UnauthorizedAuthority
+            );
+            require!(
+                registry.has_slash_destination == 1,
+                RegistryError::SlashDestinationNotSet
+            );
+            require_keys_eq!(
+                ctx.accounts.slash_destination.key(),
+                registry.slash_destination,
+                RegistryError::InvalidSlashDestination
+            );
+        }
+        compute_fn!("slash_validator_multi" => {
+            let (slash_amount, pool, total_loss, remaining) = {
+                let user_account = ctx.accounts.target_user_account.load()?;
+                require!(
+                    user_account.validator_status == ValidatorStatus::Active,
+                    RegistryError::NotActiveValidator
+                );
+                require!(
+                    user_account.staked_grx > 0,
+                    RegistryError::InsufficientStakingBalance
+                );
+                let bond = user_account.staked_grx;
+                let slash_amount = ((bond as u128)
+                    .checked_mul(slash_bps as u128)
+                    .ok_or(RegistryError::MathOverflow)?
+                    / 10_000u128) as u64;
+                let slash_amount = slash_amount.min(bond);
+                // total proven loss across victims; compensation pool capped at it.
+                let total_loss = victim_losses
+                    .iter()
+                    .try_fold(0u64, |a, &l| a.checked_add(l))
+                    .ok_or(RegistryError::MathOverflow)?;
+                let pool = slash_amount.min(total_loss);
+                let remaining = bond - slash_amount; // safe: slash_amount <= bond
+                (slash_amount, pool, total_loss, remaining)
+            };
+
+            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
+            let signer = &[&registry_seeds[..]];
+            let decimals = ctx.accounts.grx_mint.decimals;
+
+            // Pro-rata victim payouts (skipped entirely when total_loss == 0).
+            let mut paid: u64 = 0;
+            if total_loss > 0 && pool > 0 {
+                for (i, victim_ai) in ctx.remaining_accounts.iter().enumerate() {
+                    // comp_i = pool * victim_losses[i] / total_loss (u128, floor).
+                    let comp_i = ((pool as u128)
+                        .checked_mul(victim_losses[i] as u128)
+                        .ok_or(RegistryError::MathOverflow)?
+                        / total_loss as u128) as u64;
+                    if comp_i == 0 {
+                        continue;
+                    }
+                    let cpi_accounts = token_interface::TransferChecked {
+                        from: ctx.accounts.grx_vault.to_account_info(),
+                        to: victim_ai.clone(),
+                        authority: ctx.accounts.registry.to_account_info(),
+                        mint: ctx.accounts.grx_mint.to_account_info(),
+                    };
+                    token_interface::transfer_checked(
+                        CpiContext::new_with_signer(
+                            ctx.accounts.token_program.key(),
+                            cpi_accounts,
+                            signer,
+                        ),
+                        comp_i,
+                        decimals,
+                    )?;
+                    paid = paid.checked_add(comp_i).ok_or(RegistryError::MathOverflow)?;
+                }
+            }
+
+            // Fund remainder = everything not paid to victims (incl. rounding dust).
+            let fund_amount = slash_amount - paid; // safe: paid <= pool <= slash_amount
+            require!(
+                slash_amount == paid + fund_amount,
+                RegistryError::SlashAccountingMismatch
+            );
+            if fund_amount > 0 {
+                let cpi_accounts = token_interface::TransferChecked {
+                    from: ctx.accounts.grx_vault.to_account_info(),
+                    to: ctx.accounts.slash_destination.to_account_info(),
+                    authority: ctx.accounts.registry.to_account_info(),
+                    mint: ctx.accounts.grx_mint.to_account_info(),
+                };
+                token_interface::transfer_checked(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.key(),
+                        cpi_accounts,
+                        signer,
+                    ),
+                    fund_amount,
+                    decimals,
+                )?;
+            }
+
+            let mut user_account = ctx.accounts.target_user_account.load_mut()?;
+            user_account.staked_grx = remaining;
+            if slash_bps == 10_000 || remaining == 0 {
+                user_account.validator_status = ValidatorStatus::Slashed;
+            } else if remaining < MIN_VALIDATOR_STAKE {
+                user_account.validator_status = ValidatorStatus::Suspended;
+            }
+
+            let now = Clock::get()?.unix_timestamp;
+            emit!(ValidatorSlashed {
+                validator: ctx.accounts.target_authority.key(),
+                slashed_amount: slash_amount,
+                compensation: paid,
+                fund_amount,
+                proven_loss: total_loss,
+                remaining_stake: remaining,
+                timestamp: now,
+            });
+        });
+        Ok(())
+    }
 }
 
 // Internal helpers
@@ -1508,4 +1658,52 @@ pub struct SlashValidator<'info> {
     pub authority: Signer<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
+}
+
+/// Multi-victim slash (T1.3). Same as `SlashValidator` but the victim token
+/// accounts are passed as `remaining_accounts` (all GRX, all `mut`), parallel to
+/// the `victim_losses` arg, instead of a single `victim_token_account`.
+#[derive(Accounts)]
+pub struct SlashValidatorMulti<'info> {
+    /// CHECK: the validator being slashed; only used to derive its UserAccount PDA and label the event.
+    pub target_authority: UncheckedAccount<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"user", target_authority.key().as_ref()],
+        bump,
+    )]
+    pub target_user_account: AccountLoader<'info, UserAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"grx_vault"],
+        bump,
+        token::mint = grx_mint,
+        token::authority = registry,
+        token::token_program = token_program,
+    )]
+    pub grx_vault: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        seeds = [b"registry"],
+        bump,
+    )]
+    pub registry: AccountLoader<'info, Registry>,
+
+    /// Transparent fund: destination for the slash remainder (e.g. treasury `reward_vault`).
+    #[account(
+        mut,
+        token::mint = grx_mint,
+        token::token_program = token_program,
+    )]
+    pub slash_destination: InterfaceAccount<'info, TokenAccount>,
+
+    pub grx_mint: InterfaceAccount<'info, Mint>,
+
+    /// PoA authority — must equal `registry.authority`.
+    pub authority: Signer<'info>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+    // remaining_accounts: N victim GRX token accounts (mut), parallel to victim_losses.
 }

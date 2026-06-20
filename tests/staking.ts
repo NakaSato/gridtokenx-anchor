@@ -2,13 +2,15 @@ import * as anchor from "@anchor-lang/core";
 import { Program } from "@anchor-lang/core";
 import { Registry } from "../target/types/registry";
 import { expect } from "chai";
-import { 
-  PublicKey, 
-  Keypair, 
-  SystemProgram, 
-  Transaction, 
-  sendAndConfirmTransaction 
+import {
+  PublicKey,
+  Keypair,
+  SystemProgram,
+  Transaction,
+  TransactionInstruction,
+  sendAndConfirmTransaction
 } from "@solana/web3.js";
+import { createHash } from "crypto";
 import { 
   createMint, 
   getOrCreateAssociatedTokenAccount, 
@@ -465,6 +467,13 @@ describe("registry_staking", () => {
   const statusOf = async (pda: PublicKey) =>
     Object.keys((await program.account.userAccount.fetch(pda)).validatorStatus)[0];
 
+  // slash_validator_multi is called via a hand-built ix (it post-dates the
+  // checked-in IDL; rebuilding the IDL hits the registry keypair friction).
+  const disc = (name: string) => createHash("sha256").update(`global:${name}`).digest().subarray(0, 8);
+  const u16le = (n: number) => { const b = Buffer.alloc(2); b.writeUInt16LE(n); return b; };
+  const u32le = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32LE(n); return b; };
+  const u64le = (n: BN) => n.toArrayLike(Buffer, "le", 8);
+
   it("partial slash demotes to Suspended when remaining < MIN_VALIDATOR_STAKE", async () => {
     const v = await setupValidator(MIN); // bond == MIN
     const victim = await freshAta(Keypair.generate().publicKey);
@@ -520,6 +529,46 @@ describe("registry_staking", () => {
     }
     console.log(`  [BENCH_SLASH_CU] slash_validator (comp+fund) cu=${cu}`);
     expect(cu).to.be.greaterThan(0).and.lessThan(200_000); // well inside the 200k default budget
+  });
+
+  it("multi-victim slash pays compensation pro-rata by proven loss (T1.3)", async () => {
+    const v = await setupValidator(MIN.muln(2)); // 20,000 GRX bond
+    const victimA = await freshAta(Keypair.generate().publicKey);
+    const victimB = await freshAta(Keypair.generate().publicKey);
+    const [aBefore, bBefore, destBefore, vaultBefore] =
+      [await bal(victimA), await bal(victimB), await bal(slashDest), await bal(vaultPda)];
+
+    // 50% slash = 10,000 GRX. Losses A=3,000, B=1,000 (total 4,000 < slash) → pool
+    // 4,000; A gets 4000*3000/4000=3,000, B gets 1,000; fund = 10,000 − 4,000 = 6,000.
+    const lossA = GRX(3000), lossB = GRX(1000);
+    const data = Buffer.concat([
+      disc("slash_validator_multi"), u16le(5000),
+      u32le(2), u64le(lossA), u64le(lossB), // Vec<u64> victim_losses
+    ]);
+    const keys = [
+      { pubkey: v.kp.publicKey, isSigner: false, isWritable: false }, // target_authority
+      { pubkey: v.userPda, isSigner: false, isWritable: true },        // target_user_account
+      { pubkey: vaultPda, isSigner: false, isWritable: true },         // grx_vault
+      { pubkey: registryPda, isSigner: false, isWritable: false },     // registry
+      { pubkey: slashDest, isSigner: false, isWritable: true },        // slash_destination
+      { pubkey: grxMint, isSigner: false, isWritable: false },         // grx_mint
+      { pubkey: authority, isSigner: true, isWritable: false },        // authority
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false }, // token_program
+      { pubkey: victimA, isSigner: false, isWritable: true },          // remaining[0]
+      { pubkey: victimB, isSigner: false, isWritable: true },          // remaining[1]
+    ];
+    const ix = new TransactionInstruction({ programId: program.programId, keys, data });
+    await provider.sendAndConfirm(new Transaction().add(ix));
+
+    const acc = await program.account.userAccount.fetch(v.userPda);
+    expect((await bal(victimA)).sub(aBefore).toString()).to.equal(GRX(3000).toString());
+    expect((await bal(victimB)).sub(bBefore).toString()).to.equal(GRX(1000).toString());
+    expect((await bal(slashDest)).sub(destBefore).toString()).to.equal(GRX(6000).toString());
+    // Invariant: victims + fund == slash_amount == vault drain (10,000).
+    expect(vaultBefore.sub(await bal(vaultPda)).toString()).to.equal(GRX(10000).toString());
+    // remaining 10,000 == MIN → stays Active.
+    expect(Object.keys(acc.validatorStatus)[0]).to.equal("active");
+    expect(acc.stakedGrx.toString()).to.equal(MIN.toString());
   });
 
   // Skipped on a live validator: unstake_grx enforces the 24h UNSTAKE_COOLDOWN_SECS

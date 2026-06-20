@@ -52,4 +52,6 @@ pub enum RegistryError {
     InvalidSlashFraction,
     #[msg("Slash accounting mismatch: slashed != compensation + fund")]
     SlashAccountingMismatch,
+    #[msg("victim_losses length must equal the number of victim token accounts passed")]
+    VictimCountMismatch,
 }
