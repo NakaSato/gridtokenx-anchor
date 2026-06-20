@@ -5,26 +5,29 @@ description: Use this skill whenever the user is working on the on-chain Anchor 
 
 # GridTokenX Anchor Programs
 
-Five on-chain Anchor programs forming the GridTokenX P2P energy-trading platform on Solana (localnet / permissioned PoA). They share hard conventions that must be preserved on every edit.
+Six core on-chain Anchor programs (`energy-token`, `governance`, `oracle`, `registry`, `trading`, `treasury`) forming the GridTokenX P2P energy-trading platform on Solana (localnet / permissioned PoA), plus two benchmark crates (`blockbench`, `tpc-benchmark`). They share hard conventions that must be preserved on every edit.
 
 ## Repo layout
 
 There is **no root `Cargo.toml` workspace**. Each program in `programs/*` is an **independent crate**; `Anchor.toml` is the only top-level manifest. Shared logic lives in `shared/`.
 
 ```
-Anchor.toml                 # [toolchain] empty (CLI version unpinned); [programs.localnet] declares 7 IDs
+Anchor.toml                 # [toolchain] empty (CLI version unpinned); [programs.localnet] declares 8 IDs
 programs/
 ├── energy-token/           # GRID (1 kWh = 1 GRID) + GRX SPL-2022 mint; REC-validator gated
 ├── governance/             # PoA authority; ERC-1155-style RECs; DAO; 2-step authority transfer (handlers/, state/)
 ├── oracle/                 # AMI-gateway bridge; per-meter PDA state; market-clearing epochs
 ├── registry/               # user + meter accounts; 16-shard counter; staking + validator registration
-└── trading/                # order book, CDA; sharded order submit; off-chain-signed match settlement (instructions/, state/)
+├── trading/                # order book, CDA; sharded order submit; off-chain-signed match settlement (instructions/, state/)
+├── treasury/               # GRX↔THBG swap, GRX yield-staking, baht settlement accounting + per-(zone,batch) SettlementRecord
+├── blockbench/             # BlockBench OLTP/SmallBank benchmark crate (source in src/)
+└── tpc-benchmark/          # TPC-C stress benchmark crate (source in src/)
 shared/
 ├── core/                   # shared on-chain types + version
 └── compute-debug/          # compute-unit profiling macros (feature-gated)
 ```
 
-`blockbench` and `tpc_benchmark` are **precompiled benchmark programs** (no source in `programs/`) declared in `Anchor.toml [programs.localnet]` so the test validator deploys them on localnet startup.
+`blockbench` and `tpc_benchmark` are **benchmark crates** (`programs/blockbench/`, `programs/tpc-benchmark/`) declared in `Anchor.toml [programs.localnet]` so the test validator deploys them on localnet startup. (Earlier SKILL revisions called them "precompiled, no source" — that is stale; both have source under `programs/`.)
 
 Program IDs (from `Anchor.toml` — verified to match `declare_id!` in each `lib.rs`; do not change without `anchor keys sync` + updating `declare_id!`):
 
@@ -35,6 +38,7 @@ Program IDs (from `Anchor.toml` — verified to match `declare_id!` in each `lib
 | `oracle`       | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU`   |
 | `registry`     | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7`   |
 | `trading`      | `CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX`   |
+| `treasury`     | `FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn`   |
 | `blockbench`   | `9AM4JkvUkK8ZfRneTAQVahFgPe9rEisNkB9byRfZ4TwT`   |
 | `tpc_benchmark`| `ELv3cWARDqNLgv7A7dochy2CC4Ke9wdgAHvkU3wCwQha`   |
 
@@ -156,7 +160,7 @@ Tests use `AnchorProvider` against a live validator (import from `@anchor-lang/c
    cp programs/oracle/target/deploy/oracle.so target/deploy/oracle.so
    ```
 2. **Test runner is `mocha -r tsx`** (in `Anchor.toml`), not `ts-mocha` — fixes ESM module resolution conflicts.
-3. **Precompiled benchmarks** (`blockbench`, `tpc_benchmark`) must stay in `Anchor.toml [programs.localnet]` so the test validator deploys them on startup.
+3. **Benchmark crates** (`blockbench`, `tpc_benchmark`) must stay in `Anchor.toml [programs.localnet]` so the test validator deploys them on startup.
 4. **Time in tests**: don't `sleep` to advance time. Construct initial states with past timestamps (e.g. `timestamp.sub(new BN(70))`) to pass rate-limit / monotonicity checks without races.
 5. **Apple Silicon validator crash**: `solana-test-validator` on M-series panics under load ("Too many open files"). Run `ulimit -n 65536` before launching (the superproject `scripts/app.sh` handles this).
 6. **Arithmetic**: use `checked_*` / `saturating_*` for every on-chain arithmetic op. Every program's `Cargo.toml` also sets `[profile.release] overflow-checks = true` (cargo build-sbf defaults to off, which silently wraps), so any bare `+`/`-`/`*` that slips through panics instead of corrupting state. **New programs must include the same profile block.**
