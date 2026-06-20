@@ -76,14 +76,37 @@ Goal: enrich settlement recording with a tamper-evidence root + VAT audit data. 
 - [x] T2b.4 Single `settle_offchain_match` left on `record_settlement` (per-batch commitment only).
 - [x] T2b.5 Client PDA helper added: `scripts/settlement-pda.ts` → `settlementRecordPda(zoneId, batchId)` derives `[b"settlement", zone_id_le(u32), batch_id_le(u64)]` under the treasury program. **Verified** it matches the litesvm test's on-chain-confirmed derivation (`HHYQ…` for zone 301/batch 42). Wiring it into an actual batch-settle caller still needs the off-chain match flow (validator-bound).
 
-> **Verification status:** §2b is **compile-verified** end-to-end (trading→treasury CPI resolves; `anchor build` exit 0; IDL shows the new args + `settlement_record`). It is **not runtime-tested** — the batch settle path needs a live validator (`anchor test`). The CI test below is still TODO.
+> **Verification status:** §2b is **compile-verified** (trading→treasury CPI resolves; `anchor build` exit 0; IDL shows the new args + `settlement_record`). The **single** `settle_offchain_match` path — including the `record_settlement` treasury CPI — is now **on-chain verified** via `tests/escrow_settlement.ts` (the full signed off-chain settle passes on a live validator). The **batch** path runtime test (`record_settlement_batch` + per-batch `SettlementRecord`) is still TODO — see below.
 
-Tests (anchor-provider / CI, mirror `tests/escrow_settlement.ts`):
-- [ ] Batch THBG settle writes the `SettlementRecord` (root/VAT/zone/batch) and bumps `total_settled_thbg` by gross.
-- [ ] `TreasurySettlementRequired` still fires when treasury accounts omitted on a THBG market.
+### On-chain test recipe (reproducible — this is how A2 was run)
+
+The in-session validator dies on a default TTL; disable it and run the full chain:
+
+```bash
+SOLANA_VALIDATOR_TTL=0 just solana-up          # fresh validator, no auto-kill (superproject dir)
+export ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=$HOME/.config/solana/id.json
+anchor deploy --provider.cluster http://localhost:8899   # my wallet = upgrade authority (fresh chain)
+npx tsx scripts/bootstrap.ts                    # creates the Token-2022 energy mint (mint_2022) + base state
+# for THBG-market tests also: npx tsx scripts/init-treasury.ts
+npx mocha -r tsx tests/<suite>.ts --timeout 1000000
+```
+
+Gotchas learned: (1) a pre-existing validator deployed by another upgrade authority can't be upgraded — use a fresh chain you deploy; (2) energy mint is Token-2022, currency is classic — token programs must match per mint; (3) Anchor 1.0 needs optional accounts passed as `null`; (4) the long settle test is sensitive to validator websocket-pubsub flakiness on confirm.
+
+### A2 provider regression — DONE (on-chain, this session)
+
+- [x] `tests/treasury.ts` — 9/9 (swap/stake/redeem/slashStake; §2a treasury clean)
+- [x] `tests/staking.ts` — 7/7 (§1 slash: reject non-auth + full slash → fund → Slashed; outdated tests fixed in `f06ee5d`)
+- [x] `tests/escrow_settlement.ts` — 4/4 across runs (token-program + optional-account fixes in `7cfb5e0`/`62aad8a`; the signed off-chain **settle passes**, proving the `record_settlement` CPI on-chain)
+
+### §2b batch runtime — TODO (large)
+
+Tests (anchor-provider, mirror `tests/escrow_settlement.ts` + a THBG market):
+- [ ] Setup: `init-treasury.ts` (sets `settlement_thbg_mint`), attest reserve, users swap GRX→THBG, deposit THBG + energy escrows.
+- [ ] Batch THBG settle writes the `SettlementRecord` (root/VAT/zone/batch, via `scripts/settlement-pda.ts`) and bumps `total_settled_thbg` by gross.
+- [ ] `TreasurySettlementRequired` fires when treasury/settlement_record omitted on a THBG market.
 - [ ] `TreasuryCurrencyMismatch` on wrong currency.
-- [ ] CU under budget (batch + CPI-init).
-- [ ] Off-chain: rebuild root from match leaves == on-chain root.
+- [ ] CU under budget (batch + CPI-init). Off-chain: rebuilt root == on-chain root.
 
 ## §3 — Feasibility spike (GATE — before any trustless work) — DO THIRD
 
