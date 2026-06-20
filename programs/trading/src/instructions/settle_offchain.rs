@@ -306,6 +306,11 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     pub treasury_program: Option<Program<'info, treasury::program::Treasury>>,
     #[account(mut)]
     pub treasury_state: Option<AccountLoader<'info, treasury::Treasury>>,
+    /// Per-`(zone, batch)` treasury `SettlementRecord` PDA, created via CPI when
+    /// the batch is committed. Required whenever treasury recording fires.
+    /// CHECK: address + init validated by the treasury program's seeds.
+    #[account(mut)]
+    pub settlement_record: Option<UncheckedAccount<'info>>,
 }
 
 pub fn settle_offchain_match(
@@ -513,6 +518,10 @@ pub fn settle_offchain_match(
 pub fn batch_settle_offchain_match<'info>(
     ctx: Context<'info, SettleOffchainMatchBatchContext<'info>>,
     matches: Vec<BatchMatchPair>,
+    merkle_root: [u8; 32],
+    vat_amount: u64,
+    vat_rate_bps: u16,
+    batch_id: u64,
 ) -> Result<()> {
     compute_fn!("batch_settle_offchain_match" => {
     let match_count = matches.len();
@@ -716,16 +725,31 @@ pub fn batch_settle_offchain_match<'info>(
                 TradingError::TreasuryCurrencyMismatch
             );
             if batch_total_value > 0 {
-                treasury::cpi::record_settlement(
+                // Per-batch audit commitment: bind the Merkle root + VAT to this
+                // zone's batch via the treasury SettlementRecord (CPI-init).
+                let settlement_record = ctx
+                    .accounts
+                    .settlement_record
+                    .as_ref()
+                    .ok_or(TradingError::TreasurySettlementRequired)?;
+                treasury::cpi::record_settlement_batch(
                     CpiContext::new_with_signer(
                         treasury_program.key(),
-                        treasury::cpi::accounts::RecordSettlement {
+                        treasury::cpi::accounts::RecordSettlementBatch {
                             treasury: treasury_state.to_account_info(),
+                            settlement_record: settlement_record.to_account_info(),
                             recorder: ctx.accounts.market_authority.to_account_info(),
+                            payer: ctx.accounts.payer.to_account_info(),
+                            system_program: ctx.accounts.system_program.to_account_info(),
                         },
                         signer,
                     ),
                     batch_total_value,
+                    merkle_root,
+                    vat_amount,
+                    vat_rate_bps,
+                    zone_market.zone_id,
+                    batch_id,
                 )?;
             }
         }

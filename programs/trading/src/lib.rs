@@ -582,8 +582,19 @@ pub mod trading {
     pub fn batch_settle_offchain_match<'info>(
         ctx: Context<'info, SettleOffchainMatchBatchContext<'info>>,
         matches: Vec<BatchMatchPair>,
+        merkle_root: [u8; 32],
+        vat_amount: u64,
+        vat_rate_bps: u16,
+        batch_id: u64,
     ) -> Result<()> {
-        instructions::batch_settle_offchain_match(ctx, matches)
+        instructions::batch_settle_offchain_match(
+            ctx,
+            matches,
+            merkle_root,
+            vat_amount,
+            vat_rate_bps,
+            batch_id,
+        )
     }
 
     /// CDA (Continuous Double Auction) Limit Order
