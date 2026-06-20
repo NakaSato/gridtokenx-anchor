@@ -318,15 +318,21 @@ describe("registry_staking", () => {
       provider.connection, (provider.wallet as any).payer, grxMint, authority,
       false, undefined, undefined, TOKEN_2022_PROGRAM_ID,
     );
+    // Victim account must be distinct from the fund (no duplicate mutable account).
+    const victim = await getOrCreateAssociatedTokenAccount(
+      provider.connection, (provider.wallet as any).payer, grxMint, userKeypair.publicKey,
+      false, undefined, undefined, TOKEN_2022_PROGRAM_ID,
+    );
     try {
       await program.methods
-        .slashValidator(new BN(1_000_000_000))
+        .slashValidator(10_000, new BN(0)) // full slash (bps), no proven loss
         .accounts({
           targetAuthority: userKeypair.publicKey,
           targetUserAccount: userPda,
           grxVault: vaultPda,
           registry: registryPda,
           slashDestination: dest.address,
+          victimTokenAccount: victim.address, // unused (proven_loss = 0); distinct from fund
           grxMint,
           authority: userKeypair.publicKey, // wrong authority (registry.authority is the provider wallet)
           tokenProgram: TOKEN_2022_PROGRAM_ID,
@@ -344,8 +350,11 @@ describe("registry_staking", () => {
       provider.connection, (provider.wallet as any).payer, grxMint, authority,
       false, undefined, undefined, TOKEN_2022_PROGRAM_ID,
     );
-    const slash = new BN(5_000_000_000_000); // 5,000 GRX
-
+    // Victim account must be distinct from the fund (no duplicate mutable account).
+    const victim = await getOrCreateAssociatedTokenAccount(
+      provider.connection, (provider.wallet as any).payer, grxMint, userKeypair.publicKey,
+      false, undefined, undefined, TOKEN_2022_PROGRAM_ID,
+    );
     // Configure the allowed slash sink first — slash_validator refuses any other destination.
     await program.methods
       .setSlashDestination(dest.address)
@@ -356,14 +365,17 @@ describe("registry_staking", () => {
     const destBefore = await getAccount(provider.connection, dest.address, undefined, TOKEN_2022_PROGRAM_ID);
     const vaultBefore = await getAccount(provider.connection, vaultPda, undefined, TOKEN_2022_PROGRAM_ID);
 
+    // Full slash (10000 bps), proven_loss = 0 → compensation 0, the entire bond
+    // goes to the transparent fund (slashDestination); status becomes terminal Slashed.
     await program.methods
-      .slashValidator(slash)
+      .slashValidator(10_000, new BN(0))
       .accounts({
         targetAuthority: userKeypair.publicKey,
         targetUserAccount: userPda,
         grxVault: vaultPda,
         registry: registryPda,
         slashDestination: dest.address,
+        victimTokenAccount: victim.address, // unused (proven_loss = 0); distinct from fund
         grxMint,
         authority, // registry authority = provider wallet (default signer)
         tokenProgram: TOKEN_2022_PROGRAM_ID,
@@ -372,12 +384,14 @@ describe("registry_staking", () => {
 
     const userAcc = await program.account.userAccount.fetch(userPda);
     expect(Object.keys(userAcc.validatorStatus)[0]).to.equal("slashed");
-    expect(stakedBefore.sub(userAcc.stakedGrx).toString()).to.equal(slash.toString());
+    // Full forfeiture: remaining stake is zero, entire bond slashed.
+    expect(userAcc.stakedGrx.toString()).to.equal("0");
 
     const destAfter = await getAccount(provider.connection, dest.address, undefined, TOKEN_2022_PROGRAM_ID);
     const vaultAfter = await getAccount(provider.connection, vaultPda, undefined, TOKEN_2022_PROGRAM_ID);
-    expect((destAfter.amount - destBefore.amount).toString()).to.equal(slash.toString());
-    expect((vaultBefore.amount - vaultAfter.amount).toString()).to.equal(slash.toString());
+    // proven_loss = 0 → all to fund, none to victim; vault drained by the full bond.
+    expect((destAfter.amount - destBefore.amount).toString()).to.equal(stakedBefore.toString());
+    expect((vaultBefore.amount - vaultAfter.amount).toString()).to.equal(stakedBefore.toString());
   });
 
   // Skipped on a live validator: unstake_grx enforces the 24h UNSTAKE_COOLDOWN_SECS
