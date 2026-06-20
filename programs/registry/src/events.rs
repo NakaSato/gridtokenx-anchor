@@ -108,6 +108,9 @@ pub struct Unstaked {
 pub struct ValidatorSlashed {
     pub validator: Pubkey,
     pub slashed_amount: u64,
+    pub compensation: u64,
+    pub fund_amount: u64,
+    pub proven_loss: u64,
     pub remaining_stake: u64,
     pub timestamp: i64,
 }

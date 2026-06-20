@@ -824,10 +824,30 @@ pub mod registry {
     ///
     /// The target validator is identified by `target_authority`; its `UserAccount` PDA is
     /// passed mutably. The slashed amount is capped at the validator's staked balance.
-    pub fn slash_validator(ctx: Context<SlashValidator>, amount: u64) -> Result<()> {
-        require!(amount > 0, RegistryError::MinStakeNotMet);
+    /// Slash a validator's GRX bond by a severity fraction, compensating proven
+    /// victims (capped at their on-chain-provable loss) and routing the remainder to
+    /// the transparent fund (`slash_destination`, e.g. treasury `reward_vault`).
+    ///
+    /// `slash_bps` — severity in basis points (1..=10000); `slash_amount = bond * bps / 10000`.
+    /// `proven_loss` — total provable victim loss (governance-attested). Compensation is
+    /// `min(slash_amount, proven_loss)`, paid to `victim_token_account`; the rest is the
+    /// fund remainder. Value-accounting invariant: `slash_amount == compensation + fund`.
+    ///
+    /// Status: full forfeiture (bps == 10000 or bond fully consumed) → terminal `Slashed`;
+    /// a partial slash that drops the remaining bond below `MIN_VALIDATOR_STAKE` → `Suspended`
+    /// (recoverable by topping up + re-`register_validator`); otherwise stays `Active`.
+    pub fn slash_validator(
+        ctx: Context<SlashValidator>,
+        slash_bps: u16,
+        proven_loss: u64,
+    ) -> Result<()> {
+        require!(
+            slash_bps > 0 && slash_bps <= 10_000,
+            RegistryError::InvalidSlashFraction
+        );
         // PoA gate: only the registry authority may slash, and only to the configured
-        // slash destination (e.g. treasury reward_vault) so a slash cannot be misrouted.
+        // slash destination (e.g. treasury reward_vault) so the fund remainder cannot
+        // be misrouted.
         {
             let registry = ctx.accounts.registry.load()?;
             require_keys_eq!(
@@ -846,7 +866,7 @@ pub mod registry {
             );
         }
         compute_fn!("slash_validator" => {
-            let slashed = {
+            let (slash_amount, compensation, fund_amount, remaining) = {
                 let user_account = ctx.accounts.target_user_account.load()?;
                 // Only an active validator can be slashed — never a plain staker or an
                 // already-slashed account.
@@ -858,36 +878,90 @@ pub mod registry {
                     user_account.staked_grx > 0,
                     RegistryError::InsufficientStakingBalance
                 );
-                amount.min(user_account.staked_grx)
+                let bond = user_account.staked_grx;
+                // slash_amount = bond * slash_bps / 10_000, capped at the bond.
+                let slash_amount = ((bond as u128)
+                    .checked_mul(slash_bps as u128)
+                    .ok_or(RegistryError::MathOverflow)?
+                    / 10_000u128) as u64;
+                let slash_amount = slash_amount.min(bond);
+                // Compensation capped at proven loss removes the bounty-gaming incentive.
+                let compensation = slash_amount.min(proven_loss);
+                let fund_amount = slash_amount - compensation; // safe: compensation <= slash_amount
+                let remaining = bond - slash_amount;            // safe: slash_amount <= bond
+                (slash_amount, compensation, fund_amount, remaining)
             };
 
-            let cpi_accounts = token_interface::TransferChecked {
-                from: ctx.accounts.grx_vault.to_account_info(),
-                to: ctx.accounts.slash_destination.to_account_info(),
-                authority: ctx.accounts.registry.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-            };
-            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
-            let signer = &[&registry_seeds[..]];
-            let cpi_ctx = CpiContext::new_with_signer(
-                ctx.accounts.token_program.key(),
-                cpi_accounts,
-                signer,
+            // Value-accounting invariant: nothing created or destroyed.
+            require!(
+                slash_amount == compensation + fund_amount,
+                RegistryError::SlashAccountingMismatch
             );
 
-            compute_checkpoint!("before_slash_transfer_cpi");
-            token_interface::transfer_checked(cpi_ctx, slashed, ctx.accounts.grx_mint.decimals)?;
-            compute_checkpoint!("after_slash_transfer_cpi");
+            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
+            let signer = &[&registry_seeds[..]];
+            let decimals = ctx.accounts.grx_mint.decimals;
+
+            // Victim compensation (skip zero-amount transfer).
+            if compensation > 0 {
+                let cpi_accounts = token_interface::TransferChecked {
+                    from: ctx.accounts.grx_vault.to_account_info(),
+                    to: ctx.accounts.victim_token_account.to_account_info(),
+                    authority: ctx.accounts.registry.to_account_info(),
+                    mint: ctx.accounts.grx_mint.to_account_info(),
+                };
+                compute_checkpoint!("before_victim_comp_cpi");
+                token_interface::transfer_checked(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.key(),
+                        cpi_accounts,
+                        signer,
+                    ),
+                    compensation,
+                    decimals,
+                )?;
+                compute_checkpoint!("after_victim_comp_cpi");
+            }
+
+            // Fund remainder to the configured destination (skip zero-amount transfer).
+            if fund_amount > 0 {
+                let cpi_accounts = token_interface::TransferChecked {
+                    from: ctx.accounts.grx_vault.to_account_info(),
+                    to: ctx.accounts.slash_destination.to_account_info(),
+                    authority: ctx.accounts.registry.to_account_info(),
+                    mint: ctx.accounts.grx_mint.to_account_info(),
+                };
+                compute_checkpoint!("before_fund_cpi");
+                token_interface::transfer_checked(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.key(),
+                        cpi_accounts,
+                        signer,
+                    ),
+                    fund_amount,
+                    decimals,
+                )?;
+                compute_checkpoint!("after_fund_cpi");
+            }
 
             let mut user_account = ctx.accounts.target_user_account.load_mut()?;
-            user_account.staked_grx = user_account.staked_grx.saturating_sub(slashed);
-            user_account.validator_status = ValidatorStatus::Slashed;
+            user_account.staked_grx = remaining;
+            if slash_bps == 10_000 || remaining == 0 {
+                // Full forfeiture is terminal — barred from re-registration.
+                user_account.validator_status = ValidatorStatus::Slashed;
+            } else if remaining < MIN_VALIDATOR_STAKE {
+                // Partial slash below the bond floor: suspend until topped up.
+                user_account.validator_status = ValidatorStatus::Suspended;
+            } // else: remains Active.
 
             let now = Clock::get()?.unix_timestamp;
             emit!(ValidatorSlashed {
                 validator: ctx.accounts.target_authority.key(),
-                slashed_amount: slashed,
-                remaining_stake: user_account.staked_grx,
+                slashed_amount: slash_amount,
+                compensation,
+                fund_amount,
+                proven_loss,
+                remaining_stake: remaining,
                 timestamp: now,
             });
         });
@@ -1411,13 +1485,22 @@ pub struct SlashValidator<'info> {
     )]
     pub registry: AccountLoader<'info, Registry>,
 
-    /// Destination for the slashed bond (e.g. treasury `reward_vault`).
+    /// Transparent fund: destination for the slash remainder (e.g. treasury `reward_vault`).
     #[account(
         mut,
         token::mint = grx_mint,
         token::token_program = token_program,
     )]
     pub slash_destination: InterfaceAccount<'info, TokenAccount>,
+
+    /// Harmed party's GRX token account, paid the capped victim compensation. When
+    /// `proven_loss == 0` no transfer occurs; pass any valid GRX account (e.g. the fund).
+    #[account(
+        mut,
+        token::mint = grx_mint,
+        token::token_program = token_program,
+    )]
+    pub victim_token_account: InterfaceAccount<'info, TokenAccount>,
 
     pub grx_mint: InterfaceAccount<'info, Mint>,
 

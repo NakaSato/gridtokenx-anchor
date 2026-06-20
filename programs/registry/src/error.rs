@@ -48,4 +48,8 @@ pub enum RegistryError {
     NotActiveValidator,
     #[msg("Validator has been slashed and cannot re-register")]
     ValidatorAlreadySlashed,
+    #[msg("Slash fraction must be between 1 and 10000 basis points")]
+    InvalidSlashFraction,
+    #[msg("Slash accounting mismatch: slashed != compensation + fund")]
+    SlashAccountingMismatch,
 }
