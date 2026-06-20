@@ -76,7 +76,7 @@ Goal: enrich settlement recording with a tamper-evidence root + VAT audit data. 
 - [x] T2b.4 Single `settle_offchain_match` left on `record_settlement` (per-batch commitment only).
 - [x] T2b.5 Client PDA helper added: `scripts/settlement-pda.ts` → `settlementRecordPda(zoneId, batchId)` derives `[b"settlement", zone_id_le(u32), batch_id_le(u64)]` under the treasury program. **Verified** it matches the litesvm test's on-chain-confirmed derivation (`HHYQ…` for zone 301/batch 42). Wiring it into an actual batch-settle caller still needs the off-chain match flow (validator-bound).
 
-> **Verification status:** §2b is **compile-verified** (trading→treasury CPI resolves; `anchor build` exit 0; IDL shows the new args + `settlement_record`). The **single** `settle_offchain_match` path — including the `record_settlement` treasury CPI — is now **on-chain verified** via `tests/escrow_settlement.ts` (the full signed off-chain settle passes on a live validator). The **batch** path runtime test (`record_settlement_batch` + per-batch `SettlementRecord`) is still TODO — see below.
+> **Verification status:** §2b is **on-chain verified, both paths.** The **single** `settle_offchain_match` path (incl. the `record_settlement` treasury CPI) passes via `tests/escrow_settlement.ts` (4/4). The **batch** path (`batch_settle_offchain_match` → `record_settlement_batch` + per-batch `SettlementRecord`) now passes via `tests/batch_settle_thbg.ts` (1/1). Getting the batch path green required a **program fix**: the batch handler read each `OrderNullifier` via `Account::try_from` and only updated `filled_amount` — it never created the PDA (the single path uses `init_if_needed`, which the `remaining_accounts` batch path can't). It now creates+seeds a fresh nullifier in-loop via a signed `system::create_account` CPI (`ensure_nullifier_initialized`), so fresh off-chain matches settle (previously failed `AccountNotInitialized`/3012). Remaining batch TODOs (negative cases, CU, root-rebuild) below.
 
 ### On-chain test recipe (reproducible — this is how A2 was run)
 
@@ -99,11 +99,17 @@ Gotchas learned: (1) a pre-existing validator deployed by another upgrade author
 - [x] `tests/staking.ts` — 7/7 (§1 slash: reject non-auth + full slash → fund → Slashed; outdated tests fixed in `f06ee5d`)
 - [x] `tests/escrow_settlement.ts` — 4/4 across runs (token-program + optional-account fixes in `7cfb5e0`/`62aad8a`; the signed off-chain **settle passes**, proving the `record_settlement` CPI on-chain)
 
-### §2b batch runtime — TODO (large)
+### §2b batch runtime — happy path DONE (on-chain), negative cases TODO
 
-Tests (anchor-provider, mirror `tests/escrow_settlement.ts` + a THBG market):
-- [ ] Setup: `init-treasury.ts` (sets `settlement_thbg_mint`), attest reserve, users swap GRX→THBG, deposit THBG + energy escrows.
-- [ ] Batch THBG settle writes the `SettlementRecord` (root/VAT/zone/batch, via `scripts/settlement-pda.ts`) and bumps `total_settled_thbg` by gross.
+`tests/batch_settle_thbg.ts` — 1/1 on a live validator. Required the
+`ensure_nullifier_initialized` program fix (see verification status above) +
+three test-setup fixes (THBG funding vs swap rate, idempotent ATA, tx
+`recentBlockhash`). **Rebuild + redeploy current `trading.so` before running** —
+a stale binary resurfaces the `remaining_accounts.len()` mismatch.
+
+- [x] Setup: `init-treasury.ts` (sets `settlement_thbg_mint`), attest reserve, users swap GRX→THBG, deposit THBG + energy escrows.
+- [x] Batch THBG settle writes the `SettlementRecord` (root/VAT/zone/batch, via `scripts/settlement-pda.ts`).
+- [ ] Assert `total_settled_thbg` bumped by gross (record written; explicit total assertion not yet added).
 - [ ] `TreasurySettlementRequired` fires when treasury/settlement_record omitted on a THBG market.
 - [ ] `TreasuryCurrencyMismatch` on wrong currency.
 - [ ] CU under budget (batch + CPI-init). Off-chain: rebuilt root == on-chain root.

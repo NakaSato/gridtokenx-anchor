@@ -515,6 +515,47 @@ pub fn settle_offchain_match(
     Ok(())
 }
 
+/// Create the `OrderNullifier` PDA when it does not yet exist (the batch path
+/// takes nullifiers as `remaining_accounts`, so it cannot use the `init_if_needed`
+/// macro the single settle path relies on). Returns `true` when it created a fresh
+/// account (caller must seed `order_id`/`authority`/`bump`), `false` when the PDA
+/// already exists (a prior partial fill we only update). The PDA address itself is
+/// validated by the caller's `require_keys_eq!` binding, so creating here is safe.
+fn ensure_nullifier_initialized<'info>(
+    acct: &AccountInfo<'info>,
+    user: &Pubkey,
+    order_id: &[u8; 16],
+    bump: u8,
+    payer: AccountInfo<'info>,
+    system_program: AccountInfo<'info>,
+    program_id: &Pubkey,
+) -> Result<bool> {
+    if acct.owner == program_id {
+        return Ok(false);
+    }
+    let lamports = Rent::get()?.minimum_balance(OrderNullifier::LEN);
+    let bump_arr = [bump];
+    let seeds: [&[u8]; 4] = [b"nullifier", user.as_ref(), order_id.as_ref(), &bump_arr];
+    let signer_seeds: &[&[&[u8]]] = &[&seeds];
+    anchor_lang::system_program::create_account(
+        CpiContext::new_with_signer(
+            system_program.key(),
+            anchor_lang::system_program::CreateAccount {
+                from: payer,
+                to: acct.clone(),
+            },
+            signer_seeds,
+        ),
+        lamports,
+        OrderNullifier::LEN as u64,
+        program_id,
+    )?;
+    // Write the Anchor discriminator so `Account::try_from` deserializes the fresh PDA.
+    let disc = OrderNullifier::DISCRIMINATOR;
+    acct.try_borrow_mut_data()?[..disc.len()].copy_from_slice(disc);
+    Ok(true)
+}
+
 pub fn batch_settle_offchain_match<'info>(
     ctx: Context<'info, SettleOffchainMatchBatchContext<'info>>,
     matches: Vec<BatchMatchPair>,
@@ -562,17 +603,16 @@ pub fn batch_settle_offchain_match<'info>(
         // --- ACCOUNT BINDING: every remaining account must be the canonical PDA for the
         // SIGNED payload, otherwise an attacker could substitute a victim escrow (theft)
         // or an unrelated nullifier (replay). Address derivation is the binding. ---
-        let buyer_null_key = remaining_accounts[offset].key();
-        require_keys_eq!(
-            buyer_null_key,
-            Pubkey::find_program_address(&[b"nullifier", m.buyer_payload.user.as_ref(), &m.buyer_payload.order_id], program_id).0,
-            TradingError::InvalidNullifier
+        let (buyer_null_pda, buyer_null_bump) = Pubkey::find_program_address(
+            &[b"nullifier", m.buyer_payload.user.as_ref(), &m.buyer_payload.order_id],
+            program_id,
         );
-        require_keys_eq!(
-            remaining_accounts[offset + 1].key(),
-            Pubkey::find_program_address(&[b"nullifier", m.seller_payload.user.as_ref(), &m.seller_payload.order_id], program_id).0,
-            TradingError::InvalidNullifier
+        require_keys_eq!(remaining_accounts[offset].key(), buyer_null_pda, TradingError::InvalidNullifier);
+        let (seller_null_pda, seller_null_bump) = Pubkey::find_program_address(
+            &[b"nullifier", m.seller_payload.user.as_ref(), &m.seller_payload.order_id],
+            program_id,
         );
+        require_keys_eq!(remaining_accounts[offset + 1].key(), seller_null_pda, TradingError::InvalidNullifier);
         require_keys_eq!(
             remaining_accounts[offset + 2].key(),
             Pubkey::find_program_address(&[b"escrow", m.buyer_payload.user.as_ref(), currency_mint_key.as_ref()], program_id).0,
@@ -599,8 +639,33 @@ pub fn batch_settle_offchain_match<'info>(
         require_keys_eq!(*remaining_accounts[offset + 4].owner, sec_token_prog_key, TradingError::InvalidEscrow);
         require_keys_eq!(*remaining_accounts[offset + 5].owner, sec_token_prog_key, TradingError::InvalidEscrow);
 
+        // Off-chain matches have no pre-existing nullifier; create it here (the
+        // single settle path uses init_if_needed, which the remaining_accounts batch
+        // path can't). Fresh accounts deserialize zeroed, so seed their identity
+        // fields before the replay guard below.
+        let buyer_fresh = ensure_nullifier_initialized(
+            &remaining_accounts[offset], &m.buyer_payload.user, &m.buyer_payload.order_id,
+            buyer_null_bump, ctx.accounts.payer.to_account_info(),
+            ctx.accounts.system_program.to_account_info(), program_id,
+        )?;
+        let seller_fresh = ensure_nullifier_initialized(
+            &remaining_accounts[offset + 1], &m.seller_payload.user, &m.seller_payload.order_id,
+            seller_null_bump, ctx.accounts.payer.to_account_info(),
+            ctx.accounts.system_program.to_account_info(), program_id,
+        )?;
+
         let mut buyer_nullifier: Account<'info, OrderNullifier> = Account::try_from(&remaining_accounts[offset])?;
         let mut seller_nullifier: Account<'info, OrderNullifier> = Account::try_from(&remaining_accounts[offset + 1])?;
+        if buyer_fresh {
+            buyer_nullifier.order_id = m.buyer_payload.order_id;
+            buyer_nullifier.authority = m.buyer_payload.user;
+            buyer_nullifier.bump = buyer_null_bump;
+        }
+        if seller_fresh {
+            seller_nullifier.order_id = m.seller_payload.order_id;
+            seller_nullifier.authority = m.seller_payload.user;
+            seller_nullifier.bump = seller_null_bump;
+        }
         require_keys_eq!(buyer_nullifier.authority, m.buyer_payload.user, TradingError::NullifierUserMismatch);
         require_keys_eq!(seller_nullifier.authority, m.seller_payload.user, TradingError::NullifierUserMismatch);
 

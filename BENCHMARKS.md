@@ -143,12 +143,15 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   order nullifier + signature verify + trade record), not just BlockBench /
   SmallBank / TPC-C proxies — so TPS/CU describe this system, not a generic
   workload. **Single-match CU is now measured on-chain:** `settle_offchain_match`
-  = **109 344 CU** (match_amount 100, price 50), captured via the `BENCH_SETTLE_CU`
-  probe in `tests/escrow_settlement.ts` against a live validator (Solana 3.1.10).
-  That is **~5× the ~21k CU/tx TPC-C proxy above** — the Ed25519 signature verify
-  + dual-mint (classic currency / Token-2022 energy) transfers + escrow/nullifier
-  writes dominate, so the generic-OLTP figure materially *understates* per-trade
-  compute. Still TODO: a TPS sweep over this path, and the batch CU point.
+  = **103 363 CU** (match_amount 100, price 50), captured via the `BENCH_SETTLE_CU`
+  probe in `tests/escrow_settlement.ts` against a live validator (Solana 3.1.10,
+  current `trading` build). That is **~5× the ~21k CU/tx TPC-C proxy above** — the
+  Ed25519 signature verify + dual-mint (classic currency / Token-2022 energy)
+  transfers + escrow/nullifier writes dominate, so the generic-OLTP figure
+  materially *understates* per-trade compute. The §2b **batch** path
+  (`batch_settle_offchain_match` → treasury `record_settlement_batch`) is also
+  on-chain verified now (`tests/batch_settle_thbg.ts`). Still TODO: a TPS sweep
+  over this path, and a batch-CU datapoint at varying match counts.
 - **[CRIT]** **Multi-validator** (3–4 PoA nodes). A single validator measures
   no consensus cost, yet "block-time is the bottleneck" is the headline claim.
 - **[CRIT]** **Open-loop load** (fix arrival rate λ, ramp to saturation) and

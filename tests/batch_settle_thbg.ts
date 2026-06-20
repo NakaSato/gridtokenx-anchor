@@ -3,39 +3,33 @@
 // which writes a per-(zone,batch) SettlementRecord (Merkle root + VAT) and bumps
 // total_settled_thbg.
 //
-// ⚠️ RUNTIME-UNVERIFIED SCAFFOLD — partially debugged on a live validator.
-// Run via the recipe in docs/proposed/implementation-plan.md:
+// ✅ RUNTIME-VERIFIED on a live validator (Solana 3.1.10) — 1/1 green.
+// Run via the recipe in docs/proposed/implementation-plan.md. IMPORTANT:
+// rebuild + redeploy the CURRENT trading.so first (Anchor 1.0 emits to
+// programs/trading/target/deploy/ — copy to target/deploy/ before deploy):
 //   SOLANA_VALIDATOR_TTL=0 just solana-up
-//   anchor deploy --provider.cluster http://localhost:8899
+//   (cd programs/trading && cargo build-sbf)
+//   cp programs/trading/target/deploy/trading.so target/deploy/trading.so
+//   anchor deploy --provider.cluster http://localhost:8899   # or solana program deploy
 //   npx tsx scripts/bootstrap.ts && npx tsx scripts/init-treasury.ts
 //   npx mocha -r tsx tests/batch_settle_thbg.ts --timeout 1000000
 //
-// Setup is now green after three first-run fixes:
+// Getting here took four fixes (three test-side, one program-side):
 //   1. fundThbg: arg is a THBG *target*; overfund GRX ~300× to clear the
 //      grx_per_thbg_rate (×0.004) + 25 bps fee (was funding ~40 THBG when 10k
 //      was deposited → TransferChecked insufficient funds).
 //   2. createAtaFor → idempotent (energy ATAs were created twice for sellers).
 //   3. Legacy Transaction ctor: `recentBlockhash`, not `blockhash` (the ALT
 //      bootstrap txs were unsigned otherwise).
+//   4. PROGRAM FIX (settle_offchain.rs): the batch path reads each OrderNullifier
+//      via Account::try_from and only updated filled_amount — it never created
+//      the PDA (the single path uses init_if_needed, which remaining_accounts
+//      can't). batch_settle_offchain_match now creates+seeds a fresh nullifier
+//      in-loop via a signed system create_account CPI (ensure_nullifier_initialized),
+//      so fresh off-chain matches settle. Previously failed with 3012.
 //
-// BLOCKER A — RESOLVED (was a stale deployed binary, not a test bug): the
-// remaining_accounts.len() == match_count*6 check failed only because the
-// deployed trading.so predated commit e416842 (which added the 3 treasury
-// optional accounts to SettleOffchainMatchBatchContext). A `cargo build-sbf`
-// of trading + redeploy of the fresh .so fixes the account count. ALWAYS
-// redeploy the current build before running this — see the recipe above.
-//
-// BLOCKER B — OPEN, needs a PROGRAM change (not fixable in this test): the
-// batch handler reads each OrderNullifier via `Account::try_from`
-// (settle_offchain.rs:602) and only ever *updates* filled_amount — it never
-// creates the PDA. The single path uses `init_if_needed`; the batch path has
-// no init (remaining_accounts can't use the macro) and there is no standalone
-// init-nullifier instruction. So batch_settle_offchain_match fails with
-// AccountNotInitialized (3012) for any fresh off-chain match. The test cannot
-// pre-create these PDAs itself (only the owning program may create them).
-// Fix options (design call): (a) add a manual create_account CPI for the two
-// nullifiers inside the batch loop; (b) add an init_nullifier instruction the
-// client calls per order first. Until then this stays RUNTIME-UNVERIFIED.
+// Note: a stale deployed binary will resurface the old
+// remaining_accounts.len() == match_count*6 failure — always redeploy current.
 
 import * as anchor from "@anchor-lang/core";
 import { Program } from "@anchor-lang/core";
