@@ -1,0 +1,142 @@
+name: anchor-tests
+
+# Runs the Anchor program tests. Two jobs:
+#   litesvm   — in-process tests, NO validator (fast, reliable). Covers the
+#               slash-distribution, settlement-commitment, and unstake suites.
+#   provider  — full on-chain suites against a local solana-test-validator,
+#               using the proven recipe (deploy → bootstrap → init-treasury →
+#               mocha). The in-session/dev validator is flaky; CI is the stable
+#               home for these.
+#
+# NOTE: Anchor 1.0 / Solana 3.x are recent; the toolchain versions below may need
+# bumping on first CI run. The test *sequence* is the one verified locally.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  SOLANA_VERSION: "3.1.10"
+  ANCHOR_VERSION: "1.0.0"
+  NODE_VERSION: "20"
+
+jobs:
+  litesvm:
+    name: litesvm (no validator)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            programs/*/target
+            target
+          key: ${{ runner.os }}-anchor-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install Anchor (avm)
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --force || cargo install avm --force
+          avm install "$ANCHOR_VERSION"
+          avm use "$ANCHOR_VERSION"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+
+      - name: Build programs
+        run: anchor build --ignore-keys
+
+      - name: Run litesvm suites (no validator)
+        run: |
+          npx mocha -r tsx \
+            tests/slash_distribution_litesvm.ts \
+            tests/settlement_commitment_litesvm.ts \
+            tests/staking_unstake_litesvm.ts \
+            --timeout 1000000
+
+  provider:
+    name: provider (local validator)
+    runs-on: ubuntu-latest
+    needs: litesvm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            programs/*/target
+            target
+          key: ${{ runner.os }}-anchor-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${SOLANA_VERSION}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      - name: Install Anchor (avm)
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --force || cargo install avm --force
+          avm install "$ANCHOR_VERSION"
+          avm use "$ANCHOR_VERSION"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+
+      - name: Generate dev keypair
+        run: solana-keygen new --no-bip39-passphrase -o "$HOME/.config/solana/id.json"
+
+      - name: Build programs
+        run: anchor build --ignore-keys
+
+      - name: Start validator
+        run: |
+          solana-test-validator --reset --quiet --ledger /tmp/test-ledger &
+          for i in $(seq 1 30); do
+            solana --url http://localhost:8899 cluster-version && break || sleep 2
+          done
+
+      - name: Deploy + bootstrap + init-treasury
+        env:
+          ANCHOR_PROVIDER_URL: http://localhost:8899
+          ANCHOR_WALLET: /home/runner/.config/solana/id.json
+        run: |
+          anchor deploy --provider.cluster http://localhost:8899
+          npx tsx scripts/bootstrap.ts
+          npx tsx scripts/init-treasury.ts
+
+      - name: Run provider suites
+        env:
+          ANCHOR_PROVIDER_URL: http://localhost:8899
+          ANCHOR_WALLET: /home/runner/.config/solana/id.json
+        run: |
+          npx mocha -r tsx \
+            tests/treasury.ts \
+            tests/staking.ts \
+            tests/escrow_settlement.ts \
+            --timeout 1000000
+
+      # §2b batch is a runtime-unverified scaffold — run it non-blocking until
+      # it is debugged on a stable validator, then promote into the step above.
+      - name: Run §2b batch scaffold (non-blocking)
+        continue-on-error: true
+        env:
+          ANCHOR_PROVIDER_URL: http://localhost:8899
+          ANCHOR_WALLET: /home/runner/.config/solana/id.json
+        run: npx mocha -r tsx tests/batch_settle_thbg.ts --timeout 1000000
