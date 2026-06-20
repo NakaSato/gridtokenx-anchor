@@ -295,6 +295,8 @@ describe("escrow-settlement", () => {
           payer: authority,
           sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
           systemProgram: SystemProgram.programId,
+          treasuryProgram: null,
+          treasuryState: null,
         } as any)
         .rpc();
     } catch (e: any) {
@@ -385,6 +387,10 @@ describe("escrow-settlement", () => {
         payer: authority,
         sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
         systemProgram: SystemProgram.programId,
+        // Optional treasury wiring — currency is not THBG, so recording is not
+        // required; Anchor 1.0 still needs optional accounts passed as null.
+        treasuryProgram: null,
+        treasuryState: null,
       } as any)
       .instruction();
 
