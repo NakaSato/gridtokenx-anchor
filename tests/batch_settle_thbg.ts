@@ -307,6 +307,13 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     const { buyerEd, sellerEd, settleIx, alt, settlementRecord } =
       await prepareSettle(buyer, seller, { withTreasury: true, buyerOrderId, sellerOrderId, thisBatchId: batchId });
 
+    // record_settlement_batch bumps treasury.total_settled_thbg by the gross
+    // `value` (= total_value = matchAmount*matchPrice). Capture the pre-settle
+    // cumulative so we can assert the exact delta.
+    const settledBefore = new BN(
+      (await treasury.account.treasury.fetch(treasuryPda)).totalSettledThbg.toString()
+    );
+
     for (let attempt = 0; attempt < 5; attempt++) {
       const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash("confirmed");
       const msg = new TransactionMessage({ payerKey: authority, recentBlockhash: blockhash, instructions: [buyerEd, sellerEd, settleIx] }).compileToV0Message([alt]);
@@ -330,6 +337,15 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     expect(rec.vatRateBps).to.equal(700);
     expect(Buffer.from(rec.merkleRoot).equals(Buffer.from(merkleRoot00()))).to.equal(true);
     expect(rec.totalValue.toString()).to.equal((matchAmount * matchPrice).toString());
+
+    // §2b assertion: treasury.total_settled_thbg advanced by exactly the gross
+    // settled value (= rec.total_value = matchAmount*matchPrice). The CPI adds
+    // `value` to the cumulative, so delta must equal total_value, not the
+    // VAT-adjusted or escrow-net figure.
+    const settledAfter = new BN(
+      (await treasury.account.treasury.fetch(treasuryPda)).totalSettledThbg.toString()
+    );
+    expect(settledAfter.sub(settledBefore).toString()).to.equal((matchAmount * matchPrice).toString());
 
     // Buyer received the energy; total settled advanced.
     const buyerEngEscrow = escrowPda(buyer.publicKey, energyMintPda);
