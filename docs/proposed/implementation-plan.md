@@ -114,8 +114,9 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
 - [x] `TreasurySettlementRequired` (6031) fires when treasury/settlement_record omitted on a THBG market — asserted via send + `conf.value.err` `Custom:6031`.
 - [x] Assert `total_settled_thbg` bumped by gross — happy-path captures the cumulative pre/post settle and asserts the delta == `total_value` (= `matchAmount*matchPrice`), not the VAT-adjusted/escrow-net figure. 2/2 on-chain.
 - [ ] `TreasuryCurrencyMismatch` (6030) on wrong currency — needs a 2nd currency mint + market reconfig (alt-currency escrows); heavier, deferred.
-- [x] CU under budget (batch + CPI-init) — 1-match batch settle = **80 207 CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
-- [ ] Batch-CU curve at >1 match counts (per-match marginal CU); TPS sweep over the batch settle path.
+- [x] CU under budget (batch + CPI-init) — 1-match batch settle ≈ **80–92k CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. ~12k spread is `find_program_address` bump-seek noise on fresh keypairs, not ledger drift. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
+- [x] Batch-CU curve at >1 match — **single-tx cap = 1 match** (per-match inline Ed25519 verify ix data can't go in an ALT; 2 matches overrun the 1232-byte packet). A real marginal curve needs reworked sig packaging — documented in `BENCHMARKS.md`.
+- [ ] TPS sweep over the batch settle path; per-match marginal CU once sig packaging reworked (multi-tx or pre-verified sig accounts).
 
 ## §3 — Feasibility spike (GATE — before any trustless work) — DO THIRD
 

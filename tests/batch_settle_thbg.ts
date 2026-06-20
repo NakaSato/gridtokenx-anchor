@@ -208,22 +208,45 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     return { buyer, seller };
   }
 
-  // Build the batch settle ix (+ the two Ed25519 verify ixs) and an activated ALT.
-  // `withTreasury` toggles whether the optional treasury accounts are passed —
+  // Build the batch settle ix (+ 2 Ed25519 verify ixs per match) and an activated
+  // ALT. `withTreasury` toggles whether the optional treasury accounts are passed —
   // omitting them on a THBG market is the TreasurySettlementRequired guard.
+  //
+  // The batch path (settle_offchain.rs:595) verifies match i's signatures at
+  // absolute instruction indices i*2 (buyer) / i*2+1 (seller), so the Ed25519 ixs
+  // must precede the settle ix in that exact interleaved order:
+  //   [b0, s0, b1, s1, ..., settleIx]
+  // and consumes remaining_accounts in groups of 6 per match.
   async function prepareSettle(
-    buyer: Keypair, seller: Keypair,
-    opts: { withTreasury: boolean; buyerOrderId: Buffer; sellerOrderId: Buffer; thisBatchId: BN }
-  ): Promise<{ buyerEd: any; sellerEd: any; settleIx: any; alt: any; settlementRecord: PublicKey }> {
-    const { buyerOrderId, sellerOrderId } = opts;
-    const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount: matchAmount, pricePerKwh: 60, side: 0, zoneId, expiresAt: 0 });
-    const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount: matchAmount, pricePerKwh: 50, side: 1, zoneId, expiresAt: 0 });
-    const buyerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: buyer.secretKey, message: buyerMsg });
-    const sellerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: seller.secretKey, message: sellerMsg });
+    matches: { buyer: Keypair; seller: Keypair; buyerOrderId: Buffer; sellerOrderId: Buffer }[],
+    opts: { withTreasury: boolean; thisBatchId: BN }
+  ): Promise<{ edIxs: any[]; settleIx: any; alt: any; settlementRecord: PublicKey }> {
+    const edIxs: any[] = [];
+    const matchPairs: any[] = [];
+    const remaining: any[] = [];
+    for (const { buyer, seller, buyerOrderId, sellerOrderId } of matches) {
+      const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount: matchAmount, pricePerKwh: 60, side: 0, zoneId, expiresAt: 0 });
+      const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount: matchAmount, pricePerKwh: 50, side: 1, zoneId, expiresAt: 0 });
+      edIxs.push(Ed25519Program.createInstructionWithPrivateKey({ privateKey: buyer.secretKey, message: buyerMsg }));
+      edIxs.push(Ed25519Program.createInstructionWithPrivateKey({ privateKey: seller.secretKey, message: sellerMsg }));
 
-    const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(60), side: 0, zoneId, expiresAt: new BN(0) };
-    const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(50), side: 1, zoneId, expiresAt: new BN(0) };
-    const matchPair = { buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), wheelingCharge: new BN(1), lossCost: new BN(1) };
+      const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(60), side: 0, zoneId, expiresAt: new BN(0) };
+      const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(50), side: 1, zoneId, expiresAt: new BN(0) };
+      matchPairs.push({ buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), wheelingCharge: new BN(1), lossCost: new BN(1) });
+
+      // remaining_accounts per match (order from settle_offchain.rs):
+      // [buyer_nullifier, seller_nullifier, buyer_currency_escrow,
+      //  seller_currency_escrow, seller_energy_escrow, buyer_energy_escrow]
+      remaining.push(
+        nullifierPda(buyer.publicKey, buyerOrderId),
+        nullifierPda(seller.publicKey, sellerOrderId),
+        escrowPda(buyer.publicKey, thbgMint),
+        escrowPda(seller.publicKey, thbgMint),
+        escrowPda(seller.publicKey, energyMintPda),
+        escrowPda(buyer.publicKey, energyMintPda),
+      );
+    }
+    const remainingMeta = remaining.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
 
     // Per-payer shards.
     const marketAcct: any = await trading.account.market.fetch(marketPda);
@@ -236,20 +259,8 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     try { await trading.methods.initializeZoneMarketShard(zShardByte).accounts({ zoneMarket: zoneMarketPda, zoneShard: zoneShardPda, payer: authority, systemProgram: SystemProgram.programId } as any).rpc(); } catch {}
 
     const merkleRoot = Array.from({ length: 32 }, (_, i) => (i + 1) & 0xff);
-    const vatAmount = new BN(Math.floor(matchAmount * matchPrice * 0.07));
+    const vatAmount = new BN(Math.floor(matches.length * matchAmount * matchPrice * 0.07));
     const [settlementRecord] = settlementRecordPda(zoneId, opts.thisBatchId, treasury.programId);
-
-    // remaining_accounts per match (order from settle_offchain.rs):
-    // [buyer_nullifier, seller_nullifier, buyer_currency_escrow, seller_currency_escrow,
-    //  seller_energy_escrow, buyer_energy_escrow]
-    const remaining = [
-      nullifierPda(buyer.publicKey, buyerOrderId),
-      nullifierPda(seller.publicKey, sellerOrderId),
-      escrowPda(buyer.publicKey, thbgMint),
-      escrowPda(seller.publicKey, thbgMint),
-      escrowPda(seller.publicKey, energyMintPda),
-      escrowPda(buyer.publicKey, energyMintPda),
-    ].map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
 
     // Optional treasury accounts: passed as null when exercising the
     // TreasurySettlementRequired guard (THBG market + recording omitted).
@@ -258,7 +269,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
       : { treasuryProgram: null, treasuryState: null, settlementRecord: null };
 
     const settleIx = await trading.methods
-      .batchSettleOffchainMatch([matchPair] as any, merkleRoot, vatAmount, 700, opts.thisBatchId)
+      .batchSettleOffchainMatch(matchPairs as any, merkleRoot, vatAmount, 700, opts.thisBatchId)
       .accounts({
         market: marketPda, zoneMarket: zoneMarketPda, currencyMint: thbgMint, energyMint: energyMintPda,
         marketAuthority: marketAuthorityPda, marketShard: marketShardPda, zoneShard: zoneShardPda,
@@ -269,7 +280,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
         systemProgram: SystemProgram.programId,
         ...treasuryAccts,
       } as any)
-      .remainingAccounts(remaining)
+      .remainingAccounts(remainingMeta)
       .instruction();
 
     // ~20 accounts + 2 Ed25519 ixs overflow a legacy tx → v0 + ALT.
@@ -297,15 +308,15 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
       await new Promise((r) => setTimeout(r, 400));
     }
     expect(alt, "ALT activated").to.not.be.null;
-    return { buyerEd, sellerEd, settleIx, alt, settlementRecord };
+    return { edIxs, settleIx, alt, settlementRecord };
   }
 
   it("records a per-(zone,batch) SettlementRecord via record_settlement_batch", async () => {
     const { buyer, seller } = await seedUsers();
     const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(0xa1, 0);
     const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xb2, 0);
-    const { buyerEd, sellerEd, settleIx, alt, settlementRecord } =
-      await prepareSettle(buyer, seller, { withTreasury: true, buyerOrderId, sellerOrderId, thisBatchId: batchId });
+    const { edIxs, settleIx, alt, settlementRecord } =
+      await prepareSettle([{ buyer, seller, buyerOrderId, sellerOrderId }], { withTreasury: true, thisBatchId: batchId });
 
     // record_settlement_batch bumps treasury.total_settled_thbg by the gross
     // `value` (= total_value = matchAmount*matchPrice). Capture the pre-settle
@@ -317,7 +328,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     let settleSig: string | null = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash("confirmed");
-      const msg = new TransactionMessage({ payerKey: authority, recentBlockhash: blockhash, instructions: [buyerEd, sellerEd, settleIx] }).compileToV0Message([alt]);
+      const msg = new TransactionMessage({ payerKey: authority, recentBlockhash: blockhash, instructions: [...edIxs, settleIx] }).compileToV0Message([alt]);
       const vtx = new VersionedTransaction(msg);
       vtx.sign([payer]);
       try {
@@ -371,8 +382,8 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xd4, 0);
     // Distinct batch id — irrelevant since the tx rolls back, but avoids any
     // collision with the happy-path SettlementRecord PDA.
-    const { buyerEd, sellerEd, settleIx, alt } =
-      await prepareSettle(buyer, seller, { withTreasury: false, buyerOrderId, sellerOrderId, thisBatchId: batchId.addn(1) });
+    const { edIxs, settleIx, alt } =
+      await prepareSettle([{ buyer, seller, buyerOrderId, sellerOrderId }], { withTreasury: false, thisBatchId: batchId.addn(1) });
 
     // Send (not simulate): a freshly-created ALT isn't resolvable under
     // simulateTransaction's replaceRecentBlockhash path. The require!(!recording_required)
@@ -381,19 +392,41 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     let err: any = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash("confirmed");
-      const msg = new TransactionMessage({ payerKey: authority, recentBlockhash: blockhash, instructions: [buyerEd, sellerEd, settleIx] }).compileToV0Message([alt]);
+      const msg = new TransactionMessage({ payerKey: authority, recentBlockhash: blockhash, instructions: [...edIxs, settleIx] }).compileToV0Message([alt]);
       const vtx = new VersionedTransaction(msg);
       vtx.sign([payer]);
-      const sig = await provider.connection.sendTransaction(vtx, { skipPreflight: true });
-      const conf = await provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+      // sendTransaction THROWS on a transient ALT "invalid index" (table not yet
+      // active) — that's a transport error, not the on-chain reject we want, so
+      // retry rather than fail the test. Only conf.value.err is the real verdict.
+      let conf: any;
+      try {
+        const sig = await provider.connection.sendTransaction(vtx, { skipPreflight: true });
+        conf = await provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+      } catch (e) {
+        if (attempt === 4) throw e;
+        await new Promise((r) => setTimeout(r, 400));
+        continue;
+      }
       if (conf.value.err) { err = conf.value.err; break; }
       if (attempt === 4) break;
       await new Promise((r) => setTimeout(r, 400));
     }
-    // settleIx is instruction index 2 (buyerEd, sellerEd, settleIx).
+    // settleIx is the last instruction (edIxs..., settleIx).
     expect(err, "settle must fail when treasury accounts are omitted").to.not.be.null;
     expect(JSON.stringify(err), JSON.stringify(err)).to.match(/"Custom":6031/);
   });
+
+  // §2b batch-CU curve: a >1-match datapoint is NOT reachable in a single
+  // transaction. `batch_settle_offchain_match` introspects the instructions
+  // sysvar for 2 inline Ed25519 verify ixs PER match (settle_offchain.rs:598),
+  // and that signature/pubkey/message payload (~189 B/ix) lives in the ix data,
+  // not in accounts — an ALT can't compress it. With 2 matches the 4 Ed25519 ixs
+  // (~760 B) + 2 serialized BatchMatchPairs (~370 B) + the settle ix's account
+  // index list + headers overrun the 1232-byte packet (`RangeError: encoding
+  // overruns Uint8Array` at MessageV0.serialize). So the single-tx batch is
+  // capped at 1 match given the per-match Ed25519-introspection design; a real
+  // marginal-CU curve needs a packaging change (pre-verified sig accounts, or an
+  // off-chain aggregated multisig) — tracked in BENCHMARKS.md, not asserted here.
 });
 
 // merkleRoot used by the happy-path assertion (mirrors prepareSettle's root).

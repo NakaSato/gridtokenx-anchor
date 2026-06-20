@@ -150,13 +150,26 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   transfers + escrow/nullifier writes dominate, so the generic-OLTP figure
   materially *understates* per-trade compute. The §2b **batch** path
   (`batch_settle_offchain_match` → treasury `record_settlement_batch`) is also
-  on-chain verified now (`tests/batch_settle_thbg.ts`). **Batch CU, 1 match =
-  80 207 CU** (`BENCH_BATCH_SETTLE_CU` probe, both mints Token-2022, +
+  on-chain verified now (`tests/batch_settle_thbg.ts`). **Batch CU, 1 match ≈
+  80–92k CU** (`BENCH_BATCH_SETTLE_CU` probe, both mints Token-2022, +
   `record_settlement_batch` CPI + 2 in-loop nullifier creates), captured against
   the same validator. Lower than the 103 363 single-match figure above because
   that run paid a classic-SPL→Token-2022 cross-program currency leg; here both
-  legs are Token-2022. Still TODO: a TPS sweep over this path, and the batch-CU
-  curve at >1 match counts (per-match marginal CU).
+  legs are Token-2022. The ~12k run-to-run spread is **bump-seek noise, not
+  ledger drift**: the in-loop binding derives ~10 PDAs via `find_program_address`
+  (settle_offchain.rs:606–634), and each run's fresh keypairs land on different
+  bump-search iteration counts.
+  **A >1-match single-transaction batch is not achievable** with the current
+  design: `batch_settle_offchain_match` introspects the instructions sysvar for 2
+  inline Ed25519 verify ixs *per match* (`settle_offchain.rs:598`), and that
+  ~189 B/ix sig+pubkey+message payload lives in instruction data, not accounts —
+  an ALT can't compress it. Two matches (4 Ed25519 ixs ~760 B + 2 serialized
+  `BatchMatchPair`s ~370 B + the settle ix account-index list + headers) overrun
+  the 1232-byte packet (`RangeError: encoding overruns Uint8Array` at
+  `MessageV0.serialize`). A real per-match marginal-CU curve therefore needs a
+  packaging change (pre-verified signature accounts, or an off-chain aggregated
+  multisig), not just more matches per call. Still TODO: a TPS sweep over this
+  path, and that batch-CU curve once the signature packaging is reworked.
 - **[CRIT]** **Multi-validator** (3–4 PoA nodes). A single validator measures
   no consensus cost, yet "block-time is the bottleneck" is the headline claim.
 - **[CRIT]** **Open-loop load** (fix arrival rate λ, ramp to saturation) and
