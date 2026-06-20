@@ -54,4 +54,8 @@ pub enum RegistryError {
     SlashAccountingMismatch,
     #[msg("victim_losses length must equal the number of victim token accounts passed")]
     VictimCountMismatch,
+    #[msg("Amount must be greater than zero")]
+    InvalidAmount,
+    #[msg("Slash fund has insufficient balance for this disbursement")]
+    InsufficientSlashFund,
 }

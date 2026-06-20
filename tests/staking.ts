@@ -571,6 +571,65 @@ describe("registry_staking", () => {
     expect(acc.stakedGrx.toString()).to.equal(MIN.toString());
   });
 
+  it("slash fund: routes remainder in, disburses out with published accounting (T1.4)", async () => {
+    const [slashFund] = PublicKey.findProgramAddressSync([Buffer.from("slash_fund")], program.programId);
+    const [ledgerPda] = PublicKey.findProgramAddressSync([Buffer.from("slash_fund_ledger")], program.programId);
+
+    // initialize_slash_fund (idempotent) — manual ix (not in checked-in IDL).
+    try {
+      const data = disc("initialize_slash_fund");
+      const keys = [
+        { pubkey: registryPda, isSigner: false, isWritable: true },
+        { pubkey: slashFund, isSigner: false, isWritable: true },
+        { pubkey: ledgerPda, isSigner: false, isWritable: true },
+        { pubkey: grxMint, isSigner: false, isWritable: false },
+        { pubkey: authority, isSigner: true, isWritable: true },
+        { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: anchor.web3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
+      ];
+      await provider.sendAndConfirm(new Transaction().add(new TransactionInstruction({ programId: program.programId, keys, data })));
+    } catch { /* already initialized */ }
+
+    // Route slash remainders into the fund vault.
+    await program.methods.setSlashDestination(slashFund).accounts({ registry: registryPda, authority }).rpc();
+
+    // Slash a fresh validator in full (proven_loss 0) → the whole bond lands in the fund.
+    const v = await setupValidator(MIN); // 10,000 GRX
+    const victim = await freshAta(Keypair.generate().publicKey);
+    const fundBefore = await bal(slashFund);
+    await program.methods.slashValidator(10_000, new BN(0)).accounts({
+      targetAuthority: v.kp.publicKey, targetUserAccount: v.userPda, grxVault: vaultPda,
+      registry: registryPda, slashDestination: slashFund, victimTokenAccount: victim, grxMint,
+      authority, tokenProgram: TOKEN_2022_PROGRAM_ID,
+    } as any).rpc();
+    expect((await bal(slashFund)).sub(fundBefore).toString()).to.equal(MIN.toString());
+
+    // Disburse half out to a destination; ledger publishes the accounting.
+    const dest = await freshAta(Keypair.generate().publicKey);
+    const disburseAmt = GRX(5000);
+    const dData = Buffer.concat([disc("disburse_slash_fund"), u64le(disburseAmt)]);
+    const dKeys = [
+      { pubkey: registryPda, isSigner: false, isWritable: false },
+      { pubkey: slashFund, isSigner: false, isWritable: true },
+      { pubkey: ledgerPda, isSigner: false, isWritable: true },
+      { pubkey: dest, isSigner: false, isWritable: true },
+      { pubkey: grxMint, isSigner: false, isWritable: false },
+      { pubkey: authority, isSigner: true, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+    ];
+    const fundPre = await bal(slashFund);
+    await provider.sendAndConfirm(new Transaction().add(new TransactionInstruction({ programId: program.programId, keys: dKeys, data: dData })));
+    expect((await bal(dest)).toString()).to.equal(disburseAmt.toString());
+    expect(fundPre.sub(await bal(slashFund)).toString()).to.equal(disburseAmt.toString());
+
+    // Published accounting: decode SlashFundLedger.total_disbursed (offset 8, u64 LE).
+    const info = await provider.connection.getAccountInfo(ledgerPda);
+    expect(info, "ledger exists").to.not.be.null;
+    const totalDisbursed = new BN(info!.data.subarray(8, 16), "le");
+    expect(totalDisbursed.toString()).to.equal(disburseAmt.toString());
+  });
+
   // Skipped on a live validator: unstake_grx enforces the 24h UNSTAKE_COOLDOWN_SECS
   // and AnchorProvider.env() offers no clock control. The happy path (successful
   // unstake + Active->Suspended demote) is covered by the clock-warped litesvm port

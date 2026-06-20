@@ -114,3 +114,12 @@ pub struct ValidatorSlashed {
     pub remaining_stake: u64,
     pub timestamp: i64,
 }
+
+#[event]
+pub struct SlashFundDisbursed {
+    pub amount: u64,
+    pub destination: Pubkey,
+    pub total_disbursed: u64,
+    pub disbursement_count: u64,
+    pub timestamp: i64,
+}

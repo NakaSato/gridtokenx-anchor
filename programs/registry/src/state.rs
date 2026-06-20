@@ -35,6 +35,20 @@ impl RegistryShard {
     }
 }
 
+/// Published accounting for the transparent slash fund (T1.4). Inflows are the
+/// `slash_fund` vault's GRX balance (slashed remainders routed in via the existing
+/// `slash_destination`); outflows are tracked here precisely, with one event per
+/// disbursement, so the fund's redistribution history is auditable on-chain.
+#[account(zero_copy)]
+#[repr(C)]
+pub struct SlashFundLedger {
+    pub total_disbursed: u64,     // cumulative GRX paid out of the fund
+    pub disbursement_count: u64,  // number of disburse_slash_fund calls
+    pub last_disbursed_ts: i64,   // unix ts of the most recent disbursement
+    pub bump: u8,                 // canonical PDA bump
+    pub _padding: [u8; 7],
+}
+
 /// User account for frequent lookups
 #[account(zero_copy)]
 #[repr(C)]
