@@ -126,7 +126,7 @@ Goal: prove or kill the trustless fraud-proof path **before** spending on it. Po
 
 > **Verification note:** CU measurement (T3.2) requires on-chain execution — run under a live validator / `anchor test`, not litesvm.
 
-- [ ] T3.1 Prototype sparse/indexed Merkle tree giving **proof-of-exclusion** (to prove a dropped match). Confirm leaf/index scheme.
+- [x] T3.1 Prototype **indexed** Merkle tree giving **proof-of-exclusion** (`tests/spike_merkle_exclusion.ts`, throwaway PoC — 5/5, no validator). Leaf/index scheme confirmed: leaf = `H(value ‖ nextValue ‖ nextIndex)` (sentinel leaf 0 = `{0,0,0}`), sorted linked list. Non-membership of `q` = inclusion proof of the low leaf `L` with `L.value < q < L.nextValue` (or `L.nextValue == 0` for max) — O(log n) hashes (DEPTH 10 here), not the 2^256 SMT path. Both forge vectors rejected: claiming a present id absent fails the range check; widening `nextValue` fails the root check. Chose indexed over sparse precisely to keep the T3.2 on-chain proof small. (sha256 in the spike; on-chain → keccak syscall.)
 - [ ] T3.2 Measure on-chain CU of: Ed25519 meter-sig verify (instruction introspection, as `settle_offchain` does) + Merkle inclusion/exclusion verify, per challenge.
 - [ ] T3.3 Decide: CU ≤ budget AND exclusion proofs sound → write a future "trustless Tier-2" epic. Else → **stop**; governance-attested (D3) is the final design for this permissioned network.
 
