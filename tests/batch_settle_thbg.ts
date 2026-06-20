@@ -1,0 +1,289 @@
+// §2b batch settlement on a THBG market: exercises
+// trading::batch_settle_offchain_match -> treasury::record_settlement_batch,
+// which writes a per-(zone,batch) SettlementRecord (Merkle root + VAT) and bumps
+// total_settled_thbg.
+//
+// ⚠️ RUNTIME-UNVERIFIED SCAFFOLD. This test is structurally complete (exact
+// account layout + remaining_accounts order from settle_offchain.rs), but it was
+// NOT run to green in-session — it needs a stable validator (the long settle path
+// is sensitive to validator ws-pubsub flakiness) and the full THBG setup. Run via
+// the recipe in docs/proposed/implementation-plan.md:
+//   SOLANA_VALIDATOR_TTL=0 just solana-up
+//   anchor deploy --provider.cluster http://localhost:8899
+//   npx tsx scripts/bootstrap.ts && npx tsx scripts/init-treasury.ts
+//   npx mocha -r tsx tests/batch_settle_thbg.ts --timeout 1000000
+// Expect first-run fixes (this is a scaffold, not a verified test).
+
+import * as anchor from "@anchor-lang/core";
+import { Program } from "@anchor-lang/core";
+import { Trading } from "../target/types/trading";
+import { EnergyToken } from "../target/types/energy_token";
+import { Treasury } from "../target/types/treasury";
+import {
+  PublicKey,
+  Keypair,
+  SystemProgram,
+  Transaction,
+  TransactionMessage,
+  VersionedTransaction,
+  AddressLookupTableProgram,
+  LAMPORTS_PER_SOL,
+  Ed25519Program,
+} from "@solana/web3.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+  createAssociatedTokenAccountInstruction,
+  getAccount,
+} from "@solana/spl-token";
+import { expect } from "chai";
+import BN from "bn.js";
+import { settlementRecordPda } from "../scripts/settlement-pda";
+
+// Mirrors OffchainOrderPayload::get_message() in settle_offchain.rs.
+function orderMessage(p: {
+  orderId: Buffer; user: PublicKey; energyAmount: number; pricePerKwh: number;
+  side: number; zoneId: number; expiresAt: number;
+}): Buffer {
+  const b = Buffer.alloc(16 + 32 + 8 + 8 + 1 + 4 + 8);
+  let o = 0;
+  p.orderId.copy(b, o); o += 16;
+  p.user.toBuffer().copy(b, o); o += 32;
+  b.writeBigUInt64LE(BigInt(p.energyAmount), o); o += 8;
+  b.writeBigUInt64LE(BigInt(p.pricePerKwh), o); o += 8;
+  b.writeUInt8(p.side, o); o += 1;
+  b.writeUInt32LE(p.zoneId, o); o += 4;
+  b.writeBigInt64LE(BigInt(p.expiresAt), o); o += 8;
+  return b;
+}
+
+describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+
+  const trading = anchor.workspace.Trading as Program<Trading>;
+  const energy = anchor.workspace.EnergyToken as Program<EnergyToken>;
+  const treasury = anchor.workspace.Treasury as Program<Treasury>;
+  const authority = provider.wallet.publicKey;
+  const payer = (provider.wallet as any).payer as Keypair;
+
+  const zoneId = 0;
+  const batchId = new BN(7);
+
+  const tpda = (p: Program<any>, seed: string) =>
+    PublicKey.findProgramAddressSync([Buffer.from(seed)], p.programId)[0];
+
+  const marketPda = tpda(trading, "market");
+  const marketAuthorityPda = tpda(trading, "market_authority");
+  const energyMintPda = tpda(energy, "mint_2022");
+  const energyInfoPda = tpda(energy, "token_info_2022");
+  const treasuryPda = tpda(treasury, "treasury");
+  const thbgMint = tpda(treasury, "thbg_mint");
+  const swapVault = tpda(treasury, "swap_vault");
+  const zoneMarketPda = PublicKey.findProgramAddressSync(
+    [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, "le", 4)],
+    trading.programId
+  )[0];
+
+  const escrowPda = (user: PublicKey, mint: PublicKey) =>
+    PublicKey.findProgramAddressSync([Buffer.from("escrow"), user.toBuffer(), mint.toBuffer()], trading.programId)[0];
+  const collectorPda = (label: string) =>
+    PublicKey.findProgramAddressSync([Buffer.from(label), thbgMint.toBuffer()], trading.programId)[0];
+  const nullifierPda = (user: PublicKey, orderId: Buffer) =>
+    PublicKey.findProgramAddressSync([Buffer.from("nullifier"), user.toBuffer(), orderId], trading.programId)[0];
+
+  // GRX (energy mint) and THBG are both Token-2022; ATAs/escrows use that program.
+  const ata = (mint: PublicKey, owner: PublicKey) =>
+    getAssociatedTokenAddressSync(mint, owner, false, TOKEN_2022_PROGRAM_ID);
+
+  async function mintEnergyTo(dest: PublicKey, owner: PublicKey, amount: number) {
+    await energy.methods.mintToWallet(new BN(amount)).accounts({
+      mint: energyMintPda, tokenInfo: energyInfoPda, destination: dest, destinationOwner: owner,
+      authority, payer: authority, tokenProgram: TOKEN_2022_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
+    } as any).rpc();
+  }
+
+  // Fresh keypair funded with SOL; returns it. (ATAs created on demand.)
+  async function freshUser(): Promise<Keypair> {
+    const kp = Keypair.generate();
+    await provider.sendAndConfirm(new Transaction().add(
+      SystemProgram.transfer({ fromPubkey: authority, toPubkey: kp.publicKey, lamports: 0.3 * LAMPORTS_PER_SOL })
+    ));
+    return kp;
+  }
+
+  async function createAtaFor(mint: PublicKey, owner: PublicKey): Promise<PublicKey> {
+    const a = ata(mint, owner);
+    await provider.sendAndConfirm(new Transaction().add(
+      createAssociatedTokenAccountInstruction(authority, a, owner, mint, TOKEN_2022_PROGRAM_ID)
+    ));
+    return a;
+  }
+
+  async function deposit(kp: Keypair, walletAta: PublicKey, mint: PublicKey, amount: number) {
+    await trading.methods.depositEscrow(new BN(amount)).accounts({
+      user: kp.publicKey, mint, userWallet: walletAta, userEscrow: escrowPda(kp.publicKey, mint),
+      marketAuthority: marketAuthorityPda, tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
+    } as any).signers([kp]).rpc();
+  }
+
+  // Give `user` THBG by minting GRX → swapping GRX→THBG.
+  async function fundThbg(kp: Keypair, grx: number): Promise<PublicKey> {
+    const grxAta = await createAtaFor(energyMintPda, kp.publicKey);
+    await mintEnergyTo(grxAta, kp.publicKey, grx);
+    const thbgAta = await createAtaFor(thbgMint, kp.publicKey);
+    await treasury.methods.swapGrxForThbg(new BN(grx)).accounts({
+      treasury: treasuryPda, grxMint: energyMintPda, thbgMint, swapVault,
+      userGrxAta: grxAta, userThbgAta: thbgAta, user: kp.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
+    } as any).signers([kp]).rpc();
+    return thbgAta;
+  }
+
+  before(async () => {
+    // Assumes bootstrap.ts + init-treasury.ts already ran (treasury inited,
+    // market.settlement_thbg_mint = thbgMint). Refresh the reserve attestation so
+    // swaps pass the freshness + peg checks.
+    await treasury.methods.updateAttestation(new BN(1_000_000_000_000)).accounts({
+      treasury: treasuryPda, attestor: authority,
+    } as any).rpc();
+
+    // THBG collectors for the trading market (currency = THBG).
+    try {
+      await trading.methods.initializeCollectors().accounts({
+        payer: authority, currencyMint: thbgMint,
+        feeCollector: collectorPda("fee_collector"), wheelingCollector: collectorPda("wheeling_collector"),
+        lossCollector: collectorPda("loss_collector"), marketAuthority: marketAuthorityPda,
+        tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
+      } as any).rpc();
+    } catch { /* already initialized */ }
+  });
+
+  it("records a per-(zone,batch) SettlementRecord via record_settlement_batch", async () => {
+    // Buyer holds THBG; seller holds energy. Both pre-create receiving escrows.
+    const buyer = await freshUser();
+    const seller = await freshUser();
+    const buyerThbgAta = await fundThbg(buyer, 10_000);
+    const sellerEnergyAta = await createAtaFor(energyMintPda, seller.publicKey);
+    await mintEnergyTo(sellerEnergyAta, seller.publicKey, 200);
+
+    await deposit(buyer, buyerThbgAta, thbgMint, 10_000);
+    await deposit(seller, sellerEnergyAta, energyMintPda, 200);
+
+    // Receiving escrows (seller currency, buyer energy) must exist before settle.
+    const sellerThbgAta = await fundThbg(seller, 10);
+    await deposit(seller, sellerThbgAta, thbgMint, 1);
+    const buyerEnergyAta = await createAtaFor(energyMintPda, buyer.publicKey);
+    await mintEnergyTo(buyerEnergyAta, buyer.publicKey, 1);
+    await deposit(buyer, buyerEnergyAta, energyMintPda, 1);
+
+    const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(0xa1, 0);
+    const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xb2, 0);
+    const matchAmount = 100, matchPrice = 50;
+
+    const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount: matchAmount, pricePerKwh: 60, side: 0, zoneId, expiresAt: 0 });
+    const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount: matchAmount, pricePerKwh: 50, side: 1, zoneId, expiresAt: 0 });
+    const buyerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: buyer.secretKey, message: buyerMsg });
+    const sellerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: seller.secretKey, message: sellerMsg });
+
+    const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(60), side: 0, zoneId, expiresAt: new BN(0) };
+    const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(50), side: 1, zoneId, expiresAt: new BN(0) };
+    const matchPair = { buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), wheelingCharge: new BN(1), lossCost: new BN(1) };
+
+    // Per-payer shards.
+    const marketAcct: any = await trading.account.market.fetch(marketPda);
+    const zoneAcct: any = await trading.account.zoneMarket.fetch(zoneMarketPda);
+    const mShardByte = authority.toBuffer()[0] % (Number(marketAcct.numShards) || 16);
+    const zShardByte = authority.toBuffer()[0] % (Number(zoneAcct.numShards) || 16);
+    const marketShardPda = PublicKey.findProgramAddressSync([Buffer.from("market_shard"), marketPda.toBuffer(), Buffer.from([mShardByte])], trading.programId)[0];
+    const zoneShardPda = PublicKey.findProgramAddressSync([Buffer.from("zone_shard"), zoneMarketPda.toBuffer(), Buffer.from([zShardByte])], trading.programId)[0];
+    try { await trading.methods.initializeMarketShard(mShardByte).accounts({ market: marketPda, marketShard: marketShardPda, payer: authority, systemProgram: SystemProgram.programId } as any).rpc(); } catch {}
+    try { await trading.methods.initializeZoneMarketShard(zShardByte).accounts({ zoneMarket: zoneMarketPda, zoneShard: zoneShardPda, payer: authority, systemProgram: SystemProgram.programId } as any).rpc(); } catch {}
+
+    const merkleRoot = Array.from({ length: 32 }, (_, i) => (i + 1) & 0xff);
+    const vatAmount = new BN(Math.floor(matchAmount * matchPrice * 0.07));
+    const [settlementRecord] = settlementRecordPda(zoneId, batchId, treasury.programId);
+
+    // remaining_accounts per match (order from settle_offchain.rs):
+    // [buyer_nullifier, seller_nullifier, buyer_currency_escrow, seller_currency_escrow,
+    //  seller_energy_escrow, buyer_energy_escrow]
+    const remaining = [
+      nullifierPda(buyer.publicKey, buyerOrderId),
+      nullifierPda(seller.publicKey, sellerOrderId),
+      escrowPda(buyer.publicKey, thbgMint),
+      escrowPda(seller.publicKey, thbgMint),
+      escrowPda(seller.publicKey, energyMintPda),
+      escrowPda(buyer.publicKey, energyMintPda),
+    ].map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
+
+    const settleIx = await trading.methods
+      .batchSettleOffchainMatch([matchPair] as any, merkleRoot, vatAmount, 700, batchId)
+      .accounts({
+        market: marketPda, zoneMarket: zoneMarketPda, currencyMint: thbgMint, energyMint: energyMintPda,
+        marketAuthority: marketAuthorityPda, marketShard: marketShardPda, zoneShard: zoneShardPda,
+        feeCollector: collectorPda("fee_collector"), wheelingCollector: collectorPda("wheeling_collector"),
+        lossCollector: collectorPda("loss_collector"), payer: authority,
+        sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+        tokenProgram: TOKEN_2022_PROGRAM_ID, secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        treasuryProgram: treasury.programId, treasuryState: treasuryPda, settlementRecord,
+      } as any)
+      .remainingAccounts(remaining)
+      .instruction();
+
+    // ~20 accounts + 2 Ed25519 ixs overflow a legacy tx → v0 + ALT.
+    const altAddrs = [...new Set(settleIx.keys.filter((k) => !k.isSigner).map((k) => k.pubkey.toBase58()))].map((s) => new PublicKey(s));
+    const recentSlot = await provider.connection.getSlot();
+    const [createAltIx, altAddress] = AddressLookupTableProgram.createLookupTable({ authority, payer: authority, recentSlot });
+    const extendAltIx = AddressLookupTableProgram.extendLookupTable({ payer: authority, authority, lookupTable: altAddress, addresses: altAddrs });
+    {
+      const { blockhash } = await provider.connection.getLatestBlockhash("confirmed");
+      const tx = new Transaction({ feePayer: authority, blockhash } as any).add(createAltIx, extendAltIx);
+      tx.sign(payer);
+      await provider.connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+    }
+    for (let w = 0; w < 3; w++) {
+      const { blockhash } = await provider.connection.getLatestBlockhash("confirmed");
+      const tx = new Transaction({ feePayer: authority, blockhash } as any).add(SystemProgram.transfer({ fromPubkey: authority, toPubkey: authority, lamports: 1 }));
+      tx.sign(payer);
+      await provider.connection.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    let alt: any = null;
+    for (let i = 0; i < 40; i++) {
+      const r = await provider.connection.getAddressLookupTable(altAddress);
+      if (r.value && r.value.state.addresses.length >= altAddrs.length) { alt = r.value; break; }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    expect(alt, "ALT activated").to.not.be.null;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash("confirmed");
+      const msg = new TransactionMessage({ payerKey: authority, recentBlockhash: blockhash, instructions: [buyerEd, sellerEd, settleIx] }).compileToV0Message([alt]);
+      const vtx = new VersionedTransaction(msg);
+      vtx.sign([payer]);
+      try {
+        const sig = await provider.connection.sendTransaction(vtx, { skipPreflight: true });
+        const conf = await provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+        if (conf.value.err) throw new Error("batch settle failed: " + JSON.stringify(conf.value.err));
+        break;
+      } catch (e) {
+        if (attempt === 4) throw e;
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+
+    // §2b assertion: the per-(zone,batch) SettlementRecord was written.
+    const rec: any = await treasury.account.settlementRecord.fetch(settlementRecord);
+    expect(rec.zoneId).to.equal(zoneId);
+    expect(rec.batchId.toString()).to.equal(batchId.toString());
+    expect(rec.vatRateBps).to.equal(700);
+    expect(Buffer.from(rec.merkleRoot).equals(Buffer.from(merkleRoot))).to.equal(true);
+    expect(rec.totalValue.toString()).to.equal((matchAmount * matchPrice).toString());
+
+    // Buyer received the energy; total settled advanced.
+    const buyerEngEscrow = escrowPda(buyer.publicKey, energyMintPda);
+    expect(Number((await getAccount(provider.connection, buyerEngEscrow, undefined, TOKEN_2022_PROGRAM_ID)).amount)).to.equal(1 + matchAmount);
+  });
+});
