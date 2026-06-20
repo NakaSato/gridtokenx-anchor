@@ -56,7 +56,7 @@ Tests (`tests/staking.ts`):
 - [x] Capped: comp never exceeds proven loss — `min(slash_amount, proven_loss)` (program), exercised by the full-slash test.
 - [x] Refused when destination unset / validator not Active / already Slashed — guards present; non-auth + status guards exercised.
 - [ ] CU under budget — `slash_validator` is `compute_fn!`-instrumented but no explicit CU datapoint recorded.
-- [ ] **On-chain re-verify pending** — validator down this session; re-run `tests/staking.ts` after chain bring-up.
+- [x] **On-chain re-verified (2026-06-20)** — `tests/staking.ts` 7/7 on a fresh validator (Solana 3.1.10, full deploy): vault init, stake, validator register (min-stake gate), unstake cooldown, **slash non-authority reject**, **authority full-slash → bond to destination → `Slashed`**. Partial-slash `Suspended` demotion, capped-comp, and a CU datapoint still not asserted (full-slash path only).
 
 ## §2 — Settlement audit commitment (treasury) — DO SECOND
 
