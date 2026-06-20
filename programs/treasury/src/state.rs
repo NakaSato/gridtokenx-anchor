@@ -66,3 +66,27 @@ impl StakePosition {
     /// Payload size (excludes the 8-byte Anchor discriminator).
     pub const LEN: usize = 32 + 8 + 16 + 8 + 1;
 }
+
+/// Per-batch settlement audit commitment (zero-copy). Binds a Merkle root over
+/// the matches in one zone's settlement batch, plus the gross baht value and the
+/// VAT, for off-chain verification and e-Tax issuance. Commit-only — the chain
+/// stores the root; off-chain verifiers recompute and check it. The VAT rate is
+/// recorded per batch (a parameter, not a constant: the reduced 7% expires).
+///
+/// Hand-padded for `bytemuck` Pod (no implicit padding). PDA seeds:
+/// `[b"settlement", zone_id.to_le_bytes(), batch_id.to_le_bytes()]`.
+#[account(zero_copy)]
+#[repr(C)]
+pub struct SettlementRecord {
+    pub merkle_root: [u8; 32],  // 32 — root over the batch's match leaves        @0
+    pub recorder: Pubkey,       // 32 — settlement_recorder that committed         @32
+    pub total_value: u64,       // 8  — gross baht (THBG minor units) in the batch @64
+    pub vat_amount: u64,        // 8  — VAT on the energy value (audit/e-Tax)      @72
+    pub committed_ts: i64,      // 8  — unix ts of the commit                      @80
+    pub batch_id: u64,          // 8  — settlement batch id within the zone        @88
+    pub zone_id: u32,           // 4  — market zone                               @96
+    pub vat_rate_bps: u16,      // 2  — VAT rate applied                          @100
+    pub bump: u8,               // 1                                              @102
+    pub _padding: [u8; 9],      // 9  — pad to 112 (8-aligned, no implicit pad)   @103
+    // size = 32 + 32 + 8*4 + 4 + 2 + 1 + 9 = 112 (multiple of 8).
+}

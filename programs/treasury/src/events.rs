@@ -70,6 +70,20 @@ pub struct SettlementRecorded {
     pub timestamp: i64,
 }
 
+/// A settlement batch was recorded with an audit commitment (Merkle root + VAT).
+#[event]
+pub struct SettlementBatchRecorded {
+    pub recorder: Pubkey,
+    pub zone_id: u32,
+    pub batch_id: u64,
+    pub total_value: u64,
+    pub vat_amount: u64,
+    pub vat_rate_bps: u16,
+    pub merkle_root: [u8; 32],
+    pub total_settled_thbg: u64,
+    pub timestamp: i64,
+}
+
 /// A staker's principal was slashed and redistributed to the remaining stakers.
 #[event]
 pub struct StakeSlashed {
