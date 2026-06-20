@@ -310,4 +310,35 @@ pub mod blockbench {
             instructions::smallbank_amalgamate(ctx)
         })
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // §3 SPIKE T3.2 — indexed-Merkle proof verify CU (throwaway)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn merkle_verify_inclusion(
+        ctx: Context<CpuHeavy>,
+        leaf: [u8; 32],
+        index: u32,
+        proof: Vec<[u8; 32]>,
+        root: [u8; 32],
+    ) -> Result<()> {
+        compute_fn!("merkle_verify_inclusion" => {
+            instructions::merkle_verify_inclusion(ctx, leaf, index, proof, root)
+        })
+    }
+
+    pub fn merkle_verify_exclusion(
+        ctx: Context<CpuHeavy>,
+        low_value: [u8; 32],
+        low_next: [u8; 32],
+        low_next_index: u32,
+        query: [u8; 32],
+        index: u32,
+        proof: Vec<[u8; 32]>,
+        root: [u8; 32],
+    ) -> Result<()> {
+        compute_fn!("merkle_verify_exclusion" => {
+            instructions::merkle_verify_exclusion(ctx, low_value, low_next, low_next_index, query, index, proof, root)
+        })
+    }
 }

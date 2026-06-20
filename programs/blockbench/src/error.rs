@@ -63,4 +63,10 @@ pub enum BlockbenchError {
 
     #[msg("Insufficient funds")]
     InsufficientFunds,
+
+    #[msg("Merkle proof does not reconstruct the committed root")]
+    InvalidMerkleProof,
+
+    #[msg("Exclusion range check failed: low leaf does not bound the query")]
+    ExclusionRangeInvalid,
 }

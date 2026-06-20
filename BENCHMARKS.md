@@ -190,6 +190,21 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   amortize more matches per CPI (blocked by the 1-match single-tx cap above).
   Still TODO: a true open-loop (no per-round confirm barrier) for peak TPS, and
   the batch-CU curve once the signature packaging is reworked.
+- **[IMP — §3 spike, on-chain]** **Trustless fraud-proof verify CU.** Feasibility
+  gate for an indexed-Merkle exclusion proof (prove a settled match was *dropped*):
+  measured via the throwaway `blockbench::merkle_verify_inclusion`/`_exclusion`
+  instructions (sha256 ladder, `tests/spike_merkle_cu.ts`, Solana 3.1.10).
+  Inclusion = **3 250 CU @ depth 10 / 4 114 @ depth 14**; exclusion = **3 629 /
+  4 493** — ~**216 CU per tree level**, exclusion ~380 CU over inclusion (one extra
+  low-leaf hash + the range check). Both forge classes revert on-chain (tampered
+  sibling → root mismatch; claim-present-absent → range check). A challenge's
+  Ed25519 meter-sig verify is the existing SigVerify precompile (already inside the
+  103k single / ~85k batch settle CU). **Per-challenge verify is ≪ the 200k default
+  budget (~2%), ~0.3% of the 1.4M max** — CU does NOT block a trustless Tier-2; the
+  open gate is the immediate-settlement → challenge-window redesign (see
+  `docs/proposed/implementation-plan.md` §3 T3.3). NOTE: these `blockbench`
+  additions are spike-only (throwaway); the blockbench IDL was not regenerated (the
+  test builds the ix by hand).
 - **[CRIT]** **Multi-validator** (3–4 PoA nodes). A single validator measures
   no consensus cost, yet "block-time is the bottleneck" is the headline claim.
 - **[CRIT]** **Open-loop load** (fix arrival rate λ, ramp to saturation) and

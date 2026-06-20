@@ -8,6 +8,7 @@ pub mod analytics;
 pub mod ycsb;
 pub mod metrics;
 pub mod smallbank;
+pub mod merkle_verify;
 
 pub use initialize::*;
 pub use do_nothing::*;
@@ -17,3 +18,4 @@ pub use analytics::*;
 pub use ycsb::*;
 pub use metrics::*;
 pub use smallbank::*;
+pub use merkle_verify::*;

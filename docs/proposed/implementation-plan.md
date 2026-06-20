@@ -127,13 +127,13 @@ Goal: prove or kill the trustless fraud-proof path **before** spending on it. Po
 > **Verification note:** CU measurement (T3.2) requires on-chain execution — run under a live validator / `anchor test`, not litesvm.
 
 - [x] T3.1 Prototype **indexed** Merkle tree giving **proof-of-exclusion** (`tests/spike_merkle_exclusion.ts`, throwaway PoC — 5/5, no validator). Leaf/index scheme confirmed: leaf = `H(value ‖ nextValue ‖ nextIndex)` (sentinel leaf 0 = `{0,0,0}`), sorted linked list. Non-membership of `q` = inclusion proof of the low leaf `L` with `L.value < q < L.nextValue` (or `L.nextValue == 0` for max) — O(log n) hashes (DEPTH 10 here), not the 2^256 SMT path. Both forge vectors rejected: claiming a present id absent fails the range check; widening `nextValue` fails the root check. Chose indexed over sparse precisely to keep the T3.2 on-chain proof small. (sha256 in the spike; on-chain → keccak syscall.)
-- [ ] T3.2 Measure on-chain CU of: Ed25519 meter-sig verify (instruction introspection, as `settle_offchain` does) + Merkle inclusion/exclusion verify, per challenge.
-- [ ] T3.3 Decide: CU ≤ budget AND exclusion proofs sound → write a future "trustless Tier-2" epic. Else → **stop**; governance-attested (D3) is the final design for this permissioned network.
+- [x] T3.2 Measured on-chain CU of the Merkle verify (`tests/spike_merkle_cu.ts` → throwaway `blockbench::merkle_verify_inclusion`/`_exclusion`, sha256 ladder, live validator Solana 3.1.10): **inclusion 3 250 CU @ depth 10 / 4 114 @ depth 14; exclusion 3 629 / 4 493** — ~**216 CU per tree level**, exclusion ~380 CU over inclusion (extra low-leaf hash + range check). Both forge vectors **revert on-chain** (tampered sibling → root mismatch; claim-present-absent → range check). The Ed25519 leg is the existing SigVerify precompile already measured in the settle path (the 103k single / ~85k batch settle CU *include* 2 ed verifies); per challenge that's 1 meter-sig verify + this ~3.6k Merkle exclusion verify. **Total per-challenge verify ≪ 200k default budget (~2%), ~0.3% of the 1.4M max.**
+- [~] T3.3 Decide. **CU gate: PASS** (3–4.5k CU, depth-logarithmic, huge headroom). **Soundness: demonstrated** (valid drop proven, both forge classes rejected — off-chain T3.1 *and* on-chain T3.2). So the *CU-and-soundness* blocker that this spike existed to test is **cleared**. BUT the go/no-go is not CU alone: the three 🔴 design assumptions in "Why this track" remain — chiefly that settlement is **immediate/non-reversible**, so an optimistic challenge has nothing to revert. A trustless Tier-2 would need a settlement-finality delay (escrow hold / challenge window) before funds move, which is a larger redesign. **Recommendation: CU/soundness no longer block trustless; the open gate is the challenge-window redesign — decide that before opening a Tier-2 epic.** Not a unilateral go.
 
 Tests / exit criteria:
-- [ ] CU measurement recorded vs 200k default / 1.4M max.
-- [ ] Exclusion-proof correctness demo (valid drop proven; forged rejected).
-- [ ] Written go/no-go in this doc.
+- [x] CU measurement recorded vs 200k default / 1.4M max — Merkle verify 3.25–4.5k CU (≤2% of default), recorded above + in `BENCHMARKS.md`.
+- [x] Exclusion-proof correctness demo (valid drop proven; forged rejected) — `tests/spike_merkle_exclusion.ts` (off-chain 5/5) + `tests/spike_merkle_cu.ts` (on-chain 6/6, forge vectors revert).
+- [x] Written go/no-go in this doc — see T3.3 above: CU/soundness cleared; gated now on the immediate-settlement → challenge-window redesign, not on this spike.
 
 ---
 
