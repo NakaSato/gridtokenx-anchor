@@ -63,7 +63,7 @@ npm run simnet:ci   # --ci (headless, fast)
 
 ```
 programs/
-├── energy-token/   GRID (1 kWh = 1 GRID) + GRX SPL mints; REC-validator gated mint/settle
+├── energy-token/   single 9-dec SPL mint (1 kWh = 1 GRID; source also labels it GRX for its utility/collateral role — one mint, not two; treasury consumes it as grx_mint); REC-validator gated mint/settle
 ├── governance/     PoA authority (handlers/: authority, config, dao, erc, stats); ERC-1155-style RECs; 2-step authority transfer
 ├── oracle/         AMI-gateway bridge; per-meter PDA state; 15-min market-clearing epochs
 ├── registry/       user + meter accounts; 16-shard counter; staking + validator registration

@@ -57,8 +57,10 @@ pub mod energy_token {
         Ok(())
     }
 
-    /// Add metadata to an existing GRX token mint via Metaplex
+    /// Add metadata to an existing GRID token mint via Metaplex
     /// Must be called after initialize_token with the same mint address
+    /// (GRID is the canonical name for this single 9-dec mint; the source
+    /// also labels it GRX for its utility/collateral role — same mint.)
     pub fn create_token_mint(
         ctx: Context<CreateTokenMint>,
         name: String,
@@ -102,7 +104,7 @@ pub mod energy_token {
         Ok(())
     }
 
-    /// Mint GRX tokens to a wallet using Token interface
+    /// Mint GRID tokens to a wallet using Token interface
     pub fn mint_to_wallet(ctx: Context<MintToWallet>, amount: u64) -> Result<()> {
         compute_fn!("mint_to_wallet" => {
             {

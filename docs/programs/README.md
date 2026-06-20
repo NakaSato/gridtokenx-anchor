@@ -38,6 +38,16 @@ oracle    → governance      (validates AggregatorEntry PDA; types + ID only, n
 governance → registry       (mark_erc_claimed; closes ERC double-claim window)
 ```
 
+## Design-narrative companions
+
+These reference docs are the *what + path:line*; the root design docs are the *why + model*:
+
+- [`../design/trading-cda.md`](../design/trading-cda.md) — companion to [trading.md](trading.md) (order book, CDA, off-chain settlement).
+- [`../design/rec-certificates.md`](../design/rec-certificates.md) — companion to [governance.md](governance.md) + [energy-token.md](energy-token.md) (REC/ERC lifecycle + mint gating).
+- [`../design/dao-governance.md`](../design/dao-governance.md) — companion to [governance.md](governance.md) (DAO + PoA authority).
+
+For the broader system / economic / PROPOSED design docs, see the §9 tables in [`../../ARCHITECTURE.md`](../../ARCHITECTURE.md) (`docs/design/`, `docs/proposed/`).
+
 ## Related top-level references
 
 - `../../SKILL.md` — authoritative deep-dive on program invariants (zero-copy layouts,

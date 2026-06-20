@@ -1,5 +1,7 @@
 # Design: Aggregator Validator Node
 
+> **✅ STATUS: MOSTLY IMPLEMENTED.** The on-chain instructions this node calls all exist and match code: `register_validator`/`stake_grx`/`unstake_grx`/`slash_validator` (`registry`), `mint_generation` + `GenerationMintRecord` PDA (`energy-token`), `aggregate_readings`/`trigger_market_clearing`/`submit_meter_reading` (`oracle`), `aggregate_shards` (`registry`), `epoch % 900` window alignment (`oracle`), `MIN_VALIDATOR_STAKE = 10,000 GRX`. Three claims below have been corrected for current code: (1) the old `// TODO: Add unstake_grx/slash_validator` gap is closed — both are in `registry` now; (2) the program is `treasury`, not `grx_treasury`, and slashing executes in `registry`; (3) the registry validator bond is a **no-yield** security bond — reward-bearing staking is the separate `treasury::stake_grx` product.
+
 ### Permissioned Off-Chain Aggregation & Settlement-Bridge Node for the GridTokenX P2P Energy Platform
 
 *Node specification — coordinates the existing Solana/Anchor on-chain programs*
@@ -82,7 +84,7 @@ The node processes each 15-minute window through four stages.
 
 ## 4. Exactly-Once Minting Bridge
 
-This is the node's most safety-critical function. Minting must be **idempotent**: a meter that generated 5 kWh in window *W* must cause exactly 5 GRX to be minted — never 0 (lost generation), never 10 (double mint), even across node restarts, retries, and concurrent nodes.
+This is the node's most safety-critical function. Minting must be **idempotent**: a meter that generated 5 kWh in window *W* must cause exactly 5 GRID to be minted (1 kWh = 1 GRID) — never 0 (lost generation), never 10 (double mint), even across node restarts, retries, and concurrent nodes.
 
 The guarantee is **double-locked**:
 
@@ -108,7 +110,7 @@ else:
 
 The on-chain PDA is authoritative. The Redis set is only an optimisation that avoids hammering the chain with transactions that would be rejected anyway. If Redis is lost, correctness is preserved — the node simply re-derives the set from the chain (or pays for redundant rejected transactions until it does).
 
-> **Invariant.** For any `(meter_id, epoch)`, total GRX minted across all nodes and all retries equals the meter's net generation for that window — exactly once.
+> **Invariant.** For any `(meter_id, epoch)`, total GRID minted across all nodes and all retries equals the meter's net generation for that window — exactly once.
 
 ---
 
@@ -128,7 +130,7 @@ This is a **Proof-of-Authority** role, not open participation.
 1. **Allow-list.** The `governance` program maintains the set of admitted aggregator public keys. Only an admitted key's transactions are honoured for aggregation/minting authority.
 2. **Bond.** The node calls `register_validator`, locking **≥ 10,000 GRX** (`MIN` stake) as collateral via the `registry` program's `stake_grx`.
 3. **Identity.** The node holds a keypair whose pubkey is both the allow-list entry and the staking account owner; every submitted transaction is signed by it, binding actions to the bonded identity.
-4. **Rewards.** Honest, live aggregation earns staking rewards (and any aggregator fee the platform defines); these accrue to the staked account.
+4. **Rewards.** The registry validator bond itself earns **no yield** — it is a slashable security bond, not a yield position. Reward-bearing staking is a separate opt-in product in the `treasury` program (`treasury::stake_grx`, MasterChef accumulator); any aggregator fee the platform defines is also separate from the bond.
 
 Admission and removal are governance actions — a node cannot self-admit, and a misbehaving node can be removed by the same authority that admitted it.
 
@@ -146,7 +148,7 @@ Because the node is staked, misbehaviour has a direct economic cost. Recommended
 | **Liveness failure** | Missing required submissions for *N* consecutive windows | Medium → forfeit rewards, then removal |
 | **Stale data** | Minting against readings outside window bounds | Medium |
 
-Slashing itself is executed on-chain by the **`unstake`/`slash` path** (the gap the existing `registry` program flagged as `// TODO: Add unstake_grx and slash_validator`, and which the companion `grx_treasury` staking module implements). Slashed bond is redistributed to honest stakers rather than burned.
+Slashing is executed on-chain by `registry::slash_validator` (with `registry::unstake_grx` for honest exit) — both implemented in the `registry` program. The slashed bond is sent to the configured `slash_destination` (typically the `treasury` `reward_vault`) and redistributed to treasury yield-stakers via `fund_rewards`, rather than burned.
 
 > A **challenge window** is recommended: another aggregator (or any watcher) can submit proof that a settled aggregate was invalid, triggering the slash. This makes a multi-node deployment self-policing.
 
@@ -187,7 +189,7 @@ $$G_{\text{net}} = \max\!\left(0,\; \text{total\_generation} - \text{total\_cons
 
 $$M = \max\!\left(0,\; G_{\text{net}} - \text{settled\_net\_generation} - \text{claimed\_erc\_generation}\right)$$
 
-$$\text{GRX}_{\text{minted}} = M \times \eta, \qquad \eta = 1 \;\;(\text{1 kWh} = \text{1 GRX})$$
+$$\text{GRID}_{\text{minted}} = M \times \eta, \qquad \eta = 1 \;\;(\text{1 kWh} = \text{1 GRID})$$
 
 **Window boundary (alignment check):**
 
@@ -225,7 +227,8 @@ $$\text{consecutive\_misses} \geq \text{liveness\_max\_misses} \;\Rightarrow\; \
 | `registry` | `register_validator`, `stake_grx`; reads meter pubkeys | node ↔ chain |
 | `governance` | reads aggregator allow-list (PoA) | chain → node |
 | `trading` | `trigger_market_clearing` after mint | node → chain |
-| `grx_treasury` | `slash` (executed by authority on challenge); rewards accrue | chain |
+| `registry` | `slash_validator` (executed by authority on challenge) | chain |
+| `treasury` | `fund_rewards` (slashed bond → reward pool); yield-staking rewards accrue | chain |
 
 The node submits transactions but holds **no special on-chain privilege beyond its allow-listed, staked identity** — every safety property is enforced by the programs, not assumed of the node.
 
@@ -244,4 +247,4 @@ The node submits transactions but holds **no special on-chain privilege beyond i
 
 ---
 
-*Design reference for the aggregator-only validator node. The node is an off-chain coordinator; all correctness and safety properties are enforced on-chain by the `oracle`, `energy-token`, `registry`, `governance`, and `grx_treasury` programs. Window length, stake minimum, and idempotency fields track the existing codebase (`epoch % 900`, 10,000 GRX `MIN`, `GenerationMintRecord` PDA, Redis `MINTED_SET`).*
+*Design reference for the aggregator-only validator node. The node is an off-chain coordinator; all correctness and safety properties are enforced on-chain by the `oracle`, `energy-token`, `registry`, `governance`, and `treasury` programs. Window length, stake minimum, and idempotency fields track the existing codebase (`epoch % 900`, 10,000 GRX `MIN`, `GenerationMintRecord` PDA, Redis `MINTED_SET`).*

@@ -156,10 +156,30 @@ Lifecycle / load simulations: `simulate-trading.ts`, `simulate-market-clearing.t
 
 | File | Covers |
 | :--- | :--- |
-| `docs/programs/` | Per-program reference docs (one per program) — identity, state, instructions, invariants, CPI, events, errors, testing; see [`docs/programs/README.md`](docs/programs/README.md) |
+| `docs/programs/` | **Reference** (what + `path:line`): per-program docs — identity, state, instructions, invariants, CPI, events, errors, testing; see [`docs/programs/README.md`](docs/programs/README.md) |
+| `docs/design/` | **Design narratives** (why + model) for *implemented* features — see the group below |
+| `docs/proposed/` | **Proposed / not-yet-built** design + the implementation plan — see the group below |
 | `RUNTIME-ARCHITECTURE.md` | How the programs execute: SVM runtime, CPI, security model, protocol flow, consensus/validator topology |
-| `node-validator.md` | Off-chain validator/aggregator node design: PoA admission, the governance aggregator allow-list, and how the oracle authorizes admitted nodes |
 | `CLAUDE.md` | LLM working rules for this submodule |
 | `SKILL.md` | Deep dive on program invariants — **version/ID table is stale**, defer to `Anchor.toml` + `Cargo.toml` |
 | `BENCHMARKS.md` | Benchmark methodology and results |
 | `Anchor.toml` | Authoritative program IDs, toolchain, scripts |
+
+### `docs/design/` — implemented design narratives
+
+| File | Covers |
+| :--- | :--- |
+| [`docs/design/node-validator.md`](docs/design/node-validator.md) | Off-chain validator/aggregator node design: PoA admission, the governance aggregator allow-list, and how the oracle authorizes admitted nodes |
+| [`docs/design/trading-cda.md`](docs/design/trading-cda.md) | Trading order book, CDA + off-chain-signed settlement, nullifier replay guard, sharding, THBG settlement policy. Companion to [`docs/programs/trading.md`](docs/programs/trading.md) |
+| [`docs/design/rec-certificates.md`](docs/design/rec-certificates.md) | REC/ERC certificate lifecycle (issue/validate/transfer/revoke) + energy-token REC-validator mint gating. Companion to [`docs/programs/governance.md`](docs/programs/governance.md) + [`energy-token.md`](docs/programs/energy-token.md) |
+| [`docs/design/dao-governance.md`](docs/design/dao-governance.md) | Generation-weighted DAO (proposal/vote/execute) + PoA 2-step authority transfer. Companion to [`docs/programs/governance.md`](docs/programs/governance.md) |
+| [`docs/design/wallet-authority.md`](docs/design/wallet-authority.md) | **Mostly implemented:** wallet/authority architecture — PDA vaults, mint authority, custodian attestation, scoped aggregator signing |
+| [`docs/design/cost-fee-structure.md`](docs/design/cost-fee-structure.md) | **Research framework:** full cost/fee stack — wheeling, VAT, Ft, swap fee, aggregator margin (external regulatory figures; some on-chain hooks PROPOSED) |
+
+### `docs/proposed/` — not-yet-built design + plan
+
+| File | Covers |
+| :--- | :--- |
+| [`docs/proposed/blockchain-node-network.md`](docs/proposed/blockchain-node-network.md) | **Network real, Tier-2 PROPOSED:** permissioned-Solana node taxonomy + two-tier consensus (ordering inherited; settlement-validity Merkle/challenge-response not yet built) |
+| [`docs/proposed/collateral-slashing.md`](docs/proposed/collateral-slashing.md) | **PROPOSED, not implemented:** revised aggregator THBG collateral + capped-victim-comp slashing model. Current code uses a GRX validator bond — see banner |
+| [`docs/proposed/implementation-plan.md`](docs/proposed/implementation-plan.md) | Phased plan + todo/test lists to close the PROPOSED design→code gap (settlement commitment, challenge-response, slash rework) |
