@@ -99,19 +99,21 @@ Gotchas learned: (1) a pre-existing validator deployed by another upgrade author
 - [x] `tests/staking.ts` — 7/7 (§1 slash: reject non-auth + full slash → fund → Slashed; outdated tests fixed in `f06ee5d`)
 - [x] `tests/escrow_settlement.ts` — 4/4 across runs (token-program + optional-account fixes in `7cfb5e0`/`62aad8a`; the signed off-chain **settle passes**, proving the `record_settlement` CPI on-chain)
 
-### §2b batch runtime — happy path DONE (on-chain), negative cases TODO
+### §2b batch runtime — happy + TreasurySettlementRequired DONE (on-chain)
 
-`tests/batch_settle_thbg.ts` — 1/1 on a live validator. Required the
+`tests/batch_settle_thbg.ts` — 2/2 on a live validator. Required the
 `ensure_nullifier_initialized` program fix (see verification status above) +
 three test-setup fixes (THBG funding vs swap rate, idempotent ATA, tx
 `recentBlockhash`). **Rebuild + redeploy current `trading.so` before running** —
 a stale binary resurfaces the `remaining_accounts.len()` mismatch.
+Note: `batchId` is now per-run (`Date.now()`) — the validator ledger persists
+across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run.
 
 - [x] Setup: `init-treasury.ts` (sets `settlement_thbg_mint`), attest reserve, users swap GRX→THBG, deposit THBG + energy escrows.
 - [x] Batch THBG settle writes the `SettlementRecord` (root/VAT/zone/batch, via `scripts/settlement-pda.ts`).
+- [x] `TreasurySettlementRequired` (6031) fires when treasury/settlement_record omitted on a THBG market — asserted via send + `conf.value.err` `Custom:6031`.
 - [ ] Assert `total_settled_thbg` bumped by gross (record written; explicit total assertion not yet added).
-- [ ] `TreasurySettlementRequired` fires when treasury/settlement_record omitted on a THBG market.
-- [ ] `TreasuryCurrencyMismatch` on wrong currency.
+- [ ] `TreasuryCurrencyMismatch` (6030) on wrong currency — needs a 2nd currency mint + market reconfig (alt-currency escrows); heavier, deferred.
 - [ ] CU under budget (batch + CPI-init). Off-chain: rebuilt root == on-chain root.
 
 ## §3 — Feasibility spike (GATE — before any trustless work) — DO THIRD

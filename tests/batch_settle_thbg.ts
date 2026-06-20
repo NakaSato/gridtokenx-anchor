@@ -76,7 +76,7 @@ function orderMessage(p: {
   return b;
 }
 
-describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
+describe("batch_settle THBG (§2b, runtime-verified)", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
@@ -87,7 +87,9 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
   const payer = (provider.wallet as any).payer as Keypair;
 
   const zoneId = 0;
-  const batchId = new BN(7);
+  // Unique per run: the SettlementRecord PDA is seeded by (zone, batch) and the
+  // local validator ledger persists across runs — a fixed id collides on re-run.
+  const batchId = new BN(Date.now() % 1_000_000);
 
   const tpda = (p: Program<any>, seed: string) =>
     PublicKey.findProgramAddressSync([Buffer.from(seed)], p.programId)[0];
@@ -184,14 +186,16 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
     } catch { /* already initialized */ }
   });
 
-  it("records a per-(zone,batch) SettlementRecord via record_settlement_batch", async () => {
-    // Buyer holds THBG; seller holds energy. Both pre-create receiving escrows.
+  const matchAmount = 100, matchPrice = 50;
+
+  // Seed buyer (THBG) + seller (energy), pre-create both receiving escrows so a
+  // settle has somewhere to deliver. Returns the funded keypairs.
+  async function seedUsers(): Promise<{ buyer: Keypair; seller: Keypair }> {
     const buyer = await freshUser();
     const seller = await freshUser();
     const buyerThbgAta = await fundThbg(buyer, 10_000);
     const sellerEnergyAta = await createAtaFor(energyMintPda, seller.publicKey);
     await mintEnergyTo(sellerEnergyAta, seller.publicKey, 200);
-
     await deposit(buyer, buyerThbgAta, thbgMint, 10_000);
     await deposit(seller, sellerEnergyAta, energyMintPda, 200);
 
@@ -201,11 +205,17 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
     const buyerEnergyAta = await createAtaFor(energyMintPda, buyer.publicKey);
     await mintEnergyTo(buyerEnergyAta, buyer.publicKey, 1);
     await deposit(buyer, buyerEnergyAta, energyMintPda, 1);
+    return { buyer, seller };
+  }
 
-    const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(0xa1, 0);
-    const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xb2, 0);
-    const matchAmount = 100, matchPrice = 50;
-
+  // Build the batch settle ix (+ the two Ed25519 verify ixs) and an activated ALT.
+  // `withTreasury` toggles whether the optional treasury accounts are passed —
+  // omitting them on a THBG market is the TreasurySettlementRequired guard.
+  async function prepareSettle(
+    buyer: Keypair, seller: Keypair,
+    opts: { withTreasury: boolean; buyerOrderId: Buffer; sellerOrderId: Buffer; thisBatchId: BN }
+  ): Promise<{ buyerEd: any; sellerEd: any; settleIx: any; alt: any; settlementRecord: PublicKey }> {
+    const { buyerOrderId, sellerOrderId } = opts;
     const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount: matchAmount, pricePerKwh: 60, side: 0, zoneId, expiresAt: 0 });
     const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount: matchAmount, pricePerKwh: 50, side: 1, zoneId, expiresAt: 0 });
     const buyerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: buyer.secretKey, message: buyerMsg });
@@ -227,7 +237,7 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
 
     const merkleRoot = Array.from({ length: 32 }, (_, i) => (i + 1) & 0xff);
     const vatAmount = new BN(Math.floor(matchAmount * matchPrice * 0.07));
-    const [settlementRecord] = settlementRecordPda(zoneId, batchId, treasury.programId);
+    const [settlementRecord] = settlementRecordPda(zoneId, opts.thisBatchId, treasury.programId);
 
     // remaining_accounts per match (order from settle_offchain.rs):
     // [buyer_nullifier, seller_nullifier, buyer_currency_escrow, seller_currency_escrow,
@@ -241,8 +251,14 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
       escrowPda(buyer.publicKey, energyMintPda),
     ].map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
 
+    // Optional treasury accounts: passed as null when exercising the
+    // TreasurySettlementRequired guard (THBG market + recording omitted).
+    const treasuryAccts = opts.withTreasury
+      ? { treasuryProgram: treasury.programId, treasuryState: treasuryPda, settlementRecord }
+      : { treasuryProgram: null, treasuryState: null, settlementRecord: null };
+
     const settleIx = await trading.methods
-      .batchSettleOffchainMatch([matchPair] as any, merkleRoot, vatAmount, 700, batchId)
+      .batchSettleOffchainMatch([matchPair] as any, merkleRoot, vatAmount, 700, opts.thisBatchId)
       .accounts({
         market: marketPda, zoneMarket: zoneMarketPda, currencyMint: thbgMint, energyMint: energyMintPda,
         marketAuthority: marketAuthorityPda, marketShard: marketShardPda, zoneShard: zoneShardPda,
@@ -251,13 +267,13 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
         sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
         tokenProgram: TOKEN_2022_PROGRAM_ID, secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
-        treasuryProgram: treasury.programId, treasuryState: treasuryPda, settlementRecord,
+        ...treasuryAccts,
       } as any)
       .remainingAccounts(remaining)
       .instruction();
 
     // ~20 accounts + 2 Ed25519 ixs overflow a legacy tx → v0 + ALT.
-    const altAddrs = [...new Set(settleIx.keys.filter((k) => !k.isSigner).map((k) => k.pubkey.toBase58()))].map((s) => new PublicKey(s));
+    const altAddrs = [...new Set(settleIx.keys.filter((k: any) => !k.isSigner).map((k: any) => k.pubkey.toBase58()))].map((s) => new PublicKey(s as string));
     const recentSlot = await provider.connection.getSlot();
     const [createAltIx, altAddress] = AddressLookupTableProgram.createLookupTable({ authority, payer: authority, recentSlot });
     const extendAltIx = AddressLookupTableProgram.extendLookupTable({ payer: authority, authority, lookupTable: altAddress, addresses: altAddrs });
@@ -281,6 +297,15 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
       await new Promise((r) => setTimeout(r, 400));
     }
     expect(alt, "ALT activated").to.not.be.null;
+    return { buyerEd, sellerEd, settleIx, alt, settlementRecord };
+  }
+
+  it("records a per-(zone,batch) SettlementRecord via record_settlement_batch", async () => {
+    const { buyer, seller } = await seedUsers();
+    const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(0xa1, 0);
+    const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xb2, 0);
+    const { buyerEd, sellerEd, settleIx, alt, settlementRecord } =
+      await prepareSettle(buyer, seller, { withTreasury: true, buyerOrderId, sellerOrderId, thisBatchId: batchId });
 
     for (let attempt = 0; attempt < 5; attempt++) {
       const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash("confirmed");
@@ -303,11 +328,46 @@ describe("batch_settle THBG (§2b, runtime-unverified scaffold)", () => {
     expect(rec.zoneId).to.equal(zoneId);
     expect(rec.batchId.toString()).to.equal(batchId.toString());
     expect(rec.vatRateBps).to.equal(700);
-    expect(Buffer.from(rec.merkleRoot).equals(Buffer.from(merkleRoot))).to.equal(true);
+    expect(Buffer.from(rec.merkleRoot).equals(Buffer.from(merkleRoot00()))).to.equal(true);
     expect(rec.totalValue.toString()).to.equal((matchAmount * matchPrice).toString());
 
     // Buyer received the energy; total settled advanced.
     const buyerEngEscrow = escrowPda(buyer.publicKey, energyMintPda);
     expect(Number((await getAccount(provider.connection, buyerEngEscrow, undefined, TOKEN_2022_PROGRAM_ID)).amount)).to.equal(1 + matchAmount);
   });
+
+  it("rejects a THBG-market batch that omits the treasury accounts (TreasurySettlementRequired)", async () => {
+    const { buyer, seller } = await seedUsers();
+    const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(0xc3, 0);
+    const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xd4, 0);
+    // Distinct batch id — irrelevant since the tx rolls back, but avoids any
+    // collision with the happy-path SettlementRecord PDA.
+    const { buyerEd, sellerEd, settleIx, alt } =
+      await prepareSettle(buyer, seller, { withTreasury: false, buyerOrderId, sellerOrderId, thisBatchId: batchId.addn(1) });
+
+    // Send (not simulate): a freshly-created ALT isn't resolvable under
+    // simulateTransaction's replaceRecentBlockhash path. The require!(!recording_required)
+    // guard fires at the end of the batch, reverting the whole tx; the on-chain
+    // error code (6031 = TreasurySettlementRequired) surfaces in conf.value.err.
+    let err: any = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash("confirmed");
+      const msg = new TransactionMessage({ payerKey: authority, recentBlockhash: blockhash, instructions: [buyerEd, sellerEd, settleIx] }).compileToV0Message([alt]);
+      const vtx = new VersionedTransaction(msg);
+      vtx.sign([payer]);
+      const sig = await provider.connection.sendTransaction(vtx, { skipPreflight: true });
+      const conf = await provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+      if (conf.value.err) { err = conf.value.err; break; }
+      if (attempt === 4) break;
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    // settleIx is instruction index 2 (buyerEd, sellerEd, settleIx).
+    expect(err, "settle must fail when treasury accounts are omitted").to.not.be.null;
+    expect(JSON.stringify(err), JSON.stringify(err)).to.match(/"Custom":6031/);
+  });
 });
+
+// merkleRoot used by the happy-path assertion (mirrors prepareSettle's root).
+function merkleRoot00(): number[] {
+  return Array.from({ length: 32 }, (_, i) => (i + 1) & 0xff);
+}
