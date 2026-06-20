@@ -95,11 +95,29 @@ and are not reconciled.
 ### 2.4 Slashing and slash routing
 
 The PoA (Proof-of-Authority) registry authority may slash an Active validator's bond
-(`slash_validator`, `lib.rs:827`). The slashed GRX is transferred out of the vault to a
-pre-configured `slash_destination` (`lib.rs:864-880`), which must first be set by the
-authority via `set_slash_destination` (`lib.rs:131`). The intended destination is the
-treasury `reward_vault`, so that slashed bonds are redistributed to honest stakers via a
-subsequent `treasury::fund_rewards` call (`lib.rs:819-823`).
+(`slash_validator`, `lib.rs:839`). Slashing is **severity-scaled and victim-compensating**,
+not a flat forfeiture:
+
+- **Severity.** A governance-attested `slash_bps` (1..=10000) sets `slash_amount = bond *
+  slash_bps / 10_000`, capped at the bond (`lib.rs:883`).
+- **Capped victim compensation.** `compensation = min(slash_amount, proven_loss)` is paid to
+  the passed `victim_token_account` (`lib.rs:889`); capping at the governance-attested
+  `proven_loss` removes the bounty-gaming incentive.
+- **Transparent fund remainder.** `fund_amount = slash_amount − compensation` goes to the
+  pre-configured `slash_destination` (`lib.rs:890`), which must first be set by the authority
+  via `set_slash_destination` (`lib.rs:131`). The intended destination is the treasury
+  `reward_vault`, so the remainder is redistributed to honest stakers via a subsequent
+  `treasury::fund_rewards` call.
+- **Value invariant.** `slash_amount == compensation + fund_amount` is enforced on-chain
+  (`lib.rs:896`) — no value is created or destroyed.
+- **Status transition.** Full forfeiture (`slash_bps == 10000` or the bond fully consumed) →
+  terminal `Slashed`; a partial slash leaving the remaining bond below `MIN_VALIDATOR_STAKE`
+  → `Suspended` (recoverable by topping up); otherwise the validator stays `Active`
+  (`lib.rs:949`).
+
+Only an `Active` validator can be slashed, only the registry authority may call it, and the
+destination must equal the configured one (no misroute). On-chain verified in
+`tests/staking.ts` (partial→Suspended, capped comp both directions, invariant, CU ≈ 27.8k).
 
 ---
 

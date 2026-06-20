@@ -43,9 +43,9 @@ invariants, CPI, events, errors, testing — all `path:line`-cited):
 | `energy-token` | `6FZKcVKCLFSNLMxypFJGU4K14xUBnxNW9VAuKGhmqjGX` | GRID (1 kWh = 1 GRID) + GRX SPL mints; REC-validator-gated mint/settle; idempotent generation mint keyed by a per-`(meter, window)` `GenerationMintRecord` PDA (`mint_generation`); Token-2022 + Metaplex metadata |
 | `governance` | `FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS` | PoA authority (authority/config/dao/erc/stats handlers); ERC-1155-style RECs; 2-step authority transfer; PoA aggregator allow-list (`AggregatorEntry` PDA, `admit_aggregator`/`revoke_aggregator`) |
 | `oracle` | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU` | AMI-gateway bridge; per-meter PDA state; 15-min market-clearing epochs; node-facing instructions accept the chain bridge **or** an admitted aggregator (`AggregatorEntry` validated against governance) |
-| `registry` | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7` | User + meter accounts; 16-shard counter; staking + validator registration + slashing (slashed bonds go only to the configured `slash_destination`, Active validators only); unstake cooldown + validator demote-on-unstake; 10 GRX new-user airdrop |
-| `trading` | `CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX` | Order book + CDA; sharded order submit; off-chain-signed match settlement (`settle_offchain.rs`); auction clearing |
-| `treasury` | `FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn` | GRX↔THBG (THB-pegged stablecoin, 6dp) swap with reserve-attested peg invariant; redeem bounded by `swap_vault` collateral + tracked supply; GRX staking (MasterChef accumulator); non-custodial baht-settlement accounting (`record_settlement`) |
+| `registry` | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7` | User + meter accounts; 16-shard counter; staking + validator registration + slashing (severity-scaled `slash_bps`, capped victim compensation `min(slash, proven_loss)`, remainder to the configured fund/`slash_destination`, `slash == comp + fund` invariant, partial-slash → `Suspended` / full → `Slashed`, Active validators only); unstake cooldown + validator demote-on-unstake; 10 GRX new-user airdrop |
+| `trading` | `CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX` | Order book + CDA; sharded order submit; off-chain-signed match settlement (`settle_offchain.rs`); batch settle records a per-`(zone,batch)` audit commitment to treasury via CPI; auction clearing |
+| `treasury` | `FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn` | GRX↔THBG (THB-pegged stablecoin, 6dp) swap with reserve-attested peg invariant; redeem bounded by `swap_vault` collateral + tracked supply; GRX staking (MasterChef accumulator); non-custodial baht-settlement accounting — `record_settlement` (single) + `record_settlement_batch` writing a per-`(zone,batch)` `SettlementRecord` (Merkle root + VAT + total) |
 
 ### Benchmark (not part of the production protocol)
 
@@ -69,7 +69,7 @@ Cross-program invocation via path deps with `features = ["cpi"]`:
 ```
 registry → energy-token        (airdrop / mint on registration)
 trading  → governance          (read PoA config, ERC certificates)
-trading  → treasury            (optional record_settlement; non-custodial, fires only when treasury accounts are passed)
+trading  → treasury            (record_settlement / record_settlement_batch; non-custodial, fires when treasury accounts are passed — mandatory for THBG markets)
 oracle   → governance          (types + ID only, no CPI invoke: validate an admitted aggregator's `AggregatorEntry` PDA)
 ```
 
@@ -180,6 +180,6 @@ Lifecycle / load simulations: `simulate-trading.ts`, `simulate-market-clearing.t
 
 | File | Covers |
 | :--- | :--- |
-| [`docs/proposed/blockchain-node-network.md`](docs/proposed/blockchain-node-network.md) | **Network real, Tier-2 PROPOSED:** permissioned-Solana node taxonomy + two-tier consensus (ordering inherited; settlement-validity Merkle/challenge-response not yet built) |
-| [`docs/proposed/collateral-slashing.md`](docs/proposed/collateral-slashing.md) | **PROPOSED, not implemented:** revised aggregator THBG collateral + capped-victim-comp slashing model. Current code uses a GRX validator bond — see banner |
+| [`docs/proposed/blockchain-node-network.md`](docs/proposed/blockchain-node-network.md) | **Network + audit commitment real, trustless Tier-2 PROPOSED:** permissioned-Solana node taxonomy + two-tier consensus; per-`(zone,batch)` `SettlementRecord` (Merkle root + VAT) is built (commit-only), but on-chain root *verification* / challenge-response is not — see banner |
+| [`docs/proposed/collateral-slashing.md`](docs/proposed/collateral-slashing.md) | **Slash distribution IMPLEMENTED, rest PROPOSED:** severity-scaled slash + capped victim comp + fund + Suspended/Slashed are in code (GRX bond per D1); THBG bond, multi-victim pro-rata, distinct fund PDA, and trustless challenge remain forward design — see banner |
 | [`docs/proposed/implementation-plan.md`](docs/proposed/implementation-plan.md) | Phased plan + todo/test lists to close the PROPOSED design→code gap (settlement commitment, challenge-response, slash rework) |
