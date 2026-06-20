@@ -50,13 +50,13 @@ Goal: replace the single-destination slash with severity-scaled, capped-victim-c
 
 Tests (`tests/staking.ts`):
 - [x] Reject non-authority slash; full slash σ=1 → fund → `Slashed` (per prior on-chain run, plan §A2 line; outdated tests fixed in `f06ee5d`).
-- [ ] Partial slash σ=0.1 → `Suspended` demotion below `MIN_VALIDATOR_STAKE` (Example 2) — assertion not explicit yet.
-- [ ] Under-bonded: comp capped, fund=0, no over-pay (Example 3).
-- [x] `slash_amount == comp + F` invariant — enforced on-chain (program `require!`); covered implicitly by the full-slash test.
-- [x] Capped: comp never exceeds proven loss — `min(slash_amount, proven_loss)` (program), exercised by the full-slash test.
+- [x] Partial slash σ=0.1 → `Suspended` demotion below `MIN_VALIDATOR_STAKE` (Example 2) — `tests/staking.ts` "partial slash demotes to Suspended" (bond==MIN, 10% slash → remaining 90% < MIN → Suspended).
+- [x] Capped comp, both directions: proven_loss < slash → comp = proven_loss, remainder → fund, stays Active; proven_loss > slash → comp capped at slash_amount, fund=0. Asserts victim/fund deltas + the value invariant `comp + fund == slash_amount == vault drain`.
+- [x] `slash_amount == comp + F` invariant — enforced on-chain (program `require!`) **and** asserted via balance deltas in the capped-comp test.
+- [x] Capped: comp never exceeds proven loss — `min(slash_amount, proven_loss)` (program), asserted both directions.
 - [x] Refused when destination unset / validator not Active / already Slashed — guards present; non-auth + status guards exercised.
-- [ ] CU under budget — `slash_validator` is `compute_fn!`-instrumented but no explicit CU datapoint recorded.
-- [x] **On-chain re-verified (2026-06-20)** — `tests/staking.ts` 7/7 on a fresh validator (Solana 3.1.10, full deploy): vault init, stake, validator register (min-stake gate), unstake cooldown, **slash non-authority reject**, **authority full-slash → bond to destination → `Slashed`**. Partial-slash `Suspended` demotion, capped-comp, and a CU datapoint still not asserted (full-slash path only).
+- [x] CU under budget — `slash_validator` (comp+fund two-transfer path) = **27 811 CU** (`BENCH_SLASH_CU`), well inside the 200k default budget.
+- [x] **On-chain verified (2026-06-21)** — `tests/staking.ts` **11/11** on a fresh validator (Solana 3.1.10, full deploy): vault init, stake, validator register (min-stake gate), unstake cooldown, slash non-authority reject, authority full-slash → `Slashed`, **partial-slash → `Suspended`**, **capped-compensation (both directions) + value invariant**, **slash CU datapoint**.
 
 ## §2 — Settlement audit commitment (treasury) — DO SECOND
 

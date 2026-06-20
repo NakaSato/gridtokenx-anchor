@@ -394,6 +394,134 @@ describe("registry_staking", () => {
     expect((vaultBefore.amount - vaultAfter.amount).toString()).to.equal(stakedBefore.toString());
   });
 
+  // ── §1 slash distribution: partial demotion + capped compensation + CU ───────
+  //
+  // The full-slash test above leaves the shared validator terminally Slashed, so
+  // these spin up FRESH validators. MIN_VALIDATOR_STAKE = 10,000 GRX (9 dec).
+  const MIN = new BN("10000000000000");
+  const GRX = (n: number) => new BN(n).mul(new BN("1000000000")); // n GRX → base units
+  let slashDest: PublicKey; // the configured fund sink (authority ATA)
+
+  async function freshAta(owner: PublicKey): Promise<PublicKey> {
+    const a = await getOrCreateAssociatedTokenAccount(
+      provider.connection, (provider.wallet as any).payer, grxMint, owner,
+      false, undefined, undefined, TOKEN_2022_PROGRAM_ID,
+    );
+    return a.address;
+  }
+
+  // Register + stake + activate a brand-new validator with `stake` GRX bonded.
+  async function setupValidator(stake: BN): Promise<{ kp: Keypair; userPda: PublicKey }> {
+    const kp = Keypair.generate();
+    await provider.connection.confirmTransaction(
+      await provider.connection.requestAirdrop(kp.publicKey, 1_000_000_000)
+    );
+    const ata = await freshAta(kp.publicKey);
+    await mintTo(provider.connection, (provider.wallet as any).payer, grxMint, ata, authority,
+      BigInt(stake.toString()), [], undefined, TOKEN_2022_PROGRAM_ID);
+
+    const [uPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("user"), kp.publicKey.toBuffer()], program.programId);
+    const ushard = kp.publicKey.toBytes()[0] % 16;
+    const [ushardPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("registry_shard"), Buffer.from([ushard])], program.programId);
+    try {
+      await program.methods.initializeShard(ushard)
+        .accounts({ shard: ushardPda, authority, systemProgram: SystemProgram.programId } as any).rpc();
+    } catch {}
+    await program.methods.registerUser({ prosumer: {} }, 0, 0, new BN(0), ushard)
+      .accounts({
+        userAccount: uPda, registryShard: ushardPda, registry: registryPda, authority: kp.publicKey,
+        energyTokenProgram: SystemProgram.programId, mint: authority, tokenInfo: authority,
+        userTokenAccount: authority, tokenProgram: TOKEN_2022_PROGRAM_ID,
+        associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID, systemProgram: SystemProgram.programId,
+      }).rpc(); // registerUser: authority is a plain account, not a Signer (matches the main before())
+    await program.methods.stakeGrx(stake)
+      .accounts({ registry: registryPda, userAccount: uPda, grxVault: vaultPda, userGrxAta: ata, grxMint, authority: kp.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID })
+      .signers([kp]).rpc();
+    await program.methods.registerValidator()
+      .accounts({ userAccount: uPda, authority: kp.publicKey }).signers([kp]).rpc();
+    return { kp, userPda: uPda };
+  }
+
+  async function slash(v: { kp: Keypair; userPda: PublicKey }, bps: number, provenLoss: BN, victim: PublicKey): Promise<string> {
+    return await program.methods.slashValidator(bps, provenLoss)
+      .accounts({
+        targetAuthority: v.kp.publicKey, targetUserAccount: v.userPda, grxVault: vaultPda,
+        registry: registryPda, slashDestination: slashDest, victimTokenAccount: victim, grxMint,
+        authority, tokenProgram: TOKEN_2022_PROGRAM_ID,
+      }).rpc();
+  }
+
+  before(async () => {
+    // Ensure the fund sink is configured (the full-slash test also sets it, but
+    // these run independently of ordering).
+    slashDest = await freshAta(authority);
+    await program.methods.setSlashDestination(slashDest).accounts({ registry: registryPda, authority }).rpc();
+  });
+
+  const bal = async (a: PublicKey) =>
+    new BN((await getAccount(provider.connection, a, undefined, TOKEN_2022_PROGRAM_ID)).amount.toString());
+  const statusOf = async (pda: PublicKey) =>
+    Object.keys((await program.account.userAccount.fetch(pda)).validatorStatus)[0];
+
+  it("partial slash demotes to Suspended when remaining < MIN_VALIDATOR_STAKE", async () => {
+    const v = await setupValidator(MIN); // bond == MIN
+    const victim = await freshAta(Keypair.generate().publicKey);
+    // 10% slash, no proven loss → slash_amount = MIN/10 to fund; remaining = 90% < MIN.
+    await slash(v, 1000, new BN(0), victim);
+    const acc = await program.account.userAccount.fetch(v.userPda);
+    expect(Object.keys(acc.validatorStatus)[0]).to.equal("suspended");
+    expect(acc.stakedGrx.toString()).to.equal(MIN.muln(9).divn(10).toString());
+  });
+
+  it("compensation capped at proven_loss; remainder funded; invariant holds", async () => {
+    const v = await setupValidator(MIN.muln(2)); // 20,000 GRX bond
+    const victimOwner = Keypair.generate().publicKey;
+    const victim = await freshAta(victimOwner);
+    const [victimBefore, destBefore, vaultBefore] = [await bal(victim), await bal(slashDest), await bal(vaultPda)];
+    // 50% slash = 10,000 GRX; proven_loss 4,000 < slash → comp 4,000 to victim, fund 6,000.
+    await slash(v, 5000, GRX(4000), victim);
+    const acc = await program.account.userAccount.fetch(v.userPda);
+    const [victimAfter, destAfter, vaultAfter] = [await bal(victim), await bal(slashDest), await bal(vaultPda)];
+    expect(victimAfter.sub(victimBefore).toString()).to.equal(GRX(4000).toString());
+    expect(destAfter.sub(destBefore).toString()).to.equal(GRX(6000).toString());
+    // remaining 10,000 == MIN → stays Active (not < MIN).
+    expect(Object.keys(acc.validatorStatus)[0]).to.equal("active");
+    expect(acc.stakedGrx.toString()).to.equal(MIN.toString());
+    // Invariant: comp + fund == slash_amount == vault drain.
+    expect(victimAfter.sub(victimBefore).add(destAfter.sub(destBefore)).toString())
+      .to.equal(vaultBefore.sub(vaultAfter).toString());
+    expect(vaultBefore.sub(vaultAfter).toString()).to.equal(GRX(10000).toString());
+  });
+
+  it("compensation never exceeds slash_amount when proven_loss is larger", async () => {
+    const v = await setupValidator(MIN.muln(2)); // 20,000 GRX
+    const victim = await freshAta(Keypair.generate().publicKey);
+    const [victimBefore, destBefore] = [await bal(victim), await bal(slashDest)];
+    // 10% slash = 2,000 GRX; proven_loss 5,000 > slash → comp capped at 2,000, fund 0.
+    await slash(v, 1000, GRX(5000), victim);
+    const acc = await program.account.userAccount.fetch(v.userPda);
+    expect((await bal(victim)).sub(victimBefore).toString()).to.equal(GRX(2000).toString());
+    expect((await bal(slashDest)).sub(destBefore).toString()).to.equal("0"); // nothing left to fund
+    expect(Object.keys(acc.validatorStatus)[0]).to.equal("active"); // remaining 18,000 ≥ MIN
+  });
+
+  it("slash_validator CU under budget", async () => {
+    const v = await setupValidator(MIN.muln(2));
+    const victim = await freshAta(Keypair.generate().publicKey);
+    // Two-transfer path (comp + fund) to measure the heavier branch.
+    const sig = await slash(v, 1000, GRX(1000), victim);
+    let cu = 0;
+    for (let i = 0; i < 8 && cu === 0; i++) {
+      const tx = await provider.connection.getTransaction(sig, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+      cu = tx?.meta?.computeUnitsConsumed ?? 0;
+      if (cu === 0) await new Promise((r) => setTimeout(r, 400));
+    }
+    console.log(`  [BENCH_SLASH_CU] slash_validator (comp+fund) cu=${cu}`);
+    expect(cu).to.be.greaterThan(0).and.lessThan(200_000); // well inside the 200k default budget
+  });
+
   // Skipped on a live validator: unstake_grx enforces the 24h UNSTAKE_COOLDOWN_SECS
   // and AnchorProvider.env() offers no clock control. The happy path (successful
   // unstake + Active->Suspended demote) is covered by the clock-warped litesvm port

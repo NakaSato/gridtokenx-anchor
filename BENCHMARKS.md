@@ -205,6 +205,12 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   `docs/proposed/implementation-plan.md` §3 T3.3). NOTE: these `blockbench`
   additions are spike-only (throwaway); the blockbench IDL was not regenerated (the
   test builds the ix by hand).
+- **[IMP — §1 slash, on-chain]** **`registry::slash_validator` CU = 27 811** on the
+  heavier two-transfer path (victim compensation + fund remainder; `BENCH_SLASH_CU`
+  in `tests/staking.ts`, Solana 3.1.10) — well inside the 200k default budget. The
+  full §1 slash-distribution rework (severity σ, capped compensation, transparent
+  fund, Suspended/Slashed transitions, value invariant) is on-chain verified there
+  (11/11).
 - **[CRIT]** **Multi-validator** (3–4 PoA nodes). A single validator measures
   no consensus cost, yet "block-time is the bottleneck" is the headline claim.
 - **[CRIT]** **Open-loop load** (fix arrival rate λ, ramp to saturation) and
