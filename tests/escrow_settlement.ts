@@ -15,6 +15,7 @@ import {
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
@@ -83,6 +84,11 @@ describe("escrow-settlement", () => {
       tradingProgram.programId
     )[0];
 
+  // Currency is a classic SPL mint; the energy mint is Token-2022 (mint_2022).
+  // Pick the matching token program per mint so ATAs/escrows/transfers line up.
+  const progFor = (mint: PublicKey) =>
+    mint.equals(currencyMint) ? TOKEN_PROGRAM_ID : TOKEN_2022_PROGRAM_ID;
+
   before(async () => {
     [marketPda] = PublicKey.findProgramAddressSync([Buffer.from("market")], tradingProgram.programId);
     [zoneMarketPda] = PublicKey.findProgramAddressSync(
@@ -149,17 +155,18 @@ describe("escrow-settlement", () => {
         SystemProgram.transfer({ fromPubkey: authority, toPubkey: kp.publicKey, lamports: 0.2 * LAMPORTS_PER_SOL })
       )
     );
-    const ata = getAssociatedTokenAddressSync(mint, kp.publicKey, false, TOKEN_PROGRAM_ID);
+    const prog = progFor(mint);
+    const ata = getAssociatedTokenAddressSync(mint, kp.publicKey, false, prog);
     await provider.sendAndConfirm(
       new Transaction().add(
-        createAssociatedTokenAccountInstruction(authority, ata, kp.publicKey, mint, TOKEN_PROGRAM_ID)
+        createAssociatedTokenAccountInstruction(authority, ata, kp.publicKey, mint, prog)
       )
     );
     if (amount > 0) {
       if (mint.equals(currencyMint)) {
         await mintTo(provider.connection, payer, currencyMint, ata, payer, amount);
       } else {
-        // energy mint: go through the program's mintToWallet
+        // energy mint: go through the program's mintToWallet (Token-2022)
         await energyTokenProgram.methods
           .mintToWallet(new BN(amount))
           .accounts({
@@ -169,7 +176,7 @@ describe("escrow-settlement", () => {
             destinationOwner: kp.publicKey,
             authority,
             payer: authority,
-            tokenProgram: TOKEN_PROGRAM_ID,
+            tokenProgram: TOKEN_2022_PROGRAM_ID,
             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             systemProgram: SystemProgram.programId,
           } as any)
@@ -188,7 +195,7 @@ describe("escrow-settlement", () => {
         userWallet: ata,
         userEscrow: escrowPda(kp.publicKey, mint),
         marketAuthority: marketAuthorityPda,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: progFor(mint),
         systemProgram: SystemProgram.programId,
       } as any)
       .signers([kp])
@@ -275,7 +282,7 @@ describe("escrow-settlement", () => {
           energyMint: energyMintPda,
           marketAuthority: marketAuthorityPda,
           tokenProgram: TOKEN_PROGRAM_ID,
-          secondaryTokenProgram: TOKEN_PROGRAM_ID,
+          secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
           buyerCurrencyEscrow: victimEscrow, // SUBSTITUTION: not derivable from attacker
           sellerCurrencyEscrow: escrowPda(seller.publicKey, currencyMint),
           sellerEnergyEscrow: escrowPda(seller.publicKey, energyMintPda),
@@ -316,9 +323,9 @@ describe("escrow-settlement", () => {
     await deposit(seller.kp, seller.ata, energyMintPda, 200);
     // Seed the receiving escrows under the SAME buyer/seller keys.
     // (re-fund the buyer/seller wallets with the opposite asset, then deposit)
-    const buyerEngAta = getAssociatedTokenAddressSync(energyMintPda, buyer.kp.publicKey, false, TOKEN_PROGRAM_ID);
-    await provider.sendAndConfirm(new Transaction().add(createAssociatedTokenAccountInstruction(authority, buyerEngAta, buyer.kp.publicKey, energyMintPda, TOKEN_PROGRAM_ID)));
-    await energyTokenProgram.methods.mintToWallet(new BN(1)).accounts({ mint: energyMintPda, tokenInfo: energyTokenInfoPda, destination: buyerEngAta, destinationOwner: buyer.kp.publicKey, authority, payer: authority, tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId } as any).rpc();
+    const buyerEngAta = getAssociatedTokenAddressSync(energyMintPda, buyer.kp.publicKey, false, TOKEN_2022_PROGRAM_ID);
+    await provider.sendAndConfirm(new Transaction().add(createAssociatedTokenAccountInstruction(authority, buyerEngAta, buyer.kp.publicKey, energyMintPda, TOKEN_2022_PROGRAM_ID)));
+    await energyTokenProgram.methods.mintToWallet(new BN(1)).accounts({ mint: energyMintPda, tokenInfo: energyTokenInfoPda, destination: buyerEngAta, destinationOwner: buyer.kp.publicKey, authority, payer: authority, tokenProgram: TOKEN_2022_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId } as any).rpc();
     await deposit(buyer.kp, buyerEngAta, energyMintPda, 1);
 
     const sellerCurAta = getAssociatedTokenAddressSync(currencyMint, seller.kp.publicKey, false, TOKEN_PROGRAM_ID);
@@ -365,7 +372,7 @@ describe("escrow-settlement", () => {
         energyMint: energyMintPda,
         marketAuthority: marketAuthorityPda,
         tokenProgram: TOKEN_PROGRAM_ID,
-        secondaryTokenProgram: TOKEN_PROGRAM_ID,
+        secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
         buyerCurrencyEscrow: escrowPda(buyer.kp.publicKey, currencyMint),
         sellerCurrencyEscrow: escrowPda(seller.kp.publicKey, currencyMint),
         sellerEnergyEscrow: escrowPda(seller.kp.publicKey, energyMintPda),
@@ -457,7 +464,7 @@ describe("escrow-settlement", () => {
     const sellerCurEscrow = escrowPda(seller.kp.publicKey, currencyMint);
     const buyerEngEscrow = escrowPda(buyer.kp.publicKey, energyMintPda);
     expect(Number((await getAccount(provider.connection, sellerCurEscrow)).amount)).to.equal(1 + 4986);
-    expect(Number((await getAccount(provider.connection, buyerEngEscrow)).amount)).to.equal(1 + matchAmount);
+    expect(Number((await getAccount(provider.connection, buyerEngEscrow, undefined, TOKEN_2022_PROGRAM_ID)).amount)).to.equal(1 + matchAmount);
     const feeAfter = Number((await getAccount(provider.connection, feeCollectorPda)).amount);
     expect(feeAfter - feeBefore, "fee collected this settle").to.equal(12);
   });
