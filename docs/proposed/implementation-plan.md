@@ -33,27 +33,30 @@ Current code baseline (verified):
 
 ---
 
-## §1 — Slash distribution rework (registry + treasury) — DO FIRST
+## §1 — Slash distribution rework (registry + treasury) — MOSTLY DONE (single-victim)
 
 Goal: replace the single-destination slash with severity-scaled, capped-victim-compensation + transparent-fund distribution. Self-contained; no Merkle/challenge needed.
 
-- [ ] T1.1 Add per-fault-class slash fraction `σ` (bps) to registry config; `slash_amount = checked(σ * bond / 10_000)`.
-- [ ] T1.2 `slash_validator` computes `compensation = min(slash_amount, proven_loss)` and fund remainder `F = slash_amount − compensation`; `proven_loss` passed by governance (attested).
-- [ ] T1.3 Victim payout: pro-rata across harmed parties by proven loss (remaining-accounts list of victim token accounts + per-victim loss).
-- [ ] T1.4 Transparent **fund**: distinct PDA with published accounting; `F` routed there (augment/replace `slash_destination`).
-- [ ] T1.5 Top-up rule: after partial slash, if remaining bond `< MIN_VALIDATOR_STAKE` → demote to `Suspended` (reuse existing status) until topped up.
-- [ ] T1.6 Preserve guards: only slash `validator_status == Active`; refuse if fund/destination unset; slashed validator barred from re-register (existing `@739`).
-- [ ] T1.7 Invariant: `slash_amount == compensation + F` (no value created/destroyed).
-- [ ] T1.8 `compute_fn!` wrap; hoist `Clock::get()` before `emit!`; `checked_*`.
+> **Status (code reconciled 2026-06-20):** the core rework is **already implemented** in `registry::slash_validator` (`programs/registry/src/lib.rs:839`). The plan checkboxes were stale — corrected below. Two items remain genuinely open (T1.3 multi-victim, T1.4 distinct fund PDA), both design-gated. On-chain re-verification (`tests/staking.ts`) is pending a live validator (the in-session one died; bring up via the recipe in §2 before re-running).
 
-Tests:
-- [ ] Full slash σ=1, victim fully compensated, remainder→fund (Example 1).
-- [ ] Partial slash σ=0.1, top-up demotion below `MIN_VALIDATOR_STAKE` (Example 2).
-- [ ] Under-bonded: comp pro-rated, fund=0, no over-pay (Example 3).
-- [ ] `Δ == comp + F` invariant.
-- [ ] Capped: comp never exceeds proven loss.
-- [ ] Refused when fund unset / validator not Active / already Slashed.
-- [ ] CU under budget.
+- [x] T1.1 Severity fraction `σ` — implemented as a **per-call arg** `slash_bps` (1..=10000, `InvalidSlashFraction` guard), `slash_amount = bond * slash_bps / 10_000` capped at bond (`lib.rs:883`). Deviation from "registry config table": severity is **governance-attested per slash**, not a stored per-fault-class table — fits the D3 governance-attested model; revisit only if fault classes need fixed on-chain rates.
+- [x] T1.2 `compensation = min(slash_amount, proven_loss)`, fund remainder `F = slash_amount − compensation`; `proven_loss` is a governance-attested arg (`lib.rs:889`).
+- [ ] T1.3 **OPEN (design-gated).** Victim payout is currently **single-victim**: one `victim_token_account` receives the whole `compensation`. Pro-rata across multiple harmed parties (remaining-accounts list + per-victim loss) is **not** implemented. Build only if one fraud event is expected to harm multiple parties on-chain-provably.
+- [~] T1.4 **PARTIAL (design-gated).** `F` is routed to the existing single `slash_destination` (e.g. treasury `reward_vault`, redistributed via `fund_rewards`) — not a **distinct fund PDA with published accounting**. Sufficient under the current design (D-decisions route fund → treasury reward_vault); a dedicated transparent-fund PDA is a further enhancement.
+- [x] T1.5 Top-up demotion: partial slash leaving `remaining < MIN_VALIDATOR_STAKE` → `Suspended`; full forfeiture (`slash_bps == 10000` or `remaining == 0`) → terminal `Slashed` (`lib.rs:949`).
+- [x] T1.6 Guards: only `validator_status == Active` (`NotActiveValidator`); refuse if `has_slash_destination == 0`; authority-only; destination must equal the configured one (no misroute); full slash → `Slashed` bars re-registration.
+- [x] T1.7 Invariant `slash_amount == compensation + fund_amount` enforced (`SlashAccountingMismatch`, `lib.rs:896`).
+- [x] T1.8 `compute_fn!` wrap + `compute_checkpoint!` around CPIs; `Clock::get()` hoisted before `emit!`; `checked_*`/u128 math.
+
+Tests (`tests/staking.ts`):
+- [x] Reject non-authority slash; full slash σ=1 → fund → `Slashed` (per prior on-chain run, plan §A2 line; outdated tests fixed in `f06ee5d`).
+- [ ] Partial slash σ=0.1 → `Suspended` demotion below `MIN_VALIDATOR_STAKE` (Example 2) — assertion not explicit yet.
+- [ ] Under-bonded: comp capped, fund=0, no over-pay (Example 3).
+- [x] `slash_amount == comp + F` invariant — enforced on-chain (program `require!`); covered implicitly by the full-slash test.
+- [x] Capped: comp never exceeds proven loss — `min(slash_amount, proven_loss)` (program), exercised by the full-slash test.
+- [x] Refused when destination unset / validator not Active / already Slashed — guards present; non-auth + status guards exercised.
+- [ ] CU under budget — `slash_validator` is `compute_fn!`-instrumented but no explicit CU datapoint recorded.
+- [ ] **On-chain re-verify pending** — validator down this session; re-run `tests/staking.ts` after chain bring-up.
 
 ## §2 — Settlement audit commitment (treasury) — DO SECOND
 
