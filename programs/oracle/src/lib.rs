@@ -225,18 +225,17 @@ pub mod oracle {
     pub fn update_oracle_status(ctx: Context<UpdateOracleStatus>, active: bool) -> Result<()> {
         compute_fn!("update_oracle_status" => {
             let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
-
-            require!(
-                ctx.accounts.authority.key() == oracle_data.authority,
-                OracleError::UnauthorizedAuthority
-            );
+            require_oracle_admin(&oracle_data, ctx.accounts.authority.key())?;
 
             oracle_data.active = if active { 1 } else { 0 };
 
+            // Hoist Clock::get() before emit! (invariant #5) — avoids a sysvar syscall
+            // inside the macro expansion.
+            let now = Clock::get()?.unix_timestamp;
             emit!(OracleStatusUpdated {
                 authority: ctx.accounts.authority.key(),
                 active,
-                timestamp: Clock::get()?.unix_timestamp,
+                timestamp: now,
             });
         });
 
@@ -250,20 +249,18 @@ pub mod oracle {
     ) -> Result<()> {
         compute_fn!("update_api_gateway" => {
             let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
-
-            require!(
-                ctx.accounts.authority.key() == oracle_data.authority,
-                OracleError::UnauthorizedAuthority
-            );
+            require_oracle_admin(&oracle_data, ctx.accounts.authority.key())?;
 
             let old_gateway = oracle_data.chain_bridge;
             oracle_data.chain_bridge = new_api_gateway;
 
+            // Hoist Clock::get() before emit! (invariant #5).
+            let now = Clock::get()?.unix_timestamp;
             emit!(ApiGatewayUpdated {
                 authority: ctx.accounts.authority.key(),
                 old_gateway,
                 new_gateway: new_api_gateway,
-                timestamp: Clock::get()?.unix_timestamp,
+                timestamp: now,
             });
         });
 
@@ -278,11 +275,7 @@ pub mod oracle {
     ) -> Result<()> {
         compute_fn!("update_production_ratio_config" => {
             let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
-
-            require!(
-                ctx.accounts.authority.key() == oracle_data.authority,
-                OracleError::UnauthorizedAuthority
-            );
+            require_oracle_admin(&oracle_data, ctx.accounts.authority.key())?;
 
             require!(
                 max_production_consumption_ratio > 0,
@@ -291,10 +284,12 @@ pub mod oracle {
 
             oracle_data.max_production_consumption_ratio = max_production_consumption_ratio;
 
+            // Hoist Clock::get() before emit! (invariant #5).
+            let now = Clock::get()?.unix_timestamp;
             emit!(ProductionRatioConfigUpdated {
                 authority: ctx.accounts.authority.key(),
                 max_production_consumption_ratio,
-                timestamp: Clock::get()?.unix_timestamp,
+                timestamp: now,
             });
         });
         Ok(())
@@ -309,11 +304,7 @@ pub mod oracle {
     ) -> Result<()> {
         compute_fn!("update_validation_config" => {
             let mut oracle_data = ctx.accounts.oracle_data.load_mut()?;
-
-            require!(
-                ctx.accounts.authority.key() == oracle_data.authority,
-                OracleError::UnauthorizedAuthority
-            );
+            require_oracle_admin(&oracle_data, ctx.accounts.authority.key())?;
 
             // Reject inverted bounds — min > max would silently reject every reading.
             require!(
@@ -325,9 +316,11 @@ pub mod oracle {
             oracle_data.max_energy_value = max_energy_value;
             oracle_data.anomaly_detection_enabled = if anomaly_detection_enabled { 1 } else { 0 };
 
+            // Hoist Clock::get() before emit! (invariant #5).
+            let now = Clock::get()?.unix_timestamp;
             emit!(ValidationConfigUpdated {
                 authority: ctx.accounts.authority.key(),
-                timestamp: Clock::get()?.unix_timestamp,
+                timestamp: now,
             });
         });
 
@@ -390,6 +383,15 @@ pub mod oracle {
 
         Ok(())
     }
+}
+
+/// Admin gate for the oracle config handlers — the signer must be the stored
+/// `OracleData.authority`. Single source of truth shared by every admin instruction
+/// (update_oracle_status / update_api_gateway / update_production_ratio_config /
+/// update_validation_config) so the check can never drift between them.
+fn require_oracle_admin(oracle_data: &OracleData, signer: Pubkey) -> Result<()> {
+    require!(signer == oracle_data.authority, OracleError::UnauthorizedAuthority);
+    Ok(())
 }
 
 /// Authorize a caller of the node-facing oracle instructions: either the configured
