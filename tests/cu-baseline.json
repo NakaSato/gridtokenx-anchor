@@ -16,7 +16,7 @@
   "oracle.submit_meter_reading[next]": 13376,
   "oracle.trigger_market_clearing": 8390,
   "oracle.update_validation_config": 7811,
-  "registry.deactivate_meter": 10935,
+  "registry.deactivate_meter": 12495,
   "registry.initialize": 6666,
   "registry.initialize_shard": 10904,
   "registry.register_meter": 20104,

@@ -850,41 +850,18 @@ pub mod registry {
         // be misrouted.
         {
             let registry = ctx.accounts.registry.load()?;
-            require_keys_eq!(
+            poa_slash_gate(
+                &registry,
                 ctx.accounts.authority.key(),
-                registry.authority,
-                RegistryError::UnauthorizedAuthority
-            );
-            require!(
-                registry.has_slash_destination == 1,
-                RegistryError::SlashDestinationNotSet
-            );
-            require_keys_eq!(
                 ctx.accounts.slash_destination.key(),
-                registry.slash_destination,
-                RegistryError::InvalidSlashDestination
-            );
+            )?;
         }
         compute_fn!("slash_validator" => {
             let (slash_amount, compensation, fund_amount, remaining) = {
                 let user_account = ctx.accounts.target_user_account.load()?;
-                // Only an active validator can be slashed — never a plain staker or an
-                // already-slashed account.
-                require!(
-                    user_account.validator_status == ValidatorStatus::Active,
-                    RegistryError::NotActiveValidator
-                );
-                require!(
-                    user_account.staked_grx > 0,
-                    RegistryError::InsufficientStakingBalance
-                );
                 let bond = user_account.staked_grx;
-                // slash_amount = bond * slash_bps / 10_000, capped at the bond.
-                let slash_amount = ((bond as u128)
-                    .checked_mul(slash_bps as u128)
-                    .ok_or(RegistryError::MathOverflow)?
-                    / 10_000u128) as u64;
-                let slash_amount = slash_amount.min(bond);
+                // bond * slash_bps / 10_000, capped at bond (validates Active + bond>0).
+                let slash_amount = compute_slash_amount(&user_account, slash_bps)?;
                 // Compensation capped at proven loss removes the bounty-gaming incentive.
                 let compensation = slash_amount.min(proven_loss);
                 let fund_amount = slash_amount - compensation; // safe: compensation <= slash_amount
@@ -946,13 +923,7 @@ pub mod registry {
 
             let mut user_account = ctx.accounts.target_user_account.load_mut()?;
             user_account.staked_grx = remaining;
-            if slash_bps == 10_000 || remaining == 0 {
-                // Full forfeiture is terminal — barred from re-registration.
-                user_account.validator_status = ValidatorStatus::Slashed;
-            } else if remaining < MIN_VALIDATOR_STAKE {
-                // Partial slash below the bond floor: suspend until topped up.
-                user_account.validator_status = ValidatorStatus::Suspended;
-            } // else: remains Active.
+            apply_slash_status(&mut user_account, slash_bps, remaining);
 
             let now = Clock::get()?.unix_timestamp;
             emit!(ValidatorSlashed {
@@ -995,38 +966,18 @@ pub mod registry {
         // PoA gate — authority + configured destination, identical to slash_validator.
         {
             let registry = ctx.accounts.registry.load()?;
-            require_keys_eq!(
+            poa_slash_gate(
+                &registry,
                 ctx.accounts.authority.key(),
-                registry.authority,
-                RegistryError::UnauthorizedAuthority
-            );
-            require!(
-                registry.has_slash_destination == 1,
-                RegistryError::SlashDestinationNotSet
-            );
-            require_keys_eq!(
                 ctx.accounts.slash_destination.key(),
-                registry.slash_destination,
-                RegistryError::InvalidSlashDestination
-            );
+            )?;
         }
         compute_fn!("slash_validator_multi" => {
             let (slash_amount, pool, total_loss, remaining) = {
                 let user_account = ctx.accounts.target_user_account.load()?;
-                require!(
-                    user_account.validator_status == ValidatorStatus::Active,
-                    RegistryError::NotActiveValidator
-                );
-                require!(
-                    user_account.staked_grx > 0,
-                    RegistryError::InsufficientStakingBalance
-                );
                 let bond = user_account.staked_grx;
-                let slash_amount = ((bond as u128)
-                    .checked_mul(slash_bps as u128)
-                    .ok_or(RegistryError::MathOverflow)?
-                    / 10_000u128) as u64;
-                let slash_amount = slash_amount.min(bond);
+                // bond * slash_bps / 10_000, capped at bond (validates Active + bond>0).
+                let slash_amount = compute_slash_amount(&user_account, slash_bps)?;
                 // total proven loss across victims; compensation pool capped at it.
                 let total_loss = victim_losses
                     .iter()
@@ -1098,11 +1049,7 @@ pub mod registry {
 
             let mut user_account = ctx.accounts.target_user_account.load_mut()?;
             user_account.staked_grx = remaining;
-            if slash_bps == 10_000 || remaining == 0 {
-                user_account.validator_status = ValidatorStatus::Slashed;
-            } else if remaining < MIN_VALIDATOR_STAKE {
-                user_account.validator_status = ValidatorStatus::Suspended;
-            }
+            apply_slash_status(&mut user_account, slash_bps, remaining);
 
             let now = Clock::get()?.unix_timestamp;
             emit!(ValidatorSlashed {
@@ -1233,6 +1180,53 @@ fn do_settle_meter(meter: &mut MeterAccount, owner_key: Pubkey) -> Result<u64> {
     });
 
     Ok(new_tokens_to_mint)
+}
+
+/// PoA slash gate — shared by `slash_validator` and `slash_validator_multi`. Verifies
+/// the caller is the registry authority and that the passed destination is the single
+/// configured `slash_destination`, so the slash remainder can never be misrouted.
+fn poa_slash_gate(registry: &Registry, authority: Pubkey, slash_destination: Pubkey) -> Result<()> {
+    require_keys_eq!(authority, registry.authority, RegistryError::UnauthorizedAuthority);
+    require!(
+        registry.has_slash_destination == 1,
+        RegistryError::SlashDestinationNotSet
+    );
+    require_keys_eq!(
+        slash_destination,
+        registry.slash_destination,
+        RegistryError::InvalidSlashDestination
+    );
+    Ok(())
+}
+
+/// `slash_amount = bond * slash_bps / 10_000`, capped at the bond. Validates the
+/// target is an Active validator with a positive bond. Shared by both slash paths.
+fn compute_slash_amount(user: &UserAccount, slash_bps: u16) -> Result<u64> {
+    // Only an active validator can be slashed — never a plain staker or an
+    // already-slashed account.
+    require!(
+        user.validator_status == ValidatorStatus::Active,
+        RegistryError::NotActiveValidator
+    );
+    require!(user.staked_grx > 0, RegistryError::InsufficientStakingBalance);
+    let bond = user.staked_grx;
+    let amt = ((bond as u128)
+        .checked_mul(slash_bps as u128)
+        .ok_or(RegistryError::MathOverflow)?
+        / 10_000u128) as u64;
+    Ok(amt.min(bond))
+}
+
+/// Post-slash validator status transition (shared): full forfeiture (bps == 10000 or
+/// nothing left) → terminal `Slashed`; below the bond floor → `Suspended`; else Active.
+fn apply_slash_status(user: &mut UserAccount, slash_bps: u16, remaining: u64) {
+    if slash_bps == 10_000 || remaining == 0 {
+        // Full forfeiture is terminal — barred from re-registration.
+        user.validator_status = ValidatorStatus::Slashed;
+    } else if remaining < MIN_VALIDATOR_STAKE {
+        // Partial slash below the bond floor: suspend until topped up.
+        user.validator_status = ValidatorStatus::Suspended;
+    } // else: remains Active.
 }
 
 
@@ -1462,7 +1456,14 @@ pub struct DeactivateMeter<'info> {
     #[account(mut)]
     pub meter_account: AccountLoader<'info, MeterAccount>,
 
-    #[account(mut)]
+    // Bound to `owner` so the `meter_count` decrement can only ever hit the signer's
+    // OWN UserAccount. Without this seed binding an attacker could pass a victim's
+    // account and grief their meter_count down on each deactivate of an owned meter.
+    #[account(
+        mut,
+        seeds = [b"user", owner.key().as_ref()],
+        bump
+    )]
     pub user_account: AccountLoader<'info, UserAccount>,
 
     #[account(seeds = [b"registry"], bump)]

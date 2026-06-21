@@ -127,6 +127,31 @@ describe("registry meter-reading validation guards (litesvm)", () => {
     expect(blob, blob).to.match(/ReadingTooFrequent/);
   });
 
+  it("rejects deactivate with a victim's user_account (ConstraintSeeds)", async () => {
+    // Regression: deactivate_meter previously took an UNBOUND user_account, so a
+    // signer owning meterPda could pass a VICTIM's real UserAccount and grief its
+    // meter_count down. Register a victim, then have the meter owner try to charge
+    // the decrement to the victim's (registry-owned, so it clears the owner check)
+    // account — the [b"user", owner] seed binding now rejects it (derive(owner) !=
+    // victim pda). Meter is still Active here (the real deactivation is next).
+    const victim = Keypair.generate();
+    const victimShardId = victim.publicKey.toBytes()[0] % 16;
+    const [victimUserPda] = PublicKey.findProgramAddressSync([Buffer.from("user"), victim.publicKey.toBuffer()], programId);
+    const [victimShardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([victimShardId])], programId);
+    // Victim's shard may differ from `user`'s — init it if so (idempotent otherwise).
+    if (victimShardId !== shardId) {
+      send([await program.methods.initializeShard(victimShardId).accounts({ shard: victimShardPda, authority: payer.publicKey, systemProgram: SystemProgram.programId }).instruction()]);
+    }
+    send([await program.methods.registerUser({ consumer: {} }, 0, 0, new BN(0), victimShardId).accounts({
+      userAccount: victimUserPda, registryShard: victimShardPda, registry: registryPda, authority: victim.publicKey, payer: payer.publicKey, systemProgram: SystemProgram.programId,
+    }).instruction()]);
+
+    const blob = sendExpectFail([await program.methods.deactivateMeter().accounts({
+      meterAccount: meterPda, userAccount: victimUserPda, registry: registryPda, registryShard: shardPda, owner: user.publicKey,
+    }).instruction()], [user]);
+    expect(blob, blob).to.match(/ConstraintSeeds|seeds constraint|2006/);
+  });
+
   it("rejects a reading once the meter is deactivated (InvalidMeterStatus)", async () => {
     send([await program.methods.deactivateMeter().accounts({
       meterAccount: meterPda, userAccount: userPda, registry: registryPda, registryShard: shardPda, owner: user.publicKey,
