@@ -16,7 +16,7 @@
     "test:staking": "anchor test tests/staking.ts",
     "test:staking-litesvm": "mocha -r tsx tests/staking_unstake_litesvm.ts --timeout 1000000",
     "test:litesvm": "mocha -r tsx 'tests/*_litesvm.ts' --timeout 1000000",
-    "test:cu-profile": "mocha -r tsx tests/cu_profile_governance_oracle_litesvm.ts --timeout 1000000",
+    "test:cu-profile": "mocha -r tsx 'tests/cu_profile_*_litesvm.ts' --timeout 1000000",
     "test:governance": "anchor test tests/governance.ts",
     "test:blockbench": "anchor test tests/blockbench.ts",
     "test:smallbank": "anchor test tests/smallbank.ts",

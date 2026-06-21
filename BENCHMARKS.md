@@ -149,6 +149,35 @@ a test failure.
 
 ---
 
+## 5. Treasury Instruction CU Profile (in-process, litesvm)
+
+Compute-unit cost of the treasury economic hot paths (swap / redeem / stake /
+settlement recording) plus the admin/attestation primitives. Same method as §4
+(litesvm `computeUnitsConsumed()`, default-feature `.so`, Token-2022 wiring
+mirroring `tests/treasury_redeem_guards_litesvm.ts`). No validator required.
+
+Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`).
+
+| Instruction | CU |
+| ----------- | --: |
+| `treasury.initialize` | 42 278 |
+| `treasury.swap_grx_for_thbg` | 21 488 |
+| `treasury.redeem_thbg_for_grx` | 21 323 |
+| `treasury.stake_grx` (first — inits position) | 22 535 |
+| `treasury.update_attestation` | 3 300 |
+| `treasury.record_settlement` | 3 300 |
+| `treasury.set_params` | 2 863 |
+
+**Reading:** the swap/redeem/stake hot paths cluster at **~21–22.5k CU**, driven
+by the Token-2022 transfer + mint/burn CPIs (one-time `stake` adds a position-PDA
+init). `initialize` is the heaviest at 42k — a one-off that creates the THBG mint
+plus the three GRX vaults (swap/stake/reward). Pure-state admin instructions
+(`update_attestation`, `record_settlement`, `set_params`) are ~3k. All sit well
+inside the 200k budget — the baht-settlement primitive (swap) costs ~1/5 of the
+§1 `settle_offchain_match` figure.
+
+---
+
 ## Artifacts
 
 ```
