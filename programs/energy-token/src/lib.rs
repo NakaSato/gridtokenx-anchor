@@ -47,6 +47,14 @@ macro_rules! compute_checkpoint {
 
 declare_id!("6FZKcVKCLFSNLMxypFJGU4K14xUBnxNW9VAuKGhmqjGX");
 
+/// True if `key` is one of the registered REC validators. Single source of truth for
+/// the REC co-signature gate, shared by every mint path (`mint_to_wallet`,
+/// `mint_generation`, `mint_tokens_direct`) so the membership check can never drift
+/// between them. Only scans the populated prefix (`count <= 5`).
+fn rec_validator_registered(token_info: &TokenInfo, key: &Pubkey) -> bool {
+    token_info.rec_validators[..token_info.rec_validators_count as usize].contains(key)
+}
+
 #[program]
 pub mod energy_token {
     use super::*;
@@ -125,14 +133,10 @@ pub mod energy_token {
                         .as_ref()
                         .map(|v| v.key())
                         .ok_or(EnergyTokenError::RecValidatorNotFound)?;
-                    let mut found = false;
-                    for i in 0..token_info.rec_validators_count as usize {
-                        if token_info.rec_validators[i] == rec_key {
-                            found = true;
-                            break;
-                        }
-                    }
-                    require!(found, EnergyTokenError::RecValidatorNotFound);
+                    require!(
+                        rec_validator_registered(&token_info, &rec_key),
+                        EnergyTokenError::RecValidatorNotFound
+                    );
                 }
             }
             // Cache clock before CPI — avoids an inline syscall inside the emit! macro
@@ -218,14 +222,10 @@ pub mod energy_token {
                         .as_ref()
                         .map(|v| v.key())
                         .ok_or(EnergyTokenError::RecValidatorNotFound)?;
-                    let mut found = false;
-                    for i in 0..token_info.rec_validators_count as usize {
-                        if token_info.rec_validators[i] == rec_key {
-                            found = true;
-                            break;
-                        }
-                    }
-                    require!(found, EnergyTokenError::RecValidatorNotFound);
+                    require!(
+                        rec_validator_registered(&token_info, &rec_key),
+                        EnergyTokenError::RecValidatorNotFound
+                    );
                 }
             }
 
@@ -405,15 +405,10 @@ pub mod energy_token {
             // REC Validator co-signature: when validators are registered, one must sign
             // This proves the minted energy has a corresponding Renewable Energy Certificate
             if token_info.rec_validators_count > 0 {
-                let rec_key = ctx.accounts.rec_validator.key();
-                let mut found = false;
-                for i in 0..token_info.rec_validators_count as usize {
-                    if token_info.rec_validators[i] == rec_key {
-                        found = true;
-                        break;
-                    }
-                }
-                require!(found, EnergyTokenError::RecValidatorNotFound);
+                require!(
+                    rec_validator_registered(&token_info, &ctx.accounts.rec_validator.key()),
+                    EnergyTokenError::RecValidatorNotFound
+                );
             }
 
             drop(token_info);
@@ -703,7 +698,15 @@ pub struct MintTokensDirect<'info> {
     )]
     pub mint: InterfaceAccount<'info, MintInterface>,
 
-    #[account(mut)]
+    // Bind the recipient to the canonical mint + token program — parity with the
+    // `destination` binding on mint_to_wallet / mint_generation. Defense-in-depth:
+    // the mint_to CPI already rejects a wrong-mint account, but this makes the
+    // contract explicit and fails earlier in account validation.
+    #[account(
+        mut,
+        token::mint = mint,
+        token::token_program = token_program,
+    )]
     pub user_token_account: Box<InterfaceAccount<'info, TokenAccountInterface>>,
 
     pub authority: Signer<'info>,
