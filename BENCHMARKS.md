@@ -178,6 +178,32 @@ inside the 200k budget — the baht-settlement primitive (swap) costs ~1/5 of th
 
 ---
 
+## 5b. Treasury Sharded-Settlement & Batch CU Profile (in-process, litesvm)
+
+The §2c parallel-settlement reconciliation layer (separate from the §5 swap/stake
+hot paths). `record_settlement_sharded` bumps a per-shard PDA instead of the global
+`total_settled_thbg` (no write-lock under concurrent settles); `aggregate_settlement_shards`
+reconciles the global total off the hot path; `record_settlement_batch` writes a
+per-`(zone,batch)` audit commitment. Same method as §4-8; wiring mirrors
+`tests/settle_shard_litesvm.ts`.
+
+| Instruction | CU |
+| ----------- | --: |
+| `treasury.initialize_settlement_shard` | 9 905 |
+| `treasury.record_settlement_batch` | 9 332 |
+| `treasury.aggregate_settlement_shards` (2 shards) | 6 740 |
+| `treasury.record_settlement_sharded` | 5 370 |
+
+**Reading:** the recurring sharded record (`record_settlement_sharded`) is **5.4k CU**
+— cheaper than the global `record_settlement` (§5, 3.3k is the no-shard single bump;
+the sharded path adds the per-shard PDA write). `aggregate_settlement_shards` scales
+with the number of shards passed (6.7k for two). Both shard-init and batch-commitment
+are one-time-ish PDA creations at ~9-10k. The point of this layout is contention, not
+raw CU: distinct shards never write-lock one account, so settle throughput is not
+serialized on the global total (see the settlement-TPS note in §1's roadmap).
+
+---
+
 ## 6. Registry Lifecycle CU Profile (in-process, litesvm)
 
 Compute-unit cost of the registry user/meter lifecycle — the telemetry hot path
