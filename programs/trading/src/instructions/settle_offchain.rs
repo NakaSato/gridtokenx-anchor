@@ -244,7 +244,7 @@ pub struct BatchMatchPair {
 }
 
 #[derive(Accounts)]
-#[instruction(matches: Vec<BatchMatchPair>)]
+#[instruction(matches: Vec<BatchMatchPair>, merkle_root: [u8; 32], vat_amount: u64, vat_rate_bps: u16, batch_id: u64, settle_shard_id: u8)]
 pub struct SettleOffchainMatchBatchContext<'info> {
     #[account(seeds = [b"market"], bump)]
     pub market: AccountLoader<'info, Market>,
@@ -262,9 +262,16 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     #[account(mut)]
     pub zone_shard: AccountLoader<'info, ZoneMarketShard>,
 
+    // Protocol collectors — SHARDED by the caller-supplied `settle_shard_id` so
+    // concurrent batch settles on distinct shards don't write-lock a single fee ATA
+    // (§2c Part B). The off-chain matcher rotates the shard to spread load — it is NOT
+    // payer-derived, because one service wallet typically pays every settle (which would
+    // pin all of them to one shard). The same shard id keys the treasury accumulator, so
+    // one settle touches one consistent shard. Still seed-bound to `market_authority`, so
+    // fees can't be redirected. Consolidate via `sweep_collectors`.
     #[account(
         mut,
-        seeds = [b"fee_collector", currency_mint.key().as_ref()],
+        seeds = [b"fee_collector", currency_mint.key().as_ref(), &[settle_shard_id]],
         bump,
         token::mint = currency_mint,
         token::authority = market_authority,
@@ -273,7 +280,7 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     pub fee_collector: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
         mut,
-        seeds = [b"wheeling_collector", currency_mint.key().as_ref()],
+        seeds = [b"wheeling_collector", currency_mint.key().as_ref(), &[settle_shard_id]],
         bump,
         token::mint = currency_mint,
         token::authority = market_authority,
@@ -282,7 +289,7 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     pub wheeling_collector: Box<InterfaceAccount<'info, TokenAccount>>,
     #[account(
         mut,
-        seeds = [b"loss_collector", currency_mint.key().as_ref()],
+        seeds = [b"loss_collector", currency_mint.key().as_ref(), &[settle_shard_id]],
         bump,
         token::mint = currency_mint,
         token::authority = market_authority,
@@ -301,11 +308,16 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     pub system_program: Program<'info, System>,
 
     // --- Optional treasury wiring (baht-denominated settlement) ---
-    // When both are supplied, the settlement currency must be the treasury's THBG
-    // mint and the batch's gross settled value is recorded with a single CPI.
+    // When supplied, the settlement currency must be the treasury's THBG mint and the
+    // batch's gross settled value is recorded with a single CPI onto the per-shard
+    // accumulator (parallel-friendly) plus the per-(zone,batch) SettlementRecord.
     pub treasury_program: Option<Program<'info, treasury::program::Treasury>>,
     #[account(mut)]
     pub treasury_state: Option<AccountLoader<'info, treasury::Treasury>>,
+    /// Per-shard settlement accumulator (`[b"settle_shard", &[shard_id]]`), bumped via
+    /// CPI instead of the global `total_settled_thbg`. Required when recording fires.
+    #[account(mut)]
+    pub settlement_shard: Option<AccountLoader<'info, treasury::SettlementShard>>,
     /// Per-`(zone, batch)` treasury `SettlementRecord` PDA, created via CPI when
     /// the batch is committed. Required whenever treasury recording fires.
     /// CHECK: address + init validated by the treasury program's seeds.
@@ -563,10 +575,12 @@ pub fn batch_settle_offchain_match<'info>(
     vat_amount: u64,
     vat_rate_bps: u16,
     batch_id: u64,
+    settle_shard_id: u8,
 ) -> Result<()> {
     compute_fn!("batch_settle_offchain_match" => {
     let match_count = matches.len();
     require!(match_count > 0 && match_count <= 4, TradingError::BatchTooLarge);
+    require!(settle_shard_id < treasury::NUM_SETTLE_SHARDS, TradingError::InvalidShardId);
 
     let sysvar_info = &ctx.accounts.sysvar_instructions;
     let remaining_accounts = ctx.remaining_accounts;
@@ -790,18 +804,29 @@ pub fn batch_settle_offchain_match<'info>(
                 TradingError::TreasuryCurrencyMismatch
             );
             if batch_total_value > 0 {
-                // Per-batch audit commitment: bind the Merkle root + VAT to this
-                // zone's batch via the treasury SettlementRecord (CPI-init).
+                // Per-batch audit commitment: bind the Merkle root + VAT to this zone's
+                // batch via the treasury SettlementRecord (CPI-init), and bump the
+                // per-shard accumulator instead of the global total so concurrent
+                // batches on distinct shards don't serialize on `total_settled_thbg`.
                 let settlement_record = ctx
                     .accounts
                     .settlement_record
                     .as_ref()
                     .ok_or(TradingError::TreasurySettlementRequired)?;
-                treasury::cpi::record_settlement_batch(
+                let settlement_shard = ctx
+                    .accounts
+                    .settlement_shard
+                    .as_ref()
+                    .ok_or(TradingError::TreasurySettlementRequired)?;
+                // Same shard the collectors used — caller-supplied, validated above —
+                // so one settle touches one consistent shard.
+                let shard_id = settle_shard_id;
+                treasury::cpi::record_settlement_batch_sharded(
                     CpiContext::new_with_signer(
                         treasury_program.key(),
-                        treasury::cpi::accounts::RecordSettlementBatch {
+                        treasury::cpi::accounts::RecordSettlementBatchSharded {
                             treasury: treasury_state.to_account_info(),
+                            shard: settlement_shard.to_account_info(),
                             settlement_record: settlement_record.to_account_info(),
                             recorder: ctx.accounts.market_authority.to_account_info(),
                             payer: ctx.accounts.payer.to_account_info(),
@@ -815,6 +840,7 @@ pub fn batch_settle_offchain_match<'info>(
                     vat_rate_bps,
                     zone_market.zone_id,
                     batch_id,
+                    shard_id,
                 )?;
             }
         }

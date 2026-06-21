@@ -68,4 +68,6 @@ pub enum TradingError {
     TreasuryCurrencyMismatch,
     #[msg("This market settles in THBG: the treasury accounts are required to record the settlement")]
     TreasurySettlementRequired,
+    #[msg("Settlement collector shard id out of range (must be < NUM_SETTLE_SHARDS)")]
+    InvalidShardId,
 }

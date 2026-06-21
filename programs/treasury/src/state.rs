@@ -9,6 +9,20 @@ pub const ACC_PRECISION: u128 = 1_000_000_000_000; // 1e12
 /// THBG is a THB-pegged stablecoin: 6 decimals, so 1 THB = 1_000_000 minor units.
 pub const THBG_DECIMALS: u8 = 6;
 
+/// Number of settlement accumulator shards. Settlement recording is otherwise a
+/// global-write hot path (`Treasury.total_settled_thbg`), which serializes every
+/// trade settle under Sealevel. Spreading the counter across N per-shard PDAs lets
+/// settles whose buyers fall on different shards land in parallel; the global total
+/// is stale-on-purpose and reconciled by `aggregate_settlement_shards`. Same pattern
+/// and shard count as the registry's 16-shard counter.
+pub const NUM_SETTLE_SHARDS: u8 = 16;
+
+/// Shard selector — maps a key (the settlement buyer) to its accumulator shard by
+/// the first key byte, matching the registry's `authority.to_bytes()[0] % num_shards`.
+pub fn settle_shard_for(key: &Pubkey) -> u8 {
+    key.to_bytes()[0] % NUM_SETTLE_SHARDS
+}
+
 /// Global treasury configuration + accounting (zero-copy, single PDA `[b"treasury"]`).
 ///
 /// Layout is hand-padded for `bytemuck` Pod (no implicit padding). `u128` forces
@@ -65,6 +79,28 @@ pub struct StakePosition {
 impl StakePosition {
     /// Payload size (excludes the 8-byte Anchor discriminator).
     pub const LEN: usize = 32 + 8 + 16 + 8 + 1;
+}
+
+/// Per-shard settlement accumulator (zero-copy). Hot-path settles bump the shard
+/// PDA for the buyer's shard instead of the global `Treasury.total_settled_thbg`, so
+/// settles on distinct shards don't write-lock a single account. PDA seeds:
+/// `[b"settle_shard", &[shard_id]]`. Global total reconciled via
+/// `aggregate_settlement_shards`.
+#[account(zero_copy)]
+#[repr(C)]
+pub struct SettlementShard {
+    pub settled_thbg: u64,     // 8 — cumulative baht (THBG minor units) settled on this shard
+    pub settlement_count: u64, // 8 — number of settlements recorded on this shard
+    pub shard_id: u8,          // 1
+    pub bump: u8,              // 1 — canonical PDA bump, stored to avoid find_program_address re-derivation
+    pub _padding: [u8; 6],     // 6 — pad to 24 (8-aligned, no implicit pad)
+    // size = 8 + 8 + 1 + 1 + 6 = 24 (multiple of 8).
+}
+
+impl SettlementShard {
+    pub fn load_from_bytes(data: &[u8]) -> Result<&Self> {
+        Ok(bytemuck::from_bytes(data))
+    }
 }
 
 /// Per-batch settlement audit commitment (zero-copy). Binds a Merkle root over

@@ -211,3 +211,139 @@ pub fn initialize_collectors(_ctx: Context<InitializeCollectorsContext>) -> Resu
     });
     Ok(())
 }
+
+// One-time creation of the SHARDED fee/wheeling/loss collector PDAs for a currency
+// mint and one shard (§2c Part B). Run once per shard (0..NUM_SETTLE_SHARDS) so the
+// sharded batch-settle path has its per-shard destinations. Same seed-binding to
+// `market_authority` as the unsharded collectors — fees still can't be redirected.
+#[derive(Accounts)]
+#[instruction(shard_id: u8)]
+pub struct InitializeShardedCollectorsContext<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub currency_mint: Box<InterfaceAccount<'info, Mint>>,
+
+    #[account(
+        init,
+        payer = payer,
+        seeds = [b"fee_collector", currency_mint.key().as_ref(), &[shard_id]],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
+    pub fee_collector: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        init,
+        payer = payer,
+        seeds = [b"wheeling_collector", currency_mint.key().as_ref(), &[shard_id]],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
+    pub wheeling_collector: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        init,
+        payer = payer,
+        seeds = [b"loss_collector", currency_mint.key().as_ref(), &[shard_id]],
+        bump,
+        token::mint = currency_mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
+    pub loss_collector: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// CHECK: global escrow authority PDA — only its key is used.
+    #[account(seeds = [b"market_authority"], bump)]
+    pub market_authority: UncheckedAccount<'info>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn initialize_sharded_collectors(
+    _ctx: Context<InitializeShardedCollectorsContext>,
+    shard_id: u8,
+) -> Result<()> {
+    compute_fn!("initialize_sharded_collectors" => {
+        require!(shard_id < treasury::NUM_SETTLE_SHARDS, TradingError::InvalidShardId);
+        msg!("Sharded collector PDAs initialized for shard {}", shard_id);
+    });
+    Ok(())
+}
+
+// Consolidate one shard's fee/wheeling/loss balances into the canonical (unsharded)
+// collectors so accounting/withdrawal reads a single sink per fee class. Permissionless:
+// both source and destination are `market_authority`-owned, seed-bound PDAs, so a caller
+// can only move market funds between market accounts — never out. Non-hot-path.
+#[derive(Accounts)]
+#[instruction(shard_id: u8)]
+pub struct SweepCollectorsContext<'info> {
+    pub currency_mint: Box<InterfaceAccount<'info, Mint>>,
+
+    /// CHECK: global escrow authority PDA — signs the transfer CPIs.
+    #[account(seeds = [b"market_authority"], bump)]
+    pub market_authority: UncheckedAccount<'info>,
+
+    #[account(mut, seeds = [b"fee_collector", currency_mint.key().as_ref(), &[shard_id]], bump,
+        token::mint = currency_mint, token::authority = market_authority, token::token_program = token_program)]
+    pub fee_shard: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, seeds = [b"wheeling_collector", currency_mint.key().as_ref(), &[shard_id]], bump,
+        token::mint = currency_mint, token::authority = market_authority, token::token_program = token_program)]
+    pub wheeling_shard: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, seeds = [b"loss_collector", currency_mint.key().as_ref(), &[shard_id]], bump,
+        token::mint = currency_mint, token::authority = market_authority, token::token_program = token_program)]
+    pub loss_shard: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(mut, seeds = [b"fee_collector", currency_mint.key().as_ref()], bump,
+        token::mint = currency_mint, token::authority = market_authority, token::token_program = token_program)]
+    pub fee_main: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, seeds = [b"wheeling_collector", currency_mint.key().as_ref()], bump,
+        token::mint = currency_mint, token::authority = market_authority, token::token_program = token_program)]
+    pub wheeling_main: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, seeds = [b"loss_collector", currency_mint.key().as_ref()], bump,
+        token::mint = currency_mint, token::authority = market_authority, token::token_program = token_program)]
+    pub loss_main: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
+pub fn sweep_collectors(ctx: Context<SweepCollectorsContext>, shard_id: u8) -> Result<()> {
+    compute_fn!("sweep_collectors" => {
+        require!(shard_id < treasury::NUM_SETTLE_SHARDS, TradingError::InvalidShardId);
+        let authority_bump = ctx.bumps.market_authority;
+        let authority_seeds = &[b"market_authority".as_ref(), &[authority_bump]];
+        let signer = &[&authority_seeds[..]];
+        let decimals = ctx.accounts.currency_mint.decimals;
+
+        let pairs: [(&InterfaceAccount<TokenAccount>, &InterfaceAccount<TokenAccount>); 3] = [
+            (&ctx.accounts.fee_shard, &ctx.accounts.fee_main),
+            (&ctx.accounts.wheeling_shard, &ctx.accounts.wheeling_main),
+            (&ctx.accounts.loss_shard, &ctx.accounts.loss_main),
+        ];
+        for (src, dst) in pairs {
+            let amount = src.amount;
+            if amount > 0 {
+                transfer_checked(
+                    CpiContext::new_with_signer(
+                        ctx.accounts.token_program.key(),
+                        TransferChecked {
+                            from: src.to_account_info(),
+                            mint: ctx.accounts.currency_mint.to_account_info(),
+                            to: dst.to_account_info(),
+                            authority: ctx.accounts.market_authority.to_account_info(),
+                        },
+                        signer,
+                    ),
+                    amount,
+                    decimals,
+                )?;
+            }
+        }
+    });
+    Ok(())
+}

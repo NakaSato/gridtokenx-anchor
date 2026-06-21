@@ -257,6 +257,172 @@ pub mod treasury {
         Ok(())
     }
 
+    /// Create one settlement accumulator shard PDA (`[b"settle_shard", &[shard_id]]`).
+    /// Admin-only, idempotent per shard_id. Run once per shard (0..NUM_SETTLE_SHARDS)
+    /// at deploy/init so the sharded settle path has its destination accounts.
+    pub fn initialize_settlement_shard(
+        ctx: Context<InitializeSettlementShard>,
+        shard_id: u8,
+    ) -> Result<()> {
+        compute_fn!("initialize_settlement_shard" => {
+            require!(shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
+            require!(
+                ctx.accounts.treasury.load()?.authority == ctx.accounts.authority.key(),
+                TreasuryError::UnauthorizedAuthority
+            );
+            let mut shard = ctx.accounts.shard.load_init()?;
+            shard.shard_id = shard_id;
+            shard.bump = ctx.bumps.shard;
+            shard.settled_thbg = 0;
+            shard.settlement_count = 0;
+        });
+        Ok(())
+    }
+
+    /// Parallel-friendly variant of `record_settlement`: bumps the per-shard
+    /// accumulator for `shard_id` instead of the global `total_settled_thbg`, so
+    /// settles whose buyers fall on different shards don't write-lock one account.
+    /// `treasury` is read-only here (recorder gate only) — read locks are shared
+    /// across parallel txs, so it does not serialize. The shard account is bound to
+    /// `shard_id` by its PDA seeds, so a recorder cannot scatter onto an arbitrary
+    /// account. Reconcile the global total via `aggregate_settlement_shards`.
+    pub fn record_settlement_sharded(
+        ctx: Context<RecordSettlementSharded>,
+        value: u64,
+        shard_id: u8,
+    ) -> Result<()> {
+        compute_fn!("record_settlement_sharded" => {
+            require!(shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
+            let now = Clock::get()?.unix_timestamp;
+            require!(
+                ctx.accounts.treasury.load()?.settlement_recorder == ctx.accounts.recorder.key(),
+                TreasuryError::UnauthorizedRecorder
+            );
+            let mut shard = ctx.accounts.shard.load_mut()?;
+            shard.settled_thbg = shard
+                .settled_thbg
+                .checked_add(value)
+                .ok_or(TreasuryError::MathOverflow)?;
+            shard.settlement_count = shard
+                .settlement_count
+                .checked_add(1)
+                .ok_or(TreasuryError::MathOverflow)?;
+            emit!(SettlementShardRecorded {
+                recorder: ctx.accounts.recorder.key(),
+                shard_id,
+                value,
+                shard_total: shard.settled_thbg,
+                timestamp: now,
+            });
+        });
+        Ok(())
+    }
+
+    /// Reconcile the global `total_settled_thbg` from the per-shard accumulators.
+    /// Admin-only. Sums every `SettlementShard` passed in `remaining_accounts`
+    /// (validated by program owner + stored-bump PDA, deduped by a shard-id bitmask)
+    /// and writes the result onto the treasury. The global total is stale between
+    /// runs on purpose — same trade-off as the registry's `aggregate_shards`.
+    pub fn aggregate_settlement_shards(ctx: Context<AggregateSettlementShards>) -> Result<()> {
+        compute_fn!("aggregate_settlement_shards" => {
+            let mut t = ctx.accounts.treasury.load_mut()?;
+            require!(t.authority == ctx.accounts.authority.key(), TreasuryError::UnauthorizedAuthority);
+
+            let mut total: u64 = 0;
+            // Bitmask of shard_ids already counted — reject duplicates so a shard
+            // passed twice cannot inflate the total.
+            let mut seen: u16 = 0;
+            const SHARD_LEN: usize = std::mem::size_of::<SettlementShard>();
+
+            for account_info in ctx.remaining_accounts.iter() {
+                require_keys_eq!(*account_info.owner, crate::ID, TreasuryError::UnauthorizedAuthority);
+                let data = account_info.try_borrow_data()?;
+                if data.len() >= 8 + SHARD_LEN {
+                    let shard = SettlementShard::load_from_bytes(&data[8..8 + SHARD_LEN])?;
+                    require!(shard.shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
+
+                    // Validate via the stored canonical bump (create_program_address)
+                    // instead of re-deriving with find_program_address.
+                    let expected_pda = Pubkey::create_program_address(
+                        &[b"settle_shard", &[shard.shard_id], &[shard.bump]], &crate::ID
+                    ).map_err(|_| TreasuryError::InvalidShardId)?;
+                    require_keys_eq!(account_info.key(), expected_pda, TreasuryError::InvalidShardId);
+
+                    let bit = 1u16 << shard.shard_id;
+                    require!(seen & bit == 0, TreasuryError::DuplicateShard);
+                    seen |= bit;
+
+                    total = total
+                        .checked_add(shard.settled_thbg)
+                        .ok_or(TreasuryError::MathOverflow)?;
+                }
+            }
+
+            t.total_settled_thbg = total;
+        });
+        Ok(())
+    }
+
+    /// Parallel-friendly variant of `record_settlement_batch`: bumps the per-shard
+    /// accumulator for `shard_id` instead of the global `total_settled_thbg`, while
+    /// still writing the per-`(zone, batch)` `SettlementRecord` audit commitment (which
+    /// is already non-global — unique per batch). Treasury is read-only here (recorder
+    /// gate only), so parallel batch settles on distinct shards don't serialize on it.
+    /// Reconcile the global total via `aggregate_settlement_shards`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_settlement_batch_sharded(
+        ctx: Context<RecordSettlementBatchSharded>,
+        value: u64,
+        merkle_root: [u8; 32],
+        vat_amount: u64,
+        vat_rate_bps: u16,
+        zone_id: u32,
+        batch_id: u64,
+        shard_id: u8,
+    ) -> Result<()> {
+        compute_fn!("record_settlement_batch_sharded" => {
+            require!(shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
+            let now = Clock::get()?.unix_timestamp;
+            require!(
+                ctx.accounts.treasury.load()?.settlement_recorder == ctx.accounts.recorder.key(),
+                TreasuryError::UnauthorizedRecorder
+            );
+
+            let shard_total = {
+                let mut shard = ctx.accounts.shard.load_mut()?;
+                shard.settled_thbg = shard
+                    .settled_thbg
+                    .checked_add(value)
+                    .ok_or(TreasuryError::MathOverflow)?;
+                shard.settlement_count = shard
+                    .settlement_count
+                    .checked_add(1)
+                    .ok_or(TreasuryError::MathOverflow)?;
+                shard.settled_thbg
+            };
+
+            let mut rec = ctx.accounts.settlement_record.load_init()?;
+            rec.merkle_root = merkle_root;
+            rec.recorder = ctx.accounts.recorder.key();
+            rec.total_value = value;
+            rec.vat_amount = vat_amount;
+            rec.committed_ts = now;
+            rec.batch_id = batch_id;
+            rec.zone_id = zone_id;
+            rec.vat_rate_bps = vat_rate_bps;
+            rec.bump = ctx.bumps.settlement_record;
+
+            emit!(SettlementShardRecorded {
+                recorder: ctx.accounts.recorder.key(),
+                shard_id,
+                value,
+                shard_total,
+                timestamp: now,
+            });
+        });
+        Ok(())
+    }
+
     /// Custodian: refresh the off-chain THB reserve figure that caps THBG supply.
     /// This is the peg's source of truth — mints are blocked once it goes stale.
     pub fn update_attestation(ctx: Context<UpdateAttestation>, attested_reserve: u64) -> Result<()> {
@@ -982,6 +1148,82 @@ pub struct RecordSettlement<'info> {
 pub struct RecordSettlementBatch<'info> {
     #[account(mut, seeds = [b"treasury"], bump)]
     pub treasury: AccountLoader<'info, Treasury>,
+
+    /// Per-`(zone, batch)` audit commitment, created on first record for the batch.
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + std::mem::size_of::<SettlementRecord>(),
+        seeds = [b"settlement", zone_id.to_le_bytes().as_ref(), batch_id.to_le_bytes().as_ref()],
+        bump
+    )]
+    pub settlement_record: AccountLoader<'info, SettlementRecord>,
+
+    /// The authorized settlement recorder — the trading market_authority PDA.
+    pub recorder: Signer<'info>,
+
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(shard_id: u8)]
+pub struct InitializeSettlementShard<'info> {
+    #[account(seeds = [b"treasury"], bump)]
+    pub treasury: AccountLoader<'info, Treasury>,
+
+    #[account(
+        init,
+        payer = authority,
+        space = 8 + std::mem::size_of::<SettlementShard>(),
+        seeds = [b"settle_shard".as_ref(), &[shard_id]],
+        bump
+    )]
+    pub shard: AccountLoader<'info, SettlementShard>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(value: u64, shard_id: u8)]
+pub struct RecordSettlementSharded<'info> {
+    /// Read-only: only the recorder gate reads it. A shared read lock does not
+    /// serialize parallel settles (unlike the `mut` treasury in `record_settlement`).
+    #[account(seeds = [b"treasury"], bump)]
+    pub treasury: AccountLoader<'info, Treasury>,
+
+    /// The per-shard accumulator; bound to `shard_id` by its seeds.
+    #[account(mut, seeds = [b"settle_shard".as_ref(), &[shard_id]], bump = shard.load()?.bump)]
+    pub shard: AccountLoader<'info, SettlementShard>,
+
+    /// The authorized settlement recorder — the trading market_authority PDA.
+    pub recorder: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct AggregateSettlementShards<'info> {
+    #[account(mut, seeds = [b"treasury"], bump)]
+    pub treasury: AccountLoader<'info, Treasury>,
+
+    pub authority: Signer<'info>,
+    // Shards passed via remaining_accounts.
+}
+
+#[derive(Accounts)]
+#[instruction(value: u64, merkle_root: [u8; 32], vat_amount: u64, vat_rate_bps: u16, zone_id: u32, batch_id: u64, shard_id: u8)]
+pub struct RecordSettlementBatchSharded<'info> {
+    /// Read-only: only the recorder gate reads it (shared read lock does not serialize).
+    #[account(seeds = [b"treasury"], bump)]
+    pub treasury: AccountLoader<'info, Treasury>,
+
+    /// The per-shard accumulator; bound to `shard_id` by its seeds.
+    #[account(mut, seeds = [b"settle_shard".as_ref(), &[shard_id]], bump = shard.load()?.bump)]
+    pub shard: AccountLoader<'info, SettlementShard>,
 
     /// Per-`(zone, batch)` audit commitment, created on first record for the batch.
     #[account(

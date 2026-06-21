@@ -32,4 +32,8 @@ pub enum TreasuryError {
     SupplyUnderflow,
     #[msg("No stake to fund rewards against")]
     NoStakeToReward,
+    #[msg("Settlement shard id out of range (must be < NUM_SETTLE_SHARDS)")]
+    InvalidShardId,
+    #[msg("Settlement shard passed more than once in aggregation")]
+    DuplicateShard,
 }

@@ -70,6 +70,18 @@ pub struct SettlementRecorded {
     pub timestamp: i64,
 }
 
+/// A baht-denominated settlement was recorded against a per-shard accumulator
+/// (parallel-friendly variant of `SettlementRecorded`). `shard_total` is this
+/// shard's running total, not the global figure (reconciled via aggregation).
+#[event]
+pub struct SettlementShardRecorded {
+    pub recorder: Pubkey,
+    pub shard_id: u8,
+    pub value: u64,
+    pub shard_total: u64,
+    pub timestamp: i64,
+}
+
 /// A settlement batch was recorded with an audit commitment (Merkle root + VAT).
 #[event]
 pub struct SettlementBatchRecorded {

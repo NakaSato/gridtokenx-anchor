@@ -123,6 +123,91 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
 - [x] Root-caused the contention: **NOT the shard.** Spreading across all 16 shards (`BENCH_TPS_SHARD_SPREAD=1`) gave identical numbers (0.59/0.57, still 2 rounds). Serialization is the global writable accounts every settle touches — `treasury_state` (`total_settled_thbg` accumulator) + the 3 fixed fee/wheeling/loss collectors. Settlement is global-write-bound by design; sharding parallelizes order submission, not settlement.
 - [ ] True open-loop (no per-round barrier) for peak TPS; shard the treasury accumulator/collectors (or amortize more matches per CPI, blocked by 1-match cap) to parallelize settlement; per-match marginal CU once sig packaging reworked.
 
+## §2c — Shard the settlement write set (throughput) — Part A+B DONE; TPS win blocked on zone_market + open-loop bench
+
+Goal: lift settle TPS off the ~0.5 TPS floor. §2b root-caused the ceiling (line 123):
+settlement is **global-write-bound** — every settle write-locks the same accounts, so
+Sealevel serializes them regardless of order/shard. Two write sets to shard:
+
+1. **`treasury_state.total_settled_thbg`** accumulator (CPI `record_settlement*`).
+2. **`fee_collector` / `wheeling_collector` / `loss_collector`** ATAs (token-transfer
+   destinations in `settle_offchain.rs`).
+
+Sharding only one leaves the other serializing — both must shard to move TPS.
+
+### §2c Part A — accumulator shard (treasury) — DONE (litesvm 5/5)
+
+Self-contained, CPI-only, no fund movement. Mirrors the registry 16-shard counter.
+
+- [x] `SettlementShard` zero-copy PDA (24B, hand-padded), seeds `[b"settle_shard", &[shard_id]]`:
+  `settled_thbg`, `settlement_count`, `shard_id`, `bump`, `_padding` (`state.rs`). `NUM_SETTLE_SHARDS = 16`,
+  `settle_shard_for(key) = key[0] % 16`.
+- [x] `initialize_settlement_shard(shard_id)` — admin-gated, one PDA per shard (`lib.rs`).
+- [x] `record_settlement_sharded(value, shard_id)` — bumps the shard PDA, **not** the global.
+  Treasury passed **read-only** (recorder gate only) — a shared read lock does not serialize
+  parallel settles, unlike the `mut` treasury in `record_settlement`. Shard bound to `shard_id`
+  by PDA seeds (no scatter). `compute_fn!` + Clock hoisted + `checked_*`.
+- [x] `aggregate_settlement_shards` — admin; sums shards from `remaining_accounts`
+  (program-owner + stored-bump-PDA validation, `u16` shard-id dedup bitmask) → `total_settled_thbg`.
+  Global total stale-on-purpose, same trade-off as registry `aggregate_shards`.
+- [x] Errors `InvalidShardId` / `DuplicateShard`; event `SettlementShardRecorded` (shard total, not global).
+- [x] Tests `tests/settle_shard_litesvm.ts` **5/5**: per-shard accumulation + count, global stays 0
+  until aggregation, recorder gate, out-of-range shard reject, aggregation sums across shards,
+  duplicate-shard reject. Sibling litesvm suites (commitment/slash/staking) **10/10**, no regression.
+  (Build: `anchor build -p treasury --ignore-keys` then **copy** `programs/treasury/target/deploy/treasury.so`
+  → root `target/deploy/` for litesvm — SKILL gotcha #1.)
+
+### §2c Part B — collector ATA shards (trading, batch path) — DONE plumbing; TPS win NOT shown
+
+Scope: batch path only (the TPS-benchmarked one). Touches the escrow **fund-movement** path and is an
+interface change to `batch_settle_offchain_match` (account-set + a new `settle_shard_id: u8` arg). Verified
+under a live validator (Solana 3.1.10), not litesvm.
+
+- [x] T2c.1 Sharded collectors: seeds `[b"fee_collector", currency_mint, &[shard_id]]` (+ wheeling/loss),
+  created by `initialize_sharded_collectors(shard_id)` (`escrow.rs`). Same `market_authority` seed-binding —
+  fees can't be redirected.
+- [x] T2c.2 `SettleOffchainMatchBatchContext` collectors keyed by an **explicit `settle_shard_id` arg**,
+  NOT payer-derived. **Design correction:** payer-derived sharding is useless in production — one service
+  wallet pays every settle, pinning all to one shard. The off-chain matcher rotates `settle_shard_id` to
+  spread load. Validated `< NUM_SETTLE_SHARDS` in the handler.
+- [x] T2c.3 Treasury CPI routed through new `record_settlement_batch_sharded(...,shard_id)` (Part A's shard
+  + the per-(zone,batch) `SettlementRecord`), dropping the global `total_settled_thbg` write off the hot path.
+- [x] T2c.4 `sweep_collectors(shard_id)` — permissionless consolidation of a shard's 3 ATAs into the
+  canonical (unsharded) collectors (both `market_authority`-owned → can't exfiltrate).
+- [x] T2c.6 CU under budget: batch settle (sharded) ≈ **87k CU** (`tests/batch_settle_thbg.ts`), < 1.4M.
+- [x] Correctness verified on-chain (`tests/batch_settle_thbg.ts` 2/2): the per-shard accumulator advances by
+  the gross value, the **global total stays flat** (reconciled only via aggregation), buyer receives energy,
+  `TreasurySettlementRequired` (6031) still fires. Sharded litesvm accumulator (`settle_shard_litesvm.ts`) 5/5.
+- [~] **T2c.5 TPS win NOT demonstrated — confirmed unmeasurable at localnet scale.** Sweep
+  (`tests/batch_settle_tps.ts`, N=8 conc=8, Solana 3.1.10): baseline (pinned shard 0) **0.41 TPS**,
+  sharded-spread **0.47 TPS** — within noise, no real gain. A `BENCH_BATCH_SLOTTPS` slot-density probe
+  (counts landed-tx per on-chain slot span, independent of confirm-poll latency) settles it: pinned landed
+  8 settles across **slot_span=40** (0.20/slot), spread across **slot_span=35** (0.23/slot) — i.e. ~1 settle
+  every 5 slots, **never two in the same slot**. With zero same-slot writers there is no write-lock to relieve,
+  so pinned vs spread is statistical noise by construction. Two reasons:
+  1. **Harness is latency-bound, not contention-bound.** Both runs report `dropped=0 reverted=0` — the validator
+     dropped **zero** same-slot writers, i.e. there was no write-lock contention to relieve. The ~0.4 TPS is the
+     closed-loop harness's ALT-setup + confirm-poll latency, not a throughput ceiling. A real measurement needs a
+     **true open-loop generator** (submit without per-tx confirm, count landed-tx/slot) — already listed open below.
+  2. **`zone_market` is still a global `mut` lock the §2b root-cause missed.** Every settle does
+     `zone_market.load_mut()` (`settle_offchain.rs:591`) and the account is declared `mut` (`:251`) **regardless**
+     of whether `committed_flow` is updated, so Sealevel write-locks the singleton zone PDA on every settle.
+     Sharding collectors + treasury removed two of ≥3 global writes; this one remains. Hard to shard: the capacity
+     throttle is a **global** cap, and Anchor's static account model can't conditionally lock — intra-zone settles
+     (the common, no-wheeling case) still pay the lock. A fix needs either two instruction variants
+     (intra read-only / cross mut) or moving `committed_flow` to the per-shard `zone_shard` with periodic global
+     reconciliation — a separate, larger change.
+
+**Net:** Part B sharding is correct and shipped (collector + treasury locks gone, on-chain verified), but it does
+**not** move measured TPS, because (1) the bench harness is latency-bound and (2) `zone_market`'s unconditional
+`mut` lock is the dominant remaining serializer. Closing the throughput gap is gated on the two open items below.
+
+### §2c open (throughput, deferred)
+- True open-loop TPS generator (no per-round confirm barrier) — without it, neither the win nor the remaining
+  bottleneck is measurable on the current closed-loop harness.
+- Make `zone_market` read-only on the settle hot path (shard `committed_flow` into `zone_shard` + reconcile, or
+  split intra/cross settle instructions) — the last global `mut` lock on settlement.
+
 ## §3 — Feasibility spike (GATE — before any trustless work) — DO THIRD
 
 Goal: prove or kill the trustless fraud-proof path **before** spending on it. PoC only, throwaway.

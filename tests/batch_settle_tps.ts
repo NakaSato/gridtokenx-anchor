@@ -120,6 +120,13 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     PublicKey.findProgramAddressSync([Buffer.from("escrow"), user.toBuffer(), mint.toBuffer()], trading.programId)[0];
   const collectorPda = (label: string) =>
     PublicKey.findProgramAddressSync([Buffer.from(label), thbgMint.toBuffer()], trading.programId)[0];
+  // §2c Part B: sharded collectors + treasury accumulator, keyed by a caller-chosen
+  // settle shard (the matcher rotates it to spread settles off the global write-lock).
+  const NUM_SETTLE_SHARDS = 16;
+  const shardedCollectorPda = (label: string, shard: number) =>
+    PublicKey.findProgramAddressSync([Buffer.from(label), thbgMint.toBuffer(), Buffer.from([shard])], trading.programId)[0];
+  const settleShardPda = (shard: number) =>
+    PublicKey.findProgramAddressSync([Buffer.from("settle_shard"), Buffer.from([shard])], treasury.programId)[0];
   const nullifierPda = (user: PublicKey, orderId: Buffer) =>
     PublicKey.findProgramAddressSync([Buffer.from("nullifier"), user.toBuffer(), orderId], trading.programId)[0];
   const ata = (mint: PublicKey, owner: PublicKey) =>
@@ -224,17 +231,25 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       escrowPda(buyer.publicKey, energyMintPda),
     ].map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
 
+    // §2c Part B: the caller-chosen settle shard. Under SHARD_SPREAD, rotate it per
+    // settle (idx % 16) so concurrent settles hit DISTINCT collector + accumulator
+    // shards — the whole point of the rework. Pinned to shard 0 otherwise (baseline
+    // = the old single-collector serialization).
+    const settleShardByte = SHARD_SPREAD ? (idx % NUM_SETTLE_SHARDS) : 0;
+
     const settleIx = await trading.methods
-      .batchSettleOffchainMatch([matchPair] as any, merkleRoot, vatAmount, 700, thisBatchId)
+      .batchSettleOffchainMatch([matchPair] as any, merkleRoot, vatAmount, 700, thisBatchId, settleShardByte)
       .accounts({
         market: marketPda, zoneMarket: zoneMarketPda, currencyMint: thbgMint, energyMint: energyMintPda,
         marketAuthority: marketAuthorityPda, marketShard: marketShardPda, zoneShard: zoneShardPda,
-        feeCollector: collectorPda("fee_collector"), wheelingCollector: collectorPda("wheeling_collector"),
-        lossCollector: collectorPda("loss_collector"), payer: authority,
+        feeCollector: shardedCollectorPda("fee_collector", settleShardByte),
+        wheelingCollector: shardedCollectorPda("wheeling_collector", settleShardByte),
+        lossCollector: shardedCollectorPda("loss_collector", settleShardByte), payer: authority,
         sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
         tokenProgram: TOKEN_2022_PROGRAM_ID, secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
-        treasuryProgram: treasury.programId, treasuryState: treasuryPda, settlementRecord,
+        treasuryProgram: treasury.programId, treasuryState: treasuryPda,
+        settlementShard: settleShardPda(settleShardByte), settlementRecord,
       } as any)
       .remainingAccounts(remaining)
       .instruction();
@@ -329,6 +344,24 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
         tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
       } as any).rpc();
     } catch { /* already initialized */ }
+
+    // §2c Part B: pre-init ALL 16 sharded collectors + treasury accumulator shards up
+    // front, so per-shard init latency never pollutes the timed sweep below.
+    for (let s = 0; s < NUM_SETTLE_SHARDS; s++) {
+      try {
+        await trading.methods.initializeShardedCollectors(s).accounts({
+          payer: authority, currencyMint: thbgMint,
+          feeCollector: shardedCollectorPda("fee_collector", s), wheelingCollector: shardedCollectorPda("wheeling_collector", s),
+          lossCollector: shardedCollectorPda("loss_collector", s), marketAuthority: marketAuthorityPda,
+          tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
+        } as any).rpc();
+      } catch { /* already initialized */ }
+      try {
+        await treasury.methods.initializeSettlementShard(s).accounts({
+          treasury: treasuryPda, shard: settleShardPda(s), authority, systemProgram: SystemProgram.programId,
+        } as any).rpc();
+      } catch { /* already initialized */ }
+    }
   });
 
   it(`sweeps batch-settle TPS over concurrency [${CONC.join(", ")}], N=${N}/level`, async () => {
@@ -392,17 +425,30 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       const fail = N - ok;
       const tps = ok / (wallMs / 1000);
 
-      // Post-hoc CU sample over the confirmed settles.
+      // Post-hoc CU + SLOT sample over the confirmed settles. The slot of each
+      // landed settle gives the TRUE on-chain throughput — landed-per-slot over the
+      // slot span the batch occupied — which is immune to the client confirm-poll
+      // latency baked into `wallMs`/`tps` above. If the settles serialize on a shared
+      // writable account, the validator packs FEWER per slot → a wider slot span for
+      // the same N. Comparing pinned vs spread slot-span isolates the write-lock effect.
       const okSigs = sigs.filter((s, i) => s && errs[i] === null) as string[];
       let cuSum = 0, cuN = 0;
+      const slots: number[] = [];
       for (const sig of okSigs) {
         const m = await provider.connection.getTransaction(sig, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
         const cu = m?.meta?.computeUnitsConsumed ?? 0;
         if (cu > 0) { cuSum += cu; cuN++; }
+        if (typeof m?.slot === "number") slots.push(m.slot);
       }
       const cuMean = cuN ? Math.round(cuSum / cuN) : 0;
+      // Slot-density throughput: landed settles ÷ slot span, × slots/sec (≈2.5 @ 400ms).
+      const SLOTS_PER_SEC = 2.5;
+      const slotSpan = slots.length ? (Math.max(...slots) - Math.min(...slots) + 1) : 0;
+      const landedPerSlot = slotSpan ? slots.length / slotSpan : 0;
+      const slotTps = landedPerSlot * SLOTS_PER_SEC;
       rows.push({ conc, tps, wallMs, ok, fail, cuMean, rounds: roundsUsed, dropped, reverted });
       console.log(`  [BENCH_BATCH_TPS] spread=${SHARD_SPREAD ? 1 : 0} conc=${conc} N=${N} ok=${ok} fail=${fail} (dropped=${dropped} reverted=${reverted}) rounds=${roundsUsed} wall_ms=${Math.round(wallMs)} tps=${tps.toFixed(2)} cu_mean=${cuMean}`);
+      console.log(`  [BENCH_BATCH_SLOTTPS] spread=${SHARD_SPREAD ? 1 : 0} conc=${conc} landed=${slots.length} slot_span=${slotSpan} landed_per_slot=${landedPerSlot.toFixed(2)} slot_tps=${slotTps.toFixed(2)}`);
     }
 
     console.log("  [BENCH_BATCH_TPS] conc | tps | wall_ms | ok/fail | rounds | dropped | reverted | cu_mean");

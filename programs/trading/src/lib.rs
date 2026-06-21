@@ -586,6 +586,7 @@ pub mod trading {
         vat_amount: u64,
         vat_rate_bps: u16,
         batch_id: u64,
+        settle_shard_id: u8,
     ) -> Result<()> {
         instructions::batch_settle_offchain_match(
             ctx,
@@ -594,6 +595,7 @@ pub mod trading {
             vat_amount,
             vat_rate_bps,
             batch_id,
+            settle_shard_id,
         )
     }
 
@@ -1409,6 +1411,20 @@ pub mod trading {
     /// One-time creation of the fee/wheeling/loss collector PDAs for a currency mint.
     pub fn initialize_collectors(ctx: Context<InitializeCollectorsContext>) -> Result<()> {
         instructions::initialize_collectors(ctx)
+    }
+
+    /// One-time creation of the SHARDED collector PDAs for a currency mint + shard
+    /// (§2c Part B). Run once per shard (0..NUM_SETTLE_SHARDS).
+    pub fn initialize_sharded_collectors(
+        ctx: Context<InitializeShardedCollectorsContext>,
+        shard_id: u8,
+    ) -> Result<()> {
+        instructions::initialize_sharded_collectors(ctx, shard_id)
+    }
+
+    /// Consolidate a shard's fee/wheeling/loss balances into the canonical collectors.
+    pub fn sweep_collectors(ctx: Context<SweepCollectorsContext>, shard_id: u8) -> Result<()> {
+        instructions::sweep_collectors(ctx, shard_id)
     }
 
     /// Deposit currency/energy into the caller's per-user escrow PDA (funds the

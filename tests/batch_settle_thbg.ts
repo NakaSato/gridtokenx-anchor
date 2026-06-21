@@ -110,6 +110,20 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     PublicKey.findProgramAddressSync([Buffer.from("escrow"), user.toBuffer(), mint.toBuffer()], trading.programId)[0];
   const collectorPda = (label: string) =>
     PublicKey.findProgramAddressSync([Buffer.from(label), thbgMint.toBuffer()], trading.programId)[0];
+  // §2c Part B: the batch settle path now writes to SHARDED collectors keyed by
+  // `payer[0] % NUM_SETTLE_SHARDS` (payer = authority here), and bumps the matching
+  // treasury settlement-accumulator shard instead of the global total.
+  const NUM_SETTLE_SHARDS = 16;
+  const settleShardByte = authority.toBuffer()[0] % NUM_SETTLE_SHARDS;
+  const shardedCollectorPda = (label: string) =>
+    PublicKey.findProgramAddressSync(
+      [Buffer.from(label), thbgMint.toBuffer(), Buffer.from([settleShardByte])],
+      trading.programId
+    )[0];
+  const settleShardPda = PublicKey.findProgramAddressSync(
+    [Buffer.from("settle_shard"), Buffer.from([settleShardByte])],
+    treasury.programId
+  )[0];
   const nullifierPda = (user: PublicKey, orderId: Buffer) =>
     PublicKey.findProgramAddressSync([Buffer.from("nullifier"), user.toBuffer(), orderId], trading.programId)[0];
 
@@ -175,13 +189,32 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
       treasury: treasuryPda, attestor: authority,
     } as any).rpc();
 
-    // THBG collectors for the trading market (currency = THBG).
+    // THBG collectors for the trading market (currency = THBG). The main (unsharded)
+    // collectors remain the canonical sink (sweep destination); the single settle
+    // path still uses them.
     try {
       await trading.methods.initializeCollectors().accounts({
         payer: authority, currencyMint: thbgMint,
         feeCollector: collectorPda("fee_collector"), wheelingCollector: collectorPda("wheeling_collector"),
         lossCollector: collectorPda("loss_collector"), marketAuthority: marketAuthorityPda,
         tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
+      } as any).rpc();
+    } catch { /* already initialized */ }
+
+    // §2c Part B: sharded collectors for the authority's settle shard, plus the
+    // treasury settlement-accumulator shard (the sharded batch path writes both).
+    try {
+      await trading.methods.initializeShardedCollectors(settleShardByte).accounts({
+        payer: authority, currencyMint: thbgMint,
+        feeCollector: shardedCollectorPda("fee_collector"), wheelingCollector: shardedCollectorPda("wheeling_collector"),
+        lossCollector: shardedCollectorPda("loss_collector"), marketAuthority: marketAuthorityPda,
+        tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
+      } as any).rpc();
+    } catch { /* already initialized */ }
+    try {
+      await treasury.methods.initializeSettlementShard(settleShardByte).accounts({
+        treasury: treasuryPda, shard: settleShardPda, authority,
+        systemProgram: SystemProgram.programId,
       } as any).rpc();
     } catch { /* already initialized */ }
   });
@@ -265,16 +298,16 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     // Optional treasury accounts: passed as null when exercising the
     // TreasurySettlementRequired guard (THBG market + recording omitted).
     const treasuryAccts = opts.withTreasury
-      ? { treasuryProgram: treasury.programId, treasuryState: treasuryPda, settlementRecord }
-      : { treasuryProgram: null, treasuryState: null, settlementRecord: null };
+      ? { treasuryProgram: treasury.programId, treasuryState: treasuryPda, settlementShard: settleShardPda, settlementRecord }
+      : { treasuryProgram: null, treasuryState: null, settlementShard: null, settlementRecord: null };
 
     const settleIx = await trading.methods
-      .batchSettleOffchainMatch(matchPairs as any, merkleRoot, vatAmount, 700, opts.thisBatchId)
+      .batchSettleOffchainMatch(matchPairs as any, merkleRoot, vatAmount, 700, opts.thisBatchId, settleShardByte)
       .accounts({
         market: marketPda, zoneMarket: zoneMarketPda, currencyMint: thbgMint, energyMint: energyMintPda,
         marketAuthority: marketAuthorityPda, marketShard: marketShardPda, zoneShard: zoneShardPda,
-        feeCollector: collectorPda("fee_collector"), wheelingCollector: collectorPda("wheeling_collector"),
-        lossCollector: collectorPda("loss_collector"), payer: authority,
+        feeCollector: shardedCollectorPda("fee_collector"), wheelingCollector: shardedCollectorPda("wheeling_collector"),
+        lossCollector: shardedCollectorPda("loss_collector"), payer: authority,
         sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
         tokenProgram: TOKEN_2022_PROGRAM_ID, secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
@@ -318,10 +351,14 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     const { edIxs, settleIx, alt, settlementRecord } =
       await prepareSettle([{ buyer, seller, buyerOrderId, sellerOrderId }], { withTreasury: true, thisBatchId: batchId });
 
-    // record_settlement_batch bumps treasury.total_settled_thbg by the gross
-    // `value` (= total_value = matchAmount*matchPrice). Capture the pre-settle
-    // cumulative so we can assert the exact delta.
-    const settledBefore = new BN(
+    // §2c Part B: record_settlement_batch_sharded bumps the per-shard accumulator
+    // by the gross `value` (= total_value = matchAmount*matchPrice), NOT the global
+    // total_settled_thbg (which stays flat until aggregate_settlement_shards). Capture
+    // both pre-settle figures to assert the shard delta and the global no-op.
+    const shardBefore = new BN(
+      (await treasury.account.settlementShard.fetch(settleShardPda)).settledThbg.toString()
+    );
+    const globalBefore = new BN(
       (await treasury.account.treasury.fetch(treasuryPda)).totalSettledThbg.toString()
     );
 
@@ -351,14 +388,18 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     expect(Buffer.from(rec.merkleRoot).equals(Buffer.from(merkleRoot00()))).to.equal(true);
     expect(rec.totalValue.toString()).to.equal((matchAmount * matchPrice).toString());
 
-    // §2b assertion: treasury.total_settled_thbg advanced by exactly the gross
-    // settled value (= rec.total_value = matchAmount*matchPrice). The CPI adds
-    // `value` to the cumulative, so delta must equal total_value, not the
-    // VAT-adjusted or escrow-net figure.
-    const settledAfter = new BN(
+    // §2c assertion: the per-shard accumulator advanced by exactly the gross settled
+    // value (= rec.total_value = matchAmount*matchPrice), and the global total did NOT
+    // move (it reconciles only via aggregate_settlement_shards). This is the parallel
+    // win: no global write-lock on the settle hot path.
+    const shardAfter = new BN(
+      (await treasury.account.settlementShard.fetch(settleShardPda)).settledThbg.toString()
+    );
+    const globalAfter = new BN(
       (await treasury.account.treasury.fetch(treasuryPda)).totalSettledThbg.toString()
     );
-    expect(settledAfter.sub(settledBefore).toString()).to.equal((matchAmount * matchPrice).toString());
+    expect(shardAfter.sub(shardBefore).toString()).to.equal((matchAmount * matchPrice).toString());
+    expect(globalAfter.sub(globalBefore).toString()).to.equal("0");
 
     // Buyer received the energy; total settled advanced.
     const buyerEngEscrow = escrowPda(buyer.publicKey, energyMintPda);
