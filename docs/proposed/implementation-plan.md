@@ -133,6 +133,20 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
   - **Replay / double-settle**: re-submitting the control's order ids reverts at the per-order nullifier
     replay guard (`match_amount > remaining` → `InvalidAmount`), proving a signed order can't settle twice.
   - `OrderExpired`: bank clock warped past a non-zero `expires_at` (via litesvm `setClock`) → rejected.
+- [x] **Order-path validation guards — DONE** via a second in-process litesvm harness
+  (`tests/order_guards_litesvm.ts`, **9/9**). Boots trading market+zone+escrow + the governance program.
+  Key trick: `PoAConfig` (`governance_config`) and `ErcCertificate` are plain Borsh `#[account]`s, so the
+  tests **fabricate** them with `svm.setAccount` + the governance Anchor coder (camelCase account names
+  `poAConfig`/`ercCertificate`), pinning the exact field a guard keys on — no need to drive governance's
+  issue/config instructions. `governance_config` is an `UncheckedAccount` (owner unchecked); the ERC is
+  `Account<ErcCertificate>` so it carries the governance owner + disc. Guards asserted, all previously
+  untested — the REC/ERC trading gate on `create_sell_order`:
+  - `MaintenanceMode` (config `maintenance_mode = true`), `InvalidErcCertificate` (status ≠ Valid),
+    `ErcExpired` (Valid + `expires_at` past), `NotValidatedForTrading` (`validated_for_trading = false`),
+    `ExceedsErcAmount` (order amount > ERC's certified amount).
+  - `OrderNotCancellable` (`cancel_order` on an already-cancelled order), `PriceMismatch` (`match_orders`
+    with buy price < sell price), `InsufficientEscrowBalance` (`withdraw_escrow` over the escrow balance).
+  - Positive control: operational config + valid ERC → `create_sell_order` succeeds. See [[litesvm-full-match-settle-harness]].
 - [x] CU under budget (batch + CPI-init) — 1-match batch settle ≈ **80–92k CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. ~12k spread is `find_program_address` bump-seek noise on fresh keypairs, not ledger drift. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
 - [x] Batch-CU curve at >1 match — **single-tx cap = 1 match** (per-match inline Ed25519 verify ix data can't go in an ALT; 2 matches overrun the 1232-byte packet). A real marginal curve needs reworked sig packaging — documented in `BENCHMARKS.md`.
 - [x] TPS sweep over the batch settle path (`tests/batch_settle_tps.ts`) — open-loop goodput: **~0.5–0.6 TPS, flat** (conc 5→0.51, 10→0.58; N=10, 100% goodput, 0 reverts, CU ≈86–89k). Recorded in `BENCHMARKS.md`.
