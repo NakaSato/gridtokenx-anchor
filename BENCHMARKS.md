@@ -178,6 +178,34 @@ inside the 200k budget — the baht-settlement primitive (swap) costs ~1/5 of th
 
 ---
 
+## 6. Registry Lifecycle CU Profile (in-process, litesvm)
+
+Compute-unit cost of the registry user/meter lifecycle — the telemetry hot path
+(`register_user` → `register_meter` → `update_meter_reading`) plus the admin/shard
+setup. Same method as §4/§5. No validator, no token CPI on this path.
+
+Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`).
+
+| Instruction | CU |
+| ----------- | --: |
+| `registry.register_meter` | 17 104 |
+| `registry.register_user` | 12 910 |
+| `registry.initialize` | 6 666 |
+| `registry.deactivate_meter` | 6 435 |
+| `registry.initialize_shard` | 6 404 |
+| `registry.update_meter_reading` | 3 899 |
+| `registry.set_oracle_authority` | 1 569 |
+
+**Reading:** the recurring telemetry write `update_meter_reading` is **3.9k CU** —
+cheap, as intended for the per-meter PDA hot path (no global-config write lock,
+zero-copy meter state). The one-time registrations are heavier (`register_meter`
+17k inits the meter PDA + bumps its shard; `register_user` 12.9k), but still a
+fraction of the budget. The token-bearing registry instructions (`stake_grx`
+validator bond, `settle_and_mint_tokens`, `claim_airdrop`) are out of scope here;
+the bond plumbing mirrors the §5 treasury stake (~22k CU).
+
+---
+
 ## Artifacts
 
 ```
