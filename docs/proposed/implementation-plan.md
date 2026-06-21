@@ -116,7 +116,15 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
 - [x] Batch THBG settle writes the `SettlementRecord` (root/VAT/zone/batch, via `scripts/settlement-pda.ts`).
 - [x] `TreasurySettlementRequired` (6031) fires when treasury/settlement_record omitted on a THBG market — asserted via send + `conf.value.err` `Custom:6031`.
 - [x] Assert `total_settled_thbg` bumped by gross — happy-path captures the cumulative pre/post settle and asserts the delta == `total_value` (= `matchAmount*matchPrice`), not the VAT-adjusted/escrow-net figure. 2/2 on-chain.
-- [ ] `TreasuryCurrencyMismatch` (6030) on wrong currency — needs a 2nd currency mint + market reconfig (alt-currency escrows); heavier, deferred.
+- [x] `TreasuryCurrencyMismatch` (6030) on wrong currency — **DONE** via a new in-process litesvm
+  full-match harness (`tests/treasury_currency_mismatch_litesvm.ts`, 2/2). Settles a valid non-THBG
+  (classic-SPL) match, then passes the treasury accounts whose `thbg_mint` ≠ the settlement currency →
+  reverts at `require_keys_eq!` (`settle_offchain.rs:474`) **before** any `record_settlement` CPI. A
+  positive control (treasury omitted) settles the same match end-to-end, isolating the currency guard
+  from setup error. Avoids the live-validator 2nd-mint/market-reconfig route: the trigger is a treasury
+  whose mint differs, not an alt-currency market. (Harness boots trading market+zone+shards+collectors,
+  the energy Token-2022 mint, and the treasury in-process; signs the match with two Ed25519 precompile
+  ixs; compresses the ~23-account settle through a hand-built ALT installed via `setAccount`.)
 - [x] CU under budget (batch + CPI-init) — 1-match batch settle ≈ **80–92k CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. ~12k spread is `find_program_address` bump-seek noise on fresh keypairs, not ledger drift. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
 - [x] Batch-CU curve at >1 match — **single-tx cap = 1 match** (per-match inline Ed25519 verify ix data can't go in an ALT; 2 matches overrun the 1232-byte packet). A real marginal curve needs reworked sig packaging — documented in `BENCHMARKS.md`.
 - [x] TPS sweep over the batch settle path (`tests/batch_settle_tps.ts`) — open-loop goodput: **~0.5–0.6 TPS, flat** (conc 5→0.51, 10→0.58; N=10, 100% goodput, 0 reverts, CU ≈86–89k). Recorded in `BENCHMARKS.md`.
