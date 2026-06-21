@@ -865,16 +865,55 @@ fn verify_ed25519_signature(
         return Err(ProgramError::IncorrectProgramId.into());
     }
 
-    let pubkey_offset = 16;
-    let _signature_offset = 48;
-    let message_offset = 112;
+    // SECURITY: parse the Ed25519SignatureOffsets header instead of trusting fixed
+    // offsets. The native ed25519 program verifies the (sig, pubkey, msg) triple at the
+    // offsets DECLARED in this header. Reading our pubkey/message from any *other*
+    // location (the old hardcoded 16/112) lets an attacker craft a blob where the header
+    // points the native verifier at THEIR own valid key/sig (passes) while we read a
+    // victim's key planted at byte 16 + the target message at byte 112 — authorizing a
+    // settlement the victim never signed. Read from the same declared offsets so the
+    // parser and the native verifier agree, and reject any redirection to another
+    // instruction's data.
+    //
+    // Header layout (little-endian):
+    //   [0] num_signatures u8, [1] padding u8, then one 14-byte offsets struct:
+    //   [2] sig_off u16, [4] sig_ix_idx u16, [6] pk_off u16, [8] pk_ix_idx u16,
+    //   [10] msg_off u16, [12] msg_size u16, [14] msg_ix_idx u16
+    let data = &ix.data;
+    let bad = || -> anchor_lang::error::Error { ProgramError::InvalidInstructionData.into() };
+    let read_u16 = |at: usize| -> Result<u16> {
+        let s = data.get(at..at + 2).ok_or_else(bad)?;
+        Ok(u16::from_le_bytes([s[0], s[1]]))
+    };
 
-    let pubkey_in_ix = &ix.data[pubkey_offset..pubkey_offset + 32];
+    // Single-signature instruction only — one signer per verify call.
+    if *data.first().ok_or_else(bad)? != 1 {
+        return Err(ProgramError::InvalidArgument.into());
+    }
+
+    let sig_ix_idx = read_u16(4)?;
+    let pk_off = read_u16(6)? as usize;
+    let pk_ix_idx = read_u16(8)?;
+    let msg_off = read_u16(10)? as usize;
+    let msg_size = read_u16(12)? as usize;
+    let msg_ix_idx = read_u16(14)?;
+
+    // Every field must reference THIS instruction (current = u16::MAX sentinel, or its
+    // own absolute index) — block pointing the native verifier at a different ix.
+    const CURRENT: u16 = u16::MAX;
+    let refers_self = |idx: u16| idx == CURRENT || idx == instruction_index;
+    if !(refers_self(sig_ix_idx) && refers_self(pk_ix_idx) && refers_self(msg_ix_idx)) {
+        return Err(ProgramError::InvalidArgument.into());
+    }
+
+    // Pubkey at the DECLARED offset must equal the expected signer.
+    let pubkey_in_ix = data.get(pk_off..pk_off + 32).ok_or_else(bad)?;
     if pubkey_in_ix != expected_pubkey.as_ref() {
         return Err(ProgramError::InvalidArgument.into());
     }
 
-    let message_in_ix = &ix.data[message_offset..];
+    // Message at the DECLARED offset/size must equal the expected payload exactly.
+    let message_in_ix = data.get(msg_off..msg_off + msg_size).ok_or_else(bad)?;
     if message_in_ix != expected_message {
         return Err(ProgramError::InvalidInstructionData.into());
     }
