@@ -101,6 +101,12 @@ impl SettlementShard {
     pub fn load_from_bytes(data: &[u8]) -> Result<&Self> {
         Ok(bytemuck::from_bytes(data))
     }
+
+    /// Mutable view for the drain-and-fold reconcile in `aggregate_settlement_shards`,
+    /// which zeroes each shard's `settled_thbg` after folding it into the global total.
+    pub fn load_mut_from_bytes(data: &mut [u8]) -> Result<&mut Self> {
+        Ok(bytemuck::from_bytes_mut(data))
+    }
 }
 
 /// Per-batch settlement audit commitment (zero-copy). Binds a Merkle root over

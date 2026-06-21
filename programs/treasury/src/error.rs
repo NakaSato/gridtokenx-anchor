@@ -36,4 +36,6 @@ pub enum TreasuryError {
     InvalidShardId,
     #[msg("Settlement shard passed more than once in aggregation")]
     DuplicateShard,
+    #[msg("Settlement shard must be writable to be drained during aggregation")]
+    ShardNotWritable,
 }

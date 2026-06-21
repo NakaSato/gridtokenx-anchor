@@ -110,8 +110,8 @@ describe("treasury settlement (sharded + batch) CU profile (litesvm)", () => {
     const ix = await program.methods.aggregateSettlementShards()
       .accounts({ treasury: treasuryPda, authority: payer.publicKey } as any)
       .remainingAccounts([
-        { pubkey: shardPda(A), isSigner: false, isWritable: false },
-        { pubkey: shardPda(B), isSigner: false, isWritable: false },
+        { pubkey: shardPda(A), isSigner: false, isWritable: true },
+        { pubkey: shardPda(B), isSigner: false, isWritable: true },
       ]).instruction();
     expect(cu("treasury.aggregate_settlement_shards", ix)).to.be.below(BUDGET);
   });

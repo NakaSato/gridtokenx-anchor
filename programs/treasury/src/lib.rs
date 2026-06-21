@@ -319,16 +319,26 @@ pub mod treasury {
     }
 
     /// Reconcile the global `total_settled_thbg` from the per-shard accumulators.
-    /// Admin-only. Sums every `SettlementShard` passed in `remaining_accounts`
+    /// Admin-only.
+    ///
+    /// **Drain-and-fold:** each `SettlementShard` passed in `remaining_accounts`
     /// (validated by program owner + stored-bump PDA, deduped by a shard-id bitmask)
-    /// and writes the result onto the treasury. The global total is stale between
-    /// runs on purpose — same trade-off as the registry's `aggregate_shards`.
+    /// has its `settled_thbg` ADDED to the running global and then ZEROED. Folding
+    /// into — instead of overwriting — the live global is deliberate: the single-match
+    /// settle path (`record_settlement`) bumps `total_settled_thbg` directly, while the
+    /// batch path bumps shards. Overwriting `global = sum(shards)` (the previous
+    /// behaviour) silently wiped every single-match contribution on each reconcile.
+    /// Folding preserves both; zeroing the shard makes it a delta-since-last-aggregate,
+    /// so re-running with no new settles is a no-op (no double counting). Shards must
+    /// therefore be passed writable. `settlement_count` is left cumulative.
     pub fn aggregate_settlement_shards(ctx: Context<AggregateSettlementShards>) -> Result<()> {
         compute_fn!("aggregate_settlement_shards" => {
             let mut t = ctx.accounts.treasury.load_mut()?;
             require!(t.authority == ctx.accounts.authority.key(), TreasuryError::UnauthorizedAuthority);
 
-            let mut total: u64 = 0;
+            // Start from the live global so single-match `record_settlement` writes are
+            // preserved across reconciles.
+            let mut running: u64 = t.total_settled_thbg;
             // Bitmask of shard_ids already counted — reject duplicates so a shard
             // passed twice cannot inflate the total.
             let mut seen: u16 = 0;
@@ -336,9 +346,9 @@ pub mod treasury {
 
             for account_info in ctx.remaining_accounts.iter() {
                 require_keys_eq!(*account_info.owner, crate::ID, TreasuryError::UnauthorizedAuthority);
-                let data = account_info.try_borrow_data()?;
+                let mut data = account_info.try_borrow_mut_data()?;
                 if data.len() >= 8 + SHARD_LEN {
-                    let shard = SettlementShard::load_from_bytes(&data[8..8 + SHARD_LEN])?;
+                    let shard = SettlementShard::load_mut_from_bytes(&mut data[8..8 + SHARD_LEN])?;
                     require!(shard.shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
 
                     // Validate via the stored canonical bump (create_program_address)
@@ -352,13 +362,17 @@ pub mod treasury {
                     require!(seen & bit == 0, TreasuryError::DuplicateShard);
                     seen |= bit;
 
-                    total = total
+                    // Must be writable: the drain below mutates the shard's data.
+                    require!(account_info.is_writable, TreasuryError::ShardNotWritable);
+
+                    running = running
                         .checked_add(shard.settled_thbg)
                         .ok_or(TreasuryError::MathOverflow)?;
+                    shard.settled_thbg = 0; // drain — shard now holds the next delta window
                 }
             }
 
-            t.total_settled_thbg = total;
+            t.total_settled_thbg = running;
         });
         Ok(())
     }

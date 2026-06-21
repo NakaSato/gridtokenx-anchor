@@ -200,17 +200,34 @@ describe("treasury sharded settlement accumulator (litesvm)", () => {
   });
 
   it("aggregates the per-shard totals into the global total", async () => {
+    // Drain-and-fold: shards are passed writable; each settled_thbg is folded into
+    // the global and then zeroed.
     const aggIx = await program.methods
       .aggregateSettlementShards()
       .accounts({ treasury: treasuryPda, authority: payer.publicKey })
       .remainingAccounts([
-        { pubkey: shardPda(A), isSigner: false, isWritable: false },
-        { pubkey: shardPda(B), isSigner: false, isWritable: false },
+        { pubkey: shardPda(A), isSigner: false, isWritable: true },
+        { pubkey: shardPda(B), isSigner: false, isWritable: true },
       ])
       .instruction();
     send([aggIx], []);
 
-    // 7,000,000 (A) + 7,000,000 (B) = 14,000,000.
+    // 7,000,000 (A) + 7,000,000 (B) = 14,000,000 folded into the (previously 0) global.
+    expect(decode("Treasury", treasuryPda).totalSettledThbg.toString()).to.equal("14000000");
+    // Each shard was drained to 0 after folding (delta-since-last-aggregate semantics).
+    expect(decode("SettlementShard", shardPda(A)).settledThbg.toString()).to.equal("0");
+    expect(decode("SettlementShard", shardPda(B)).settledThbg.toString()).to.equal("0");
+
+    // Re-running with no new settles is a no-op (no double counting).
+    const aggIx2 = await program.methods
+      .aggregateSettlementShards()
+      .accounts({ treasury: treasuryPda, authority: payer.publicKey })
+      .remainingAccounts([
+        { pubkey: shardPda(A), isSigner: false, isWritable: true },
+        { pubkey: shardPda(B), isSigner: false, isWritable: true },
+      ])
+      .instruction();
+    send([aggIx2], []);
     expect(decode("Treasury", treasuryPda).totalSettledThbg.toString()).to.equal("14000000");
   });
 
@@ -219,8 +236,8 @@ describe("treasury sharded settlement accumulator (litesvm)", () => {
       .aggregateSettlementShards()
       .accounts({ treasury: treasuryPda, authority: payer.publicKey })
       .remainingAccounts([
-        { pubkey: shardPda(A), isSigner: false, isWritable: false },
-        { pubkey: shardPda(A), isSigner: false, isWritable: false }, // dup
+        { pubkey: shardPda(A), isSigner: false, isWritable: true },
+        { pubkey: shardPda(A), isSigner: false, isWritable: true }, // dup
       ])
       .instruction();
 
