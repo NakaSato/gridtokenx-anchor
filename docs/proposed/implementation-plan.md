@@ -147,6 +147,16 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
   - `OrderNotCancellable` (`cancel_order` on an already-cancelled order), `PriceMismatch` (`match_orders`
     with buy price < sell price), `InsufficientEscrowBalance` (`withdraw_escrow` over the escrow balance).
   - Positive control: operational config + valid ERC → `create_sell_order` succeeds. See [[litesvm-full-match-settle-harness]].
+- [x] **Treasury redeem peg/collateral guards — DONE** via a third litesvm harness
+  (`tests/treasury_redeem_guards_litesvm.ts`, **5/5**). Boots the treasury + an external GRX mint in-process,
+  attests a reserve, and drives real swap/redeem flows. Guards asserted, all previously untested (the
+  swap-side `StaleAttestation`/`PegBreach` were already covered by `tests/treasury.ts`):
+  - `SupplyUnderflow`: redeem `thbg_in` > tracked `thbg_supply` (trivial on a fresh treasury, supply 0).
+  - `InsufficientVault`: **the headline invariant** (CLAUDE.md) — build vault collateral via a swap, drop
+    `grx_per_thbg_rate` via `set_params`, then a tiny redeem computes `grx_out > swap_vault.amount` and is
+    rejected. Proves a rate change can never let a redeemer drain more GRX than the vault physically holds.
+  - `Paused` (`set_params` paused → swap rejected), `ZeroAmount` (zero redeem).
+  - Positive control: swap 2 GRX → redeem 4 THBG within collateral → succeeds, exercising the real math.
 - [x] CU under budget (batch + CPI-init) — 1-match batch settle ≈ **80–92k CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. ~12k spread is `find_program_address` bump-seek noise on fresh keypairs, not ledger drift. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
 - [x] Batch-CU curve at >1 match — **single-tx cap = 1 match** (per-match inline Ed25519 verify ix data can't go in an ALT; 2 matches overrun the 1232-byte packet). A real marginal curve needs reworked sig packaging — documented in `BENCHMARKS.md`.
 - [x] TPS sweep over the batch settle path (`tests/batch_settle_tps.ts`) — open-loop goodput: **~0.5–0.6 TPS, flat** (conc 5→0.51, 10→0.58; N=10, 100% goodput, 0 reverts, CU ≈86–89k). Recorded in `BENCHMARKS.md`.
