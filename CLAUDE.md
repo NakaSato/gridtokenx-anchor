@@ -40,6 +40,16 @@ npx mocha -r tsx tests/oracle.ts --timeout 1000000   # single file
 
 ./scripts/run-tests.sh --suite oracle                # standalone/CI runner, flags: --skip-build --skip-deploy --suite
 
+# In-process litesvm suites (no validator): guard tests + CU profiles.
+npm run test:litesvm        # every tests/*_litesvm.ts  (auto-stages fresh .so via pretest hook)
+npm run test:cu-profile     # tests/cu_profile_*_litesvm.ts (each asserts < 200k CU)
+npm run build:programs      # cargo build-sbf every program, then stage into target/deploy
+npm run stage:programs      # copy programs/*/target/deploy/*.so -> target/deploy (newest wins)
+# The litesvm suites load target/deploy/<p>.so; Anchor 1.0 emits per-program binaries under
+# programs/<p>/target/deploy, so a stale root copy makes tests run the WRONG binary. The
+# stage script (scripts/stage-programs.sh, also a CI step) keeps root current; `--check`
+# fails if drift exists. Rebuild + restage after editing a program: `npm run build:programs`.
+
 npm run lint        # eslint .
 npm run lint:fix
 ```
