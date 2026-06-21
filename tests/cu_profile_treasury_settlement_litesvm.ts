@@ -16,6 +16,7 @@ import { PublicKey, Keypair, Transaction, SystemProgram, TransactionInstruction 
 import { TOKEN_2022_PROGRAM_ID, MINT_SIZE, createInitializeMint2Instruction } from "@solana/spl-token";
 import BN from "bn.js";
 import { createRequire } from "module";
+import { assertBaseline, fixedKeypair } from "./cu-baseline";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/treasury.json");
@@ -31,8 +32,8 @@ describe("treasury settlement (sharded + batch) CU profile (litesvm)", () => {
   let program: Program<Treasury>;
   let programId: PublicKey;
 
-  const payer = Keypair.generate(); // authority + attestor + settlement recorder
-  const grxMint = Keypair.generate();
+  const payer = fixedKeypair(1); // authority + attestor + settlement recorder
+  const grxMint = fixedKeypair(2);
 
   let treasuryPda: PublicKey;
 
@@ -87,6 +88,7 @@ describe("treasury settlement (sharded + batch) CU profile (litesvm)", () => {
     const w = Math.max(...profile.map((p) => p.ix.length));
     console.log("\n  CU profile (default features, no localnet):");
     for (const p of profile) console.log(`    ${p.ix.padEnd(w)}  ${p.cu.toString().padStart(7)} CU`);
+    assertBaseline(profile);
   });
 
   const initShardIx = (id: number) =>

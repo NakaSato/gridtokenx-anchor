@@ -26,6 +26,7 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import { createRequire } from "module";
+import { assertBaseline, fixedKeypair } from "./cu-baseline";
 
 const require = createRequire(import.meta.url);
 const tradingIdl = require("../target/idl/trading.json");
@@ -43,8 +44,8 @@ describe("trading CDA order-path CU profile (litesvm)", () => {
   let tradingId: PublicKey;
   let governanceId: PublicKey;
 
-  const payer = Keypair.generate();
-  const currencyMintKp = Keypair.generate();
+  const payer = fixedKeypair(1);
+  const currencyMintKp = fixedKeypair(2);
 
   let currencyMint: PublicKey, marketPda: PublicKey, zoneMarketPda: PublicKey, marketAuthorityPda: PublicKey;
   let cfg: PublicKey, erc: PublicKey;
@@ -79,7 +80,7 @@ describe("trading CDA order-path CU profile (litesvm)", () => {
     PublicKey.findProgramAddressSync([Buffer.from("escrow"), payer.publicKey.toBuffer(), currencyMint.toBuffer()], tradingId)[0];
 
   async function installConfig(maintenance: boolean): Promise<PublicKey> {
-    const key = Keypair.generate().publicKey;
+    const key = fixedKeypair(10).publicKey;
     const c = {
       authority: PublicKey.default, authorityName: Array(64).fill(0), nameLen: 0, contactInfo: Array(128).fill(0), contactLen: 0,
       version: 1, maintenanceMode: maintenance, ercValidationEnabled: true, minEnergyAmount: new BN(0), maxErcAmount: new BN(0),
@@ -94,7 +95,7 @@ describe("trading CDA order-path CU profile (litesvm)", () => {
   }
 
   async function installErc(energyAmount: number): Promise<PublicKey> {
-    const key = Keypair.generate().publicKey;
+    const key = fixedKeypair(11).publicKey;
     const e = {
       certificateId: Array(64).fill(0), idLen: 0, authority: payer.publicKey, owner: payer.publicKey, energyAmount: new BN(energyAmount),
       renewableSource: Array(64).fill(0), sourceLen: 0, validationData: Array(256).fill(0), dataLen: 0, issuedAt: new BN(0),
@@ -137,6 +138,7 @@ describe("trading CDA order-path CU profile (litesvm)", () => {
     const w = Math.max(...profile.map((p) => p.ix.length));
     console.log("\n  CU profile (default features, no localnet):");
     for (const p of profile) console.log(`    ${p.ix.padEnd(w)}  ${p.cu.toString().padStart(7)} CU`);
+    assertBaseline(profile);
   });
 
   it("trading.initialize_market", async () => {

@@ -20,6 +20,7 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import { createRequire } from "module";
+import { assertBaseline, fixedKeypair } from "./cu-baseline";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/energy_token.json");
@@ -31,9 +32,9 @@ describe("energy-token CU profile (litesvm)", () => {
   let program: Program<EnergyToken>;
   let programId: PublicKey;
 
-  const payer = Keypair.generate();
-  const destOwner = Keypair.generate();
-  const v1 = Keypair.generate(); // registered REC validator
+  const payer = fixedKeypair(1);
+  const destOwner = fixedKeypair(2);
+  const v1 = fixedKeypair(3); // registered REC validator
 
   let mintPda: PublicKey, infoPda: PublicKey, destAta: PublicKey, payerAta: PublicKey;
 
@@ -88,6 +89,7 @@ describe("energy-token CU profile (litesvm)", () => {
     const w = Math.max(...profile.map((p) => p.ix.length));
     console.log("\n  CU profile (default features, no localnet):");
     for (const p of profile) console.log(`    ${p.ix.padEnd(w)}  ${p.cu.toString().padStart(7)} CU`);
+    assertBaseline(profile);
   });
 
   it("energy_token.initialize_token", async () => {

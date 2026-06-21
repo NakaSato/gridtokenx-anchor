@@ -21,6 +21,7 @@ import {
 import BN from "bn.js";
 import { expect } from "chai";
 import { createRequire } from "module";
+import { assertBaseline, fixedKeypair } from "./cu-baseline";
 
 const require = createRequire(import.meta.url);
 const oracleIdl = require("../target/idl/oracle.json");
@@ -36,9 +37,9 @@ describe("governance + oracle CU profile (litesvm)", () => {
   let oracleId: PublicKey;
   let governanceId: PublicKey;
 
-  const payer = Keypair.generate();
-  const chainBridge = Keypair.generate();
-  const proposed = Keypair.generate();
+  const payer = fixedKeypair(1);
+  const chainBridge = fixedKeypair(2);
+  const proposed = fixedKeypair(3);
 
   let oracleData: PublicKey;
   let poaConfig: PublicKey;
@@ -84,6 +85,7 @@ describe("governance + oracle CU profile (litesvm)", () => {
     const w = Math.max(...profile.map((p) => p.ix.length));
     console.log("\n  CU profile (default features, no localnet):");
     for (const p of profile) console.log(`    ${p.ix.padEnd(w)}  ${p.cu.toString().padStart(7)} CU`);
+    assertBaseline(profile);
   });
 
   it("governance: initialize_poa", async () => {

@@ -23,6 +23,7 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import { createRequire } from "module";
+import { assertBaseline, fixedKeypair } from "./cu-baseline";
 
 const require = createRequire(import.meta.url);
 const treasuryIdl = require("../target/idl/treasury.json");
@@ -38,8 +39,8 @@ describe("treasury CU profile (litesvm)", () => {
   let treasury: Program<Treasury>;
   let treasuryId: PublicKey;
 
-  const payer = Keypair.generate(); // authority + attestor + recorder + the swapping/staking user
-  const grxMintKp = Keypair.generate();
+  const payer = fixedKeypair(1); // authority + attestor + recorder + the swapping/staking user
+  const grxMintKp = fixedKeypair(2);
 
   let grxMint: PublicKey, treasuryPda: PublicKey, thbgMint: PublicKey, swapVault: PublicKey;
   let stakeVault: PublicKey, userGrxAta: PublicKey, userThbgAta: PublicKey;
@@ -99,6 +100,7 @@ describe("treasury CU profile (litesvm)", () => {
     const w = Math.max(...profile.map((p) => p.ix.length));
     console.log("\n  CU profile (default features, no localnet):");
     for (const p of profile) console.log(`    ${p.ix.padEnd(w)}  ${p.cu.toString().padStart(7)} CU`);
+    assertBaseline(profile);
   });
 
   it("treasury.initialize", async () => {

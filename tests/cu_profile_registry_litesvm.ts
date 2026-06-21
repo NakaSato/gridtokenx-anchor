@@ -15,6 +15,7 @@ import { expect } from "chai";
 import { PublicKey, Keypair, Transaction, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 import { createRequire } from "module";
+import { assertBaseline, fixedKeypair } from "./cu-baseline";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/registry.json");
@@ -27,9 +28,9 @@ describe("registry CU profile (litesvm)", () => {
   let program: Program<Registry>;
   let programId: PublicKey;
 
-  const payer = Keypair.generate();
-  const user = Keypair.generate();
-  const oracle = Keypair.generate();
+  const payer = fixedKeypair(1);
+  const user = fixedKeypair(2);
+  const oracle = fixedKeypair(3);
 
   let registryPda: PublicKey, userPda: PublicKey, shardPda: PublicKey, meterPda: PublicKey;
   let shardId: number;
@@ -77,6 +78,7 @@ describe("registry CU profile (litesvm)", () => {
     const w = Math.max(...profile.map((p) => p.ix.length));
     console.log("\n  CU profile (default features, no localnet):");
     for (const p of profile) console.log(`    ${p.ix.padEnd(w)}  ${p.cu.toString().padStart(7)} CU`);
+    assertBaseline(profile);
   });
 
   it("registry.initialize", async () => {

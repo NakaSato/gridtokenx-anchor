@@ -125,6 +125,14 @@ production-representative). No validator required.
 
 Reproduce: `npm run test:cu-profile` (asserts each instruction < 200k default budget).
 
+> **Determinism & baseline gate.** The profiles use fixed (deterministic) keypairs, not
+> `Keypair.generate()`: a PDA's bump-search iteration count is charged in CU and varies
+> with the account address, so random keys make init instructions jitter by thousands of
+> CU. With fixed keys every number below is reproducible run-to-run. The values are
+> committed to `tests/cu-baseline.json`; each profile asserts its measurements against it
+> within 5% (`tests/cu-baseline.ts`), so a compute regression — not just a 200k blowout —
+> fails CI. Regenerate after an intentional change: `CU_BASELINE_UPDATE=1 npm run test:cu-profile`.
+
 | Instruction | CU |
 | ----------- | --: |
 | `governance.initialize_poa` | 16 417 |
@@ -163,12 +171,12 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 | `treasury.initialize` | 42 278 |
 | `treasury.swap_grx_for_thbg` | 21 488 |
 | `treasury.redeem_thbg_for_grx` | 21 323 |
-| `treasury.stake_grx` (first — inits position) | 22 535 |
+| `treasury.stake_grx` (first — inits position) | 19 535 |
 | `treasury.update_attestation` | 3 300 |
 | `treasury.record_settlement` | 3 300 |
 | `treasury.set_params` | 2 863 |
 
-**Reading:** the swap/redeem/stake hot paths cluster at **~21–22.5k CU**, driven
+**Reading:** the swap/redeem/stake hot paths cluster at **~19.5–21.5k CU**, driven
 by the Token-2022 transfer + mint/burn CPIs (one-time `stake` adds a position-PDA
 init). `initialize` is the heaviest at 42k — a one-off that creates the THBG mint
 plus the three GRX vaults (swap/stake/reward). Pure-state admin instructions
@@ -214,21 +222,21 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 
 | Instruction | CU |
 | ----------- | --: |
-| `registry.register_meter` | 17 104 |
-| `registry.register_user` | 12 910 |
+| `registry.register_meter` | 20 104 |
+| `registry.register_user` | 15 910 |
+| `registry.deactivate_meter` | 10 935 |
+| `registry.initialize_shard` | 10 904 |
 | `registry.initialize` | 6 666 |
-| `registry.deactivate_meter` | 6 435 |
-| `registry.initialize_shard` | 6 404 |
 | `registry.update_meter_reading` | 3 899 |
 | `registry.set_oracle_authority` | 1 569 |
 
 **Reading:** the recurring telemetry write `update_meter_reading` is **3.9k CU** —
 cheap, as intended for the per-meter PDA hot path (no global-config write lock,
 zero-copy meter state). The one-time registrations are heavier (`register_meter`
-17k inits the meter PDA + bumps its shard; `register_user` 12.9k), but still a
+20k inits the meter PDA + bumps its shard; `register_user` 15.9k), but still a
 fraction of the budget. The token-bearing registry instructions (`stake_grx`
 validator bond, `settle_and_mint_tokens`, `claim_airdrop`) are out of scope here;
-the bond plumbing mirrors the §5 treasury stake (~22k CU).
+the bond plumbing mirrors the §5 treasury stake (~19.5k CU).
 
 ---
 
@@ -243,11 +251,11 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 
 | Instruction | CU |
 | ----------- | --: |
-| `trading.deposit_escrow` | 30 658 |
-| `trading.withdraw_escrow` | 21 094 |
+| `trading.deposit_escrow` | 27 658 |
+| `trading.withdraw_escrow` | 18 094 |
 | `trading.match_orders` (CDA) | 11 746 |
-| `trading.create_sell_order` | 10 008 |
-| `trading.create_buy_order` | 8 961 |
+| `trading.create_sell_order` | 11 508 |
+| `trading.create_buy_order` | 10 461 |
 | `trading.initialize_market` | 8 392 |
 | `trading.initialize_zone_market` | 6 867 |
 | `trading.cancel_order` | 4 463 |
@@ -258,7 +266,7 @@ record; no token movement. Contrast §1's `settle_offchain_match` at **103k**: t
 ~9× gap is the Ed25519 signature-verify precompile + dual-mint escrow transfers on
 the *settlement* path, which `match_orders` does not perform. The escrow
 deposit/withdraw (SPL transfer + PDA init/close accounting) dominate this path at
-21-31k. Order create/cancel are ~4-10k.
+18-28k. Order create/cancel are ~4.5-11.5k.
 
 ---
 
