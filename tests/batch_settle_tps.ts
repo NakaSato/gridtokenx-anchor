@@ -88,6 +88,10 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   const zoneId = 0;
   const N = envInt("BENCH_TPS_N", 8);
   const WARMUP = envInt("BENCH_TPS_WARMUP", 2);
+  // Retry rounds for dropped (same-slot write-race loser) sigs. Set BENCH_TPS_ROUNDS=1
+  // for a pure single-burst open-loop: fire all N once, no re-fire — the slot-density of
+  // that one burst is the cleanest peak-throughput measurement (no barrier inflation).
+  const ROUNDS = envInt("BENCH_TPS_ROUNDS", 3);
   const CONC = (process.env.BENCH_TPS_CONC || "4,8").split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => n > 0);
   // Unique batch-id base per run: SettlementRecord PDA is seeded by (zone,batch)
   // and the local ledger persists across runs, so a fixed id collides on re-run.
@@ -395,7 +399,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       // failure and is NOT retried — only "missing" (dropped) ones are.
       const sigs: (string | null)[] = new Array(N).fill(null);
       const errs: (any | "missing")[] = new Array(N).fill("missing");
-      const rounds = 3;
+      const rounds = ROUNDS;
       let roundsUsed = 0, dropped = 0, reverted = 0;
       const t0 = performance.now();
       for (let round = 0; round < rounds; round++) {
