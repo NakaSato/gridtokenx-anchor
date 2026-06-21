@@ -136,12 +136,12 @@ Goal: prove or kill the trustless fraud-proof path **before** spending on it. Po
 Tests / exit criteria:
 - [x] CU measurement recorded vs 200k default / 1.4M max — Merkle verify 3.25–4.5k CU (≤2% of default), recorded above + in `BENCHMARKS.md`.
 - [x] Exclusion-proof correctness demo (valid drop proven; forged rejected) — `tests/spike_merkle_exclusion.ts` (off-chain 5/5) + `tests/spike_merkle_cu.ts` (on-chain 6/6, forge vectors revert).
-- [x] Written go/no-go in this doc — see T3.3 above: CU/soundness cleared; gated now on the immediate-settlement → challenge-window redesign, not on this spike.
+- [x] Written go/no-go — see T3.3 above + the full decision doc [`tier2-go-no-go.md`](tier2-go-no-go.md) (**recommendation: NO-GO for now** — CU/soundness cleared, but a trustless Tier-2 needs a settlement-finality/challenge-window redesign that a permissioned PoA network doesn't yet justify; re-open if the trust model changes).
 
 ---
 
-## Deferred (only if §3 passes)
-- Trustless on-chain Merkle fraud proof + challenge-response.
+## Deferred (only if §3 passes — current recommendation NO-GO, see [`tier2-go-no-go.md`](tier2-go-no-go.md))
+- Trustless on-chain Merkle fraud proof + challenge-response — **gated on a settlement-finality/challenge-window redesign** (the proof verify itself is done + cheap). Re-open only if the trust model leaves permissioned PoA.
 - THBG-denominated bond + migration of live GRX bonds.
 
 ## Cross-cutting
