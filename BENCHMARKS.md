@@ -236,6 +236,32 @@ deposit/withdraw (SPL transfer + PDA init/close accounting) dominate this path a
 
 ---
 
+## 8. Energy-Token (GRID Mint) CU Profile (in-process, litesvm)
+
+Compute-unit cost of the GRID mint lifecycle — token init, REC-validator set
+management, REC-gated `mint_to_wallet`, transfer, and burn. Same method as §4-7.
+Token-2022 mint owned by the program's mint PDA; `mint_to_wallet` is co-signed by a
+registered REC validator (wiring from `tests/energy_token_rec_guards_litesvm.ts`).
+
+Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`).
+
+| Instruction | CU |
+| ----------- | --: |
+| `energy_token.initialize_token` | 18 424 |
+| `energy_token.mint_to_wallet` (REC-gated) | 13 700 |
+| `energy_token.transfer_tokens` | 8 035 |
+| `energy_token.burn_tokens` | 6 537 |
+| `energy_token.add_rec_validator` | 1 575 |
+| `energy_token.remove_rec_validator` | 1 366 |
+
+**Reading:** the REC-gated `mint_to_wallet` — the provenance boundary that requires
+a registered REC validator co-sign before any GRID is minted — costs **13.7k CU**
+(REC-set scan + Token-2022 mint CPI). `initialize_token` (18.4k) is the one-off
+mint-PDA creation. Transfer/burn are plain Token-2022 CPIs at 6.5-8k. Validator-set
+edits are pure-state at ~1.5k. All well inside budget.
+
+---
+
 ## Artifacts
 
 ```
