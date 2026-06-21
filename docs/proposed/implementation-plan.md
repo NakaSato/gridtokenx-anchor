@@ -157,6 +157,16 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
     rejected. Proves a rate change can never let a redeemer drain more GRX than the vault physically holds.
   - `Paused` (`set_params` paused → swap rejected), `ZeroAmount` (zero redeem).
   - Positive control: swap 2 GRX → redeem 4 THBG within collateral → succeeds, exercising the real math.
+- [x] **Registry slash/stake gating guards — DONE** via a fourth litesvm harness
+  (`tests/registry_slash_gating_litesvm.ts`, **3/3**). Boots a registry + an Active staked validator;
+  every slash attempt reverts so the validator stays Active and the guards are isolated (the slash *math*
+  + `InvalidSlashFraction`/`NotActiveValidator` are covered by `tests/slash_distribution_litesvm.ts`).
+  Guards asserted, all previously untested — the validator-bond misroute/drain protections:
+  - `SlashDestinationNotSet`: slash before any `set_slash_destination` → rejected (registry refuses to
+    slash until a destination is configured).
+  - `InvalidSlashDestination`: after configuring the fund destination, a slash routed to a *different*
+    account is rejected — the fund remainder can't be misrouted to an attacker.
+  - `InsufficientStakingBalance`: `unstake_grx` for more than the staked bond is rejected.
 - [x] CU under budget (batch + CPI-init) — 1-match batch settle ≈ **80–92k CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. ~12k spread is `find_program_address` bump-seek noise on fresh keypairs, not ledger drift. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
 - [x] Batch-CU curve at >1 match — **single-tx cap = 1 match** (per-match inline Ed25519 verify ix data can't go in an ALT; 2 matches overrun the 1232-byte packet). A real marginal curve needs reworked sig packaging — documented in `BENCHMARKS.md`.
 - [x] TPS sweep over the batch settle path (`tests/batch_settle_tps.ts`) — open-loop goodput: **~0.5–0.6 TPS, flat** (conc 5→0.51, 10→0.58; N=10, 100% goodput, 0 reverts, CU ≈86–89k). Recorded in `BENCHMARKS.md`.
