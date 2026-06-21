@@ -117,7 +117,7 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
 - [x] `TreasurySettlementRequired` (6031) fires when treasury/settlement_record omitted on a THBG market — asserted via send + `conf.value.err` `Custom:6031`.
 - [x] Assert `total_settled_thbg` bumped by gross — happy-path captures the cumulative pre/post settle and asserts the delta == `total_value` (= `matchAmount*matchPrice`), not the VAT-adjusted/escrow-net figure. 2/2 on-chain.
 - [x] **Settle-path validation guards — DONE** via a new in-process litesvm full-match harness
-  (`tests/settle_offchain_guards_litesvm.ts`, **7/7**). First harness that boots trading
+  (`tests/settle_offchain_guards_litesvm.ts`, **9/9**). First harness that boots trading
   market+zone+shards+collectors, the energy Token-2022 mint, and the treasury in-process; signs a match
   with two Ed25519 precompile ixs; compresses the ~23-account settle through a hand-built ALT installed
   via `setAccount`. One valid-match template drives a positive control + every guard via field overrides
@@ -130,6 +130,9 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
   - `InvalidOrderSide` (wrong side flag), `InvalidAmount` (zero match amount).
   - `CapacityExceeded`: a cross-zone match (both legs zone 8) settled against a low-cap zone (cap 50,
     amount 60) → throttled at the `committed_flow + amount ≤ capacity` check ([[settlement-tps-zone-market-lock]]).
+  - **Replay / double-settle**: re-submitting the control's order ids reverts at the per-order nullifier
+    replay guard (`match_amount > remaining` → `InvalidAmount`), proving a signed order can't settle twice.
+  - `OrderExpired`: bank clock warped past a non-zero `expires_at` (via litesvm `setClock`) → rejected.
 - [x] CU under budget (batch + CPI-init) — 1-match batch settle ≈ **80–92k CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. ~12k spread is `find_program_address` bump-seek noise on fresh keypairs, not ledger drift. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
 - [x] Batch-CU curve at >1 match — **single-tx cap = 1 match** (per-match inline Ed25519 verify ix data can't go in an ALT; 2 matches overrun the 1232-byte packet). A real marginal curve needs reworked sig packaging — documented in `BENCHMARKS.md`.
 - [x] TPS sweep over the batch settle path (`tests/batch_settle_tps.ts`) — open-loop goodput: **~0.5–0.6 TPS, flat** (conc 5→0.51, 10→0.58; N=10, 100% goodput, 0 reverts, CU ≈86–89k). Recorded in `BENCHMARKS.md`.

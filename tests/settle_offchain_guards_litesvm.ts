@@ -18,7 +18,7 @@
 // The ~23-account settle is compressed through a hand-built ALT (see sendV0/installAlt):
 // a v0 message can't serialize >1232 bytes even in litesvm (web3.js caps the buffer).
 
-import { LiteSVM, FailedTransactionMetadata } from "litesvm";
+import { LiteSVM, Clock, FailedTransactionMetadata } from "litesvm";
 import { Program } from "@anchor-lang/core";
 import * as anchorPkg from "@anchor-lang/core";
 import { Trading } from "../target/types/trading";
@@ -221,6 +221,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       seedA?: number; seedB?: number;
       buyerSide?: number; sellerSide?: number;
       buyerZone?: number; sellerZone?: number;
+      buyerExpires?: number; sellerExpires?: number;
       energyAmount?: number; matchAmount?: number; matchPrice?: number;
       zoneMarket?: PublicKey; zoneShard?: PublicKey;
     } = {}
@@ -228,6 +229,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const seedA = o.seedA ?? 0xa1, seedB = o.seedB ?? 0xb2;
     const buyerSide = o.buyerSide ?? 0, sellerSide = o.sellerSide ?? 1;
     const buyerZone = o.buyerZone ?? ZONE, sellerZone = o.sellerZone ?? ZONE;
+    const buyerExpires = o.buyerExpires ?? 0, sellerExpires = o.sellerExpires ?? 0;
     const energyAmount = o.energyAmount ?? MATCH_AMOUNT;
     const matchAmount = o.matchAmount ?? MATCH_AMOUNT;
     const matchPrice = o.matchPrice ?? MATCH_PRICE;
@@ -237,13 +239,13 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(seedA, 0);
     const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(seedB, 0);
 
-    const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount, pricePerKwh: 60, side: buyerSide, zoneId: buyerZone, expiresAt: 0 });
-    const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount, pricePerKwh: 50, side: sellerSide, zoneId: sellerZone, expiresAt: 0 });
+    const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount, pricePerKwh: 60, side: buyerSide, zoneId: buyerZone, expiresAt: buyerExpires });
+    const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount, pricePerKwh: 50, side: sellerSide, zoneId: sellerZone, expiresAt: sellerExpires });
     const buyerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: buyer.secretKey, message: buyerMsg });
     const sellerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: seller.secretKey, message: sellerMsg });
 
-    const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(energyAmount), pricePerKwh: new BN(60), side: buyerSide, zoneId: buyerZone, expiresAt: new BN(0) };
-    const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(energyAmount), pricePerKwh: new BN(50), side: sellerSide, zoneId: sellerZone, expiresAt: new BN(0) };
+    const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(energyAmount), pricePerKwh: new BN(60), side: buyerSide, zoneId: buyerZone, expiresAt: new BN(buyerExpires) };
+    const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(energyAmount), pricePerKwh: new BN(50), side: sellerSide, zoneId: sellerZone, expiresAt: new BN(sellerExpires) };
 
     const settleIx = await trading.methods
       .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), new BN(1), new BN(1))
@@ -472,5 +474,22 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       zoneMarket: lowZonePda, zoneShard: lowZoneShardPda,
     }), true);
     expect(blob, blob).to.match(/CapacityExceeded/);
+  });
+
+  it("rejects re-settling an already-filled order (replay / double-settle)", async () => {
+    // The control test settled order a1/b2 — the buyer nullifier now records filled=100
+    // (= energy_amount), so remaining is 0. Re-submitting the SAME order ids reverts at
+    // the per-order replay guard (match_amount > remaining → InvalidAmount), proving the
+    // nullifier blocks double-settlement of a signed order.
+    const blob = sendV0(await buildSettleIxs(false), true); // default seeds a1/b2
+    expect(blob, blob).to.match(/InvalidAmount/);
+  });
+
+  // Keep last: this mutates the bank clock, which would shift expiry for any later test.
+  it("rejects a settle past the order's expiry (OrderExpired)", async () => {
+    const c = svm.getClock();
+    svm.setClock(new Clock(c.slot, c.epochStartTimestamp, c.epoch, c.leaderScheduleEpoch, 1_000_000n));
+    const blob = sendV0(await buildSettleIxs(false, { seedA: 0x1b, seedB: 0x1c, buyerExpires: 500_000 }), true);
+    expect(blob, blob).to.match(/OrderExpired/);
   });
 });
