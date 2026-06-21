@@ -44,6 +44,7 @@ describe("treasury sharded settlement accumulator (litesvm)", () => {
 
   const payer = Keypair.generate(); // funds + treasury authority + attestor
   const recorder = Keypair.generate(); // authorized settlement recorder
+  const stranger = Keypair.generate(); // unprivileged signer (neither authority nor recorder)
   const grxMint = Keypair.generate();
 
   let treasuryPda: PublicKey;
@@ -229,6 +230,84 @@ describe("treasury sharded settlement accumulator (litesvm)", () => {
     } catch (e) {
       failed = true;
       expect(String(e)).to.match(/DuplicateShard/);
+    }
+    expect(failed).to.equal(true);
+  });
+
+  it("rejects aggregation signed by a non-authority", async () => {
+    // The auth gate fires before the remaining_accounts loop, so valid shards
+    // are passed to prove rejection is the authority check, not a bad account.
+    const aggIx = await program.methods
+      .aggregateSettlementShards()
+      .accounts({ treasury: treasuryPda, authority: stranger.publicKey })
+      .remainingAccounts([
+        { pubkey: shardPda(A), isSigner: false, isWritable: false },
+        { pubkey: shardPda(B), isSigner: false, isWritable: false },
+      ])
+      .instruction();
+
+    let failed = false;
+    try {
+      send([aggIx], [stranger]);
+    } catch (e) {
+      failed = true;
+      expect(String(e)).to.match(/UnauthorizedAuthority/);
+    }
+    expect(failed).to.equal(true);
+  });
+
+  it("rejects a foreign-owned account spoofed as a settlement shard", async () => {
+    // grxMint is owned by the token program, not the treasury program → the
+    // `owner == crate::ID` guard rejects it before any shard data is read.
+    const aggIx = await program.methods
+      .aggregateSettlementShards()
+      .accounts({ treasury: treasuryPda, authority: payer.publicKey })
+      .remainingAccounts([
+        { pubkey: grxMint.publicKey, isSigner: false, isWritable: false },
+      ])
+      .instruction();
+
+    let failed = false;
+    try {
+      send([aggIx], []);
+    } catch (e) {
+      failed = true;
+      expect(String(e)).to.match(/UnauthorizedAuthority/);
+    }
+    expect(failed).to.equal(true);
+  });
+
+  it("rejects a program-owned non-shard PDA spoofed as a settlement shard", async () => {
+    // Fabricate an account OWNED by the treasury program (passes the `owner ==
+    // crate::ID` guard) but living at an arbitrary, non-`settle_shard` address with
+    // an out-of-range shard_id in its raw bytes. The shard_id range check (and the
+    // stored-bump `create_program_address` rebind) reject it as InvalidShardId — a
+    // program-owned account cannot be passed off as a shard it does not bind to.
+    const fake = Keypair.generate().publicKey;
+    const data = new Uint8Array(8 + 24); // 8 disc + SettlementShard (24)
+    data[8 + 16] = 0xff; // shard_id byte = 255 (>= NUM_SETTLE_SHARDS) → InvalidShardId
+    svm.setAccount(fake, {
+      lamports: 1_000_000_000,
+      data,
+      owner: programId,
+      executable: false,
+      rentEpoch: 0n,
+    });
+
+    const aggIx = await program.methods
+      .aggregateSettlementShards()
+      .accounts({ treasury: treasuryPda, authority: payer.publicKey })
+      .remainingAccounts([
+        { pubkey: fake, isSigner: false, isWritable: false },
+      ])
+      .instruction();
+
+    let failed = false;
+    try {
+      send([aggIx], []);
+    } catch (e) {
+      failed = true;
+      expect(String(e)).to.match(/InvalidShardId/);
     }
     expect(failed).to.equal(true);
   });
