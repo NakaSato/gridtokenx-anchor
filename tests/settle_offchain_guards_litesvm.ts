@@ -485,6 +485,59 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     expect(blob, blob).to.match(/InvalidAmount/);
   });
 
+  it("rejects the ed25519 offset-redirection bypass (declared pk != signed payload user)", async () => {
+    // Regression for the settle_offchain ed25519 fix. Craft a buyer Ed25519 ix whose
+    // HEADER offsets point to a valid ATTACKER (pk, sig, msg) triple — so the native
+    // precompile verifies and passes — while the victim buyer's pubkey is planted at
+    // the legacy FIXED offset 16 and the expected order message at 112. The OLD verifier
+    // read those fixed bytes and accepted (authorizing a settle the buyer never signed);
+    // the fix reads the header-DECLARED offsets, sees the attacker pk != buyer, rejects.
+    const seedA = 0x41, seedB = 0x42;
+    const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(seedA, 0);
+    const buyerMsg = orderMessage({
+      orderId: buyerOrderId, user: buyer.publicKey, energyAmount: MATCH_AMOUNT,
+      pricePerKwh: 60, side: 0, zoneId: ZONE, expiresAt: 0,
+    });
+
+    // A valid attacker triple — the native precompile checks THIS via the declared offsets.
+    const attacker = Keypair.generate();
+    const attackerMsg = Buffer.from([0xde, 0xad, 0xbe, 0xef]);
+    const stdAtt = Ed25519Program.createInstructionWithPrivateKey({ privateKey: attacker.secretKey, message: attackerMsg });
+    const attackerSig = stdAtt.data.subarray(48, 112); // sig at offset 48 in the standard layout
+
+    // Hand-build the malicious ix data: standard 16-byte offsets header pointing at an
+    // attacker region appended after the planted victim pk (16) + order message (112).
+    const L = buyerMsg.length;
+    const pkOff = 112 + L;       // DECLARED public_key_offset → attacker pk
+    const sigOff = pkOff + 32;   // attacker sig
+    const msgOff = sigOff + 64;  // attacker msg
+    const data = Buffer.alloc(msgOff + attackerMsg.length);
+    data.writeUInt8(1, 0);                       // num_signatures = 1
+    data.writeUInt8(0, 1);                       // padding
+    data.writeUInt16LE(sigOff, 2);               // signature_offset
+    data.writeUInt16LE(0xffff, 4);               // signature_instruction_index = current
+    data.writeUInt16LE(pkOff, 6);                // public_key_offset → attacker pk
+    data.writeUInt16LE(0xffff, 8);               // public_key_instruction_index = current
+    data.writeUInt16LE(msgOff, 10);              // message_data_offset → attacker msg
+    data.writeUInt16LE(attackerMsg.length, 12);  // message_data_size
+    data.writeUInt16LE(0xffff, 14);              // message_instruction_index = current
+    buyer.publicKey.toBuffer().copy(data, 16);   // victim pk at the LEGACY fixed offset
+    buyerMsg.copy(data, 112);                    // order message at the LEGACY fixed offset
+    attacker.publicKey.toBuffer().copy(data, pkOff);
+    Buffer.from(attackerSig).copy(data, sigOff);
+    attackerMsg.copy(data, msgOff);
+    const maliciousBuyerEd = new TransactionInstruction({ programId: Ed25519Program.programId, keys: [], data });
+
+    // Otherwise-valid settle for these seeds, with the buyer's Ed25519 ix swapped out.
+    const ixs = await buildSettleIxs(false, { seedA, seedB });
+    ixs[0] = maliciousBuyerEd;
+    const blob = sendV0(ixs, true);
+    // Failure must originate in the trading program's signature verify (the precompile
+    // passed on the attacker triple), not at a later/unrelated guard.
+    expect(blob, blob).to.match(new RegExp(tradingId.toBase58()));
+    expect(blob, blob).to.not.match(/InvalidAmount|InvalidNullifier|SlippageExceeded|CapacityExceeded/);
+  });
+
   // Keep last: this mutates the bank clock, which would shift expiry for any later test.
   it("rejects a settle past the order's expiry (OrderExpired)", async () => {
     const c = svm.getClock();
