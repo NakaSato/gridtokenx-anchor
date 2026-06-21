@@ -1,8 +1,10 @@
 name: anchor-tests
 
 # Runs the Anchor program tests. Two jobs:
-#   litesvm   — in-process tests, NO validator (fast, reliable). Covers the
-#               slash-distribution, settlement-commitment, and unstake suites.
+#   litesvm   — in-process tests, NO validator (fast, reliable). Runs every
+#               tests/*_litesvm.ts: the per-program guard suites AND the CU
+#               profiles (each profile asserts < 200k CU, so a compute regression
+#               fails CI). Single source of truth: `npm run test:litesvm`.
 #   provider  — full on-chain suites against a local solana-test-validator,
 #               using the proven recipe (deploy → bootstrap → init-treasury →
 #               mocha). The in-session/dev validator is flaky; CI is the stable
@@ -61,13 +63,22 @@ jobs:
       - name: Build programs
         run: anchor build --ignore-keys
 
-      - name: Run litesvm suites (no validator)
+      # Anchor 1.0 may emit each program's .so under programs/<p>/target/deploy
+      # rather than the root target/deploy that the litesvm tests load via
+      # svm.addProgramFromFile("target/deploy/<p>.so"). Stage every freshly built
+      # .so into root target/deploy so the tests never run against a stale or
+      # missing binary (this drift bit twice during local development).
+      - name: Stage program binaries into target/deploy
         run: |
-          npx mocha -r tsx \
-            tests/slash_distribution_litesvm.ts \
-            tests/settlement_commitment_litesvm.ts \
-            tests/staking_unstake_litesvm.ts \
-            --timeout 1000000
+          shopt -s nullglob
+          mkdir -p target/deploy
+          for so in programs/*/target/deploy/*.so; do
+            cp -f "$so" target/deploy/
+          done
+          ls -la target/deploy/*.so
+
+      - name: Run litesvm suites (no validator)
+        run: npm run test:litesvm
 
   provider:
     name: provider (local validator)
