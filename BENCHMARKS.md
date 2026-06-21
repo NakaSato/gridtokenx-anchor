@@ -206,6 +206,36 @@ the bond plumbing mirrors the §5 treasury stake (~22k CU).
 
 ---
 
+## 7. Trading CDA Order-Path CU Profile (in-process, litesvm)
+
+Compute-unit cost of the trading order book path — market/zone setup, escrow
+deposit/withdraw, create sell/buy order, on-chain `match_orders` (CDA), and cancel.
+Same method as §4-6. The fabricated governance PoAConfig/ErcCertificate mirror
+`tests/order_guards_litesvm.ts`. Token transfers use classic SPL (Token program).
+
+Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`).
+
+| Instruction | CU |
+| ----------- | --: |
+| `trading.deposit_escrow` | 30 658 |
+| `trading.withdraw_escrow` | 21 094 |
+| `trading.match_orders` (CDA) | 11 746 |
+| `trading.create_sell_order` | 10 008 |
+| `trading.create_buy_order` | 8 961 |
+| `trading.initialize_market` | 8 392 |
+| `trading.initialize_zone_market` | 6 867 |
+| `trading.cancel_order` | 4 463 |
+
+**Reading:** the **on-chain CDA match** (`match_orders`) is **11.7k CU** — cheap,
+because it only touches the two `Order` PDAs + the `zone_market` and writes a trade
+record; no token movement. Contrast §1's `settle_offchain_match` at **103k**: the
+~9× gap is the Ed25519 signature-verify precompile + dual-mint escrow transfers on
+the *settlement* path, which `match_orders` does not perform. The escrow
+deposit/withdraw (SPL transfer + PDA init/close accounting) dominate this path at
+21-31k. Order create/cancel are ~4-10k.
+
+---
+
 ## Artifacts
 
 ```
