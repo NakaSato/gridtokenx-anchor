@@ -167,6 +167,16 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
   - `InvalidSlashDestination`: after configuring the fund destination, a slash routed to a *different*
     account is rejected — the fund remainder can't be misrouted to an attacker.
   - `InsufficientStakingBalance`: `unstake_grx` for more than the staked bond is rejected.
+- [x] **Registry meter-reading validation guards — DONE** via a fifth litesvm harness
+  (`tests/registry_meter_reading_guards_litesvm.ts`, **7/7**). The AMI data-integrity boundary for
+  oracle-pushed telemetry on `update_meter_reading`. Boots registry + a registered user + an Active meter;
+  a valid-reading control sets `last_reading_at` so the stale/rate-limit cases are exercised against real
+  state. `reading_timestamp` is an explicit arg (not the bank clock) → no `setClock`. Guards asserted, all
+  previously untested, in handler order (`lib.rs:451-485`):
+  - `OracleNotConfigured` (reading before any `set_oracle_authority`), `UnauthorizedOracle` (wrong oracle
+    signer), `InvalidMeterStatus` (meter deactivated), `StaleReading` (non-increasing timestamp),
+    `ReadingTooFrequent` (inside the 60s rate-limit), `ReadingTooHigh` (delta > 1e12 ceiling).
+  - Positive control: a valid reading is accepted and advances `last_reading_at`.
 - [x] CU under budget (batch + CPI-init) — 1-match batch settle ≈ **80–92k CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. ~12k spread is `find_program_address` bump-seek noise on fresh keypairs, not ledger drift. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
 - [x] Batch-CU curve at >1 match — **single-tx cap = 1 match** (per-match inline Ed25519 verify ix data can't go in an ALT; 2 matches overrun the 1232-byte packet). A real marginal curve needs reworked sig packaging — documented in `BENCHMARKS.md`.
 - [x] TPS sweep over the batch settle path (`tests/batch_settle_tps.ts`) — open-loop goodput: **~0.5–0.6 TPS, flat** (conc 5→0.51, 10→0.58; N=10, 100% goodput, 0 reverts, CU ≈86–89k). Recorded in `BENCHMARKS.md`.
