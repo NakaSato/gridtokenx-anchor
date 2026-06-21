@@ -177,6 +177,17 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
     signer), `InvalidMeterStatus` (meter deactivated), `StaleReading` (non-increasing timestamp),
     `ReadingTooFrequent` (inside the 60s rate-limit), `ReadingTooHigh` (delta > 1e12 ceiling).
   - Positive control: a valid reading is accepted and advances `last_reading_at`.
+- [x] **Energy-token REC-gating guards — DONE** via a sixth litesvm harness
+  (`tests/energy_token_rec_guards_litesvm.ts`, **6/6**) — first test coverage of the energy-token program.
+  The REC (Renewable Energy Certificate) co-sign requirement is the provenance boundary on
+  `mint_to_wallet`: once any REC validator is registered, every mint must be co-signed by a validator in
+  the set, so the admin mint path can't bypass the certificate proof (`lib.rs:117-135`). Guards asserted,
+  all previously untested:
+  - `RecValidatorNotFound` (two ways): a mint with **no** REC co-signer, and a mint co-signed by a
+    **non-registered** validator — both rejected once the set is non-empty. Positive control: a mint
+    co-signed by a registered validator succeeds.
+  - `ValidatorAlreadyExists` (add the same validator twice), `RemoveValidatorNotFound` (remove a
+    validator not in the set), `MaxValidatorsReached` (add a 6th past the cap of 5).
 - [x] CU under budget (batch + CPI-init) — 1-match batch settle ≈ **80–92k CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. ~12k spread is `find_program_address` bump-seek noise on fresh keypairs, not ledger drift. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
 - [x] Batch-CU curve at >1 match — **single-tx cap = 1 match** (per-match inline Ed25519 verify ix data can't go in an ALT; 2 matches overrun the 1232-byte packet). A real marginal curve needs reworked sig packaging — documented in `BENCHMARKS.md`.
 - [x] TPS sweep over the batch settle path (`tests/batch_settle_tps.ts`) — open-loop goodput: **~0.5–0.6 TPS, flat** (conc 5→0.51, 10→0.58; N=10, 100% goodput, 0 reverts, CU ≈86–89k). Recorded in `BENCHMARKS.md`.
