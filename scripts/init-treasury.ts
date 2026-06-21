@@ -117,6 +117,68 @@ async function main() {
     console.error('⚠️  set_settlement_thbg_mint failed (is the market initialized & are you its authority?):', e.message);
   }
 
+  // Create the 16 settlement accumulator shards + per-shard fee/wheeling/loss
+  // collectors for the THBG settlement currency (§2c). The sharded batch-settle path
+  // (batch_settle_offchain_match → record_settlement_sharded) writes BOTH per shard,
+  // so both must exist before any sharded settle runs. Idempotent: each is gated by
+  // `init`, so a re-run hits "already in use" per shard and is skipped. The unsharded
+  // global path is unaffected — these are additive destinations.
+  const NUM_SETTLE_SHARDS = 16;
+  const shardedCollectorPda = (prefix: string, shardId: number) =>
+    PublicKey.findProgramAddressSync(
+      [Buffer.from(prefix), thbgMint.toBuffer(), Buffer.from([shardId])],
+      tradingProgram.programId,
+    )[0];
+
+  let shardsCreated = 0;
+  let collectorsCreated = 0;
+  for (let s = 0; s < NUM_SETTLE_SHARDS; s++) {
+    const [settleShardPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from('settle_shard'), Buffer.from([s])],
+      treasuryProgram.programId,
+    );
+    try {
+      await treasuryProgram.methods
+        .initializeSettlementShard(s)
+        .accounts({
+          treasury: treasuryPda,
+          shard: settleShardPda,
+          authority: authority.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+      shardsCreated++;
+    } catch (e: any) {
+      if (!e.message?.includes('already in use')) {
+        console.error(`⚠️  initialize_settlement_shard(${s}) failed:`, e.message);
+      }
+    }
+    try {
+      await tradingProgram.methods
+        .initializeShardedCollectors(s)
+        .accounts({
+          payer: authority.publicKey,
+          currencyMint: thbgMint,
+          feeCollector: shardedCollectorPda('fee_collector', s),
+          wheelingCollector: shardedCollectorPda('wheeling_collector', s),
+          lossCollector: shardedCollectorPda('loss_collector', s),
+          marketAuthority,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+      collectorsCreated++;
+    } catch (e: any) {
+      if (!e.message?.includes('already in use')) {
+        console.error(`⚠️  initialize_sharded_collectors(${s}) failed:`, e.message);
+      }
+    }
+  }
+  console.log(
+    `✅ Settlement shards ready (${shardsCreated}/${NUM_SETTLE_SHARDS} new, ` +
+      `${collectorsCreated}/${NUM_SETTLE_SHARDS} collector sets new; rest pre-existing).`,
+  );
+
   const t = await treasuryProgram.account.treasury.fetch(treasuryPda);
   console.log('\n📊 Treasury:');
   console.log('   authority         :', t.authority.toBase58());
