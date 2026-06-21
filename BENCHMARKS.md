@@ -116,6 +116,39 @@ run-to-run stability.
 
 ---
 
+## 4. Governance & Oracle Instruction CU Profile (in-process, litesvm)
+
+Happy-path compute-unit cost of every governance + oracle instruction, measured
+in-process via litesvm (`computeUnitsConsumed()` from the tx meta) against the
+**default-feature** `.so` (no `localnet`, so `compute_fn!` is a no-op — these are
+production-representative). No validator required.
+
+Reproduce: `npm run test:cu-profile` (asserts each instruction < 200k default budget).
+
+| Instruction | CU |
+| ----------- | --: |
+| `governance.initialize_poa` | 16 417 |
+| `governance.propose_authority_change` | 13 328 |
+| `governance.approve_authority_change` | 13 278 |
+| `governance.set_oracle_authority` | 13 324 |
+| `governance.update_erc_limits` | 13 283 |
+| `oracle.initialize` | 11 098 |
+| `oracle.submit_meter_reading` (first — inits meter PDA) | 16 050 |
+| `oracle.submit_meter_reading` (subsequent) | 13 376 |
+| `oracle.trigger_market_clearing` | 8 390 |
+| `oracle.aggregate_readings` | 8 362 |
+| `oracle.update_validation_config` | 7 811 |
+
+**Reading:** all governance/oracle instructions sit at **≤16.4k CU (≤8.2% of the
+200k budget)** — cheap config/control paths with ample headroom. The hot oracle
+write path (`submit_meter_reading`) costs ~16k on first touch (meter PDA init)
+and ~13.4k steady-state. Contrast §1's `settle_offchain_match` at 103k: these are
+config/telemetry instructions, not signature-verifying settlement. The CI
+assertion turns an accidental extra syscall or a serialized hot-path account into
+a test failure.
+
+---
+
 ## Artifacts
 
 ```
