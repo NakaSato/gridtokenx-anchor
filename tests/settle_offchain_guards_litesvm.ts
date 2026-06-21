@@ -1,19 +1,22 @@
-// Litesvm coverage for trading `settle_offchain_match`'s TreasuryCurrencyMismatch
-// (6030) guard: when treasury accounts ARE passed but the settlement currency mint
-// is NOT the treasury's THBG mint, the settle must revert at the
-// `require_keys_eq!(currency_mint == treasury.thbg_mint)` check
-// (settle_offchain.rs:474) — BEFORE any record_settlement CPI moves/records anything.
+// Litesvm negative-coverage for trading `settle_offchain_match`'s validation guards,
+// most previously untested. The first full-match settle harness that boots the trading
+// market, the energy Token-2022 mint, and the treasury entirely in-process (no live
+// validator): init market+zone+shards+collectors+escrows, sign an off-chain match with
+// two Ed25519 precompile ixs, then settle. One valid-match template (`buildSettleIxs`)
+// drives both a positive control and each guard case via field overrides; the Ed25519
+// messages regenerate from the payloads so signatures stay valid while the on-chain
+// check rejects the bad parameter.
 //
-// This is the first full-match settle harness that boots the trading market, the
-// energy Token-2022 mint, and the treasury entirely in-process (no live validator):
-// init market+zone+shards+collectors+escrows, sign an off-chain match with two
-// Ed25519 precompile ixs, then settle. A positive control (treasury omitted, a
-// non-THBG currency) proves the match itself is valid, so the 6030 case isolates
-// the currency guard rather than some unrelated setup failure.
+// Guards asserted:
+//   - TreasuryCurrencyMismatch (6030): treasury passed but currency != treasury.thbg_mint
+//     → reverts at require_keys_eq! (settle_offchain.rs:474) BEFORE any record CPI.
+//   - SlippageExceeded: match_price outside [seller_limit, buyer_limit] (both directions).
+//   - InvalidOrderSide: a payload with the wrong side flag.
+//   - InvalidAmount: a zero match amount.
+//   - CapacityExceeded: a cross-zone match overrunning the zone's wheeling capacity.
 //
-// Why no ALT: litesvm processes in-process, so the ~23-account + 2-ed25519-ix settle
-// tx isn't bound by the 1232-byte transport packet limit that forces a v0 tx + ALT
-// against solana-test-validator (see tests/escrow_settlement.ts).
+// The ~23-account settle is compressed through a hand-built ALT (see sendV0/installAlt):
+// a v0 message can't serialize >1232 bytes even in litesvm (web3.js caps the buffer).
 
 import { LiteSVM, FailedTransactionMetadata } from "litesvm";
 import { Program } from "@anchor-lang/core";
@@ -79,7 +82,7 @@ function orderMessage(p: {
   return b;
 }
 
-describe("trading settle_offchain_match — TreasuryCurrencyMismatch 6030 (litesvm)", () => {
+describe("trading settle_offchain_match — validation guards (litesvm)", () => {
   let svm: LiteSVM;
   let trading: Program<Trading>;
   let energy: Program<EnergyToken>;
@@ -104,6 +107,12 @@ describe("trading settle_offchain_match — TreasuryCurrencyMismatch 6030 (lites
   let energyInfoPda: PublicKey;
   let treasuryPda: PublicKey;
   let thbgMint: PublicKey;
+
+  // A separate low-capacity zone (zone 7, capacity 50) for the cross-zone CapacityExceeded case.
+  const LOW_ZONE = 7;
+  const LOW_CAP = 50;
+  let lowZonePda: PublicKey;
+  let lowZoneShardPda: PublicKey;
 
   function send(ixs: TransactionInstruction[], signers: Keypair[]) {
     const tx = new Transaction();
@@ -202,25 +211,45 @@ describe("trading settle_offchain_match — TreasuryCurrencyMismatch 6030 (lites
     send([ix], [user]);
   }
 
-  // Build the [buyerEd, sellerEd, settleIx] instruction set for a settle, optionally
-  // wiring the treasury accounts (the 6030 trigger when currency != treasury.thbg_mint).
-  async function buildSettleIxs(withTreasury: boolean): Promise<TransactionInstruction[]> {
-    const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(0xa1, 0);
-    const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xb2, 0);
+  // Build the [buyerEd, sellerEd, settleIx] instruction set for a settle. `o` overrides
+  // let one valid-match template drive both the happy path and every negative guard case
+  // — the Ed25519 messages are regenerated from the (possibly overridden) payload fields,
+  // so signatures stay valid while the on-chain validation rejects the bad parameter.
+  async function buildSettleIxs(
+    withTreasury: boolean,
+    o: {
+      seedA?: number; seedB?: number;
+      buyerSide?: number; sellerSide?: number;
+      buyerZone?: number; sellerZone?: number;
+      energyAmount?: number; matchAmount?: number; matchPrice?: number;
+      zoneMarket?: PublicKey; zoneShard?: PublicKey;
+    } = {}
+  ): Promise<TransactionInstruction[]> {
+    const seedA = o.seedA ?? 0xa1, seedB = o.seedB ?? 0xb2;
+    const buyerSide = o.buyerSide ?? 0, sellerSide = o.sellerSide ?? 1;
+    const buyerZone = o.buyerZone ?? ZONE, sellerZone = o.sellerZone ?? ZONE;
+    const energyAmount = o.energyAmount ?? MATCH_AMOUNT;
+    const matchAmount = o.matchAmount ?? MATCH_AMOUNT;
+    const matchPrice = o.matchPrice ?? MATCH_PRICE;
+    const zoneMarket = o.zoneMarket ?? zoneMarketPda;
+    const zoneShard = o.zoneShard ?? zoneShardPda;
 
-    const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount: MATCH_AMOUNT, pricePerKwh: 60, side: 0, zoneId: ZONE, expiresAt: 0 });
-    const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount: MATCH_AMOUNT, pricePerKwh: 50, side: 1, zoneId: ZONE, expiresAt: 0 });
+    const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(seedA, 0);
+    const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(seedB, 0);
+
+    const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount, pricePerKwh: 60, side: buyerSide, zoneId: buyerZone, expiresAt: 0 });
+    const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount, pricePerKwh: 50, side: sellerSide, zoneId: sellerZone, expiresAt: 0 });
     const buyerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: buyer.secretKey, message: buyerMsg });
     const sellerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: seller.secretKey, message: sellerMsg });
 
-    const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(MATCH_AMOUNT), pricePerKwh: new BN(60), side: 0, zoneId: ZONE, expiresAt: new BN(0) };
-    const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(MATCH_AMOUNT), pricePerKwh: new BN(50), side: 1, zoneId: ZONE, expiresAt: new BN(0) };
+    const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(energyAmount), pricePerKwh: new BN(60), side: buyerSide, zoneId: buyerZone, expiresAt: new BN(0) };
+    const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(energyAmount), pricePerKwh: new BN(50), side: sellerSide, zoneId: sellerZone, expiresAt: new BN(0) };
 
     const settleIx = await trading.methods
-      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(MATCH_AMOUNT), new BN(MATCH_PRICE), new BN(1), new BN(1))
+      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), new BN(1), new BN(1))
       .accounts({
         market: marketPda,
-        zoneMarket: zoneMarketPda,
+        zoneMarket,
         buyerNullifier: nullifierPda(buyer.publicKey, buyerOrderId),
         sellerNullifier: nullifierPda(seller.publicKey, sellerOrderId),
         currencyMint,
@@ -236,7 +265,7 @@ describe("trading settle_offchain_match — TreasuryCurrencyMismatch 6030 (lites
         wheelingCollector: collectorPda("wheeling_collector", currencyMint),
         lossCollector: collectorPda("loss_collector", currencyMint),
         marketShard: marketShardPda,
-        zoneShard: zoneShardPda,
+        zoneShard,
         payer: payer.publicKey,
         sysvarInstructions: anchorPkg.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
         systemProgram: SystemProgram.programId,
@@ -326,6 +355,11 @@ describe("trading settle_offchain_match — TreasuryCurrencyMismatch 6030 (lites
     // --- trading market + zone + shards + collectors ---
     send([await trading.methods.initializeMarket(16).accounts({ market: marketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000)).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
+    // Low-cap zone for the CapacityExceeded case.
+    [lowZonePda] = PublicKey.findProgramAddressSync([Buffer.from("zone_market"), marketPda.toBuffer(), new BN(LOW_ZONE).toArrayLike(Buffer, "le", 4)], tradingId);
+    [lowZoneShardPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_shard"), lowZonePda.toBuffer(), Buffer.from([shardByte])], tradingId);
+    send([await trading.methods.initializeZoneMarket(LOW_ZONE, 16, new BN(LOW_CAP)).accounts({ market: marketPda, zoneMarket: lowZonePda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
+    send([await trading.methods.initializeZoneMarketShard(shardByte).accounts({ zoneMarket: lowZonePda, zoneShard: lowZoneShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeMarketShard(shardByte).accounts({ market: marketPda, marketShard: marketShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeZoneMarketShard(shardByte).accounts({ zoneMarket: zoneMarketPda, zoneShard: zoneShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeCollectors().accounts({ payer: payer.publicKey, currencyMint, feeCollector: collectorPda("fee_collector", currencyMint), wheelingCollector: collectorPda("wheeling_collector", currencyMint), lossCollector: collectorPda("loss_collector", currencyMint), marketAuthority: marketAuthorityPda, tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId } as any).instruction()], []);
@@ -402,5 +436,41 @@ describe("trading settle_offchain_match — TreasuryCurrencyMismatch 6030 (lites
     const be = svm.getAccount(buyerEngEscrow)!;
     const buyerEngAmt = Buffer.from(be.data).readBigUInt64LE(64);
     expect(buyerEngAmt.toString()).to.equal((1n + BigInt(MATCH_AMOUNT)).toString());
+  });
+
+  // --- Negative coverage for the other settle-path guards (all previously untested).
+  // Each reverts before any escrow transfer, so they use distinct order ids but need no
+  // extra funding. The Ed25519 sigs stay valid because messages regenerate from payloads.
+
+  it("rejects match_price above the buyer's limit (SlippageExceeded)", async () => {
+    const blob = sendV0(await buildSettleIxs(false, { seedA: 0x11, seedB: 0x12, matchPrice: 70 }), true);
+    expect(blob, blob).to.match(/SlippageExceeded/);
+  });
+
+  it("rejects match_price below the seller's limit (SlippageExceeded)", async () => {
+    const blob = sendV0(await buildSettleIxs(false, { seedA: 0x13, seedB: 0x14, matchPrice: 40 }), true);
+    expect(blob, blob).to.match(/SlippageExceeded/);
+  });
+
+  it("rejects a buyer payload with the wrong side (InvalidOrderSide)", async () => {
+    const blob = sendV0(await buildSettleIxs(false, { seedA: 0x15, seedB: 0x16, buyerSide: 1 }), true);
+    expect(blob, blob).to.match(/InvalidOrderSide/);
+  });
+
+  it("rejects a zero match amount (InvalidAmount)", async () => {
+    const blob = sendV0(await buildSettleIxs(false, { seedA: 0x17, seedB: 0x18, matchAmount: 0 }), true);
+    expect(blob, blob).to.match(/InvalidAmount/);
+  });
+
+  it("rejects a cross-zone match that overruns the zone capacity (CapacityExceeded)", async () => {
+    // Cross-zone (both legs in zone 8) settled against the low-cap zone 7 (capacity 50):
+    // committed_flow 0 + match_amount 60 > 50 → throttled. Fires before any transfer.
+    const blob = sendV0(await buildSettleIxs(false, {
+      seedA: 0x19, seedB: 0x1a,
+      buyerZone: 8, sellerZone: 8,
+      energyAmount: 100, matchAmount: 60,
+      zoneMarket: lowZonePda, zoneShard: lowZoneShardPda,
+    }), true);
+    expect(blob, blob).to.match(/CapacityExceeded/);
   });
 });
