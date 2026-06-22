@@ -122,7 +122,7 @@ describe("oracle-metering-integration", () => {
     // 2. Register Meter
     console.log("   Registering meter...");
     await registryProgram.methods
-      .registerMeter(meterId, { solar: {} }, userShardId)
+      .registerMeter(meterId, { solar: {} }, userShardId, 0)
       .accounts({
         meterAccount: meterAccountPda,
         userAccount: userAccountPda,

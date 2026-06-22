@@ -31,11 +31,13 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import { createRequire } from "module";
+import { admitAggregator } from "./litesvm-admit";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/registry.json");
 
 const UNSTAKE_COOLDOWN_SECS = 24 * 60 * 60; // mirrors registry::UNSTAKE_COOLDOWN_SECS
+const RESIGN_COOLDOWN_SECS = 24 * 60 * 60; // mirrors registry::RESIGN_COOLDOWN_SECS
 const MIN_VALIDATOR_STAKE = new BN("10000000000000"); // 10,000 GRX (9 decimals)
 const GRX = (n: number) => new BN(n).mul(new BN("1000000000")); // n GRX -> base units
 
@@ -219,7 +221,7 @@ describe("registry_staking unstake (litesvm, clock-warped)", () => {
 
     const regValidatorIx = await program.methods
       .registerValidator()
-      .accounts({ userAccount: userPda, authority: user.publicKey })
+      .accounts({ userAccount: userPda, aggregatorEntry: admitAggregator(svm, user.publicKey), authority: user.publicKey })
       .instruction();
     send([regValidatorIx], [user]);
   });
@@ -230,12 +232,17 @@ describe("registry_staking unstake (litesvm, clock-warped)", () => {
     expect(Object.keys(u.validatorStatus)[0]).to.equal("active");
   });
 
-  it("unstakes after warping past the cooldown and demotes the validator", async () => {
-    const unstakeAmt = GRX(100); // 10,000 -> 9,900 (< MIN) => demote to Suspended
+  it("rejects unstaking below the bond floor while Active (ValidatorStakeLocked)", async () => {
+    // Anti-slash-escape (0.2): an Active validator staked at exactly MIN cannot unstake any
+    // amount that would drop the bond below MIN_VALIDATOR_STAKE. Previously this demoted the
+    // validator to Suspended (unslashable) *after* moving the tokens out — a free exit ahead
+    // of a slash. Now it must revert with no token movement and no status change.
+    const unstakeAmt = GRX(100); // 10,000 -> 9,900 (< MIN) -> must be blocked
     const beforeStake = new BN(fetchUser().stakedGrx.toString());
     const beforeAta = ataAmount();
 
-    // Warp the clock past UNSTAKE_COOLDOWN_SECS so the cooldown gate passes.
+    // Warp the clock past UNSTAKE_COOLDOWN_SECS so the cooldown gate is NOT the blocker —
+    // the stake-floor guard must be what rejects this.
     const c = svm.getClock();
     svm.setClock(
       new Clock(
@@ -259,15 +266,21 @@ describe("registry_staking unstake (litesvm, clock-warped)", () => {
         tokenProgram: TOKEN_2022_PROGRAM_ID,
       })
       .instruction();
-    send([unstakeIx], [user]);
 
+    let locked = false;
+    try {
+      send([unstakeIx], [user]);
+    } catch (e) {
+      locked = true;
+      expect(String(e)).to.match(/ValidatorStakeLocked/);
+    }
+    expect(locked, "Active validator must not unstake below MIN bond").to.equal(true);
+
+    // No token movement, stake unchanged, still Active (slashable).
     const u = fetchUser();
-    expect(new BN(u.stakedGrx.toString()).toString()).to.equal(
-      beforeStake.sub(unstakeAmt).toString()
-    );
-    expect(ataAmount() - beforeAta).to.equal(BigInt(unstakeAmt.toString()));
-    // Remaining stake (9,900 GRX) < MIN_VALIDATOR_STAKE -> demoted.
-    expect(Object.keys(u.validatorStatus)[0]).to.equal("suspended");
+    expect(u.stakedGrx.toString()).to.equal(beforeStake.toString());
+    expect(ataAmount()).to.equal(beforeAta);
+    expect(Object.keys(u.validatorStatus)[0]).to.equal("active");
   });
 
   // Regression: the dust-stake cooldown bypass. stake_grx must re-anchor
@@ -323,5 +336,40 @@ describe("registry_staking unstake (litesvm, clock-warped)", () => {
     expect(fetchUser().stakedGrx.toString()).to.equal(
       stakedBefore.add(topUp).toString()
     );
+  });
+
+  it("deregister_validator enables honest exit after the resign cooldown (still slashable within it)", async () => {
+    const warp = (secs: number) => {
+      const c = svm.getClock();
+      svm.setClock(new Clock(c.slot + 10n, c.epochStartTimestamp, c.epoch, c.leaderScheduleEpoch, c.unixTimestamp + BigInt(secs)));
+    };
+    const unstakeIx = async (amt: BN) =>
+      program.methods.unstakeGrx(amt).accounts({
+        userAccount: userPda, grxVault: vaultPda, registry: registryPda, userGrxAta: userAta,
+        grxMint: mint.publicKey, authority: user.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
+      }).instruction();
+
+    // Past the stake cooldown so UnstakingLocked is never the blocker below.
+    warp(UNSTAKE_COOLDOWN_SECS + 10);
+    svm.expireBlockhash(); // prior test left a failed (unexpired) blockhash
+
+    // 1. Announce exit: Active -> Resigning, resign_at = now.
+    send([await program.methods.deregisterValidator()
+      .accounts({ userAccount: userPda, authority: user.publicKey }).instruction()], [user]);
+    expect(Object.keys(fetchUser().validatorStatus)[0]).to.equal("resigning");
+
+    // 2. During the resign cooldown the bond stays locked below MIN (still slashable).
+    let locked = false;
+    try { send([await unstakeIx(GRX(100))], [user]); }
+    catch (e) { locked = true; expect(String(e)).to.match(/ValidatorStakeLocked/); }
+    expect(locked, "resigning bond must stay locked during the cooldown").to.equal(true);
+
+    // 3. After the resign cooldown the bond unstakes below MIN — honest exit completes.
+    warp(RESIGN_COOLDOWN_SECS + 10);
+    svm.expireBlockhash(); // step 2's rejected unstake left the blockhash unrotated
+    const before = new BN(fetchUser().stakedGrx.toString());
+    send([await unstakeIx(GRX(100))], [user]);
+    expect(new BN(fetchUser().stakedGrx.toString()).toString())
+      .to.equal(before.sub(GRX(100)).toString());
   });
 });

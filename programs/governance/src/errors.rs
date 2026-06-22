@@ -94,6 +94,8 @@ pub enum GovernanceError {
     InsufficientQuorum,
     #[msg("Meter account does not belong to signer")]
     MeterOwnerMismatch,
+    #[msg("Meter's zone does not match the proposal's target zone")]
+    MeterZoneMismatch,
     #[msg("Math overflow")]
     MathOverflow,
 }

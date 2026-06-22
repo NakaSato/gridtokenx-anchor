@@ -14,6 +14,20 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { expect } from "chai";
 import BN from "bn.js";
 
+// Idempotent setup helper: these init calls re-run across test sessions against a
+// persistent validator ledger, so an "account already in use" failure is expected
+// and benign. Any OTHER error (bad accounts, constraint violation, program panic)
+// is a real setup failure and must surface — never blanket-swallow.
+async function ensureInitialized(label: string, run: () => Promise<unknown>): Promise<void> {
+  try {
+    await run();
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    if (msg.includes("already in use")) return; // already initialized — fine
+    throw new Error(`setup '${label}' failed: ${msg}`);
+  }
+}
+
 describe("governance-dao-integration", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -25,7 +39,7 @@ describe("governance-dao-integration", () => {
   const authority = provider.wallet.publicKey;
   const payer = (provider.wallet as any).payer as Keypair;
 
-  let poaConfigPda: PublicKey;
+  let governanceConfigPda: PublicKey;
   const zoneId = 301;
   let zoneConfigPda: PublicKey;
   let marketPda: PublicKey;
@@ -34,7 +48,7 @@ describe("governance-dao-integration", () => {
   const shardId = 0;
 
   before(async () => {
-    [poaConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
     [zoneConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_config"), new BN(zoneId).toArrayLike(Buffer, 'le', 4)], governanceProgram.programId);
     [marketPda] = PublicKey.findProgramAddressSync([Buffer.from("market")], tradingProgram.programId);
     [zoneMarketPda] = PublicKey.findProgramAddressSync(
@@ -43,23 +57,37 @@ describe("governance-dao-integration", () => {
     );
 
     // Ensure PoA is initialized
-    try {
-        await governanceProgram.methods.initializePoa().accounts({
-            poaConfig: poaConfigPda,
+    await ensureInitialized("initializeGovernance", () =>
+        governanceProgram.methods.initializeGovernance().accounts({
+            governanceConfig: governanceConfigPda,
             authority: authority,
             systemProgram: SystemProgram.programId,
-        } as any).rpc();
-    } catch (e) {}
+        } as any).rpc());
 
     // Ensure ZoneConfig is initialized
-    try {
-        await governanceProgram.methods.initializeZoneConfig(zoneId, new BN(1000), new BN(50)).accounts({
+    await ensureInitialized("initializeZoneConfig", () =>
+        governanceProgram.methods.initializeZoneConfig(zoneId, new BN(1000), new BN(50)).accounts({
             zoneConfig: zoneConfigPda,
-            poaConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             authority: authority,
             systemProgram: SystemProgram.programId,
-        } as any).rpc();
-    } catch (e) {}
+        } as any).rpc());
+
+    // Ensure Trading market + zone market (zone 0) exist so create_sell_order
+    // deserializes its accounts and reaches the maintenance-mode gate.
+    await ensureInitialized("initializeMarket", () =>
+        tradingProgram.methods.initializeMarket(1).accounts({
+            market: marketPda,
+            authority: authority,
+            systemProgram: SystemProgram.programId,
+        } as any).rpc());
+    await ensureInitialized("initializeZoneMarket", () =>
+        tradingProgram.methods.initializeZoneMarket(0, 1, new BN(1_000_000)).accounts({
+            market: marketPda,
+            zoneMarket: zoneMarketPda,
+            authority: authority,
+            systemProgram: SystemProgram.programId,
+        } as any).rpc());
   });
 
   async function registerUserWithMeter(user: Keypair, meterId: string): Promise<{ meterPda: PublicKey }> {
@@ -68,9 +96,8 @@ describe("governance-dao-integration", () => {
     // Shard bound in-program to the user's first key byte — derive + ensure inited.
     const userShardId = user.publicKey.toBytes()[0] % 16;
     const [shardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([userShardId])], registryProgram.programId);
-    try {
-        await registryProgram.methods.initializeShard(userShardId).accounts({ shard: shardPda, authority, systemProgram: SystemProgram.programId } as any).rpc();
-    } catch (e) {}
+    await ensureInitialized("initializeShard", () =>
+        registryProgram.methods.initializeShard(userShardId).accounts({ shard: shardPda, authority, systemProgram: SystemProgram.programId } as any).rpc());
     const [meterPda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), user.publicKey.toBuffer(), Buffer.from(meterId)], registryProgram.programId);
 
     // Fund user
@@ -91,15 +118,18 @@ describe("governance-dao-integration", () => {
         systemProgram: SystemProgram.programId,
     } as any).rpc();
 
-    // Register Meter
-    await registryProgram.methods.registerMeter(meterId, { solar: {} }, userShardId).accounts({
+    // Register Meter — owner is non-signing (custodial-bridge model); payer (wallet) signs.
+    // Zone-bind the meter to the DAO test's proposal zone so create_proposal/cast_vote pass
+    // the new meter.zone_id == target_zone check.
+    await registryProgram.methods.registerMeter(meterId, { solar: {} }, userShardId, zoneId).accounts({
         meterAccount: meterPda,
         userAccount: userPda,
         registryShard: shardPda,
         registry: registryPda,
         owner: user.publicKey,
+        payer: authority,
         systemProgram: SystemProgram.programId,
-    } as any).signers([user]).rpc();
+    } as any).rpc();
 
     return { meterPda };
   }
@@ -117,7 +147,7 @@ describe("governance-dao-integration", () => {
     // 1. Create Proposal (Update Wheeling Charge to 75)
     console.log("   Creating proposal...");
     await governanceProgram.methods
-        .createProposal(zoneId, proposalId, { wheelingCharge: {} }, new BN(75), new BN(1)) // 1 second voting period for test
+        .createProposal(zoneId, proposalId, { wheelingCharge: {} }, new BN(75), new BN(3)) // short voting period; execute polls for on-chain expiry below
         .accounts({
             proposal: proposalPda,
             proposer: proposer.publicKey,
@@ -146,21 +176,31 @@ describe("governance-dao-integration", () => {
         .signers([proposer])
         .rpc();
 
-    // 3. Wait for expiry
-    console.log("   Waiting for voting period to end...");
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // 4. Execute Proposal
-    console.log("   Executing proposal...");
-    await governanceProgram.methods
-        .executeProposal()
-        .accounts({
-            poaConfig: poaConfigPda,
-            zoneConfig: zoneConfigPda,
-            proposal: proposalPda,
-            executor: authority,
-        } as any)
-        .rpc();
+    // 3. + 4. Execute once the voting period has expired. The validator clock is
+    // slot-derived (drifts from wall time), so poll executeProposal and retry while
+    // it reports ProposalNotExpired rather than relying on a fixed setTimeout.
+    console.log("   Waiting for voting period to end, then executing...");
+    const execDeadline = Date.now() + 30000;
+    while (true) {
+        try {
+            await governanceProgram.methods
+                .executeProposal()
+                .accounts({
+                    governanceConfig: governanceConfigPda,
+                    zoneConfig: zoneConfigPda,
+                    proposal: proposalPda,
+                    executor: authority,
+                } as any)
+                .rpc();
+            break;
+        } catch (e: any) {
+            if (e.message?.includes("ProposalNotExpired") && Date.now() < execDeadline) {
+                await new Promise(resolve => setTimeout(resolve, 700));
+                continue;
+            }
+            throw e;
+        }
+    }
 
     // 5. Verify outcome
     const zoneConfig = await governanceProgram.account.zoneConfig.fetch(zoneConfigPda);
@@ -178,12 +218,12 @@ describe("governance-dao-integration", () => {
     await governanceProgram.methods
         .proposeAuthorityChange(newAuthority.publicKey)
         .accounts({
-            poaConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             authority: authority,
         } as any)
         .rpc();
 
-    let config = await governanceProgram.account.poAConfig.fetch(poaConfigPda);
+    let config = await governanceProgram.account.governanceConfig.fetch(governanceConfigPda);
     expect(config.pendingAuthority.toBase58()).to.equal(newAuthority.publicKey.toBase58());
 
     // 2. Approve Change (must be signed by new authority)
@@ -194,20 +234,20 @@ describe("governance-dao-integration", () => {
     await governanceProgram.methods
         .approveAuthorityChange()
         .accounts({
-            poaConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             newAuthority: newAuthority.publicKey,
         } as any)
         .signers([newAuthority])
         .rpc();
 
-    config = await governanceProgram.account.poAConfig.fetch(poaConfigPda);
+    config = await governanceProgram.account.governanceConfig.fetch(governanceConfigPda);
     expect(config.authority.toBase58()).to.equal(newAuthority.publicKey.toBase58());
 
     // Clean up: Revert to original authority for other tests
     await governanceProgram.methods
         .proposeAuthorityChange(authority)
         .accounts({
-            poaConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             authority: newAuthority.publicKey,
         } as any)
         .signers([newAuthority])
@@ -216,7 +256,7 @@ describe("governance-dao-integration", () => {
     await governanceProgram.methods
         .approveAuthorityChange()
         .accounts({
-            poaConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             newAuthority: authority,
         } as any)
         .rpc();
@@ -228,7 +268,7 @@ describe("governance-dao-integration", () => {
     await governanceProgram.methods
         .setMaintenanceMode(true)
         .accounts({
-            poaConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             authority: authority,
         } as any)
         .rpc();
@@ -252,7 +292,7 @@ describe("governance-dao-integration", () => {
                 zoneMarket: zoneMarketPda,
                 order: orderPda,
                 authority: seller.publicKey,
-                governanceConfig: poaConfigPda,
+                governanceConfig: governanceConfigPda,
                 ercCertificate: null,
                 systemProgram: SystemProgram.programId,
             } as any)
@@ -268,7 +308,7 @@ describe("governance-dao-integration", () => {
     await governanceProgram.methods
         .setMaintenanceMode(false)
         .accounts({
-            poaConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             authority: authority,
         } as any)
         .rpc();
@@ -282,7 +322,7 @@ describe("governance-dao-integration", () => {
             zoneMarket: zoneMarketPda,
             order: orderPda,
             authority: seller.publicKey,
-            governanceConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             ercCertificate: null,
             systemProgram: SystemProgram.programId,
         } as any)

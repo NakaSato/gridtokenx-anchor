@@ -36,6 +36,12 @@ pub fn create_proposal(
             meter_owner == ctx.accounts.proposer.key(),
             GovernanceError::MeterOwnerMismatch
         );
+        // Zone binding: a proposer may only open a proposal for the zone their meter is in.
+        // Without this the `target_zone` is attacker-chosen and unrelated to the meter.
+        require!(
+            meter.zone_id == target_zone,
+            GovernanceError::MeterZoneMismatch
+        );
     }
 
     proposal.proposer = ctx.accounts.proposer.key();
@@ -101,6 +107,12 @@ pub fn cast_vote(
             meter_owner == ctx.accounts.voter.key(),
             GovernanceError::MeterOwnerMismatch
         );
+        // Zone binding: the meter must belong to the proposal's zone, so a prosumer cannot
+        // swing another zone's proposal with an unrelated high-generation meter.
+        require!(
+            meter.zone_id == proposal.target_zone,
+            GovernanceError::MeterZoneMismatch
+        );
         (meter.total_generation / 1_000).max(100)
     };
 
@@ -135,7 +147,7 @@ pub fn execute_proposal(
 ) -> Result<()> {
     let proposal = &mut ctx.accounts.proposal;
     let zone_config = &mut ctx.accounts.zone_config;
-    let min_quorum = ctx.accounts.poa_config.min_quorum_votes;
+    let min_quorum = ctx.accounts.governance_config.min_quorum_votes;
     let clock = Clock::get()?;
 
     // 1. Verify voting period has ended

@@ -65,6 +65,46 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use crate::state::*;
 use crate::error::TradingError;
 
+/// Read the governance maintenance flag without deserializing the full 405-byte
+/// GovernanceConfig — the settle context is already at the BPF stack limit, so a typed
+/// `Account<GovernanceConfig>` here overflows `try_accounts`. The PDA address is bound by the
+/// `seeds::program` constraint in the context; this confirms governance ownership and reads
+/// the single maintenance_mode byte. Layout offset: 8 (disc) + 32 (authority) + 64 (name)
+/// + 1 (name_len) + 128 (contact) + 1 (contact_len) + 1 (version) = 235; maintenance_mode
+/// (bool) sits at byte 235. `is_operational()` == `!maintenance_mode`.
+fn require_governance_operational(info: &AccountInfo) -> Result<()> {
+    // Bind the account to the canonical governance poa_config PDA. This check lives in the
+    // handler rather than as a `seeds` account constraint because the settle context is at
+    // the BPF stack limit — an extra constraint in `try_accounts` overflows the frame.
+    require_keys_eq!(*info.owner, governance::ID, TradingError::InvalidGovernanceAccount);
+    let (expected, _bump) = Pubkey::find_program_address(&[b"poa_config"], &governance::ID);
+    require_keys_eq!(*info.key, expected, TradingError::InvalidGovernanceAccount);
+    let data = info.try_borrow_data()?;
+    require!(data.len() > 235, TradingError::InvalidGovernanceAccount);
+    require!(data[235] == 0, TradingError::MaintenanceMode);
+    Ok(())
+}
+
+/// Hard ceiling on combined network charges (wheeling + line loss) as a fraction of trade
+/// value. A settler must not be able to siphon the seller's proceeds to the collectors by
+/// inflating these caller-supplied charges. 20% is a conservative sanity bound; exact
+/// per-zone tariff enforcement via a governance-set rate is a separate follow-up.
+const MAX_NETWORK_CHARGE_BPS: u64 = 2000;
+
+/// Bound the network charges and compute the seller's net proceeds. Replaces the former
+/// `saturating_sub` chain, which silently zeroed the seller when charges exceeded the trade.
+fn net_seller_after_charges(total: u64, market_fee: u64, wheeling: u64, loss: u64) -> Result<u64> {
+    let network = wheeling.checked_add(loss).ok_or(TradingError::Overflow)?;
+    let max_network = total
+        .checked_mul(MAX_NETWORK_CHARGE_BPS)
+        .map(|v| v / 10000)
+        .ok_or(TradingError::Overflow)?;
+    require!(network <= max_network, TradingError::ChargesExceedCap);
+    let deductions = market_fee.checked_add(network).ok_or(TradingError::Overflow)?;
+    require!(deductions <= total, TradingError::ChargesExceedValue);
+    Ok(total - deductions)
+}
+
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
 #[cfg(not(feature = "localnet"))]
@@ -104,6 +144,11 @@ pub struct SettleOffchainMatchContext<'info> {
     // Must belong to `market` — blocks substituting a zero-capacity / wrong-zone book.
     #[account(mut, constraint = zone_market.load()?.market == market.key())]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
+
+    // NOTE: the governance poa_config account is passed as the FIRST remaining account, not a
+    // named field — the named context is at the BPF stack limit and one more account overflows
+    // `try_accounts`. Validated in-handler by `require_governance_operational` (PDA + owner +
+    // maintenance byte), so the binding is identical to a typed constraint.
 
     #[account(
         init_if_needed,
@@ -250,6 +295,11 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     pub market: AccountLoader<'info, Market>,
     #[account(mut, constraint = zone_market.load()?.market == market.key())]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
+
+    // NOTE: governance poa_config is passed as the LAST remaining account (after the
+    // match_count*6 per-pair accounts), not a named field — stack-limit workaround identical
+    // to the single-match context. Validated in-handler by `require_governance_operational`.
+
     pub currency_mint: Box<InterfaceAccount<'info, Mint>>,
     pub energy_mint: Box<InterfaceAccount<'info, Mint>>,
 
@@ -335,6 +385,16 @@ pub fn settle_offchain_match(
     loss_cost_val: u64,
 ) -> Result<()> {
     compute_fn!("settle_offchain_match" => {
+    // --- 0. GOVERNANCE GATE ---
+    // Settlement moves escrowed funds; it must halt under maintenance/emergency like every
+    // other state-mutating trading instruction. Previously this fund path had no gate. The
+    // governance poa_config account is the first remaining account (stack-limit workaround).
+    let gov_info = ctx
+        .remaining_accounts
+        .first()
+        .ok_or(TradingError::InvalidGovernanceAccount)?;
+    require_governance_operational(gov_info)?;
+
     // --- 1. Ed25519 SIGNATURE VERIFICATION ---
     let sysvar_info = &ctx.accounts.sysvar_instructions;
 
@@ -383,7 +443,7 @@ pub fn settle_offchain_match(
     // and record a garbage value instead of rejecting an impossible match.
     let total_currency_value = match_amount.checked_mul(match_price).ok_or(TradingError::Overflow)?;
     let market_fee = total_currency_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
-    let net_seller_amount = total_currency_value.saturating_sub(market_fee).saturating_sub(wheeling_charge_val).saturating_sub(loss_cost_val);
+    let net_seller_amount = net_seller_after_charges(total_currency_value, market_fee, wheeling_charge_val, loss_cost_val)?;
 
     let authority_bump = ctx.bumps.market_authority;
     let authority_seeds = &[b"market_authority".as_ref(), &[authority_bump]];
@@ -584,7 +644,12 @@ pub fn batch_settle_offchain_match<'info>(
 
     let sysvar_info = &ctx.accounts.sysvar_instructions;
     let remaining_accounts = ctx.remaining_accounts;
-    require!(remaining_accounts.len() == match_count * 6, TradingError::InvalidAmount);
+    // Per-pair accounts (match_count*6) followed by ONE trailing governance poa_config account.
+    require!(remaining_accounts.len() == match_count * 6 + 1, TradingError::InvalidAmount);
+
+    // Governance gate — batch settlement is the primary fund path; halt under maintenance.
+    // poa_config is the trailing remaining account (stack-limit workaround).
+    require_governance_operational(&remaining_accounts[match_count * 6])?;
 
     let clock = Clock::get()?;
     let market = ctx.accounts.market.load()?;
@@ -693,7 +758,7 @@ pub fn batch_settle_offchain_match<'info>(
 
         let total_value = m.match_amount.checked_mul(m.match_price).ok_or(TradingError::Overflow)?;
         let market_fee = total_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
-        let net_seller = total_value.saturating_sub(market_fee).saturating_sub(m.wheeling_charge).saturating_sub(m.loss_cost);
+        let net_seller = net_seller_after_charges(total_value, market_fee, m.wheeling_charge, m.loss_cost)?;
         batch_total_value = batch_total_value.checked_add(total_value).ok_or(TradingError::Overflow)?;
 
         // Zone capacity check and update (cross-zone wheeling flow only — see single path).

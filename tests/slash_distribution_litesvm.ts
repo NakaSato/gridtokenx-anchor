@@ -31,6 +31,7 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import { createRequire } from "module";
+import { admitAggregator } from "./litesvm-admit";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/registry.json");
@@ -190,7 +191,7 @@ describe("registry slash_validator distribution (litesvm)", () => {
 
     const regValidatorIx = await program.methods
       .registerValidator()
-      .accounts({ userAccount: userPda, authority: user.publicKey })
+      .accounts({ userAccount: userPda, aggregatorEntry: admitAggregator(svm, user.publicKey), authority: user.publicKey })
       .instruction();
     send([regValidatorIx], [user]);
 

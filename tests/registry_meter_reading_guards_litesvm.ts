@@ -90,7 +90,7 @@ describe("registry meter-reading validation guards (litesvm)", () => {
     send([await program.methods.registerUser({ prosumer: {} }, 0, 0, new BN(0), shardId).accounts({
       userAccount: userPda, registryShard: shardPda, registry: registryPda, authority: user.publicKey, payer: payer.publicKey, systemProgram: SystemProgram.programId,
     }).instruction()]);
-    send([await program.methods.registerMeter(METER_ID, { solar: {} }, shardId).accounts({
+    send([await program.methods.registerMeter(METER_ID, { solar: {} }, shardId, 0).accounts({
       meterAccount: meterPda, userAccount: userPda, registryShard: shardPda, registry: registryPda,
       owner: user.publicKey, payer: payer.publicKey, systemProgram: SystemProgram.programId,
     }).instruction()]);
@@ -127,6 +127,15 @@ describe("registry meter-reading validation guards (litesvm)", () => {
     expect(blob, blob).to.match(/ReadingTooFrequent/);
   });
 
+  it("set_meter_status cannot set Inactive — that is deactivate_meter's job (InvalidMeterStatusTransition)", async () => {
+    // Setting Inactive here would drop active_meter_count but leave meter_count/user.meter_count
+    // overcounted. Inactive is reachable only via deactivate_meter. Meter stays Active (reverts).
+    const blob = sendExpectFail([await program.methods.setMeterStatus({ inactive: {} }).accounts({
+      meterAccount: meterPda, registry: registryPda, registryShard: shardPda, authority: user.publicKey,
+    }).instruction()], [user]);
+    expect(blob, blob).to.match(/InvalidMeterStatusTransition/);
+  });
+
   it("rejects deactivate with a victim's user_account (ConstraintSeeds)", async () => {
     // Regression: deactivate_meter previously took an UNBOUND user_account, so a
     // signer owning meterPda could pass a VICTIM's real UserAccount and grief its
@@ -158,5 +167,15 @@ describe("registry meter-reading validation guards (litesvm)", () => {
     }).instruction()], [user]);
     const blob = sendExpectFail([await readingIx(100, 0, 2000, oracle.publicKey)], [oracle]); // status != Active
     expect(blob, blob).to.match(/InvalidMeterStatus/);
+  });
+
+  it("rejects reviving a deactivated meter via set_meter_status (InvalidMeterStatusTransition)", async () => {
+    // Meter is now Inactive (terminal, from the test above). Reviving it via set_meter_status
+    // would re-add active_meter_count without restoring the meter_count deactivate_meter dropped,
+    // leaving active_meter_count > meter_count. Must be rejected.
+    const blob = sendExpectFail([await program.methods.setMeterStatus({ active: {} }).accounts({
+      meterAccount: meterPda, registry: registryPda, registryShard: shardPda, authority: user.publicKey,
+    }).instruction()], [user]);
+    expect(blob, blob).to.match(/InvalidMeterStatusTransition/);
   });
 });

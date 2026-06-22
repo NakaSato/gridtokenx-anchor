@@ -3,6 +3,7 @@ import { Program } from "@anchor-lang/core";
 import { Registry } from "../target/types/registry";
 import { Oracle } from "../target/types/oracle";
 import { EnergyToken } from "../target/types/energy_token";
+import { Governance } from "../target/types/governance";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
 import BN from "bn.js";
@@ -27,6 +28,7 @@ async function main() {
   const registryProgram = anchor.workspace.Registry as Program<Registry>;
   const oracleProgram = anchor.workspace.Oracle as Program<Oracle>;
   const energyTokenProgram = anchor.workspace.EnergyToken as Program<EnergyToken>;
+  const governanceProgram = anchor.workspace.Governance as Program<Governance>;
   
   // Load users
   const prosumerKey = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync("test-wallet-prosumer.json", "utf8"))));
@@ -77,7 +79,7 @@ async function main() {
   );
   try {
     await registryProgram.methods
-      .registerMeter(meterId, { solar: {} }, shardId)
+      .registerMeter(meterId, { solar: {} }, shardId, 0)
       .accounts({
         meterAccount: registryMeterPda,
         userAccount: userAccountPda,
@@ -180,6 +182,11 @@ async function main() {
   console.log("\n🪙  2b. Admin minting 20,000 GRX to prosumer for staking...");
   try {
     const mintAmount = new BN(20_000).mul(new BN(10).pow(new BN(9))); // 20,000 GRX with 9 decimals
+    // REC provenance is mandatory (0.5): register the admin wallet as a REC validator first.
+    try {
+      await energyTokenProgram.methods.addRecValidator(provider.wallet.publicKey, "rec")
+        .accounts({ tokenInfo: tokenInfoPda, authority: provider.wallet.publicKey } as any).rpc();
+    } catch { /* already registered */ }
     const tx = await energyTokenProgram.methods.mintToWallet(mintAmount)
       .accounts({
         mint: mintPda,
@@ -187,6 +194,7 @@ async function main() {
         destination: userAta!,
         destinationOwner: prosumerKey.publicKey,
         authority: provider.wallet.publicKey,
+        recValidator: provider.wallet.publicKey, // mandatory registered REC co-signer (0.5)
         payer: (provider.wallet as any).payer.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram: anchor.utils.token.ASSOCIATED_PROGRAM_ID,
@@ -219,9 +227,20 @@ async function main() {
       .rpc();
     console.log(`   ✅ Staked 10,000 GRX successfully.`);
 
+    // register_validator now requires a governance-admitted aggregator entry (0.1). Admit the
+    // prosumer (governance authority = provider wallet), then pass its AggregatorEntry PDA.
+    const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+    const [aggregatorEntry] = PublicKey.findProgramAddressSync([Buffer.from("aggregator"), prosumerKey.publicKey.toBuffer()], governanceProgram.programId);
+    try {
+      await governanceProgram.methods.admitAggregator(prosumerKey.publicKey)
+        .accounts({ governanceConfig: governanceConfigPda, aggregatorEntry, authority: provider.wallet.publicKey, systemProgram: SystemProgram.programId } as any)
+        .rpc();
+    } catch { /* already admitted */ }
+
     await registryProgram.methods.registerValidator()
       .accounts({
         userAccount: userAccountPda,
+        aggregatorEntry,
         authority: prosumerKey.publicKey,
       } as any)
       .signers([prosumerKey])

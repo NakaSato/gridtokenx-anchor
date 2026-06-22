@@ -58,4 +58,14 @@ pub enum RegistryError {
     InvalidAmount,
     #[msg("Slash fund has insufficient balance for this disbursement")]
     InsufficientSlashFund,
+    #[msg("Validator bond requires an active governance-admitted aggregator entry")]
+    AggregatorNotAdmitted,
+    #[msg("Aggregator entry account is malformed or too short")]
+    InvalidAggregatorEntry,
+    #[msg("Active validator cannot unstake below the minimum bond; deregister or be slashed first")]
+    ValidatorStakeLocked,
+    #[msg("set_meter_status cannot set or leave Inactive; Inactive is terminal (use deactivate_meter)")]
+    InvalidMeterStatusTransition,
+    #[msg("Zone id must be non-negative")]
+    InvalidZone,
 }

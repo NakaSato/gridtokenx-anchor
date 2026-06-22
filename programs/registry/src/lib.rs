@@ -13,6 +13,13 @@ pub use state::*;
 
 declare_id!("FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7");
 
+/// Governance program ID — owner of the PoA aggregator allow-list (`AggregatorEntry` PDA).
+/// Hardcoded rather than imported: `governance` already depends on `registry` for CPI, so
+/// adding `registry -> governance` as a path dep would be a cycle. Validate the allow-list
+/// entry by raw account checks (owner + PDA seeds + bytes) instead. Must match
+/// `Anchor.toml [programs.localnet].governance`.
+pub const GOVERNANCE_PROGRAM_ID: Pubkey = pubkey!("FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS");
+
 /// Airdrop amount for new users (in smallest token units, 9 decimals = 10 GRX)
 pub const AIRDROP_AMOUNT: u64 = 10_000_000_000; // 10 GRX tokens
 
@@ -22,6 +29,11 @@ pub const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000; // 10,000 GRX
 
 /// Cooldown after the most recent `stake_grx` before tokens can be unstaked.
 pub const UNSTAKE_COOLDOWN_SECS: i64 = 24 * 60 * 60; // 24h
+
+/// Challenge/slashable window after a validator calls `deregister_validator`. The bond stays
+/// locked (and the validator stays slashable) for this long, so an honest exit cannot be used
+/// to dodge a pending slash. Only after it elapses may the bond be unstaked below MIN.
+pub const RESIGN_COOLDOWN_SECS: i64 = 24 * 60 * 60; // 24h
 
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
@@ -358,8 +370,10 @@ pub mod registry {
         meter_id: String,
         meter_type: MeterType,
         shard_id: u8,
+        zone_id: i32,
     ) -> Result<()> {
         require!(shard_id < 16, RegistryError::InvalidShardId);
+        require!(zone_id >= 0, RegistryError::InvalidZone);
         let owner = ctx.accounts.owner.key();
         // Meter co-locates on its owner's shard.
         require!(shard_id == shard_for(&owner), RegistryError::InvalidShardId);
@@ -386,6 +400,7 @@ pub mod registry {
             meter_account.owner = owner;
             meter_account.meter_type = meter_type;
             meter_account.status = MeterStatus::Active;
+            meter_account.zone_id = zone_id;
             meter_account.registered_at = Clock::get()?.unix_timestamp;
             meter_account.last_reading_at = 0;
             meter_account.total_generation = 0;
@@ -517,6 +532,17 @@ pub mod registry {
             );
 
             let old_status = meter.status;
+
+            // Inactive is terminal and owned solely by `deactivate_meter` (which also drops
+            // meter_count + user.meter_count). `set_meter_status` only toggles the reversible
+            // Active<->Maintenance states. It must NOT revive a deactivated meter (old ==
+            // Inactive) — that would re-add active_meter_count without restoring meter_count,
+            // leaving active_meter_count > meter_count — nor set Inactive itself (which would
+            // drop active_meter_count but leave meter_count/user.meter_count overcounted).
+            require!(
+                old_status != MeterStatus::Inactive && new_status != MeterStatus::Inactive,
+                RegistryError::InvalidMeterStatusTransition
+            );
 
             if old_status == MeterStatus::Active && new_status != MeterStatus::Active {
                 shard.active_meter_count = shard.active_meter_count.saturating_sub(1);
@@ -745,7 +771,58 @@ pub mod registry {
                 RegistryError::MinStakeNotMet
             );
 
+            // PoA gate: the validator bond is only granted to a governance-admitted
+            // aggregator — the bond cannot be self-promoted by anyone holding MIN stake.
+            // Raw-validate the allow-list entry (no governance crate dep — would cycle):
+            // owner == governance, canonical PDA for this authority, active, identity match.
+            let entry_ai = ctx.accounts.aggregator_entry.to_account_info();
+            require_keys_eq!(
+                *entry_ai.owner,
+                GOVERNANCE_PROGRAM_ID,
+                RegistryError::AggregatorNotAdmitted
+            );
+            let (expected_entry, _bump) = Pubkey::find_program_address(
+                &[b"aggregator", ctx.accounts.authority.key().as_ref()],
+                &GOVERNANCE_PROGRAM_ID,
+            );
+            require_keys_eq!(
+                entry_ai.key(),
+                expected_entry,
+                RegistryError::AggregatorNotAdmitted
+            );
+            // AggregatorEntry borsh layout:
+            // [0..8] discriminator | [8..40] aggregator | [40..48] admitted_at
+            // [48..56] updated_at | [56] active | [57] bump
+            let data = entry_ai.try_borrow_data()?;
+            require!(data.len() >= 57, RegistryError::InvalidAggregatorEntry);
+            require!(
+                &data[8..40] == ctx.accounts.authority.key().as_ref(),
+                RegistryError::AggregatorNotAdmitted
+            );
+            require!(data[56] == 1, RegistryError::AggregatorNotAdmitted);
+
+            // Activating (or re-activating from Resigning) clears any pending resignation.
             user_account.validator_status = ValidatorStatus::Active;
+            user_account.resign_at = 0;
+        });
+        Ok(())
+    }
+
+    /// Announce an honest validator exit. Flips an Active validator to `Resigning` and stamps
+    /// `resign_at`. The bond stays locked and the validator stays slashable for
+    /// `RESIGN_COOLDOWN_SECS` (see `unstake_grx` + `compute_slash_amount`); only after the
+    /// window may the bond be unstaked below `MIN_VALIDATOR_STAKE`. Re-calling
+    /// `register_validator` before unstaking cancels the resignation.
+    pub fn deregister_validator(ctx: Context<DeregisterValidator>) -> Result<()> {
+        compute_fn!("deregister_validator" => {
+            let now = Clock::get()?.unix_timestamp;
+            let mut user_account = ctx.accounts.user_account.load_mut()?;
+            require!(
+                user_account.validator_status == ValidatorStatus::Active,
+                RegistryError::NotActiveValidator
+            );
+            user_account.validator_status = ValidatorStatus::Resigning;
+            user_account.resign_at = now;
         });
         Ok(())
     }
@@ -761,14 +838,36 @@ pub mod registry {
             let now = Clock::get()?.unix_timestamp;
 
             // Read-then-drop the loader borrow before the CPI; re-borrow after.
-            let (staked, last_stake_at) = {
+            let (staked, last_stake_at, validator_status, resign_at) = {
                 let user_account = ctx.accounts.user_account.load()?;
-                (user_account.staked_grx, user_account.last_stake_at)
+                (
+                    user_account.staked_grx,
+                    user_account.last_stake_at,
+                    user_account.validator_status,
+                    user_account.resign_at,
+                )
             };
             require!(amount <= staked, RegistryError::InsufficientStakingBalance);
             require!(
                 now.saturating_sub(last_stake_at) >= UNSTAKE_COOLDOWN_SECS,
                 RegistryError::UnstakingLocked
+            );
+
+            // Anti-slash-escape: the bond stays locked below the floor while the validator is
+            // still slashable. An Active validator is always locked; a Resigning one stays
+            // locked until the resign cooldown elapses (the window during which it remains
+            // slashable). Only after that — or for a Suspended/Slashed/None account — may the
+            // bond be drawn below MIN_VALIDATOR_STAKE. Excess above MIN is always withdrawable.
+            let bond_locked = match validator_status {
+                ValidatorStatus::Active => true,
+                ValidatorStatus::Resigning => {
+                    now.saturating_sub(resign_at) < RESIGN_COOLDOWN_SECS
+                }
+                _ => false,
+            };
+            require!(
+                !(bond_locked && staked.saturating_sub(amount) < MIN_VALIDATOR_STAKE),
+                RegistryError::ValidatorStakeLocked
             );
 
             // Registry PDA is the vault authority — sign the withdrawal.
@@ -799,12 +898,9 @@ pub mod registry {
                 .ok_or(RegistryError::MathOverflow)?;
             user_account.staked_grx = remaining;
 
-            // Demote a validator that no longer meets the minimum stake.
-            if user_account.validator_status == ValidatorStatus::Active
-                && remaining < MIN_VALIDATOR_STAKE
-            {
-                user_account.validator_status = ValidatorStatus::Suspended;
-            }
+            // No Active->Suspended demotion here: the pre-CPI guard guarantees an Active
+            // validator's remaining stake never drops below MIN_VALIDATOR_STAKE via unstake.
+            // Suspended/Slashed/Inactive statuses are unaffected by a withdrawal.
 
             emit!(Unstaked {
                 user: ctx.accounts.authority.key(),
@@ -1202,10 +1298,15 @@ fn poa_slash_gate(registry: &Registry, authority: Pubkey, slash_destination: Pub
 /// `slash_amount = bond * slash_bps / 10_000`, capped at the bond. Validates the
 /// target is an Active validator with a positive bond. Shared by both slash paths.
 fn compute_slash_amount(user: &UserAccount, slash_bps: u16) -> Result<u64> {
-    // Only an active validator can be slashed — never a plain staker or an
-    // already-slashed account.
+    // Only an Active or Resigning validator can be slashed — never a plain staker, an
+    // already-slashed account, or a Suspended one. Including Resigning is what keeps the
+    // honest-exit path from being a slash dodge: the bond stays slashable for the whole
+    // resign cooldown (matching the unstake lock in `unstake_grx`).
     require!(
-        user.validator_status == ValidatorStatus::Active,
+        matches!(
+            user.validator_status,
+            ValidatorStatus::Active | ValidatorStatus::Resigning
+        ),
         RegistryError::NotActiveValidator
     );
     require!(user.staked_grx > 0, RegistryError::InsufficientStakingBalance);
@@ -1634,6 +1735,25 @@ pub struct StakeGrx<'info> {
 
 #[derive(Accounts)]
 pub struct RegisterValidator<'info> {
+    #[account(
+        mut,
+        seeds = [b"user", authority.key().as_ref()],
+        bump,
+        has_one = authority,
+    )]
+    pub user_account: AccountLoader<'info, UserAccount>,
+
+    /// CHECK: governance `AggregatorEntry` PDA for `authority`. Validated in-handler
+    /// (owner = governance program, PDA seeds match, `active`, `aggregator == authority`)
+    /// rather than via a typed account, because importing the governance crate would
+    /// cycle (governance depends on registry).
+    pub aggregator_entry: UncheckedAccount<'info>,
+
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct DeregisterValidator<'info> {
     #[account(
         mut,
         seeds = [b"user", authority.key().as_ref()],

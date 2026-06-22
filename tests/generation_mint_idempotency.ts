@@ -54,6 +54,15 @@ describe("generation-mint idempotency", () => {
       [Buffer.from("token_info_2022")],
       energyTokenProgram.programId
     );
+
+    // REC provenance is mandatory (0.5): register the test authority as a REC validator so
+    // mint_generation below can co-sign. Idempotent — ignore if a validator already exists.
+    try {
+      await energyTokenProgram.methods
+        .addRecValidator(authority, "rec")
+        .accounts({ tokenInfo: energyTokenInfoPda, authority } as any)
+        .rpc();
+    } catch (_) { /* already registered */ }
   });
 
   // Fund a fresh recipient keypair and create its energy-mint ATA (empty).
@@ -94,7 +103,7 @@ describe("generation-mint idempotency", () => {
         destinationOwner: args.owner,
         mintRecord: genMintPda(args.meterId, args.windowStartMs),
         authority,
-        recValidator: null,
+        recValidator: authority, // mandatory registered REC co-signer (0.5)
         payer: authority,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,

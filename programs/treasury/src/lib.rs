@@ -703,7 +703,10 @@ pub mod treasury {
 
             let new_total = {
                 let mut t = ctx.accounts.treasury.load_mut()?;
-                t.total_staked = t.total_staked.saturating_sub(amount);
+                // checked, not saturating: `amount <= pos.amount <= total_staked` always holds,
+                // so a clamp would mean corrupted accounting — fail loud instead of silently
+                // understating total_staked (which would inflate per-share rewards in fund_rewards).
+                t.total_staked = t.total_staked.checked_sub(amount).ok_or(TreasuryError::MathOverflow)?;
                 t.total_staked
             };
 
@@ -837,7 +840,9 @@ pub mod treasury {
                 slashed
             };
 
-            let total_after = total_staked.saturating_sub(slashed);
+            // checked, not saturating: `slashed <= pos.amount <= total_staked`, so a clamp
+            // would signal corrupted accounting — fail loud rather than understate total_staked.
+            let total_after = total_staked.checked_sub(slashed).ok_or(TreasuryError::MathOverflow)?;
 
             // Redistribute to remaining stakers (acc bump); if none remain, just hold in pool.
             let acc_new = if total_after > 0 {

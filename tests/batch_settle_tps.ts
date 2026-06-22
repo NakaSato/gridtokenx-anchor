@@ -29,6 +29,7 @@ import { Program } from "@anchor-lang/core";
 import { Trading } from "../target/types/trading";
 import { EnergyToken } from "../target/types/energy_token";
 import { Treasury } from "../target/types/treasury";
+import { Governance } from "../target/types/governance";
 import {
   PublicKey,
   Keypair,
@@ -83,6 +84,9 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   const energy = anchor.workspace.EnergyToken as Program<EnergyToken>;
   const treasury = anchor.workspace.Treasury as Program<Treasury>;
   const authority = provider.wallet.publicKey;
+  const governance = anchor.workspace.Governance as Program<Governance>;
+  // Governance poa_config gates settlement (0.3); bootstrap.ts inits it (operational).
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governance.programId);
   const payer = (provider.wallet as any).payer as Keypair;
 
   const zoneId = 0;
@@ -139,7 +143,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   async function mintEnergyTo(dest: PublicKey, owner: PublicKey, amount: number) {
     await energy.methods.mintToWallet(new BN(amount)).accounts({
       mint: energyMintPda, tokenInfo: energyInfoPda, destination: dest, destinationOwner: owner,
-      authority, payer: authority, tokenProgram: TOKEN_2022_PROGRAM_ID,
+      authority, recValidator: authority, payer: authority, tokenProgram: TOKEN_2022_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
     } as any).rpc();
   }
@@ -234,6 +238,8 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       escrowPda(seller.publicKey, energyMintPda),
       escrowPda(buyer.publicKey, energyMintPda),
     ].map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
+    // Trailing governance poa_config account (0.3 settlement gate).
+    remaining.push({ pubkey: governanceConfigPda, isSigner: false, isWritable: false });
 
     // §2c Part B: the caller-chosen settle shard. Under SHARD_SPREAD, rotate it per
     // settle (idx % 16) so concurrent settles hit DISTINCT collector + accumulator
@@ -340,6 +346,12 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     await treasury.methods.updateAttestation(new BN(1_000_000_000_000)).accounts({
       treasury: treasuryPda, attestor: authority,
     } as any).rpc();
+
+    // REC provenance is mandatory (0.5): register authority as a REC validator (idempotent).
+    try {
+      await energy.methods.addRecValidator(authority, "rec")
+        .accounts({ tokenInfo: energyInfoPda, authority } as any).rpc();
+    } catch { /* already registered */ }
     try {
       await trading.methods.initializeCollectors().accounts({
         payer: authority, currencyMint: thbgMint,

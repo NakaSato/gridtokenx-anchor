@@ -68,7 +68,7 @@ describe("Governance Program", () => {
   const regProgram = anchor.workspace.Registry as Program<Registry>;
   const authority = provider.wallet as anchor.Wallet;
 
-  const poaConfigPda = getGovernancePda(govProgram.programId);
+  const governanceConfigPda = getGovernancePda(govProgram.programId);
 
   // Unique IDs per run to avoid collision on a persistent ledger
   const RUN_TAG = Date.now().toString(36);
@@ -200,7 +200,7 @@ describe("Governance Program", () => {
 
     try {
       await regProgram.methods
-        .registerMeter(METER_ID, { solar: {} }, shardId)
+        .registerMeter(METER_ID, { solar: {} }, shardId, 0)
         .accounts({
           meterAccount: meterAccountPda,
           userAccount: userAccountPda,
@@ -267,7 +267,7 @@ describe("Governance Program", () => {
   // ── 1. Initialization ─────────────────────────────────────────────────────
 
   it("reports correct authority after initialization", async () => {
-    const config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    const config: any = await govProgram.account.governanceConfig.fetch(governanceConfigPda);
     assert.ok(
       config.authority.equals(authority.publicKey),
       "PoA config authority should match wallet",
@@ -293,12 +293,12 @@ describe("Governance Program", () => {
         true, // allow_certificate_transfers
       )
       .accounts({
-        poaConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         authority: authority.publicKey,
       })
       .rpc();
 
-    const config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    const config: any = await govProgram.account.governanceConfig.fetch(governanceConfigPda);
     assert.equal(config.ercValidationEnabled, true);
     assert.equal(config.allowCertificateTransfers, true);
   });
@@ -311,12 +311,12 @@ describe("Governance Program", () => {
         new BN(86400 * 365), // erc_validity_period (1 year in seconds)
       )
       .accounts({
-        poaConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         authority: authority.publicKey,
       })
       .rpc();
 
-    const config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    const config: any = await govProgram.account.governanceConfig.fetch(governanceConfigPda);
     assert.equal(config.minEnergyAmount.toNumber(), 1);
     assert.equal(config.maxErcAmount.toNumber(), 100_000);
   });
@@ -327,19 +327,19 @@ describe("Governance Program", () => {
     // Enable
     await govProgram.methods
       .setMaintenanceMode(true)
-      .accounts({ poaConfig: poaConfigPda, authority: authority.publicKey })
+      .accounts({ governanceConfig: governanceConfigPda, authority: authority.publicKey })
       .rpc();
 
-    let config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    let config: any = await govProgram.account.governanceConfig.fetch(governanceConfigPda);
     assert.equal(config.maintenanceMode, true, "Should be in maintenance mode");
 
     // Disable
     await govProgram.methods
       .setMaintenanceMode(false)
-      .accounts({ poaConfig: poaConfigPda, authority: authority.publicKey })
+      .accounts({ governanceConfig: governanceConfigPda, authority: authority.publicKey })
       .rpc();
 
-    config = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    config = await govProgram.account.governanceConfig.fetch(governanceConfigPda);
     assert.equal(
       config.maintenanceMode,
       false,
@@ -364,7 +364,7 @@ describe("Governance Program", () => {
           "Hash:abc123", // validation_data
         )
         .accounts({
-          poaConfig: poaConfigPda,
+          governanceConfig: governanceConfigPda,
           ercCertificate: ercPda,
           meterAccount: meterAccountPda,
           registry: registryPda,
@@ -414,7 +414,7 @@ describe("Governance Program", () => {
     await govProgram.methods
       .validateErcForTrading()
       .accounts({
-        poaConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         ercCertificate: ercPda,
         authority: authority.publicKey,
       })
@@ -436,7 +436,7 @@ describe("Governance Program", () => {
     await govProgram.methods
       .transferErc()
       .accounts({
-        poaConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         ercCertificate: ercPda,
         currentOwner: authority.publicKey,
         newOwner: newOwner.publicKey,
@@ -461,7 +461,7 @@ describe("Governance Program", () => {
       await govProgram.methods
         .issueErc(CERT2_ID, new BN(200), "Wind", "Hash:def456")
         .accounts({
-          poaConfig: poaConfigPda,
+          governanceConfig: governanceConfigPda,
           ercCertificate: erc2Pda,
           meterAccount: meterAccountPda,
           owner: authority.publicKey,
@@ -486,7 +486,7 @@ describe("Governance Program", () => {
     await govProgram.methods
       .revokeErc("Double-claim detected during audit")
       .accounts({
-        poaConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         ercCertificate: erc2Pda,
         authority: authority.publicKey,
       })
@@ -519,7 +519,7 @@ describe("Governance Program", () => {
       await govProgram.methods
         .revokeErc("Second attempt")
         .accounts({
-          poaConfig: poaConfigPda,
+          governanceConfig: governanceConfigPda,
           ercCertificate: erc2Pda,
           authority: authority.publicKey,
         })
@@ -540,7 +540,7 @@ describe("Governance Program", () => {
   it("returns accurate governance statistics", async () => {
     const stats = await govProgram.methods
       .getGovernanceStats()
-      .accounts({ poaConfig: poaConfigPda })
+      .accounts({ governanceConfig: governanceConfigPda })
       .view();
 
     assert.ok(
@@ -574,12 +574,12 @@ describe("Governance Program", () => {
     await govProgram.methods
       .proposeAuthorityChange(proposed.publicKey)
       .accounts({
-        poaConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         authority: authority.publicKey,
       })
       .rpc();
 
-    let config: any = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    let config: any = await govProgram.account.governanceConfig.fetch(governanceConfigPda);
     // pending_authority is now a flat Pubkey (not Option), cleared state = default (all zeros)
     assert.ok(
       config.pendingAuthority !== null &&
@@ -592,12 +592,12 @@ describe("Governance Program", () => {
     await govProgram.methods
       .cancelAuthorityChange()
       .accounts({
-        poaConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         authority: authority.publicKey,
       })
       .rpc();
 
-    config = await govProgram.account.poAConfig.fetch(poaConfigPda);
+    config = await govProgram.account.governanceConfig.fetch(governanceConfigPda);
     // pending_authority is a flat Pubkey — cleared state is Pubkey::default() (all zeros)
     const DEFAULT_PUBKEY = new PublicKey("11111111111111111111111111111111");
     assert.ok(
@@ -627,7 +627,7 @@ describe("Governance Program", () => {
       await govProgram.methods
         .setMaintenanceMode(true)
         .accounts({
-          poaConfig: poaConfigPda,
+          governanceConfig: governanceConfigPda,
           authority: attacker.publicKey,
         })
         .signers([attacker])
@@ -655,7 +655,7 @@ describe("Governance Program", () => {
         )
         .accounts({
           zoneConfig: zoneConfigPda,
-          poaConfig: poaConfigPda,
+          governanceConfig: governanceConfigPda,
           authority: authority.publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -776,7 +776,7 @@ describe("Governance Program", () => {
       await govProgram.methods
         .executeProposal()
         .accounts({
-          poaConfig: poaConfigPda,
+          governanceConfig: governanceConfigPda,
           zoneConfig: zoneConfigPda,
           proposal: proposalPda,
           executor: authority.publicKey,
@@ -835,7 +835,7 @@ describe("Governance Program", () => {
       await govProgram.methods
         .executeProposal()
         .accounts({
-          poaConfig: poaConfigPda,
+          governanceConfig: governanceConfigPda,
           zoneConfig: zoneConfigPda,
           proposal: proposalPda,
           executor: authority.publicKey,
@@ -865,7 +865,7 @@ describe("Governance Program", () => {
       await govProgram.methods
         .admitAggregator(aggregator.publicKey)
         .accounts({
-          poaConfig: poaConfigPda,
+          governanceConfig: governanceConfigPda,
           aggregatorEntry: aggregatorEntryPda,
           authority: authority.publicKey,
           systemProgram: SystemProgram.programId,
@@ -896,7 +896,7 @@ describe("Governance Program", () => {
         await govProgram.methods
           .admitAggregator(victim.publicKey)
           .accounts({
-            poaConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             aggregatorEntry: victimEntry,
             authority: intruder.publicKey,
             systemProgram: SystemProgram.programId,
@@ -918,7 +918,7 @@ describe("Governance Program", () => {
       await govProgram.methods
         .revokeAggregator()
         .accounts({
-          poaConfig: poaConfigPda,
+          governanceConfig: governanceConfigPda,
           aggregatorEntry: aggregatorEntryPda,
           authority: authority.publicKey,
         })
@@ -930,7 +930,7 @@ describe("Governance Program", () => {
       await govProgram.methods
         .admitAggregator(aggregator.publicKey)
         .accounts({
-          poaConfig: poaConfigPda,
+          governanceConfig: governanceConfigPda,
           aggregatorEntry: aggregatorEntryPda,
           authority: authority.publicKey,
           systemProgram: SystemProgram.programId,

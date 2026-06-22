@@ -35,6 +35,7 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import { createRequire } from "module";
+import { admitAggregator } from "./litesvm-admit";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/registry.json");
@@ -138,7 +139,7 @@ describe("registry slash/stake gating guards (litesvm)", () => {
     send([await program.methods.stakeGrx(GRX(30000)).accounts({
       registry: registryPda, userAccount: userPda, grxVault: vaultPda, userGrxAta: userAta, grxMint: mint.publicKey, authority: user.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
     }).instruction()], [user]);
-    send([await program.methods.registerValidator().accounts({ userAccount: userPda, authority: user.publicKey }).instruction()], [user]);
+    send([await program.methods.registerValidator().accounts({ userAccount: userPda, aggregatorEntry: admitAggregator(svm, user.publicKey), authority: user.publicKey }).instruction()], [user]);
     // NOTE: slash destination intentionally NOT set yet — exercised by the first test.
   });
 
@@ -166,5 +167,18 @@ describe("registry slash/stake gating guards (litesvm)", () => {
       .instruction();
     const blob = sendExpectFail([ix], [user]);
     expect(blob, blob).to.match(/InsufficientStakingBalance/);
+  });
+
+  it("refuses register_validator without a governance-admitted aggregator entry (AggregatorNotAdmitted)", async () => {
+    // An entry account not owned by the governance program must be rejected — the
+    // validator bond cannot be self-granted by anyone holding MIN stake. The gate runs
+    // even though `user` is already Active from the before-all setup.
+    const bogusEntry = Keypair.generate().publicKey; // never admitted; owner = system program
+    const ix = await program.methods
+      .registerValidator()
+      .accounts({ userAccount: userPda, aggregatorEntry: bogusEntry, authority: user.publicKey })
+      .instruction();
+    const blob = sendExpectFail([ix], [user]);
+    expect(blob, blob).to.match(/AggregatorNotAdmitted/);
   });
 });

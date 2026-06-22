@@ -24,6 +24,8 @@ import * as anchorPkg from "@anchor-lang/core";
 import { Trading } from "../target/types/trading";
 import { EnergyToken } from "../target/types/energy_token";
 import { Treasury } from "../target/types/treasury";
+import { Governance } from "../target/types/governance";
+import { GOVERNANCE_PROGRAM_ID } from "./litesvm-admit";
 import { expect } from "chai";
 import {
   PublicKey,
@@ -54,6 +56,7 @@ const require = createRequire(import.meta.url);
 const tradingIdl = require("../target/idl/trading.json");
 const energyIdl = require("../target/idl/energy_token.json");
 const treasuryIdl = require("../target/idl/treasury.json");
+const governanceIdl = require("../target/idl/governance.json");
 
 const ZONE = 0; // intra-zone match → capacity throttle exempt (settle_offchain.rs:369)
 let shardByte = 0;
@@ -87,9 +90,11 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   let trading: Program<Trading>;
   let energy: Program<EnergyToken>;
   let treasury: Program<Treasury>;
+  let governance: Program<Governance>;
   let tradingId: PublicKey;
   let energyId: PublicKey;
   let treasuryId: PublicKey;
+  let governanceConfigPda: PublicKey;
 
   const payer = Keypair.generate(); // authority / fee payer / mint authority
   const buyer = Keypair.generate();
@@ -195,6 +200,23 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   const nullifierPda = (user: PublicKey, orderId: Buffer) =>
     tpda([Buffer.from("nullifier"), user.toBuffer(), orderId]);
 
+  // Fabricate the governance GovernanceConfig at the canonical poa_config PDA (owned by the
+  // governance program) so settle_offchain_match's maintenance gate can read it. Plain Borsh
+  // #[account] set directly — no need to deploy/drive governance. maintenance=true flips the
+  // gate closed (is_operational() == false).
+  async function installGovernanceConfig(maintenance: boolean): Promise<void> {
+    const c = {
+      authority: PublicKey.default, authorityName: Array(64).fill(0), nameLen: 0, contactInfo: Array(128).fill(0), contactLen: 0,
+      version: 1, maintenanceMode: maintenance, ercValidationEnabled: true, minEnergyAmount: new BN(0), maxErcAmount: new BN(0),
+      ercValidityPeriod: new BN(0), requireOracleValidation: false, oracleAuthority: PublicKey.default, minOracleConfidence: 0,
+      allowCertificateTransfers: true, minQuorumVotes: new BN(0), totalErcsIssued: new BN(0), totalErcsValidated: new BN(0),
+      totalErcsRevoked: new BN(0), totalEnergyCertified: new BN(0), createdAt: new BN(0), lastUpdated: new BN(0), lastErcIssuedAt: new BN(0),
+      pendingAuthority: PublicKey.default, pendingAuthorityProposedAt: new BN(0), pendingAuthorityExpiresAt: new BN(0), reserved: Array(5).fill(0),
+    };
+    const data = await governance.coder.accounts.encode("governanceConfig", c as any);
+    svm.setAccount(governanceConfigPda, { lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))), data, owner: GOVERNANCE_PROGRAM_ID, executable: false, rentEpoch: 0 } as any);
+  }
+
   async function depositEscrow(user: Keypair, mint: PublicKey, wallet: PublicKey, amount: number, prog: PublicKey) {
     const ix = await trading.methods
       .depositEscrow(new BN(amount))
@@ -223,6 +245,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       buyerZone?: number; sellerZone?: number;
       buyerExpires?: number; sellerExpires?: number;
       energyAmount?: number; matchAmount?: number; matchPrice?: number;
+      wheeling?: number; loss?: number;
       zoneMarket?: PublicKey; zoneShard?: PublicKey;
     } = {}
   ): Promise<TransactionInstruction[]> {
@@ -235,6 +258,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const matchPrice = o.matchPrice ?? MATCH_PRICE;
     const zoneMarket = o.zoneMarket ?? zoneMarketPda;
     const zoneShard = o.zoneShard ?? zoneShardPda;
+    const wheeling = o.wheeling ?? 1, loss = o.loss ?? 1;
 
     const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(seedA, 0);
     const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(seedB, 0);
@@ -248,7 +272,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(energyAmount), pricePerKwh: new BN(50), side: sellerSide, zoneId: sellerZone, expiresAt: new BN(sellerExpires) };
 
     const settleIx = await trading.methods
-      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), new BN(1), new BN(1))
+      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), new BN(wheeling), new BN(loss))
       .accounts({
         market: marketPda,
         zoneMarket,
@@ -274,6 +298,8 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
         treasuryProgram: withTreasury ? treasuryId : null,
         treasuryState: withTreasury ? treasuryPda : null,
       } as any)
+      // Governance poa_config is the FIRST remaining account (maintenance gate).
+      .remainingAccounts([{ pubkey: governanceConfigPda, isSigner: false, isWritable: false }])
       .instruction();
 
     return [buyerEd, sellerEd, settleIx];
@@ -287,6 +313,9 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     tradingId = trading.programId;
     energyId = energy.programId;
     treasuryId = treasury.programId;
+    governance = new Program(governanceIdl, { connection: {}, publicKey: PublicKey.default } as any);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], GOVERNANCE_PROGRAM_ID);
+    await installGovernanceConfig(false); // operational by default
     svm.addProgramFromFile(tradingId, "target/deploy/trading.so");
     svm.addProgramFromFile(energyId, "target/deploy/energy_token.so");
     svm.addProgramFromFile(treasuryId, "target/deploy/treasury.so");
@@ -386,6 +415,11 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       createAssociatedTokenAccountInstruction(payer.publicKey, buyerEngAta, buyer.publicKey, energyMintPda, TOKEN_2022_PROGRAM_ID),
     ], []);
 
+    // REC provenance is now mandatory (0.5): register the payer as a REC validator so the
+    // setup mints below carry a valid co-signer.
+    send([await energy.methods.addRecValidator(payer.publicKey, "rec")
+      .accounts({ tokenInfo: energyInfoPda, authority: payer.publicKey } as any).instruction()], []);
+
     // Energy wallets via the energy program's mint_to_wallet (seller gets 200, buyer 1 to seed escrow).
     const mintEnergy = async (dest: PublicKey, owner: PublicKey, amount: number) => {
       const ix = await energy.methods
@@ -396,7 +430,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
           destination: dest,
           destinationOwner: owner,
           authority: payer.publicKey,
-          recValidator: null,
+          recValidator: payer.publicKey, // mandatory registered co-signer
           payer: payer.publicKey,
           tokenProgram: TOKEN_2022_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -536,6 +570,26 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     // passed on the attacker triple), not at a later/unrelated guard.
     expect(blob, blob).to.match(new RegExp(tradingId.toBase58()));
     expect(blob, blob).to.not.match(/InvalidAmount|InvalidNullifier|SlippageExceeded|CapacityExceeded/);
+  });
+
+  it("rejects network charges above the cap (ChargesExceedCap)", async () => {
+    // total = 100*50 = 5000; cap = 20% = 1000. wheeling+loss = 1200 > 1000 -> rejected,
+    // so a settler can't siphon the seller's proceeds to the collectors. Reverts before any
+    // transfer (no extra funding needed).
+    const blob = sendV0(await buildSettleIxs(false, { seedA: 0x41, seedB: 0x42, wheeling: 600, loss: 600 }), true);
+    expect(blob, blob).to.match(/ChargesExceedCap/);
+  });
+
+  it("rejects settlement while the system is in maintenance mode (MaintenanceMode)", async () => {
+    // Governance gate (0.3): flip poa_config maintenance on and confirm the fund-moving
+    // settle path halts. Restore operational afterwards so later tests are unaffected.
+    await installGovernanceConfig(true);
+    try {
+      const blob = sendV0(await buildSettleIxs(false, { seedA: 0x31, seedB: 0x32 }), true);
+      expect(blob, blob).to.match(/MaintenanceMode/);
+    } finally {
+      await installGovernanceConfig(false);
+    }
   });
 
   // Keep last: this mutates the bank clock, which would shift expiry for any later test.

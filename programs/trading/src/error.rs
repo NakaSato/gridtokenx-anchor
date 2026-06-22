@@ -58,6 +58,10 @@ pub enum TradingError {
     CapacityExceeded,
     #[msg("Invalid governance account")]
     InvalidGovernanceAccount,
+    #[msg("Network charges (wheeling + loss) exceed the allowed fraction of trade value")]
+    ChargesExceedCap,
+    #[msg("Total deductions (fee + wheeling + loss) exceed the trade value")]
+    ChargesExceedValue,
     #[msg("Escrow account does not match the expected per-user PDA")]
     InvalidEscrow,
     #[msg("Nullifier account does not match the expected per-order PDA")]

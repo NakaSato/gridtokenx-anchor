@@ -73,7 +73,7 @@ trading  → treasury            (record_settlement / record_settlement_batch; n
 oracle   → governance          (types + ID only, no CPI invoke: validate an admitted aggregator's `AggregatorEntry` PDA)
 ```
 
-`trading` re-exports `governance::{ErcCertificate, ErcStatus, PoAConfig}` directly. `oracle`
+`trading` re-exports `governance::{ErcCertificate, ErcStatus, GovernanceConfig}` directly. `oracle`
 deserializes `governance::AggregatorEntry` and derives its PDA against `governance::ID` to
 authorize admitted aggregator nodes — no instruction is invoked.
 
@@ -170,6 +170,8 @@ Lifecycle / load simulations: `simulate-trading.ts`, `simulate-market-clearing.t
 | File | Covers |
 | :--- | :--- |
 | [`docs/design/node-validator.md`](docs/design/node-validator.md) | Off-chain validator/aggregator node design: PoA admission, the governance aggregator allow-list, and how the oracle authorizes admitted nodes |
+| [`docs/design/role-map.md`](docs/design/role-map.md) | **PROPOSED (design correction):** maps the on-chain authority scheme onto Thailand's real institutions (ERC regulator vs EGAT/MEA/PEA operators vs licensed aggregators) — flags where current bindings mis-map and the `path:line` code deltas to fix. Companion to [`node-validator.md`](docs/design/node-validator.md) + [`../proposed/blockchain-node-network.md`](docs/proposed/blockchain-node-network.md) |
+| [`docs/design/audit-remediation.md`](docs/design/audit-remediation.md) | **IN PROGRESS:** security/audit remediation tracker — Wave-0 enforcement fixes (validator bond, slash-escape, settlement gate, charge cap, REC mandatory) + follow-ups, each with verification status, plus remaining structural items and their blast radius. Companion to [`role-map.md`](docs/design/role-map.md) |
 | [`docs/design/trading-cda.md`](docs/design/trading-cda.md) | Trading order book, CDA + off-chain-signed settlement, nullifier replay guard, sharding, THBG settlement policy. Companion to [`docs/programs/trading.md`](docs/programs/trading.md) |
 | [`docs/design/rec-certificates.md`](docs/design/rec-certificates.md) | REC/ERC certificate lifecycle (issue/validate/transfer/revoke) + energy-token REC-validator mint gating. Companion to [`docs/programs/governance.md`](docs/programs/governance.md) + [`energy-token.md`](docs/programs/energy-token.md) |
 | [`docs/design/dao-governance.md`](docs/design/dao-governance.md) | Generation-weighted DAO (proposal/vote/execute) + PoA 2-step authority transfer. Companion to [`docs/programs/governance.md`](docs/programs/governance.md) |

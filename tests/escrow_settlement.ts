@@ -2,6 +2,7 @@ import * as anchor from "@anchor-lang/core";
 import { Program } from "@anchor-lang/core";
 import { Trading } from "../target/types/trading";
 import { EnergyToken } from "../target/types/energy_token";
+import { Governance } from "../target/types/governance";
 import {
   PublicKey,
   Keypair,
@@ -55,8 +56,13 @@ describe("escrow-settlement", () => {
 
   const tradingProgram = anchor.workspace.Trading as Program<Trading>;
   const energyTokenProgram = anchor.workspace.EnergyToken as Program<EnergyToken>;
+  const governanceProgram = anchor.workspace.Governance as Program<Governance>;
   const authority = provider.wallet.publicKey;
   const payer = (provider.wallet as any).payer as Keypair;
+  // Governance poa_config gates settlement (0.3); bootstrap.ts initializes it (operational).
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+  // Settlement passes poa_config as the first remaining account.
+  const govRemaining = [{ pubkey: governanceConfigPda, isSigner: false, isWritable: false }];
 
   let marketPda: PublicKey;
   let zoneMarketPda: PublicKey;
@@ -145,6 +151,15 @@ describe("escrow-settlement", () => {
     } catch (e: any) {
       // already initialized
     }
+
+    // REC provenance is mandatory (0.5): register the authority (= token_info authority) as a
+    // REC validator so the mint_to_wallet setup below can co-sign. Idempotent.
+    try {
+      await energyTokenProgram.methods
+        .addRecValidator(authority, "rec")
+        .accounts({ tokenInfo: energyTokenInfoPda, authority } as any)
+        .rpc();
+    } catch (e) { /* already registered */ }
   });
 
   // Fund a fresh keypair with SOL + an ATA holding `amount` of `mint`.
@@ -175,6 +190,7 @@ describe("escrow-settlement", () => {
             destination: ata,
             destinationOwner: kp.publicKey,
             authority,
+            recValidator: authority, // mandatory registered REC co-signer (0.5)
             payer: authority,
             tokenProgram: TOKEN_2022_PROGRAM_ID,
             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -298,6 +314,7 @@ describe("escrow-settlement", () => {
           treasuryProgram: null,
           treasuryState: null,
         } as any)
+        .remainingAccounts(govRemaining) // 0.3 governance gate (poa_config)
         .rpc();
     } catch (e: any) {
       threw = true;
@@ -327,7 +344,7 @@ describe("escrow-settlement", () => {
     // (re-fund the buyer/seller wallets with the opposite asset, then deposit)
     const buyerEngAta = getAssociatedTokenAddressSync(energyMintPda, buyer.kp.publicKey, false, TOKEN_2022_PROGRAM_ID);
     await provider.sendAndConfirm(new Transaction().add(createAssociatedTokenAccountInstruction(authority, buyerEngAta, buyer.kp.publicKey, energyMintPda, TOKEN_2022_PROGRAM_ID)));
-    await energyTokenProgram.methods.mintToWallet(new BN(1)).accounts({ mint: energyMintPda, tokenInfo: energyTokenInfoPda, destination: buyerEngAta, destinationOwner: buyer.kp.publicKey, authority, payer: authority, tokenProgram: TOKEN_2022_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId } as any).rpc();
+    await energyTokenProgram.methods.mintToWallet(new BN(1)).accounts({ mint: energyMintPda, tokenInfo: energyTokenInfoPda, destination: buyerEngAta, destinationOwner: buyer.kp.publicKey, authority, recValidator: authority, payer: authority, tokenProgram: TOKEN_2022_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId } as any).rpc();
     await deposit(buyer.kp, buyerEngAta, energyMintPda, 1);
 
     const sellerCurAta = getAssociatedTokenAddressSync(currencyMint, seller.kp.publicKey, false, TOKEN_PROGRAM_ID);
@@ -392,6 +409,7 @@ describe("escrow-settlement", () => {
         treasuryProgram: null,
         treasuryState: null,
       } as any)
+      .remainingAccounts(govRemaining) // 0.3 governance gate (poa_config)
       .instruction();
 
     // The settle path carries ~20 accounts + two Ed25519 verify ixs, which overflows a

@@ -9,7 +9,8 @@ pub struct MeterAccount {
     pub owner: [u8; 32],
     pub meter_type: u8,    // MeterType enum
     pub status: u8,        // MeterStatus enum
-    pub _padding: [u8; 6], // Alignment
+    pub _pad_a: [u8; 2],   // Alignment to the i32 below (MUST mirror registry::MeterAccount)
+    pub zone_id: i32,      // Microgrid zone — mirrors registry layout (offset 68)
     pub registered_at: i64,
     pub last_reading_at: i64,
     pub total_generation: u64,

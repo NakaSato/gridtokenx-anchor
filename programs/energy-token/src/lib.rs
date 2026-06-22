@@ -122,22 +122,21 @@ pub mod energy_token {
                     EnergyTokenError::UnauthorizedAuthority
                 );
 
-                // REC provenance: when validators are registered, one must co-sign.
-                // Parity with mint_tokens_direct — without this the admin mint path
-                // bypasses the Renewable Energy Certificate proof. The signer is
-                // optional so existing callers keep working while no validators exist.
-                if token_info.rec_validators_count > 0 {
-                    let rec_key = ctx
-                        .accounts
-                        .rec_validator
-                        .as_ref()
-                        .map(|v| v.key())
-                        .ok_or(EnergyTokenError::RecValidatorNotFound)?;
-                    require!(
-                        rec_validator_registered(&token_info, &rec_key),
-                        EnergyTokenError::RecValidatorNotFound
-                    );
-                }
+                // REC provenance (mandatory — no opt-out): every mint must be co-signed by a
+                // registered REC validator, proving the minted GRID is backed by a Renewable
+                // Energy Certificate. A fresh token cannot mint until at least one validator
+                // is registered via add_rec_validator (rec_validators_count == 0 => no key is
+                // registered => RecValidatorNotFound).
+                let rec_key = ctx
+                    .accounts
+                    .rec_validator
+                    .as_ref()
+                    .map(|v| v.key())
+                    .ok_or(EnergyTokenError::RecValidatorNotFound)?;
+                require!(
+                    rec_validator_registered(&token_info, &rec_key),
+                    EnergyTokenError::RecValidatorNotFound
+                );
             }
             // Cache clock before CPI — avoids an inline syscall inside the emit! macro
             // and ensures the timestamp is captured before the CPI context is consumed.
@@ -213,20 +212,19 @@ pub mod energy_token {
                     EnergyTokenError::UnauthorizedAuthority
                 );
 
-                // REC provenance: parity with mint_to_wallet — when validators are
-                // registered, one must co-sign.
-                if token_info.rec_validators_count > 0 {
-                    let rec_key = ctx
-                        .accounts
-                        .rec_validator
-                        .as_ref()
-                        .map(|v| v.key())
-                        .ok_or(EnergyTokenError::RecValidatorNotFound)?;
-                    require!(
-                        rec_validator_registered(&token_info, &rec_key),
-                        EnergyTokenError::RecValidatorNotFound
-                    );
-                }
+                // REC provenance (mandatory — no opt-out): every generation mint must be
+                // co-signed by a registered REC validator. A fresh token cannot mint until a
+                // validator is registered (count == 0 => no key registered => rejected).
+                let rec_key = ctx
+                    .accounts
+                    .rec_validator
+                    .as_ref()
+                    .map(|v| v.key())
+                    .ok_or(EnergyTokenError::RecValidatorNotFound)?;
+                require!(
+                    rec_validator_registered(&token_info, &rec_key),
+                    EnergyTokenError::RecValidatorNotFound
+                );
             }
 
             let now = Clock::get()?.unix_timestamp;
@@ -436,7 +434,9 @@ pub mod energy_token {
             // total_supply is NOT updated here — use sync_total_supply for batch updates
 
             emit!(GridTokensMinted {
-                meter_owner: ctx.accounts.user_token_account.key(),
+                // The recipient WALLET (token-account owner), not the token-account address —
+                // downstream REC/provenance consumers key on the owner, not the ATA pubkey.
+                meter_owner: ctx.accounts.user_token_account.owner,
                 amount,
                 timestamp: now,
             });
@@ -553,7 +553,9 @@ pub struct MintToWallet<'info> {
 
     pub authority: Signer<'info>,
 
-    /// REC validator co-signer — required only when token_info.rec_validators_count > 0
+    /// REC validator co-signer — MANDATORY: must be a registered REC validator. Typed as
+    /// Option so a missing co-signer surfaces as RecValidatorNotFound rather than a coarse
+    /// "account not enough keys"; the handler rejects None and any non-registered key.
     pub rec_validator: Option<Signer<'info>>,
 
     #[account(mut)]
@@ -606,7 +608,9 @@ pub struct MintGeneration<'info> {
 
     pub authority: Signer<'info>,
 
-    /// REC validator co-signer — required only when token_info.rec_validators_count > 0
+    /// REC validator co-signer — MANDATORY: must be a registered REC validator. Typed as
+    /// Option so a missing co-signer surfaces as RecValidatorNotFound rather than a coarse
+    /// "account not enough keys"; the handler rejects None and any non-registered key.
     pub rec_validator: Option<Signer<'info>>,
 
     #[account(mut)]

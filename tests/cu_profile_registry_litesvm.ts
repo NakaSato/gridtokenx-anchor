@@ -99,7 +99,7 @@ describe("registry CU profile (litesvm)", () => {
   });
 
   it("registry.register_meter", async () => {
-    const ix = await program.methods.registerMeter(METER_ID, { solar: {} }, shardId).accounts({
+    const ix = await program.methods.registerMeter(METER_ID, { solar: {} }, shardId, 0).accounts({
       meterAccount: meterPda, userAccount: userPda, registryShard: shardPda, registry: registryPda, owner: user.publicKey, payer: payer.publicKey, systemProgram: SystemProgram.programId,
     }).instruction();
     expect(cu("registry.register_meter", ix, [user])).to.be.below(BUDGET);

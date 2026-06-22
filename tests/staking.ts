@@ -1,6 +1,7 @@
 import * as anchor from "@anchor-lang/core";
 import { Program } from "@anchor-lang/core";
 import { Registry } from "../target/types/registry";
+import { Governance } from "../target/types/governance";
 import { expect } from "chai";
 import {
   PublicKey,
@@ -22,8 +23,23 @@ describe("registry_staking", () => {
   anchor.setProvider(anchor.AnchorProvider.env());
 
   const program = anchor.workspace.Registry as Program<Registry>;
+  const governance = anchor.workspace.Governance as Program<Governance>;
   const provider = anchor.getProvider() as anchor.AnchorProvider;
   const authority = provider.wallet.publicKey;
+
+  // register_validator now requires a governance-admitted aggregator entry (0.1). Admit the
+  // validator (governance authority = provider wallet) and return its AggregatorEntry PDA.
+  // bootstrap.ts initializes the governance poa_config.
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governance.programId);
+  async function admitValidator(v: PublicKey): Promise<PublicKey> {
+    const [entry] = PublicKey.findProgramAddressSync([Buffer.from("aggregator"), v.toBuffer()], governance.programId);
+    try {
+      await governance.methods.admitAggregator(v)
+        .accounts({ governanceConfig: governanceConfigPda, aggregatorEntry: entry, authority, systemProgram: SystemProgram.programId } as any)
+        .rpc();
+    } catch { /* already admitted */ }
+    return entry;
+  }
 
   const [registryPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("registry")],
@@ -233,6 +249,8 @@ describe("registry_staking", () => {
         .registerValidator()
         .accounts({
           userAccount: userPda,
+          // MinStakeNotMet fires before the aggregator gate, so a non-admitted dummy entry is fine here.
+          aggregatorEntry: userPda,
           authority: userKeypair.publicKey,
         })
         .signers([userKeypair])
@@ -275,15 +293,17 @@ describe("registry_staking", () => {
       .signers([userKeypair])
       .rpc();
 
+    const userEntry = await admitValidator(userKeypair.publicKey);
     await program.methods
       .registerValidator()
       .accounts({
         userAccount: userPda,
+        aggregatorEntry: userEntry,
         authority: userKeypair.publicKey,
       })
       .signers([userKeypair])
       .rpc();
-    
+
     const userAcc = await program.account.userAccount.fetch(userPda);
     expect(Object.keys(userAcc.validatorStatus)[0]).to.equal("active");
   });
@@ -439,8 +459,9 @@ describe("registry_staking", () => {
     await program.methods.stakeGrx(stake)
       .accounts({ registry: registryPda, userAccount: uPda, grxVault: vaultPda, userGrxAta: ata, grxMint, authority: kp.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID })
       .signers([kp]).rpc();
+    const kpEntry = await admitValidator(kp.publicKey);
     await program.methods.registerValidator()
-      .accounts({ userAccount: uPda, authority: kp.publicKey }).signers([kp]).rpc();
+      .accounts({ userAccount: uPda, aggregatorEntry: kpEntry, authority: kp.publicKey }).signers([kp]).rpc();
     return { kp, userPda: uPda };
   }
 

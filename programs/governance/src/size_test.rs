@@ -1,7 +1,11 @@
-use crate::state::PoAConfig;
+use crate::state::GovernanceConfig;
 
 #[test]
 fn test_size() {
-    println!("PoAConfig size: {}", std::mem::size_of::<PoAConfig>());
-    assert_eq!(std::mem::size_of::<PoAConfig>(), 405);
+    // GovernanceConfig is a Borsh `#[account]`: on-chain allocation is `8 + LEN`,
+    // where LEN is the serialized (padding-free) size. Assert that invariant.
+    // `mem::size_of` (408 here) includes struct alignment padding that Borsh never
+    // serializes, so it is NOT the load-bearing number — do not assert on it.
+    println!("GovernanceConfig::LEN: {}", GovernanceConfig::LEN);
+    assert_eq!(GovernanceConfig::LEN, 405);
 }

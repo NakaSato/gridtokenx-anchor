@@ -70,7 +70,8 @@ pub struct UserAccount {
     pub _padding4: [u8; 4],  // 4 bytes padding (76-80) - Alignment for staked_grx
     pub staked_grx: u64,     // 8 bytes (80-88)
     pub last_stake_at: i64,  // 8 bytes (88-96)
-    pub _padding5: [u8; 8],  // 8 bytes padding (96-104) - Total: 104 bytes (multiple of 8)
+    pub resign_at: i64,      // 8 bytes (96-104) - unix ts of deregister_validator; 0 = not resigning.
+                             //   Carved from former _padding5; total still 104 bytes (multiple of 8).
 }
 
 /// Meter account for reading updates
@@ -79,10 +80,14 @@ pub struct UserAccount {
 pub struct MeterAccount {
     pub meter_id: [u8; 32],    // Unique meter identifier (fixed size for ZeroCopy)
     pub owner: Pubkey,         // User who owns this meter
-    pub meter_type: MeterType, // Solar, Wind, Battery, or Grid
-    pub status: MeterStatus,   // Active, Inactive, or Maintenance
-    pub _padding: [u8; 6],     // Alignment
-    pub registered_at: i64,    // When meter was registered
+    pub meter_type: MeterType, // Solar, Wind, Battery, or Grid (offset 64)
+    pub status: MeterStatus,   // Active, Inactive, or Maintenance (65)
+    pub _pad_a: [u8; 2],       // Alignment to the i32 below (66-68)
+    pub zone_id: i32,          // Microgrid zone this meter belongs to (68-72). Carved from the
+                               //   former _padding[6]; binds the meter to one governance zone so
+                               //   its vote weight can only affect that zone. Existing accounts
+                               //   read 0 (zone 0). Size unchanged.
+    pub registered_at: i64,    // When meter was registered (72)
     pub last_reading_at: i64,  // Last time reading was updated
     pub total_generation: u64, // Cumulative energy generated (in smallest units)
     pub total_consumption: u64, // Cumulative energy consumed (in smallest units)
@@ -144,7 +149,31 @@ pub enum ValidatorStatus {
     Active,
     Slashed,
     Suspended,
+    /// Validator announced an honest exit. Still slashable until the resign cooldown
+    /// elapses; only then may the bond be unstaked below MIN_VALIDATOR_STAKE.
+    Resigning,
 }
 
 unsafe impl bytemuck::Zeroable for ValidatorStatus {}
 unsafe impl bytemuck::Pod for ValidatorStatus {}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    /// Zero-copy on-chain layout invariant (SKILL.md invariant #1): `resign_at` was carved
+    /// from the former `_padding5`, so `UserAccount` must stay exactly 104 bytes — otherwise
+    /// already-deployed accounts become unreadable. Recount by hand if a field is added.
+    #[test]
+    fn user_account_size_is_stable() {
+        assert_eq!(std::mem::size_of::<UserAccount>(), 104);
+    }
+
+    /// `MeterAccount` is bytemuck-cast cross-program by `governance` (its mirror struct must
+    /// match byte-for-byte). `zone_id` was carved from the former `_padding[6]`, so the size
+    /// must stay 120 bytes — and `governance::state::meter_account::MeterAccount` must mirror it.
+    #[test]
+    fn meter_account_size_is_stable() {
+        assert_eq!(std::mem::size_of::<MeterAccount>(), 120);
+    }
+}

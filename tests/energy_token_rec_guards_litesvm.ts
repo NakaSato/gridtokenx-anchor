@@ -125,6 +125,16 @@ describe("energy-token REC-validator gating guards (litesvm)", () => {
     send([await mintIx(v1.publicKey)], [v1]);
   });
 
+  it("rejects all mints once the validator set is empty — no opt-out (0.5)", async () => {
+    // Remove the only validator → count == 0. Previously this OPENED an opt-out (mints with
+    // no REC proof succeeded). Now REC provenance is mandatory: even the previously-registered
+    // v1 is rejected. Re-add v1 afterwards so the cap test below still sees a populated set.
+    send([await removeValidatorIx(v1.publicKey)]); // count -> 0
+    const blob = sendExpectFail([await mintIx(v1.publicKey)], [v1]);
+    expect(blob, blob).to.match(/RecValidatorNotFound/);
+    send([await addValidatorIx(v1.publicKey)]); // restore count -> 1
+  });
+
   it("rejects adding a 6th REC validator past the cap of 5 (MaxValidatorsReached)", async () => {
     // v1 already registered; add four more to fill the set (5), then the 6th must fail.
     for (let i = 0; i < 4; i++) send([await addValidatorIx(Keypair.generate().publicKey)]);

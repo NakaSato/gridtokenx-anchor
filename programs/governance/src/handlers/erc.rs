@@ -19,7 +19,12 @@ pub fn issue(
             meter_data.len() >= 8 + std::mem::size_of::<MeterAccount>(),
             GovernanceError::InvalidMeterAccount
         );
-        let meter = bytemuck::from_bytes::<MeterAccount>(&meter_data[8..]);
+        // Slice EXACTLY 8..8+size — `from_bytes` panics on a length mismatch, so passing the
+        // whole `[8..]` remainder would DoS issuance if the account carries trailing bytes.
+        // (Matches the safe pattern in dao.rs.)
+        let meter = bytemuck::from_bytes::<MeterAccount>(
+            &meter_data[8..8 + std::mem::size_of::<MeterAccount>()],
+        );
         let meter_owner = Pubkey::new_from_array(meter.owner);
         let unclaimed = meter
             .total_generation
@@ -28,7 +33,7 @@ pub fn issue(
         (meter_owner, unclaimed)
     };
 
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
 
     // Operational and config validation
@@ -140,7 +145,7 @@ pub fn issue(
 }
 
 pub fn validate_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let clock = Clock::get()?;
 
@@ -188,7 +193,7 @@ pub fn validate_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
 
 /// Revoke an ERC certificate - REC authority only
 pub fn revoke(ctx: Context<crate::RevokeErc>, reason: String) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let clock = Clock::get()?;
 
@@ -251,7 +256,7 @@ pub fn revoke(ctx: Context<crate::RevokeErc>, reason: String) -> Result<()> {
 
 /// Transfer ERC ownership
 pub fn transfer(ctx: Context<crate::TransferErc>) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let clock = Clock::get()?;
 

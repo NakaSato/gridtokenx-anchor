@@ -36,6 +36,7 @@ import { Program } from "@anchor-lang/core";
 import { Trading } from "../target/types/trading";
 import { EnergyToken } from "../target/types/energy_token";
 import { Treasury } from "../target/types/treasury";
+import { Governance } from "../target/types/governance";
 import {
   PublicKey,
   Keypair,
@@ -84,6 +85,9 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
   const energy = anchor.workspace.EnergyToken as Program<EnergyToken>;
   const treasury = anchor.workspace.Treasury as Program<Treasury>;
   const authority = provider.wallet.publicKey;
+  const governance = anchor.workspace.Governance as Program<Governance>;
+  // Governance poa_config gates settlement (0.3); bootstrap.ts inits it (operational).
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governance.programId);
   const payer = (provider.wallet as any).payer as Keypair;
 
   const zoneId = 0;
@@ -134,7 +138,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
   async function mintEnergyTo(dest: PublicKey, owner: PublicKey, amount: number) {
     await energy.methods.mintToWallet(new BN(amount)).accounts({
       mint: energyMintPda, tokenInfo: energyInfoPda, destination: dest, destinationOwner: owner,
-      authority, payer: authority, tokenProgram: TOKEN_2022_PROGRAM_ID,
+      authority, recValidator: authority, payer: authority, tokenProgram: TOKEN_2022_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
     } as any).rpc();
   }
@@ -188,6 +192,12 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     await treasury.methods.updateAttestation(new BN(1_000_000_000_000)).accounts({
       treasury: treasuryPda, attestor: authority,
     } as any).rpc();
+
+    // REC provenance is mandatory (0.5): register authority as a REC validator (idempotent).
+    try {
+      await energy.methods.addRecValidator(authority, "rec")
+        .accounts({ tokenInfo: energyInfoPda, authority } as any).rpc();
+    } catch { /* already registered */ }
 
     // THBG collectors for the trading market (currency = THBG). The main (unsharded)
     // collectors remain the canonical sink (sweep destination); the single settle
@@ -279,7 +289,11 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
         escrowPda(buyer.publicKey, energyMintPda),
       );
     }
-    const remainingMeta = remaining.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
+    // Pair accounts (match_count*6) followed by ONE trailing governance poa_config account (0.3).
+    const remainingMeta = [
+      ...remaining.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true })),
+      { pubkey: governanceConfigPda, isSigner: false, isWritable: false },
+    ];
 
     // Per-payer shards.
     const marketAcct: any = await trading.account.market.fetch(marketPda);
