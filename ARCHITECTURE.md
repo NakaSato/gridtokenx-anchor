@@ -157,6 +157,7 @@ Lifecycle / load simulations: `simulate-trading.ts`, `simulate-market-clearing.t
 | File | Covers |
 | :--- | :--- |
 | `docs/programs/` | **Reference** (what + `path:line`): per-program docs — identity, state, instructions, invariants, CPI, events, errors, testing; see [`docs/programs/README.md`](docs/programs/README.md) |
+| `docs/diagrams/` | **Learning path** (how Solana works, bottom-up): 21 mermaid explainers — PoH/slot/PDA/Sealevel/CPI, then repo internals (zero-copy, off-chain settlement, sharding, BPF stack) and domain (Token-2022, treasury peg, oracle epochs, registry slash); see [`docs/diagrams/README.md`](docs/diagrams/README.md) |
 | `docs/design/` | **Design narratives** (why + model) for *implemented* features — see the group below |
 | `docs/proposed/` | **Proposed / not-yet-built** design + the implementation plan — see the group below |
 | `RUNTIME-ARCHITECTURE.md` | How the programs execute: SVM runtime, CPI, security model, protocol flow, consensus/validator topology |

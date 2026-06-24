@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **`SKILL.md`** — the authoritative deep-dive on program invariants (zero-copy layouts, sharding, CPI, compute profiling). **Caveat: its version numbers and program-ID table are stale.** Always treat `Anchor.toml` (program IDs) and each program's `Cargo.toml` (crate versions) as source of truth.
 - **`ARCHITECTURE.md`** — component map for this repo; **`RUNTIME-ARCHITECTURE.md`** — runtime/SVM measurement context; **`BENCHMARKS.md`** — canonical benchmark results. (The former `docs/` VitePress site was removed; `npm run docs:dev` no longer has a target.)
+- **`docs/diagrams/README.md`** — Solana-internals learning path (21 explainers, mermaid): PoH → slot/leader → PDA → Sealevel → CPI, then repo-specific (zero-copy, off-chain settlement, sharding, BPF stack) and domain (Token-2022, treasury peg, oracle epochs, registry slash). Concept-level, fact-checked against source.
 
 ---
 
