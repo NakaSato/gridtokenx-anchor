@@ -10,9 +10,10 @@ import {
   Transaction,
   LAMPORTS_PER_SOL
 } from "@solana/web3.js";
-import { 
-  TOKEN_PROGRAM_ID, 
-  ASSOCIATED_TOKEN_PROGRAM_ID, 
+import {
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
   getAccount
@@ -63,6 +64,16 @@ describe("oracle-metering-integration", () => {
       } as any).rpc();
       console.log("   API Gateway updated to current authority");
     } catch (e) {}
+
+    // REC provenance is mandatory: settle_and_mint_tokens co-signs against a registered
+    // REC validator. Register the test authority once (idempotent — bootstrap seeds none),
+    // else the mint CPI fails with RecValidatorNotFound.
+    try {
+      await energyTokenProgram.methods
+        .addRecValidator(authority, "rec")
+        .accounts({ tokenInfo: energyTokenInfoPda, authority } as any)
+        .rpc();
+    } catch (e) {}
   });
 
   async function ensureAta(mint: PublicKey, owner: PublicKey, programId: PublicKey = TOKEN_PROGRAM_ID): Promise<PublicKey> {
@@ -112,9 +123,9 @@ describe("oracle-metering-integration", () => {
         payer: authority,
         energyTokenProgram: energyTokenProgram.programId,
         mint: energyMintPda,
-        userTokenAccount: await ensureAta(energyMintPda, user.publicKey),
+        userTokenAccount: await ensureAta(energyMintPda, user.publicKey, TOKEN_2022_PROGRAM_ID),
         tokenInfo: energyTokenInfoPda,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       } as any)
       .rpc();
@@ -129,9 +140,9 @@ describe("oracle-metering-integration", () => {
         registryShard: userShardPda,
         registry: registryPda,
         owner: user.publicKey,
+        payer: authority,
         systemProgram: SystemProgram.programId,
       } as any)
-      .signers([user])
       .rpc();
 
     // 3. Submit Meter Reading (Oracle)
@@ -163,7 +174,7 @@ describe("oracle-metering-integration", () => {
 
     // 5. Settle and Mint (CPI Registry -> EnergyToken)
     console.log("   Settling and minting tokens...");
-    const userAta = await ensureAta(energyMintPda, user.publicKey);
+    const userAta = await ensureAta(energyMintPda, user.publicKey, TOKEN_2022_PROGRAM_ID);
     
     await registryProgram.methods
       .settleAndMintTokens()
@@ -175,7 +186,7 @@ describe("oracle-metering-integration", () => {
         userTokenAccount: userAta,
         registry: registryPda,
         energyTokenProgram: energyTokenProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
         recValidator: authority, // Placeholder
       } as any)
       .signers([user])
@@ -189,7 +200,8 @@ describe("oracle-metering-integration", () => {
     // registry.rs: new_tokens_to_mint = current_net_gen.saturating_sub(meter.settled_net_generation);
     // 800 units minted.
     console.log(`   Final Balance: ${balance.value.amount}`);
-    expect(new BN(balance.value.amount).gt(new BN(800))).to.be.true;
+    // Net generation = 1000 - 200 = 800 units minted 1:1 to the meter owner.
+    expect(new BN(balance.value.amount).gte(new BN(800))).to.be.true;
   });
 
   it("Rejects anomalous readings", async () => {

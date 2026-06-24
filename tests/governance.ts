@@ -200,7 +200,7 @@ describe("Governance Program", () => {
 
     try {
       await regProgram.methods
-        .registerMeter(METER_ID, { solar: {} }, shardId, 0)
+        .registerMeter(METER_ID, { solar: {} }, shardId, ZONE_ID)
         .accounts({
           meterAccount: meterAccountPda,
           userAccount: userAccountPda,

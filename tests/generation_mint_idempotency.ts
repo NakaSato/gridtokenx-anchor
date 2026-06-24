@@ -111,8 +111,22 @@ describe("generation-mint idempotency", () => {
       } as any);
   }
 
-  const balance = async (ata: PublicKey): Promise<bigint> =>
-    (await getAccount(provider.connection, ata, "confirmed", TOKEN_2022_PROGRAM_ID)).amount;
+  // getAccount("confirmed") can race ahead of propagation right after .rpc() resolves
+  // (the provider confirms at a lower commitment), reading a stale 0. Poll until two
+  // consecutive reads agree so the assertion sees the settled balance.
+  const balance = async (ata: PublicKey): Promise<bigint> => {
+    let prev = -1n;
+    for (let i = 0; i < 15; i++) {
+      let cur = 0n;
+      try {
+        cur = (await getAccount(provider.connection, ata, "confirmed", TOKEN_2022_PROGRAM_ID)).amount;
+      } catch (_) { /* account not yet visible */ }
+      if (cur === prev && cur > 0n) return cur;
+      prev = cur;
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    return prev;
+  };
 
   // Unique 16-byte meter id per test run so reruns against a long-lived validator
   // don't collide on an already-minted record.
@@ -126,7 +140,7 @@ describe("generation-mint idempotency", () => {
   it("first mint credits the recipient and stamps the record", async () => {
     const { kp, ata } = await freshRecipient();
     const meter = meterId(1);
-    const window = new BN(1_700_000_000_000);
+    const window = new BN(1_700_000_100_000); // 900_000-ms aligned (mint_generation MisalignedWindow guard)
     const amount = new BN(5_000);
 
     await mintGenerationIx({ ata, owner: kp.publicKey, meterId: meter, windowStartMs: window, amount }).rpc();
@@ -141,7 +155,7 @@ describe("generation-mint idempotency", () => {
   it("replaying the same (meter, window) is a no-op — no double mint", async () => {
     const { kp, ata } = await freshRecipient();
     const meter = meterId(2);
-    const window = new BN(1_700_000_900_000);
+    const window = new BN(1_700_001_000_000); // aligned
     const amount = new BN(7_000);
 
     await mintGenerationIx({ ata, owner: kp.publicKey, meterId: meter, windowStartMs: window, amount }).rpc();
@@ -161,7 +175,7 @@ describe("generation-mint idempotency", () => {
     const b = await freshRecipient();
     const meterA = meterId(3);
     const meterB = meterId(4);
-    const window = new BN(1_700_001_800_000);
+    const window = new BN(1_700_001_900_000); // aligned
     const amount = new BN(9_000);
 
     // Pre-mint A so its record exists with minted == true.

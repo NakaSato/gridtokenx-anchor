@@ -6,6 +6,7 @@ import { expect } from "chai";
 import { PublicKey, Keypair, SystemProgram, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   getOrCreateAssociatedTokenAccount,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
@@ -95,11 +96,11 @@ describe("airdrop_claim", () => {
   it("claim_airdrop mints the airdrop, flips the flag, and emits AirdropClaimed", async () => {
     // The user's energy ATA must exist before the mint CPI.
     const ata = await getOrCreateAssociatedTokenAccount(
-      provider.connection, payer, energyMintPda, userKeypair.publicKey, false, undefined, undefined, TOKEN_PROGRAM_ID
+      provider.connection, payer, energyMintPda, userKeypair.publicKey, false, undefined, undefined, TOKEN_2022_PROGRAM_ID
     );
     userAta = ata.address;
     expect(userAta.toBase58()).to.equal(
-      getAssociatedTokenAddressSync(energyMintPda, userKeypair.publicKey, false, TOKEN_PROGRAM_ID).toBase58()
+      getAssociatedTokenAddressSync(energyMintPda, userKeypair.publicKey, false, TOKEN_2022_PROGRAM_ID).toBase58()
     );
 
     const ix = await program.methods
@@ -113,7 +114,7 @@ describe("airdrop_claim", () => {
         mint: energyMintPda,
         userTokenAccount: userAta,
         tokenInfo: energyTokenInfoPda,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
       } as any)
       .instruction();
 
@@ -130,10 +131,17 @@ describe("airdrop_claim", () => {
     expect(user.airdropClaimed, "claimed flag set").to.equal(1);
 
     // Event observable (and this time it persists — the tx succeeded).
-    const txInfo = await provider.connection.getTransaction(txSig, {
-      commitment: "confirmed",
-      maxSupportedTransactionVersion: 0,
-    });
+    // getTransaction can briefly return null after a "confirmed" send while the
+    // ledger indexes it — poll until the record materializes.
+    let txInfo = null;
+    for (let i = 0; i < 20 && txInfo === null; i++) {
+      txInfo = await provider.connection.getTransaction(txSig, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+      if (txInfo === null) await new Promise((r) => setTimeout(r, 500));
+    }
+    expect(txInfo, "claim tx retrievable").to.not.be.null;
     const parser = new EventParser(program.programId, (program as any).coder);
     const events = [...parser.parseLogs(txInfo!.meta!.logMessages!)];
     const ev = events.find((e) => e.name === "AirdropClaimed" || e.name === "airdropClaimed");
@@ -153,7 +161,7 @@ describe("airdrop_claim", () => {
         mint: energyMintPda,
         userTokenAccount: userAta,
         tokenInfo: energyTokenInfoPda,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
       } as any)
       .instruction();
 

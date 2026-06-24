@@ -43,7 +43,7 @@ describe("trading-settlement", () => {
 
   let marketPda: PublicKey;
   let zoneMarketPda: PublicKey;
-  let poaConfigPda: PublicKey;
+  let governanceConfigPda: PublicKey;
   let energyMintPda: PublicKey;
   let energyTokenInfoPda: PublicKey;
   let currencyMint: PublicKey;
@@ -58,9 +58,19 @@ describe("trading-settlement", () => {
       [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, 'le', 4)],
       tradingProgram.programId
     );
-    [poaConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
     [energyMintPda] = PublicKey.findProgramAddressSync([Buffer.from("mint_2022")], energyTokenProgram.programId);
     [energyTokenInfoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], energyTokenProgram.programId);
+
+    // REC provenance is mandatory: mint_to_wallet below co-signs against a registered
+    // REC validator. Register the test authority once (idempotent — bootstrap does not
+    // seed one), else mint_to_wallet fails with RecValidatorNotFound.
+    try {
+      await energyTokenProgram.methods
+        .addRecValidator(authority, "rec")
+        .accounts({ tokenInfo: energyTokenInfoPda, authority } as any)
+        .rpc();
+    } catch (_) { /* already registered */ }
 
     // 2. Load or Create Currency Mint
     try {
@@ -136,9 +146,9 @@ describe("trading-settlement", () => {
 
     // Setup ATAs
     const buyerCurrencyEscrow = await ensureAta(currencyMint, escrowAuth.publicKey, TOKEN_PROGRAM_ID);
-    const sellerEnergyEscrow = await ensureAta(energyMintPda, escrowAuth.publicKey, TOKEN_PROGRAM_ID);
+    const sellerEnergyEscrow = await ensureAta(energyMintPda, escrowAuth.publicKey, TOKEN_2022_PROGRAM_ID);
     const sellerCurrencyAccount = await ensureAta(currencyMint, prosumer.publicKey, TOKEN_PROGRAM_ID);
-    const buyerEnergyAccount = await ensureAta(energyMintPda, consumer.publicKey, TOKEN_PROGRAM_ID);
+    const buyerEnergyAccount = await ensureAta(energyMintPda, consumer.publicKey, TOKEN_2022_PROGRAM_ID);
     const feeCollector = await ensureAta(currencyMint, authority, TOKEN_PROGRAM_ID);
     const wheelingCollector = await ensureAta(currencyMint, Keypair.generate().publicKey, TOKEN_PROGRAM_ID);
     const lossCollector = await ensureAta(currencyMint, Keypair.generate().publicKey, TOKEN_PROGRAM_ID);
@@ -154,7 +164,7 @@ describe("trading-settlement", () => {
         destinationOwner: escrowAuth.publicKey,
         authority: authority,
         payer: authority,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       } as any)
@@ -173,7 +183,7 @@ describe("trading-settlement", () => {
         zoneMarket: zoneMarketPda,
         order: sellOrderPda,
         authority: prosumer.publicKey,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         ercCertificate: null,
         systemProgram: SystemProgram.programId,
       } as any)
@@ -192,7 +202,7 @@ describe("trading-settlement", () => {
         zoneMarket: zoneMarketPda,
         order: buyOrderPda,
         authority: consumer.publicKey,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         systemProgram: SystemProgram.programId,
       } as any)
       .signers([consumer])
@@ -218,8 +228,8 @@ describe("trading-settlement", () => {
         marketAuthority: authority,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
-        secondaryTokenProgram: TOKEN_PROGRAM_ID,
-        governanceConfig: poaConfigPda,
+        secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
+        governanceConfig: governanceConfigPda,
       } as any)
       .signers([escrowAuth]);
 
@@ -261,7 +271,7 @@ describe("trading-settlement", () => {
       .rpc();
 
     const info = await energyTokenProgram.account.tokenInfo.fetch(energyTokenInfoPda);
-    const mint = await getMint(provider.connection, energyMintPda, "confirmed", TOKEN_PROGRAM_ID);
+    const mint = await getMint(provider.connection, energyMintPda, "confirmed", TOKEN_2022_PROGRAM_ID);
     expect(info.totalSupply.toString(), "stored total_supply vs mint.supply").to.equal(mint.supply.toString());
   });
 });

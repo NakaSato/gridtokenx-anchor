@@ -443,7 +443,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     // Send (not simulate): a freshly-created ALT isn't resolvable under
     // simulateTransaction's replaceRecentBlockhash path. The require!(!recording_required)
     // guard fires at the end of the batch, reverting the whole tx; the on-chain
-    // error code (6031 = TreasurySettlementRequired) surfaces in conf.value.err.
+    // error code (6033 = TreasurySettlementRequired) surfaces in conf.value.err.
     let err: any = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash("confirmed");
@@ -468,7 +468,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     }
     // settleIx is the last instruction (edIxs..., settleIx).
     expect(err, "settle must fail when treasury accounts are omitted").to.not.be.null;
-    expect(JSON.stringify(err), JSON.stringify(err)).to.match(/"Custom":6031/);
+    expect(JSON.stringify(err), JSON.stringify(err)).to.match(/"Custom":6033/);
   });
 
   // §2b batch-CU curve: a >1-match datapoint is NOT reachable in a single
