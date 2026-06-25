@@ -212,20 +212,20 @@ async function main() {
 
   // 3. Initialize Governance (PoA)
   console.log('\n[3/5] Initializing Governance PoA...');
-  const [poaConfigPda] = PublicKey.findProgramAddressSync(
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync(
     [Buffer.from('poa_config')],
     governanceProgram.programId
   );
   try {
     const tx = await governanceProgram.methods
-      .initializePoa()
+      .initializeGovernance()
       .accounts({
-        poaConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         authority: authority,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
       .rpc();
-    console.log('  ✅ PoA Config initialized:', poaConfigPda.toBase58());
+    console.log('  ✅ PoA Config initialized:', governanceConfigPda.toBase58());
   } catch (e: any) {
     console.log('  ℹ️  PoA Config already exists or failed:', e.message);
   }

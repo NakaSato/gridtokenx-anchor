@@ -14,18 +14,18 @@ async function main() {
     console.log("Authority:", authority.publicKey.toBase58());
 
     // 1. Derive PoA Config PDA
-    const [poaConfigPda] = PublicKey.findProgramAddressSync(
+    const [governanceConfigPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("poa_config")],
         program.programId
     );
-    console.log("PoA Config PDA:", poaConfigPda.toBase58());
+    console.log("PoA Config PDA:", governanceConfigPda.toBase58());
 
     // 2. Initialize PoA
     try {
         const tx = await program.methods
-            .initializePoa()
+            .initializeGovernance()
             .accounts({
-                poaConfig: poaConfigPda,
+                governanceConfig: governanceConfigPda,
                 authority: authority.publicKey,
                 systemProgram: SystemProgram.programId,
             })

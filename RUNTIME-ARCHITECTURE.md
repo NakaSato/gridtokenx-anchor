@@ -104,7 +104,7 @@ grants it signer status because the calling program proved the seeds derive to t
 ### 3.2 trading → governance (PoA config + ERC certificates)
 
 Trading depends on governance with `features = ["cpi"]` and re-exports its types directly:
-`pub use governance::{ErcCertificate, ErcStatus, PoAConfig}`
+`pub use governance::{ErcCertificate, ErcStatus, GovernanceConfig}`
 (`programs/trading/src/lib.rs:18`). Settlement validates governance-owned accounts
 (deserialize + owner check) rather than invoking governance instructions — a read-side
 coupling, cheaper than a full CPI call.
@@ -132,7 +132,7 @@ on `IssueErc` (`programs/governance/src/contexts.rs:31`), `ValidateErc`
 
 ### 4.2 Application-layer PoA with 2-step authority transfer
 
-The governance program holds a `PoAConfig` account naming the platform authority. Authority
+The governance program holds a `GovernanceConfig` account naming the platform authority. Authority
 rotation is two-phase to survive fat-finger key mistakes:
 
 1. `propose_authority_change` (`programs/governance/src/handlers/authority.rs:13`) — current
@@ -186,7 +186,7 @@ the validator set (`lib.rs:127`–`128`), with the same gate on the generation-m
 | Boundary | Enforced by |
 | :--- | :--- |
 | Who may mutate an account | Runtime ownership rule (program-owned accounts) |
-| Who may invoke privileged instructions | Anchor `Signer` + `has_one` against `PoAConfig` / stored authorities |
+| Who may invoke privileged instructions | Anchor `Signer` + `has_one` against `GovernanceConfig` / stored authorities |
 | Whether a trade was authorized | Ed25519 native-program verification + sysvar introspection |
 | Whether a trade can be replayed | `OrderNullifier` PDA per (user, order) |
 | Whether energy backing is real | REC validator set in energy-token |
@@ -206,7 +206,7 @@ A full market cycle touches all five programs:
                   collects buyer+seller Ed25519 signatures
 5. Settlement     trading: settle_offchain_match — ed25519 ix at index 0/1,
                   introspection check, nullifier fill update, escrow transfer
-                  (reads governance PoAConfig / ERC certificates)
+                  (reads governance GovernanceConfig / ERC certificates)
 6. Token movement energy-token / SPL: GRID + GRX transfers, REC-gated mint/settle
 7. Reconciliation admin: aggregate_readings / aggregate_shards fold shard + meter
                   state into global totals (deliberately stale between runs)
@@ -232,13 +232,13 @@ GridTokenX targets a **permissioned cluster**: the validator set is a closed lis
 operators (utility / market-operator nodes) rather than open stake-weighted entry. Solana
 does not have a separate "PoA mode" — permissioning is operational (who is allowed to run a
 validator and receive stake delegation), and the *application-layer* PoA lives in the
-governance program's `PoAConfig` (§4.2), which gates protocol administration regardless of
+governance program's `GovernanceConfig` (§4.2), which gates protocol administration regardless of
 who validates blocks. Keep the two layers distinct:
 
 | Layer | Authority | Mechanism |
 | :--- | :--- | :--- |
 | Block production / finality | Permissioned validator operators | PoH + Tower BFT among allowlisted nodes |
-| Protocol administration | `PoAConfig.authority` | Governance program checks (§4.1–4.2) |
+| Protocol administration | `GovernanceConfig.authority` | Governance program checks (§4.1–4.2) |
 | Energy attestation | REC validator set | energy-token gating (§4.4) |
 
 ### 6.3 Development topologies

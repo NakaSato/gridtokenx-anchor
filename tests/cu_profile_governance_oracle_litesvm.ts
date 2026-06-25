@@ -42,7 +42,7 @@ describe("governance + oracle CU profile (litesvm)", () => {
   const proposed = fixedKeypair(3);
 
   let oracleData: PublicKey;
-  let poaConfig: PublicKey;
+  let governanceConfig: PublicKey;
 
   const profile: Array<{ ix: string; cu: number }> = [];
 
@@ -77,7 +77,7 @@ describe("governance + oracle CU profile (litesvm)", () => {
     svm.addProgramFromFile(governanceId, "target/deploy/governance.so");
     for (const kp of [payer, chainBridge, proposed]) svm.airdrop(kp.publicKey, BigInt(1_000_000_000_000));
     oracleData = PublicKey.findProgramAddressSync([Buffer.from("oracle_data")], oracleId)[0];
-    poaConfig = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceId)[0];
+    governanceConfig = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceId)[0];
     svm.setClock(new Clock(svm.getClock().slot, 0n, 0n, 0n, BigInt(NOW)));
   });
 
@@ -88,9 +88,9 @@ describe("governance + oracle CU profile (litesvm)", () => {
     assertBaseline(profile);
   });
 
-  it("governance: initialize_poa", async () => {
-    const cu = await sendCU("governance.initialize_poa", governance.methods.initializePoa()
-      .accounts({ poaConfig, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction(), [payer]);
+  it("governance: initialize_governance", async () => {
+    const cu = await sendCU("governance.initialize_governance", governance.methods.initializeGovernance()
+      .accounts({ governanceConfig, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction(), [payer]);
     expect(cu).to.be.below(BUDGET);
   });
 
@@ -140,26 +140,26 @@ describe("governance + oracle CU profile (litesvm)", () => {
 
   it("governance: propose_authority_change", async () => {
     const cu = await sendCU("governance.propose_authority_change", governance.methods.proposeAuthorityChange(proposed.publicKey)
-      .accounts({ poaConfig, authority: payer.publicKey } as any).instruction(), [payer]);
+      .accounts({ governanceConfig, authority: payer.publicKey } as any).instruction(), [payer]);
     expect(cu).to.be.below(BUDGET);
   });
 
   it("governance: approve_authority_change", async () => {
     const cu = await sendCU("governance.approve_authority_change", governance.methods.approveAuthorityChange()
-      .accounts({ poaConfig, newAuthority: proposed.publicKey } as any).instruction(), [payer, proposed]);
+      .accounts({ governanceConfig, newAuthority: proposed.publicKey } as any).instruction(), [payer, proposed]);
     expect(cu).to.be.below(BUDGET);
   });
 
   it("governance: set_oracle_authority", async () => {
     // authority is now `proposed` after the transfer above.
     const cu = await sendCU("governance.set_oracle_authority", governance.methods.setOracleAuthority(PublicKey.default, 80, false)
-      .accounts({ poaConfig, authority: proposed.publicKey } as any).instruction(), [payer, proposed]);
+      .accounts({ governanceConfig, authority: proposed.publicKey } as any).instruction(), [payer, proposed]);
     expect(cu).to.be.below(BUDGET);
   });
 
   it("governance: update_erc_limits", async () => {
     const cu = await sendCU("governance.update_erc_limits", governance.methods.updateErcLimits(new BN(50), new BN(2_000_000), new BN(31_536_000))
-      .accounts({ poaConfig, authority: proposed.publicKey } as any).instruction(), [payer, proposed]);
+      .accounts({ governanceConfig, authority: proposed.publicKey } as any).instruction(), [payer, proposed]);
     expect(cu).to.be.below(BUDGET);
   });
 });

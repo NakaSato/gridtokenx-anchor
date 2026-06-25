@@ -15,7 +15,7 @@ pub use crate::state::{
     PriceLevel, PricePoint, TradeRecord, ZoneMarket, ZoneMarketShard, ZoneConfig, MAX_DEPTH_LEVELS,
 };
 pub use crate::utils::get_governance_config;
-pub use governance::{ErcCertificate, ErcStatus, PoAConfig};
+pub use governance::{ErcCertificate, ErcStatus, GovernanceConfig};
 
 // ============================================================================
 // AUCTION CLEARING TYPES (Inlined to avoid Anchor macro issues)
@@ -1557,7 +1557,7 @@ pub mod trading {
         pub order: AccountLoader<'info, Order>,
         #[account(mut)]
         pub authority: Signer<'info>,
-        pub governance_config: Account<'info, PoAConfig>,
+        pub governance_config: Account<'info, GovernanceConfig>,
     }
 
     #[derive(Accounts)]
@@ -1596,7 +1596,7 @@ pub mod trading {
         pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
         pub system_program: Program<'info, System>,
         pub secondary_token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
-        pub governance_config: Account<'info, PoAConfig>,
+        pub governance_config: Account<'info, GovernanceConfig>,
     }
 
     #[derive(Accounts)]
@@ -1604,7 +1604,7 @@ pub mod trading {
         #[account(mut, has_one = authority)]
         pub market: AccountLoader<'info, Market>,
         pub authority: Signer<'info>,
-        pub governance_config: Account<'info, PoAConfig>,
+        pub governance_config: Account<'info, GovernanceConfig>,
     }
 
     #[derive(Accounts)]
@@ -1621,7 +1621,7 @@ pub mod trading {
         pub order: AccountLoader<'info, Order>,
         #[account(mut)]
         pub authority: Signer<'info>,
-        pub governance_config: Account<'info, PoAConfig>,
+        pub governance_config: Account<'info, GovernanceConfig>,
     }
 
     #[derive(Accounts)]
@@ -1630,7 +1630,7 @@ pub mod trading {
         pub market: AccountLoader<'info, Market>,
         #[account(mut)]
         pub authority: Signer<'info>,
-        pub governance_config: Account<'info, PoAConfig>,
+        pub governance_config: Account<'info, GovernanceConfig>,
     }
 
     #[derive(Accounts)]
@@ -1639,7 +1639,7 @@ pub mod trading {
         pub market: AccountLoader<'info, Market>,
         #[account(mut)]
         pub authority: Signer<'info>,
-        pub governance_config: Account<'info, PoAConfig>,
+        pub governance_config: Account<'info, GovernanceConfig>,
     }
 
     #[derive(Accounts)]
@@ -1679,7 +1679,7 @@ pub mod trading {
         pub zone_market: AccountLoader<'info, ZoneMarket>,
         #[account(mut)]
         pub authority: Signer<'info>,
-        pub governance_config: Account<'info, PoAConfig>,
+        pub governance_config: Account<'info, GovernanceConfig>,
     }
 
     #[derive(Accounts)]
@@ -1690,7 +1690,7 @@ pub mod trading {
         pub zone_market: AccountLoader<'info, ZoneMarket>,
         #[account(mut)]
         pub authority: Signer<'info>,
-        pub governance_config: Account<'info, PoAConfig>,
+        pub governance_config: Account<'info, GovernanceConfig>,
     }
 
     #[derive(Accounts)]
@@ -1699,7 +1699,7 @@ pub mod trading {
         pub market: AccountLoader<'info, Market>,
         #[account(mut)]
         pub authority: Signer<'info>,
-        pub governance_config: Account<'info, PoAConfig>,
+        pub governance_config: Account<'info, GovernanceConfig>,
     }
 
     // ========================================================================
@@ -1725,7 +1725,7 @@ pub mod trading {
         /// CHECK: Token program for transfers
         pub token_program: UncheckedAccount<'info>,
 
-        pub governance_config: Account<'info, PoAConfig>,
+        pub governance_config: Account<'info, GovernanceConfig>,
     }
 }
 

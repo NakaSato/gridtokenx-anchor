@@ -240,7 +240,7 @@ Withdraws staked GRX principal (`lib.rs:493-538`).
 - **Signers:** `user` (`lib.rs:917`).
 - **Accounts:** `treasury`, `position` (`[b"stake", user]`, `has_one = owner`), `owner` (must equal `user.key()`), `grx_mint`, `stake_vault`, `user_grx_ata`, `token_program` (`lib.rs:889-919`).
 - **Preconditions:** `amount > 0` (`ZeroAmount`); `amount ≤ position.amount` (`InsufficientStake`) (`lib.rs:495`, `lib.rs:504`).
-- **Effects:** settles accrued reward into `pending`, decrements `position.amount`, recomputes `reward_debt` (`lib.rs:505-508`); transfers `amount` GRX from `stake_vault` to the user, signed by the treasury PDA (`lib.rs:510-522`); decrements `total_staked` via saturating subtraction (`lib.rs:524-528`).
+- **Effects:** settles accrued reward into `pending`, decrements `position.amount`, recomputes `reward_debt` (`lib.rs:505-508`); transfers `amount` GRX from `stake_vault` to the user, signed by the treasury PDA (`lib.rs:510-522`); decrements `total_staked` via checked subtraction, failing loud with `MathOverflow` on underflow rather than clamping (`lib.rs:704-711`).
 - **Events:** `Unstaked` (`lib.rs:530-535`).
 - **Errors:** `ZeroAmount`, `InsufficientStake`, `MathOverflow`.
 
@@ -320,7 +320,7 @@ The platform operates two separate GRX staking facilities that share lock/unlock
 
 ### 5.6 Arithmetic safety
 
-The release profile sets `overflow-checks = true` (`Cargo.toml:32-33`), because `cargo build-sbf` otherwise defaults to silent wrapping. Beyond this, the program prefers explicit `checked_*` and `saturating_*` operations throughout — for example `checked_mul`/`checked_add` in the accumulator helpers (`lib.rs:41-53`), the swap arithmetic (`lib.rs:299-313`), and the redemption supply subtraction (`lib.rs:397-400`); `saturating_sub` for attestation age (`lib.rs:295`) and `total_staked` decrement (`lib.rs:526`). Overflow conversions to `u64` map to `MathOverflow` (`lib.rs:45`, `lib.rs:317-319`).
+The release profile sets `overflow-checks = true` (`Cargo.toml:32-33`), because `cargo build-sbf` otherwise defaults to silent wrapping. Beyond this, the program prefers explicit `checked_*` and `saturating_*` operations throughout — for example `checked_mul`/`checked_add` in the accumulator helpers (`lib.rs:41-53`), the swap arithmetic (`lib.rs:299-313`), and the redemption supply subtraction (`lib.rs:397-400`); `saturating_sub` for attestation age (`lib.rs:295`); `checked_sub` with an explicit `MathOverflow` for the `total_staked` decrement (`lib.rs:709`). Overflow conversions to `u64` map to `MathOverflow` (`lib.rs:45`, `lib.rs:317-319`).
 
 ---
 

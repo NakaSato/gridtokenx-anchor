@@ -2,7 +2,7 @@ use crate::errors::GovernanceError;
 use anchor_lang::prelude::*;
 
 #[account]
-pub struct PoAConfig {
+pub struct GovernanceConfig {
     // === Authority Configuration ===
     /// Single authority - REC certifying entity
     pub authority: Pubkey,
@@ -72,7 +72,7 @@ pub struct PoAConfig {
     pub _reserved: [u8; 5],
 }
 
-impl PoAConfig {
+impl GovernanceConfig {
     pub const LEN: usize =
         // Authority Configuration
         32 +    // authority

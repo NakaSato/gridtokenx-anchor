@@ -35,7 +35,7 @@ Flow: **create** (status Active) → **vote** until `expires_at` → **execute**
 - **Eligibility**: any account owning a meter registered in the registry program (`meter_account.owner` must equal the signer; `MeterOwnerMismatch`).
 - **Weight**: `max(100, meter.total_generation / 1_000)` — every 1,000 kWh of lifetime generation adds 1 weight, with a floor of 100 (`dao.rs:87-105`). This is **generation-stake-weighted, not token-weighted** — voice scales with how much energy you've actually produced.
 - **One vote per voter**: enforced by `VoteRecord` PDA uniqueness, seeds `[b"vote", proposal, voter]`; weight is snapshotted at vote time.
-- **Quorum/threshold**: global `min_quorum_votes` on `PoAConfig`; simple majority decides.
+- **Quorum/threshold**: global `min_quorum_votes` on `GovernanceConfig`; simple majority decides.
 - **Period**: per-proposal `expires_at`; no votes after expiry, no execution before it (`ProposalExpired`/`ProposalNotExpired`).
 
 ---
@@ -47,7 +47,7 @@ Flow: **create** (status Active) → **vote** until `expires_at` → **execute**
 | `Proposal` (89 B) | `[b"proposal", target_zone, proposal_id]` | proposer, target_zone, parameter, new_value, votes_for/against, status (Active/Passed/Rejected/Executed/Cancelled), expires_at |
 | `VoteRecord` (90 B) | `[b"vote", proposal, voter]` | proposal, voter, choice, weight, voted_at |
 | `ZoneConfig` (46 B) | `[b"zone_config", zone_id]` | zone_id, incentive_multiplier, wheeling_charge, loss_factor, maintenance_mode, last_updated |
-| `PoAConfig` (singleton) | `[b"poa_config"]` | authority, pending_authority, min_quorum_votes, ERC policy + stats |
+| `GovernanceConfig` (singleton) | `[b"poa_config"]` | authority, pending_authority, min_quorum_votes, ERC policy + stats |
 
 The voter's `MeterAccount` is a registry zero-copy account; the DAO reads it via manual `bytemuck` deserialization to avoid the zero-copy loader overhead across the program boundary (`dao.rs:31,95`).
 

@@ -43,7 +43,7 @@ describe("governance authority/config/oracle guards (litesvm)", () => {
   const attacker = Keypair.generate(); // non-authority signer
   const proposed = Keypair.generate(); // pending authority for the transfer happy path
 
-  let poaConfig: PublicKey;
+  let governanceConfig: PublicKey;
 
   // Send signed by `payer` as fee payer; `extra` are additional signers.
   // ixs may be instructions or promises of instructions (anchor `.instruction()` is async).
@@ -75,36 +75,36 @@ describe("governance authority/config/oracle guards (litesvm)", () => {
   }
 
   function readAuthority(): string {
-    const acct = svm.getAccount(poaConfig);
+    const acct = svm.getAccount(governanceConfig);
     if (!acct) throw new Error("poa_config missing");
-    const decoded = governance.coder.accounts.decode("poAConfig", Buffer.from(acct.data));
+    const decoded = governance.coder.accounts.decode("governanceConfig", Buffer.from(acct.data));
     return (decoded.authority as PublicKey).toBase58();
   }
 
   // Instruction builders (authority overridable to test has_one).
   const proposeIx = (newAuthority: PublicKey, authority = payer.publicKey) =>
     governance.methods.proposeAuthorityChange(newAuthority)
-      .accounts({ poaConfig, authority } as any).instruction();
+      .accounts({ governanceConfig, authority } as any).instruction();
 
   const approveIx = (newAuthority: PublicKey) =>
     governance.methods.approveAuthorityChange()
-      .accounts({ poaConfig, newAuthority } as any).instruction();
+      .accounts({ governanceConfig, newAuthority } as any).instruction();
 
   const cancelIx = (authority = payer.publicKey) =>
     governance.methods.cancelAuthorityChange()
-      .accounts({ poaConfig, authority } as any).instruction();
+      .accounts({ governanceConfig, authority } as any).instruction();
 
   const setOracleIx = (minConfidence: number, authority = payer.publicKey) =>
     governance.methods.setOracleAuthority(PublicKey.default, minConfidence, false)
-      .accounts({ poaConfig, authority } as any).instruction();
+      .accounts({ governanceConfig, authority } as any).instruction();
 
   const ercLimitsIx = (min: number | BN, max: number | BN, validity: number | BN) =>
     governance.methods.updateErcLimits(new BN(min), new BN(max), new BN(validity))
-      .accounts({ poaConfig, authority: payer.publicKey } as any).instruction();
+      .accounts({ governanceConfig, authority: payer.publicKey } as any).instruction();
 
   const authorityInfoIx = (contact: string) =>
     governance.methods.updateAuthorityInfo(contact)
-      .accounts({ poaConfig, authority: payer.publicKey } as any).instruction();
+      .accounts({ governanceConfig, authority: payer.publicKey } as any).instruction();
 
   before(async () => {
     svm = new LiteSVM().withDefaultPrograms();
@@ -114,14 +114,14 @@ describe("governance authority/config/oracle guards (litesvm)", () => {
     svm.airdrop(payer.publicKey, BigInt(1_000_000_000_000));
     svm.airdrop(attacker.publicKey, BigInt(1_000_000_000_000));
 
-    poaConfig = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceId)[0];
+    governanceConfig = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceId)[0];
 
     warpClock(NOW);
 
-    // initialize_poa: authority = payer.
-    await send([await governance.methods.initializePoa()
+    // initialize_governance: authority = payer.
+    await send([await governance.methods.initializeGovernance()
       .accounts({
-        poaConfig,
+        governanceConfig,
         authority: payer.publicKey,
         systemProgram: SystemProgram.programId,
       } as any).instruction()]);

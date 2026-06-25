@@ -14,7 +14,7 @@ pub fn propose_authority_change(
     ctx: Context<ProposeAuthorityChange>,
     new_authority: Pubkey,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     // Cannot propose if there's already a pending change
@@ -51,7 +51,7 @@ pub fn propose_authority_change(
 /// Approve pending authority change (step 2 of 2-step transfer)
 /// Must be called by the pending authority
 pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     // Must have a pending authority change
@@ -97,7 +97,7 @@ pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<
 /// Cancel a pending authority change
 /// Can only be called by current authority
 pub fn cancel_authority_change(ctx: Context<CancelAuthorityChange>) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     // Must have a pending authority change
@@ -126,7 +126,7 @@ pub fn set_oracle_authority(
     min_confidence: u8,
     require_validation: bool,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     // Validate confidence score

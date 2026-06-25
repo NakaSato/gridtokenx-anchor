@@ -3,7 +3,7 @@ use crate::GetGovernanceStats;
 use anchor_lang::prelude::*;
 
 pub fn handler(ctx: Context<GetGovernanceStats>) -> Result<GovernanceStats> {
-    let poa_config = &ctx.accounts.poa_config;
+    let poa_config = &ctx.accounts.governance_config;
 
     Ok(GovernanceStats {
         // Core statistics

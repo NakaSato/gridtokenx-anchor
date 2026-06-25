@@ -25,6 +25,8 @@ distinct from the yield-bearing staking implemented by the `treasury` program.
 | Crate name | `registry` (`Cargo.toml:2`) |
 | Crate version | `0.1.1` (`Cargo.toml:3`) |
 | `declare_id!` | `lib.rs:14` |
+| `GOVERNANCE_PROGRAM_ID` | `FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS` — owner of the PoA aggregator allow-list (`AggregatorEntry` PDA); hardcoded to avoid a `registry → governance` CPI cycle (`lib.rs:21`) |
+| `RESIGN_COOLDOWN_SECS` | `24h` — bond stays locked and slashable after `deregister_validator` (`lib.rs:36`) |
 | Anchor framework | `anchor-lang` / `anchor-spl` `1.0.0` (`Cargo.toml:24-25`) |
 
 The program ID declared in source (`lib.rs:14`) is the canonical on-chain identity; the
@@ -81,10 +83,14 @@ Participants lock GRX into a single program-owned vault PDA at seeds `[b"grx_vau
 (`lib.rs:1271`) whose token authority is the `registry` PDA. The staked amount is tracked on
 the staker's own `UserAccount.staked_grx` field (`state.rs:57`). Holding at least
 `MIN_VALIDATOR_STAKE = 10,000 GRX` (`lib.rs:21`) qualifies an account to be promoted to an
-`Active` validator via `register_validator` (`lib.rs:731-751`). Withdrawal is subject to a
-24-hour cooldown anchored to the most recent stake (`UNSTAKE_COOLDOWN_SECS`, `lib.rs:24`;
-enforced `lib.rs:769-772`); dropping below the minimum demotes an Active validator to
-`Suspended` (`lib.rs:803-807`).
+`Active` validator via `register_validator` (`lib.rs:757-809`), gated additionally by a
+governance-admitted `AggregatorEntry` allow-list entry (PoA aggregator-admission). Withdrawal
+is subject to a 24-hour cooldown anchored to the most recent stake (`UNSTAKE_COOLDOWN_SECS`,
+`lib.rs:31`; enforced `lib.rs:851-854`). The bond of a still-slashable validator (`Active`,
+or `Resigning` within the resign cooldown) cannot be drawn below the minimum
+(`ValidatorStakeLocked`, `lib.rs:861-871`): an Active validator must first announce an honest
+exit via `deregister_validator` and serve `RESIGN_COOLDOWN_SECS` (`lib.rs:36`) before the bond
+unlocks.
 
 **This is a security bond, not a yield product.** It pays no rewards, is gated by a
 minimum, and is subject to slashing of the bond for validator misbehaviour
@@ -191,16 +197,16 @@ Per-user identity, staking, and validator record.
 | `_padding2` | `[u8; 4]` | 44–48 | aligns `h3_index` (`state.rs:47`) |
 | `h3_index` | `u64` | 48–56 | H3 geospatial cell index (`state.rs:48`) |
 | `status` | `UserStatus` | 56–57 | Active/Suspended/Inactive (`state.rs:49`) |
-| `validator_status` | `ValidatorStatus` | 57–58 | None/Active/Slashed/Suspended (`state.rs:50`) |
+| `validator_status` | `ValidatorStatus` | 57–58 | None/Active/Slashed/Suspended/Resigning (`state.rs:64`) |
 | `shard_id` | `u8` | 58–59 | bound shard (`state.rs:51`) |
 | `airdrop_claimed` | `u8` | 59–60 | 0 unclaimed / 1 claimed (`state.rs:52`) |
 | `_padding3` | `[u8; 4]` | 60–64 | (`state.rs:53`) |
 | `registered_at` | `i64` | 64–72 | registration timestamp (`state.rs:54`) |
 | `meter_count` | `u32` | 72–76 | owned-meter count (`state.rs:55`) |
 | `_padding4` | `[u8; 4]` | 76–80 | aligns `staked_grx` (`state.rs:56`) |
-| `staked_grx` | `u64` | 80–88 | staked security bond in smallest GRX units (`state.rs:57`) |
-| `last_stake_at` | `i64` | 88–96 | timestamp of most recent stake — anchors cooldown (`state.rs:58`) |
-| `_padding5` | `[u8; 8]` | 96–104 | total 104 bytes (`state.rs:59`) |
+| `staked_grx` | `u64` | 80–88 | staked security bond in smallest GRX units (`state.rs:71`) |
+| `last_stake_at` | `i64` | 88–96 | timestamp of most recent stake — anchors cooldown (`state.rs:72`) |
+| `resign_at` | `i64` | 96–104 | unix ts of `deregister_validator`; 0 = not resigning. Carved from former `_padding5`; total still 104 bytes (`state.rs:73-74`) |
 
 ### 3.5 `MeterAccount`
 
@@ -211,17 +217,18 @@ Per-meter device record and tokenization watermarks.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `meter_id` | `[u8; 32]` | fixed-buffer meter identifier (`state.rs:66`) |
-| `owner` | `Pubkey` | owning user (`state.rs:67`) |
-| `meter_type` | `MeterType` | Solar/Wind/Battery/Grid (`state.rs:68`) |
-| `status` | `MeterStatus` | Active/Inactive/Maintenance (`state.rs:69`) |
-| `_padding` | `[u8; 6]` | alignment (`state.rs:70`) |
-| `registered_at` | `i64` | registration timestamp (`state.rs:71`) |
-| `last_reading_at` | `i64` | timestamp of last accepted reading (`state.rs:72`) |
-| `total_generation` | `u64` | cumulative energy generated (`state.rs:73`) |
-| `total_consumption` | `u64` | cumulative energy consumed (`state.rs:74`) |
-| `settled_net_generation` | `u64` | net generation already tokenised as GRID (`state.rs:77`) |
-| `claimed_erc_generation` | `u64` | net generation already claimed for ERC issuance (`state.rs:78`) |
+| `meter_id` | `[u8; 32]` | fixed-buffer meter identifier (`state.rs:81`) |
+| `owner` | `Pubkey` | owning user (`state.rs:82`) |
+| `meter_type` | `MeterType` | Solar/Wind/Battery/Grid (`state.rs:83`) |
+| `status` | `MeterStatus` | Active/Inactive/Maintenance (`state.rs:84`) |
+| `_pad_a` | `[u8; 2]` | aligns `zone_id` (`state.rs:85`) |
+| `zone_id` | `i32` | microgrid governance zone; carved from former `_padding[6]`, existing accounts read 0 (`state.rs:86-89`) |
+| `registered_at` | `i64` | registration timestamp (`state.rs:90`) |
+| `last_reading_at` | `i64` | timestamp of last accepted reading (`state.rs:91`) |
+| `total_generation` | `u64` | cumulative energy generated (`state.rs:92`) |
+| `total_consumption` | `u64` | cumulative energy consumed (`state.rs:93`) |
+| `settled_net_generation` | `u64` | net generation already tokenised as GRID (`state.rs:96`) |
+| `claimed_erc_generation` | `u64` | net generation already claimed for ERC issuance (`state.rs:97`) |
 
 ### 3.6 Enumerations
 
@@ -230,11 +237,11 @@ zero-copy structs.
 
 | Enum | Variants | Source |
 | --- | --- | --- |
-| `UserType` | `Prosumer`, `Consumer` | `state.rs:84-87` |
-| `UserStatus` | `Active`, `Suspended`, `Inactive` | `state.rs:94-98` |
-| `MeterType` | `Solar`, `Wind`, `Battery`, `Grid` | `state.rs:105-110` |
-| `MeterStatus` | `Active`, `Inactive`, `Maintenance` | `state.rs:117-121` |
-| `ValidatorStatus` | `None`, `Active`, `Slashed`, `Suspended` | `state.rs:128-133` |
+| `UserType` | `Prosumer`, `Consumer` | `state.rs:103-106` |
+| `UserStatus` | `Active`, `Suspended`, `Inactive` | `state.rs:113-117` |
+| `MeterType` | `Solar`, `Wind`, `Battery`, `Grid` | `state.rs:124-129` |
+| `MeterStatus` | `Active`, `Inactive`, `Maintenance` | `state.rs:136-140` |
+| `ValidatorStatus` | `None`, `Active`, `Slashed`, `Suspended`, `Resigning` | `state.rs:147-155` |
 
 ---
 
@@ -308,13 +315,15 @@ and a compute-unit profiler under the `localnet` feature.
   `AIRDROP_AMOUNT` with the registry PDA signing (`lib.rs:324-342`).
 - **Event:** `AirdropClaimed` (`lib.rs:346`).
 
-#### `register_meter(meter_id: String, meter_type, shard_id)`
+#### `register_meter(meter_id: String, meter_type, shard_id, zone_id: i32)`
 - **Signer:** `payer`. `owner` is a non-signing `AccountInfo` (custodial model);
   ownership is enforced by `owner == user_account.authority` and by PDA seeds
-  (`lib.rs:377-381`, `lib.rs:1078-1083`).
-- **Preconditions:** `shard_id < 16` and `shard_id == shard_for(owner)` (`lib.rs:362-365`);
-  user must be `Active` (`UnauthorizedUser`, `lib.rs:371-374`); `meter_id.len() <= 32`
-  (`InvalidMeterId`, `lib.rs:383`).
+  (`lib.rs:391-395`, `lib.rs:1452`).
+- **Preconditions:** `shard_id < 16` and `shard_id == shard_for(owner)` (`lib.rs:375-379`);
+  `zone_id >= 0` (`InvalidZone`, `lib.rs:376`); user must be `Active` (`UnauthorizedUser`,
+  `lib.rs:385-388`); `meter_id.len() <= 32` (`InvalidMeterId`, `lib.rs:397`).
+- **Effects (zone):** persists `zone_id` on the `MeterAccount`, binding the meter to one
+  governance zone (`lib.rs:403`).
 - **Effects:** initialises the `MeterAccount` (`Active`, zeroed watermarks); increments the
   user's `meter_count` and the shard's `meter_count` and `active_meter_count` (all checked,
   `lib.rs:385-401`).
@@ -326,20 +335,28 @@ and a compute-unit profiler under the `localnet` feature.
 - **Event:** `UserStatusUpdated` (`lib.rs:430`).
 
 #### `set_meter_status(new_status)`
-- **Signer:** `authority` — must be the meter owner or the registry admin (`lib.rs:508-510`).
+- **Signer:** `authority` — must be the meter owner or the registry admin (`lib.rs:523-525`).
 - **Preconditions:** the supplied shard must be the owner's shard (`InvalidShardId`,
-  `lib.rs:514-517`; the seed is derived from `meter.owner`, `lib.rs:1147-1152`).
+  `lib.rs:529-532`; the seed is derived from `meter.owner`, `lib.rs:1547`); neither the old
+  nor the new status may be `Inactive` (`InvalidMeterStatusTransition`, `lib.rs:542-545`) —
+  `Inactive` is terminal and owned solely by `deactivate_meter`, so this instruction can
+  neither revive a deactivated meter nor deactivate one (either would desync the shard's
+  `active_meter_count` from `meter_count`).
 - **Effects:** adjusts the shard's `active_meter_count` on Active↔non-Active transitions
-  (saturating, `lib.rs:521-525`); sets the new status.
-- **Event:** `MeterStatusUpdated` (`lib.rs:529`).
+  (saturating, `lib.rs:547-551`); sets the new status.
+- **Event:** `MeterStatusUpdated` (`lib.rs:555`).
 
 #### `deactivate_meter`
-- **Signer:** `owner` — must equal `meter.owner` (`lib.rs:546-550`).
-- **Preconditions:** meter not already `Inactive` (`AlreadyInactive`, `lib.rs:552-555`).
+- **Signer:** `owner` — must equal `meter.owner` (`lib.rs:572-576`).
+- **Account binding (security fix):** `user_account` is seeds-bound to `owner`
+  (`[b"user", owner.key()]`, `lib.rs:1563-1567`), so the `meter_count` decrement can only
+  ever hit the signer's own `UserAccount` — a caller cannot pass a victim's account to
+  grief their `meter_count` down.
+- **Preconditions:** meter not already `Inactive` (`AlreadyInactive`, `lib.rs:578-581`).
 - **Effects:** decrements the shard `active_meter_count` if previously Active; sets
   `Inactive`; decrements the user's `meter_count` and the shard's `meter_count` (all
-  saturating, `lib.rs:557-566`).
-- **Event:** `MeterDeactivated` (`lib.rs:568`).
+  saturating, `lib.rs:583-592`).
+- **Event:** `MeterDeactivated` (`lib.rs:594`).
 
 ### 4.3 Metering and tokenization
 
@@ -401,35 +418,70 @@ indicating that the respective account's status is `Active`.
   `last_stake_at` to now on every stake** (`lib.rs:725`, see §5).
 
 #### `register_validator`
-- **Signer:** `authority` (`has_one`, `lib.rs:1337`).
+- **Signer:** `authority` (`has_one`, `lib.rs:1742`).
+- **Accounts:** an `aggregator_entry` PDA — the governance `AggregatorEntry` allow-list
+  entry for `authority`, passed as an `UncheckedAccount` and raw-validated in-handler
+  (`lib.rs:1746-1750`).
 - **Preconditions:** `validator_status != Slashed` (`ValidatorAlreadySlashed`, a slashed
-  validator may never self-reinstate, `lib.rs:738-741`); `staked_grx >=
-  MIN_VALIDATOR_STAKE` (`MinStakeNotMet`, `lib.rs:743-746`).
-- **Effect:** sets `validator_status = Active` (`lib.rs:748`).
+  validator may never self-reinstate, `lib.rs:764-767`); `staked_grx >=
+  MIN_VALIDATOR_STAKE` (`MinStakeNotMet`, `lib.rs:769-772`).
+- **PoA aggregator-admission gate:** the bond is only granted to a governance-admitted
+  aggregator — `MIN` stake alone cannot self-promote. The `aggregator_entry` is validated
+  by raw account checks (no governance crate dep — would cycle): owner ==
+  `GOVERNANCE_PROGRAM_ID` (`AggregatorNotAdmitted`), canonical PDA
+  `[b"aggregator", authority]` (`AggregatorNotAdmitted`), borsh length `>= 57`
+  (`InvalidAggregatorEntry`), `aggregator == authority`, and `active == 1`
+  (`AggregatorNotAdmitted`) (`lib.rs:778-802`).
+- **Effect:** sets `validator_status = Active` and clears `resign_at = 0`, so re-activating
+  from `Resigning` cancels a pending resignation (`lib.rs:805-806`).
+
+#### `deregister_validator`
+- **Signer:** `authority` (`has_one`, `lib.rs:1761`).
+- **Precondition:** `validator_status == Active` (`NotActiveValidator`, `lib.rs:820-823`).
+- **Effects:** flips `Active → Resigning` and stamps `resign_at = now` (`lib.rs:824-825`).
+  This is the **honest-exit path**: the bond stays locked and the validator stays slashable
+  for `RESIGN_COOLDOWN_SECS` (24 h), so an honest exit cannot dodge a pending slash. Only
+  after the window may the bond be unstaked below `MIN_VALIDATOR_STAKE`; calling
+  `register_validator` again before unstaking cancels the resignation.
 
 #### `unstake_grx(amount)`
-- **Signer:** `authority` (`has_one`, `lib.rs:1351`).
-- **Preconditions:** `amount > 0` (`InsufficientStakingBalance`, `lib.rs:759`);
-  `amount <= staked_grx` (`lib.rs:768`); cooldown elapsed,
-  `now − last_stake_at >= UNSTAKE_COOLDOWN_SECS` (`UnstakingLocked`, `lib.rs:769-772`).
+- **Signer:** `authority` (`has_one`, `lib.rs:1774`).
+- **Preconditions:** `amount > 0` (`InsufficientStakingBalance`, `lib.rs:836`);
+  `amount <= staked_grx` (`lib.rs:850`); cooldown elapsed,
+  `now − last_stake_at >= UNSTAKE_COOLDOWN_SECS` (`UnstakingLocked`, `lib.rs:851-854`).
+- **Bond lock (anti-slash-escape):** while the validator is still slashable, the bond
+  cannot be drawn below `MIN_VALIDATOR_STAKE` (`ValidatorStakeLocked`, `lib.rs:861-871`).
+  An `Active` validator is always locked; a `Resigning` one stays locked until the resign
+  cooldown elapses (`now − resign_at >= RESIGN_COOLDOWN_SECS`). Suspended/Slashed/None
+  accounts are unlocked, and excess above `MIN` is always withdrawable. To exit, an Active
+  validator must first `deregister_validator` and serve the resign cooldown (or be slashed).
 - **Effects:** `transfer_checked` from vault to the user's ATA, with the registry PDA
-  signing (`lib.rs:779-792`); checked-subtracts from `staked_grx` (`lib.rs:796-800`);
-  demotes an `Active` validator to `Suspended` if the remainder falls below
-  `MIN_VALIDATOR_STAKE` (`lib.rs:803-807`).
-- **Event:** `Unstaked` (`lib.rs:809`).
+  signing (`lib.rs:878-891`); checked-subtracts from `staked_grx` (`lib.rs:894-899`). The
+  former `Active → Suspended` auto-demotion is **removed**: the pre-CPI bond-lock guard
+  guarantees an Active validator's remaining stake can never drop below `MIN` via unstake
+  (`lib.rs:901-903`).
+- **Event:** `Unstaked` (`lib.rs:905`).
 
-#### `slash_validator(amount)`
-- **Signer:** `authority` — must equal `registry.authority` (`lib.rs:833-837`).
-- **Preconditions:** `amount > 0` (`MinStakeNotMet`, `lib.rs:828`); `has_slash_destination ==
-  1` (`SlashDestinationNotSet`, `lib.rs:838-841`); the supplied `slash_destination` token
-  account must equal the configured one (`InvalidSlashDestination`, `lib.rs:842-846`); the
-  target's `validator_status == Active` (`NotActiveValidator`, `lib.rs:852-856`); target
-  `staked_grx > 0` (`InsufficientStakingBalance`, `lib.rs:857-860`).
-- **Effects:** the slashed amount is capped at the target's stake (`lib.rs:861`);
-  `transfer_checked` from vault to `slash_destination`, registry PDA signing
-  (`lib.rs:864-879`); saturating-subtracts from `staked_grx`; sets `validator_status =
-  Slashed` (`lib.rs:882-884`).
-- **Event:** `ValidatorSlashed` (`lib.rs:887`).
+#### `slash_validator(slash_bps, proven_loss)`
+- **Signer:** `authority` — must equal `registry.authority` (`UnauthorizedAuthority`).
+- **Preconditions:** `slash_bps ∈ 1..=10000` (`InvalidSlashFraction`, `lib.rs:940-943`);
+  PoA gate via the shared `poa_slash_gate` helper — registry authority + `has_slash_destination
+  == 1` (`SlashDestinationNotSet`) + supplied destination equals the configured one
+  (`InvalidSlashDestination`) (`lib.rs:947-954`, `lib.rs:1284-1296`); and (in
+  `compute_slash_amount`, `lib.rs:1300-1319`) the target's `validator_status` is `Active`
+  **or `Resigning`** (`NotActiveValidator`) with `staked_grx > 0`
+  (`InsufficientStakingBalance`). Including `Resigning` keeps the honest-exit path from
+  being a slash dodge — the bond stays slashable for the whole resign cooldown.
+- **Effects:** `slash_amount = bond * slash_bps / 10000` capped at the bond; victim
+  compensation `= min(slash_amount, proven_loss)` to `victim_token_account`, the remainder
+  to `slash_destination` — both `transfer_checked` with the registry PDA signing; value
+  invariant `slash_amount == compensation + fund` enforced (`lib.rs:955-1022`). Status
+  transition applied by the shared `apply_slash_status` helper (`lib.rs:1323-1331`).
+- **Event:** `ValidatorSlashed` (`lib.rs:1025`).
+
+> The PoA gate (`poa_slash_gate`) and the amount/status helpers (`compute_slash_amount`,
+> `apply_slash_status`) are **deduped** and shared with the multi-victim
+> `slash_validator_multi` variant (`lib.rs:1049`).
 
 ---
 
@@ -560,6 +612,11 @@ compile-time dependency on the treasury program.
 | `InvalidSlashDestination` | Slash destination does not match the configured destination | `error.rs:46` |
 | `NotActiveValidator` | Target is not an active validator | `error.rs:48` |
 | `ValidatorAlreadySlashed` | Validator has been slashed and cannot re-register | `error.rs:50` |
+| `AggregatorNotAdmitted` | Validator bond requires an active governance-admitted aggregator entry | `error.rs:62` |
+| `InvalidAggregatorEntry` | Aggregator entry account is malformed or too short | `error.rs:64` |
+| `ValidatorStakeLocked` | Active validator cannot unstake below the minimum bond; deregister or be slashed first | `error.rs:66` |
+| `InvalidMeterStatusTransition` | set_meter_status cannot set or leave Inactive; Inactive is terminal (use deactivate_meter) | `error.rs:68` |
+| `InvalidZone` | Zone id must be non-negative | `error.rs:70` |
 
 ---
 

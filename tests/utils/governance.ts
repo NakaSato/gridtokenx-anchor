@@ -17,9 +17,9 @@ export const initializeGovernance = async (
 
     try {
         await program.methods
-            .initializePoa()
+            .initializeGovernance()
             .accounts({
-                poaConfig: governancePda,
+                governanceConfig: governancePda,
                 authority: provider.wallet.publicKey,
                 systemProgram: SystemProgram.programId,
             } as any)

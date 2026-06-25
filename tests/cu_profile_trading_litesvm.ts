@@ -2,8 +2,8 @@
 // escrow deposit/withdraw, create sell/buy order, on-chain match_orders, and cancel.
 // Same method as §4-6 (litesvm `computeUnitsConsumed()`, default-feature .so, no localnet).
 //
-// Account wiring + the fabricated governance PoAConfig / ErcCertificate mirror
-// tests/order_guards_litesvm.ts (PoAConfig + ERC are plain Borsh #[account]s, set directly
+// Account wiring + the fabricated governance GovernanceConfig / ErcCertificate mirror
+// tests/order_guards_litesvm.ts (GovernanceConfig + ERC are plain Borsh #[account]s, set directly
 // via svm.setAccount so create_sell_order's REC gating passes without driving governance).
 //
 // NOTE: this is the *order book* path. The signature-verifying settlement path
@@ -89,7 +89,7 @@ describe("trading CDA order-path CU profile (litesvm)", () => {
       totalErcsRevoked: new BN(0), totalEnergyCertified: new BN(0), createdAt: new BN(0), lastUpdated: new BN(0), lastErcIssuedAt: new BN(0),
       pendingAuthority: PublicKey.default, pendingAuthorityProposedAt: new BN(0), pendingAuthorityExpiresAt: new BN(0), reserved: Array(5).fill(0),
     };
-    const data = await governance.coder.accounts.encode("poAConfig", c as any);
+    const data = await governance.coder.accounts.encode("governanceConfig", c as any);
     svm.setAccount(key, { lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))), data, owner: governanceId, executable: false, rentEpoch: 0 } as any);
     return key;
   }

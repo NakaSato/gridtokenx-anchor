@@ -375,7 +375,7 @@ describe("Oracle Program", () => {
       await govProgram.methods
         .admitAggregator(aggregator.publicKey)
         .accounts({
-          poaConfig: getGovernancePda(govProgram.programId),
+          governanceConfig: getGovernancePda(govProgram.programId),
           aggregatorEntry: aggregatorEntryPda,
           authority: authority.publicKey,
           systemProgram: SystemProgram.programId,
@@ -431,7 +431,7 @@ describe("Oracle Program", () => {
       await govProgram.methods
         .revokeAggregator()
         .accounts({
-          poaConfig: getGovernancePda(govProgram.programId),
+          governanceConfig: getGovernancePda(govProgram.programId),
           aggregatorEntry: aggregatorEntryPda,
           authority: authority.publicKey,
         })

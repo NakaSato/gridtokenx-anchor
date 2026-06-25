@@ -8,19 +8,19 @@ async function main() {
     const program = anchor.workspace.Governance;
     const authority = provider.wallet;
 
-    const [poaConfigPda] = PublicKey.findProgramAddressSync(
+    const [governanceConfigPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("poa_config")],
         program.programId
     );
 
-    console.log("PoA Config PDA:", poaConfigPda.toBase58());
+    console.log("PoA Config PDA:", governanceConfigPda.toBase58());
 
     try {
         console.log("Setting maintenance mode to FALSE...");
         const tx = await program.methods
             .setMaintenanceMode(false)
             .accounts({
-                poaConfig: poaConfigPda,
+                governanceConfig: governanceConfigPda,
                 authority: authority.publicKey,
             })
             .rpc();

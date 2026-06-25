@@ -71,7 +71,7 @@ async function main() {
     [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, 'le', 4)],
     tradingProgram.programId
   );
-  const [poaConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
   const [energyMintPda] = PublicKey.findProgramAddressSync([Buffer.from("mint_2022")], energyTokenProgram.programId);
   const [energyTokenInfoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], energyTokenProgram.programId);
 
@@ -173,7 +173,7 @@ async function main() {
       zoneMarket: zoneMarketPda,
       order: sellOrderPda,
       authority: prosumerKey.publicKey,
-      governanceConfig: poaConfigPda,
+      governanceConfig: governanceConfigPda,
       ercCertificate: null,
       systemProgram: SystemProgram.programId,
     } as any)
@@ -194,7 +194,7 @@ async function main() {
       zoneMarket: zoneMarketPda,
       order: buyOrderPda,
       authority: consumerKey.publicKey,
-      governanceConfig: poaConfigPda,
+      governanceConfig: governanceConfigPda,
       systemProgram: SystemProgram.programId,
     } as any)
     .signers([consumerKey])
@@ -228,7 +228,7 @@ async function main() {
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         secondaryTokenProgram: TOKEN_PROGRAM_ID,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
       } as any)
       .signers([escrowAuth]);
 

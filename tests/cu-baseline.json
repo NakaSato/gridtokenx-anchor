@@ -6,7 +6,7 @@
   "energy_token.remove_rec_validator": 1366,
   "energy_token.transfer_tokens": 8035,
   "governance.approve_authority_change": 13278,
-  "governance.initialize_poa": 16417,
+  "governance.initialize_governance": 16417,
   "governance.propose_authority_change": 13328,
   "governance.set_oracle_authority": 13324,
   "governance.update_erc_limits": 13283,

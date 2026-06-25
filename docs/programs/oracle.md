@@ -147,38 +147,38 @@ The program exposes eight instructions, all defined in the `#[program] mod oracl
 
 - **Signature:** `update_oracle_status(ctx, active: bool)` (`programs/oracle/src/lib.rs:225`).
 - **Accounts (`UpdateOracleStatus`, `programs/oracle/src/lib.rs:535`):** `oracle_data` (`mut` PDA); `authority` (signer).
-- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority` (`programs/oracle/src/lib.rs:229`–`programs/oracle/src/lib.rs:232`).
-- **Effects:** Sets `active` to 1 or 0 (`programs/oracle/src/lib.rs:234`).
-- **Events:** `OracleStatusUpdated` (`programs/oracle/src/lib.rs:236`).
+- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/lib.rs:228`, helper at `programs/oracle/src/lib.rs:392`–`programs/oracle/src/lib.rs:394`).
+- **Effects:** Sets `active` to 1 or 0 (`programs/oracle/src/lib.rs:230`).
+- **Events:** `OracleStatusUpdated`, with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/lib.rs:234`–`programs/oracle/src/lib.rs:239`).
 - **Errors:** `UnauthorizedAuthority`.
 
 ### 4.5 `update_api_gateway`
 
 - **Signature:** `update_api_gateway(ctx, new_api_gateway: Pubkey)` (`programs/oracle/src/lib.rs:247`).
 - **Accounts (`UpdateApiGateway`, `programs/oracle/src/lib.rs:543`):** `oracle_data` (`mut` PDA); `authority` (signer).
-- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority` (`programs/oracle/src/lib.rs:254`–`programs/oracle/src/lib.rs:257`).
-- **Effects:** Replaces `chain_bridge` with `new_api_gateway` (`programs/oracle/src/lib.rs:259`–`programs/oracle/src/lib.rs:260`).
-- **Events:** `ApiGatewayUpdated` (carrying old and new keys) (`programs/oracle/src/lib.rs:262`).
+- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/lib.rs:252`, helper at `programs/oracle/src/lib.rs:392`–`programs/oracle/src/lib.rs:394`).
+- **Effects:** Replaces `chain_bridge` with `new_api_gateway` (`programs/oracle/src/lib.rs:254`–`programs/oracle/src/lib.rs:255`).
+- **Events:** `ApiGatewayUpdated` (carrying old and new keys), with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/lib.rs:258`–`programs/oracle/src/lib.rs:264`).
 - **Errors:** `UnauthorizedAuthority`.
 
 ### 4.6 `update_production_ratio_config`
 
 - **Signature:** `update_production_ratio_config(ctx, max_production_consumption_ratio: u16)` (`programs/oracle/src/lib.rs:275`).
 - **Accounts (`UpdateValidationConfig`, `programs/oracle/src/lib.rs:551`):** `oracle_data` (`mut` PDA); `authority` (signer).
-- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority` (`programs/oracle/src/lib.rs:282`–`programs/oracle/src/lib.rs:285`).
-- **Preconditions:** `max_production_consumption_ratio > 0` else `InvalidConfiguration` (`programs/oracle/src/lib.rs:287`–`programs/oracle/src/lib.rs:290`).
-- **Effects:** Updates `max_production_consumption_ratio` (`programs/oracle/src/lib.rs:292`).
-- **Events:** `ProductionRatioConfigUpdated` (`programs/oracle/src/lib.rs:294`).
+- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/lib.rs:278`, helper at `programs/oracle/src/lib.rs:392`–`programs/oracle/src/lib.rs:394`).
+- **Preconditions:** `max_production_consumption_ratio > 0` else `InvalidConfiguration` (`programs/oracle/src/lib.rs:280`–`programs/oracle/src/lib.rs:283`).
+- **Effects:** Updates `max_production_consumption_ratio` (`programs/oracle/src/lib.rs:285`).
+- **Events:** `ProductionRatioConfigUpdated`, with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/lib.rs:288`–`programs/oracle/src/lib.rs:293`).
 - **Errors:** `UnauthorizedAuthority`, `InvalidConfiguration`.
 
 ### 4.7 `update_validation_config`
 
 - **Signature:** `update_validation_config(ctx, min_energy_value: u64, max_energy_value: u64, anomaly_detection_enabled: bool)` (`programs/oracle/src/lib.rs:304`).
 - **Accounts (`UpdateValidationConfig`, `programs/oracle/src/lib.rs:551`):** `oracle_data` (`mut` PDA); `authority` (signer). (Shares the `UpdateValidationConfig` accounts struct with §4.6.)
-- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority` (`programs/oracle/src/lib.rs:313`–`programs/oracle/src/lib.rs:316`).
-- **Preconditions:** `min_energy_value ≤ max_energy_value` else `InvalidConfiguration` — guards against inverted bounds that would reject every reading (`programs/oracle/src/lib.rs:318`–`programs/oracle/src/lib.rs:322`).
-- **Effects:** Updates `min_energy_value`, `max_energy_value`, and `anomaly_detection_enabled` (`programs/oracle/src/lib.rs:324`–`programs/oracle/src/lib.rs:326`).
-- **Events:** `ValidationConfigUpdated` (`programs/oracle/src/lib.rs:328`).
+- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/lib.rs:307`, helper at `programs/oracle/src/lib.rs:392`–`programs/oracle/src/lib.rs:394`).
+- **Preconditions:** `min_energy_value ≤ max_energy_value` else `InvalidConfiguration` — guards against inverted bounds that would reject every reading (`programs/oracle/src/lib.rs:310`–`programs/oracle/src/lib.rs:313`).
+- **Effects:** Updates `min_energy_value`, `max_energy_value`, and `anomaly_detection_enabled` (`programs/oracle/src/lib.rs:315`–`programs/oracle/src/lib.rs:317`).
+- **Events:** `ValidationConfigUpdated`, with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/lib.rs:320`–`programs/oracle/src/lib.rs:324`).
 - **Errors:** `UnauthorizedAuthority`, `InvalidConfiguration`.
 
 ### 4.8 `aggregate_readings`
@@ -209,11 +209,13 @@ For an accepted reading: timestamps are monotonically increasing per meter (`Out
 
 ### 5.4 Authorization
 
-Administrative instructions (`update_oracle_status`, `update_api_gateway`, `update_production_ratio_config`, `update_validation_config`) require the signer to equal `oracle_data.authority` (`UnauthorizedAuthority`). The submit path requires the signer to equal `oracle_data.chain_bridge` (`UnauthorizedGateway`). The node-facing batch/clearing instructions accept the chain bridge or a governance-admitted aggregator, validated by `authorize_node_caller` (Section 6).
+Administrative instructions (`update_oracle_status`, `update_api_gateway`, `update_production_ratio_config`, `update_validation_config`) require the signer to equal `oracle_data.authority` (`UnauthorizedAuthority`). This check is centralized in a single helper, `require_oracle_admin`, that all four handlers call so the gate can never drift between them (`programs/oracle/src/lib.rs:392`–`programs/oracle/src/lib.rs:395`). The submit path requires the signer to equal `oracle_data.chain_bridge` (`UnauthorizedGateway`). The node-facing batch/clearing instructions accept the chain bridge or a governance-admitted aggregator, validated by `authorize_node_caller` (Section 6).
 
 ### 5.5 Arithmetic safety
 
 The release profile sets `overflow-checks = true`, so bare arithmetic panics rather than silently wrapping (`programs/oracle/Cargo.toml:34`–`programs/oracle/Cargo.toml:35`). In addition, cumulative counters use `saturating_add`/`saturating_mul` (`programs/oracle/src/lib.rs:159`–`programs/oracle/src/lib.rs:162`, `programs/oracle/src/lib.rs:363`–`programs/oracle/src/lib.rs:374`), the quality-score division uses `checked_div(...).unwrap_or(0)` (`programs/oracle/src/lib.rs:375`–`programs/oracle/src/lib.rs:376`), and the rate-limit comparison uses `saturating_add` on the interval (`programs/oracle/src/lib.rs:115`).
+
+Per invariant #5, `Clock::get()` is hoisted into a local binding before each `emit!` rather than being invoked inside the macro expansion — applied across the four admin handlers (`programs/oracle/src/lib.rs:234`, `programs/oracle/src/lib.rs:258`, `programs/oracle/src/lib.rs:288`, `programs/oracle/src/lib.rs:320`) and `aggregate_readings`, where a single `Clock::get()` is reused for both timestamp fields and the event (`programs/oracle/src/lib.rs:352`–`programs/oracle/src/lib.rs:354`).
 
 ---
 

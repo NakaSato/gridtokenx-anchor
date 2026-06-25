@@ -2,7 +2,7 @@
 // untested: the REC/ERC gating on create_sell_order, the maintenance-mode kill switch,
 // and the escrow-balance guard on withdraw_escrow.
 //
-// Trick: PoAConfig (governance_config) and ErcCertificate are plain Borsh #[account]s, so
+// Trick: GovernanceConfig (governance_config) and ErcCertificate are plain Borsh #[account]s, so
 // instead of driving the governance program's issue/config instructions we FABRICATE those
 // accounts directly with svm.setAccount + the governance Anchor coder — letting each test
 // pin the exact field values (maintenance_mode, ERC status/expiry/validated/amount) a guard
@@ -90,7 +90,7 @@ describe("trading order-path validation guards (litesvm)", () => {
       tradingId
     )[0];
 
-  // Fabricate a governance PoAConfig account with the given maintenance flag (all other
+  // Fabricate a governance GovernanceConfig account with the given maintenance flag (all other
   // fields zero/default — only maintenance_mode gates create_sell_order's MaintenanceMode).
   async function installConfig(maintenance: boolean): Promise<PublicKey> {
     const key = Keypair.generate().publicKey;
@@ -123,7 +123,7 @@ describe("trading order-path validation guards (litesvm)", () => {
       pendingAuthorityExpiresAt: new BN(0),
       reserved: Array(5).fill(0),
     };
-    const data = await governance.coder.accounts.encode("poAConfig", cfg as any);
+    const data = await governance.coder.accounts.encode("governanceConfig", cfg as any);
     svm.setAccount(key, {
       lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))),
       data,

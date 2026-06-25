@@ -31,18 +31,30 @@ not infrastructure ownership.
 
 ## 2. Corrected on-chain authority bindings (vs current code)
 
-| On-chain role | Corrected holder | Current code | Fix |
-|---|---|---|---|
-| Governance authority | **ERC council, k-of-n multisig** (ERC chair + EGAT + MEA + PEA) | single `Pubkey`, 2-step single→single ([`poa_config.rs:7`](../../programs/governance/src/state/poa_config.rs)) | replace single key with k-of-n (Squads / SPL-governance or native multisig set) |
-| REC issuer gate | **EGAT T-REC** key, **mandatory** | opt-in `if rec_validators_count > 0` ([`energy-token/src/lib.rs:129`](../../programs/energy-token/src/lib.rs)) | make co-sign mandatory; bind issuer = T-REC registrar |
-| Aggregator admission | **ERC** (or MEA/PEA delegated per territory) | `admit_aggregator` exists but **unlinked** to the bond | link to the validator bond (next row) |
-| Validator bond | **admitted aggregator only** | any 10k GRX holder self-promotes ([`registry/src/lib.rs:743`](../../programs/registry/src/lib.rs)) | `register_validator` must verify an active admitted-aggregator entry (CPI / seed check to governance) |
-| Slashability | **Active-at-misbehavior, independent of current stake** | escapable via unstake→Suspended ([`registry/src/lib.rs:803`](../../programs/registry/src/lib.rs) vs [`:1208`](../../programs/registry/src/lib.rs)) | block unstake-below-MIN while Active, or keep slashable regardless of status |
-| Consensus set | **EGAT+MEA+PEA (+ERC observer), n ≥ 4** | named n=3 → one node down can halt (Tower BFT ≥1/3) | raise n or run sub-nodes per utility; document k, n |
-| Wheeling / loss charge | **signed tariff** from EGAT (transmission) / MEA-PEA (distribution), **capped vs trade value** | unbounded caller arg ([`settle_offchain.rs:334`](../../programs/trading/src/instructions/settle_offchain.rs)) | require tariff-authority signer; bound charge ≤ trade value |
-| Settlement gating | **governance-gated + operator-signed** | permissionless `payer`, no `is_operational` ([`settle_offchain.rs:219`](../../programs/trading/src/instructions/settle_offchain.rs), [`:100`](../../programs/trading/src/instructions/settle_offchain.rs)) | add `governance_config` + `is_operational()`; require admitted-aggregator signer |
-| Reserve attestation | **independent custodian** key | arbitrary admin scalar ([`treasury/src/lib.rs:447`](../../programs/treasury/src/lib.rs)) | separate `attestor` authority from param admin; ideally on-chain proof |
-| Slash destination | **regulator / consumer-rebate pool** | treasury `reward_vault` → yield-stakers | repoint to ERC / consumer pool |
+| On-chain role        | Corrected holder                                                  | Current code |
+| -------------------- | ----------------------------------------------------------------- | ------------ |
+| Governance authority | **ERC council, k-of-n multisig** (ERC chair + EGAT + MEA + PEA)    | single `Pubkey`, 2-step single→single ([`poa_config.rs:7`](../../programs/governance/src/state/poa_config.rs)) |
+| REC issuer gate      | **EGAT T-REC** key, **mandatory**                                 | opt-in `if rec_validators_count > 0` ([`energy-token/src/lib.rs:129`](../../programs/energy-token/src/lib.rs)) |
+| Aggregator admission | **ERC** (or MEA/PEA delegated per territory)                      | `admit_aggregator` exists but **unlinked** to the bond |
+| Validator bond       | **admitted aggregator only**                                      | any 10k GRX holder self-promotes ([`registry/src/lib.rs:743`](../../programs/registry/src/lib.rs)) |
+| Slashability         | **Active-at-misbehavior, independent of current stake**           | escapable via unstake→Suspended ([`registry/src/lib.rs:803`](../../programs/registry/src/lib.rs) vs [`:1208`](../../programs/registry/src/lib.rs)) |
+| Consensus set        | **EGAT+MEA+PEA (+ERC observer), n ≥ 4**                           | named n=3 → one node down can halt (Tower BFT ≥1/3) |
+| Wheeling / loss      | **signed tariff** EGAT (transmission) / MEA-PEA (distribution), **capped vs trade value** | unbounded caller arg ([`settle_offchain.rs:334`](../../programs/trading/src/instructions/settle_offchain.rs)) |
+| Settlement gating    | **governance-gated + operator-signed**                            | permissionless `payer`, no `is_operational` ([`settle_offchain.rs:219`](../../programs/trading/src/instructions/settle_offchain.rs), [`:100`](../../programs/trading/src/instructions/settle_offchain.rs)) |
+| Reserve attestation  | **independent custodian** key                                     | arbitrary admin scalar ([`treasury/src/lib.rs:447`](../../programs/treasury/src/lib.rs)) |
+| Slash destination    | **regulator / consumer-rebate pool**                              | treasury `reward_vault` → yield-stakers |
+
+**Fix (per row):**
+1. **Governance authority** — replace the single key with k-of-n (Squads / SPL-governance or native multisig set).
+2. **REC issuer gate** — make co-sign mandatory; bind issuer = T-REC registrar. *(done — 0.5)*
+3. **Aggregator admission** — link to the validator bond (row 4).
+4. **Validator bond** — `register_validator` must verify an active admitted-aggregator entry (CPI / seed check to governance). *(done — 0.1)*
+5. **Slashability** — block unstake-below-MIN while Active, or keep slashable regardless of status. *(done — 0.2 + deregister)*
+6. **Consensus set** — raise n or run sub-nodes per utility; document k, n.
+7. **Wheeling / loss** — require a tariff-authority signer; bound charge ≤ trade value. *(cap done — 0.4; signer pending — 0.4b)*
+8. **Settlement gating** — add `governance_config` + `is_operational()`; require admitted-aggregator signer. *(gate done — 0.3; operator signer pending)*
+9. **Reserve attestation** — separate `attestor` from param admin (already in code); ideally add on-chain proof.
+10. **Slash destination** — repoint to an ERC / consumer-rebate pool (config — 1.2).
 
 ---
 

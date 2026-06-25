@@ -51,7 +51,7 @@ describe("oracle validation/gateway/epoch/aggregator guards (litesvm)", () => {
   const outsider = Keypair.generate(); // neither bridge nor admitted aggregator
 
   let oracleData: PublicKey;
-  let poaConfig: PublicKey;
+  let governanceConfig: PublicKey;
 
   type IxLike = TransactionInstruction | Promise<TransactionInstruction>;
   async function trySend(
@@ -123,7 +123,7 @@ describe("oracle validation/gateway/epoch/aggregator guards (litesvm)", () => {
     }
 
     oracleData = PublicKey.findProgramAddressSync([Buffer.from("oracle_data")], oracleId)[0];
-    poaConfig = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceId)[0];
+    governanceConfig = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceId)[0];
 
     svm.setClock(new Clock(svm.getClock().slot, 0n, 0n, 0n, BigInt(NOW)));
 
@@ -133,8 +133,8 @@ describe("oracle validation/gateway/epoch/aggregator guards (litesvm)", () => {
       .instruction()]);
 
     // governance: PoA authority = payer (for the aggregator allow-list).
-    await send([await governance.methods.initializePoa()
-      .accounts({ poaConfig, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any)
+    await send([await governance.methods.initializeGovernance()
+      .accounts({ governanceConfig, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any)
       .instruction()]);
   });
 
@@ -221,7 +221,7 @@ describe("oracle validation/gateway/epoch/aggregator guards (litesvm)", () => {
     // Admit the aggregator on governance's PoA allow-list.
     await send([await governance.methods.admitAggregator(aggregator.publicKey)
       .accounts({
-        poaConfig,
+        governanceConfig,
         aggregatorEntry: aggEntryPda(aggregator.publicKey),
         authority: payer.publicKey,
         systemProgram: SystemProgram.programId,
@@ -234,7 +234,7 @@ describe("oracle validation/gateway/epoch/aggregator guards (litesvm)", () => {
   it("rejects a revoked aggregator (AggregatorNotAdmitted)", async () => {
     await send([await governance.methods.revokeAggregator()
       .accounts({
-        poaConfig,
+        governanceConfig,
         aggregatorEntry: aggEntryPda(aggregator.publicKey),
         authority: payer.publicKey,
       } as any).instruction()]);

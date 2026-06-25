@@ -30,7 +30,7 @@ async function main() {
     [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, 'le', 4)],
     tradingProgram.programId
   );
-  const [poaConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
 
   console.log(`Using Market: ${marketPda.toBase58()}`);
   console.log(`Using Zone Market (0): ${zoneMarketPda.toBase58()}`);
@@ -51,7 +51,7 @@ async function main() {
         zoneMarket: zoneMarketPda,
         order: sellOrderPda,
         authority: prosumerKey.publicKey,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         ercCertificate: null,
         systemProgram: SystemProgram.programId,
       } as any)
@@ -78,7 +78,7 @@ async function main() {
         zoneMarket: zoneMarketPda,
         order: buyOrderPda,
         authority: consumerKey.publicKey,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         systemProgram: SystemProgram.programId,
       } as any)
       .signers([consumerKey])
@@ -105,7 +105,7 @@ async function main() {
         sellOrder: sellOrderPda,
         tradeRecord: tradeRecordPda,
         authority: authority,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         systemProgram: SystemProgram.programId,
       } as any)
       .rpc();
@@ -130,7 +130,7 @@ async function main() {
         zoneMarket: zoneMarketPda,
         order: indBuyOrderPda,
         authority: industrialKey.publicKey,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         systemProgram: SystemProgram.programId,
       } as any)
       .signers([industrialKey])
@@ -157,7 +157,7 @@ async function main() {
         sellOrder: sellOrderPda,
         tradeRecord: tradeRecord2Pda,
         authority: authority,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         systemProgram: SystemProgram.programId,
       } as any)
       .rpc();

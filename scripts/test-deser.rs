@@ -2,7 +2,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use solana_sdk::pubkey::Pubkey;
 
 #[derive(BorshDeserialize, BorshSerialize, Debug)]
-pub struct PoAConfig {
+pub struct GovernanceConfig {
     pub authority: Pubkey,
     pub authority_name: [u8; 64],
     pub name_len: u8,
@@ -37,7 +37,7 @@ fn main() {
     let data = hex::decode(hex_data).unwrap();
     
     let mut data_ptr = &data[..];
-    match PoAConfig::deserialize(&mut data_ptr) {
+    match GovernanceConfig::deserialize(&mut data_ptr) {
         Ok(config) => {
             println!("Success! {:?}", config);
             println!("Leftover bytes: {}", data_ptr.len());

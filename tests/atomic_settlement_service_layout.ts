@@ -44,7 +44,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
 
   let marketPda: PublicKey;
   let zoneMarketPda: PublicKey;
-  let poaConfigPda: PublicKey;
+  let governanceConfigPda: PublicKey;
   let currencyMint: PublicKey; // classic SPL Token
   let energyMint: PublicKey; // Token-2022
 
@@ -56,7 +56,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, "le", 4)],
       tradingProgram.programId
     );
-    [poaConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
 
     // Fresh mints, mint authority = provider wallet. Currency classic (6 dp),
     // energy Token-2022 (9 dp) — matching the production token programs the
@@ -119,7 +119,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
         zoneMarket: zoneMarketPda,
         order: sellOrderPda,
         authority: prosumer.publicKey,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         ercCertificate: null,
         systemProgram: SystemProgram.programId,
       } as any)
@@ -138,7 +138,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
         zoneMarket: zoneMarketPda,
         order: buyOrderPda,
         authority: consumer.publicKey,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         systemProgram: SystemProgram.programId,
       } as any)
       .signers([consumer])
@@ -166,7 +166,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
         secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
       } as any)
       .signers([escrowAuth])
       .rpc();

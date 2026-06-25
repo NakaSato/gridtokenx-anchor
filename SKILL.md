@@ -58,7 +58,7 @@ Every on-chain struct in `state.rs` / `state/*.rs` is zero-copy and Pod-compatib
 - Manually insert `_paddingN: [u8; N]` to align every field (8-byte for `u64`/`i64`, 4-byte for `u32`, etc.)
 - Enums in zero-copy structs: the existing registry enums (`UserType`, `UserStatus`, `MeterType`, `MeterStatus`, `ValidatorStatus` in `registry/src/state.rs`) use hand-written `unsafe impl bytemuck::Pod` on `#[repr(u8)]` enums. **This is technically unsound** — `Pod` requires every bit pattern to be valid, but a 2-variant enum only has 2 valid bytes; a corrupted or forged account byte is UB on read. It survives today because Anchor's owner+discriminator checks gate the load. **For new code prefer a raw `u8` field + `TryFrom<u8>` accessor** (the pattern `trading::Order.order_type` uses) instead of copying the unsafe impls.
 - Use `AccountLoader<'info, T>` + `load()` / `load_mut()` / `load_init()` — never `Account<'info, T>` on a zero-copy struct
-- Space: `8 + std::mem::size_of::<T>()` (zero-copy) or manual `T::LEN` (regular `#[account]`: `ErcCertificate::LEN`, `PoAConfig::LEN`, `OrderNullifier::LEN`)
+- Space: `8 + std::mem::size_of::<T>()` (zero-copy) or manual `T::LEN` (regular `#[account]`: `ErcCertificate::LEN`, `GovernanceConfig::LEN`, `OrderNullifier::LEN`)
 
 Add a field → recount padding by hand. The `OracleData` / `UserAccount` offset-arithmetic comments show the style — keep it.
 
@@ -80,7 +80,7 @@ Each program has a `localnet` feature pulling in `shared/compute-debug`, providi
 
 Most important architectural rule. High-frequency writes (meter readings, trades) **never** write to global config accounts:
 
-- Config accounts (`OracleData`, `Registry`, `Market`, `TokenInfo`, `PoAConfig`) load read-only on hot paths
+- Config accounts (`OracleData`, `Registry`, `Market`, `TokenInfo`, `GovernanceConfig`) load read-only on hot paths
 - Writes go to per-entity PDAs: `MeterState` (`[b"meter", meter_id]`), `Order` (`[b"order", authority, order_id]`), `OrderNullifier` (`[b"nullifier", user, order_id]`), `RegistryShard` / `MarketShard` / `ZoneMarketShard`
 - Aggregation via periodic admin instruction: `aggregate_readings` (oracle), `aggregate_shards` (registry). Global totals (`total_supply`, `total_readings`, `total_volume_global`, `Registry.active_meter_count`) are **stale on purpose** — never read mid-transaction assuming current. Live count: `sync_total_supply` in `energy_token`.
 - Worked example: meter Active-counting lives on `RegistryShard.active_meter_count` (the owner's shard, `shard_for(owner)`); `register_meter` / `set_meter_status` / `deactivate_meter` write the shard while the global `Registry` stays read-only in their contexts, and `aggregate_shards` reconciles `Registry.active_meter_count`. A `mut` on the global account would take a Sealevel write lock per registration and serialize the hot path — this exact regression was shipped once and fixed.
@@ -96,9 +96,9 @@ Most important architectural rule. High-frequency writes (meter readings, trades
 - When REC validators are registered in `TokenInfo`, `mint_tokens_direct` **requires** a `rec_validator` Signer in `TokenInfo::rec_validators`. Registry passes `meter_owner` or a separate validator account.
 - Airdrop on `register_user` is **best-effort** — failure logged and swallowed (`if ... .is_err()`). Do not make it propagate; it would block user registration.
 
-### 8. Governance ↔ trading coupling via `PoAConfig`
+### 8. Governance ↔ trading coupling via `GovernanceConfig`
 
-Every trading instruction takes `governance_config: Account<'info, PoAConfig>` and guards `governance_config.is_operational()` at the top. Keep the maintenance-mode guard on new trading instructions. `trading/Cargo.toml` has `governance = { path = "../governance", features = ["cpi"] }` — that's how `ErcCertificate` and `PoAConfig` re-export from `lib.rs`.
+Every trading instruction takes `governance_config: Account<'info, GovernanceConfig>` and guards `governance_config.is_operational()` at the top. Keep the maintenance-mode guard on new trading instructions. `trading/Cargo.toml` has `governance = { path = "../governance", features = ["cpi"] }` — that's how `ErcCertificate` and `GovernanceConfig` re-export from `lib.rs`.
 
 ### 9. ERC double-claim prevention
 
@@ -118,7 +118,7 @@ The sibling Rust client library hardcodes Anchor's 8-byte SHA256 discriminators 
 | ------------ | -------------------------------------------------------------- | ----------------------------- |
 | energy-token | `[b"mint_2022"]`                                               | SPL-2022 mint                 |
 | energy-token | `[b"token_info_2022"]`                                         | `TokenInfo` config PDA        |
-| governance   | `[b"poa_config"]`                                              | `PoAConfig`                   |
+| governance   | `[b"poa_config"]`                                              | `GovernanceConfig`                   |
 | governance   | `[b"erc_certificate", certificate_id.as_bytes()]`             | One per ERC                   |
 | oracle       | `[b"oracle_data"]`                                             | `OracleData` config           |
 | oracle       | `[b"meter", meter_id.as_bytes()]`                             | Per-meter `MeterState`        |
@@ -179,7 +179,7 @@ Tests use `AnchorProvider` against a live validator (import from `@anchor-lang/c
 **Add a field to a zero-copy struct** (breaking — account size grows, existing data unreadable):
 1. Add field with correct alignment + padding
 2. Verify every `init` site's `size_of::<T>()` (implicit but recheck)
-3. For manual-`LEN` structs (`ErcCertificate::LEN`, `PoAConfig::LEN`), update the constant
+3. For manual-`LEN` structs (`ErcCertificate::LEN`, `GovernanceConfig::LEN`), update the constant
 4. Production: write a realloc + zero-init migration instruction; don't rely on `init_if_needed`
 
 **Wire a new CPI** (follow `registry → energy-token`):

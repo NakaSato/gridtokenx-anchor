@@ -34,7 +34,7 @@ The `compute_fn!` macro is a no-op outside the `localnet` feature; the program d
 
 ### 2.1 PoA authority model
 
-The program records a single `authority` pubkey — the REC certifying entity — on the `PoAConfig` singleton (`programs/governance/src/state/poa_config.rs:8`). On initialization the authority is set to the initializing signer, with a fixed authority name of `"REC"` and a fixed contact string (`programs/governance/src/handlers/initialize.rs:10-23`). Every administrative instruction context that mutates configuration or certificates enforces `has_one = authority` against this field, rejecting non-authority callers with `GovernanceError::UnauthorizedAuthority` (e.g. `programs/governance/src/contexts.rs:31`, `:90`, `:108`, `:149`, `:172`, `:210`, `:224`, `:247`, `:350`).
+The program records a single `authority` pubkey — the REC certifying entity — on the `GovernanceConfig` singleton (`programs/governance/src/state/poa_config.rs:8`). On initialization the authority is set to the initializing signer, with a fixed authority name of `"REC"` and a fixed contact string (`programs/governance/src/handlers/initialize.rs:10-23`). Every administrative instruction context that mutates configuration or certificates enforces `has_one = authority` against this field, rejecting non-authority callers with `GovernanceError::UnauthorizedAuthority` (e.g. `programs/governance/src/contexts.rs:31`, `:90`, `:108`, `:149`, `:172`, `:210`, `:224`, `:247`, `:350`).
 
 ### 2.2 ERC-1155-style Renewable Energy Certificates (RECs)
 
@@ -52,9 +52,9 @@ The PoA authority admits off-chain validator nodes ("aggregators") to an on-chai
 
 All persistent accounts in this program are regular Anchor `#[account]` structures (Borsh-serialized) rather than zero-copy. The one exception is `MeterAccount`, a zero-copy `#[repr(C)]` mirror of the registry program's layout used solely for `bytemuck` reads of registry-owned accounts (`programs/governance/src/state/meter_account.rs:5-19`); the governance program never initializes a `MeterAccount`.
 
-### 3.1 `PoAConfig` — `state/poa_config.rs`
+### 3.1 `GovernanceConfig` — `state/poa_config.rs`
 
-The platform singleton. PDA seed `[b"poa_config"]` (`programs/governance/src/contexts.rs:13`). Regular `#[account]` (`programs/governance/src/state/poa_config.rs:4`). Allocated space is `8 + PoAConfig::LEN` (`programs/governance/src/contexts.rs:12`), where `LEN = 405` bytes summed field-by-field at `programs/governance/src/state/poa_config.rs:76-116`. A compile-time test asserts `size_of::<PoAConfig>() == 405` (`programs/governance/src/size_test.rs:6`).
+The platform singleton. PDA seed `[b"poa_config"]` (`programs/governance/src/contexts.rs:13`). Regular `#[account]` (`programs/governance/src/state/poa_config.rs:4`). Allocated space is `8 + GovernanceConfig::LEN` (`programs/governance/src/contexts.rs:12`), where `LEN = 405` bytes summed field-by-field at `programs/governance/src/state/poa_config.rs:76-116`. A compile-time test asserts `size_of::<GovernanceConfig>() == 405` (`programs/governance/src/size_test.rs:6`).
 
 | Field | Type | Purpose | Citation |
 | --- | --- | --- | --- |
@@ -84,7 +84,7 @@ The platform singleton. PDA seed `[b"poa_config"]` (`programs/governance/src/con
 | `pending_authority_expires_at` | `i64` | When the proposal expires | `state/poa_config.rs:70` |
 | `_reserved` | `[u8; 5]` | Reserved padding for future fields | `state/poa_config.rs:72` |
 
-`PoAConfig` provides three helper predicates: `validate_config` (range checks on energy limits, validity period, and confidence; `programs/governance/src/state/poa_config.rs:119-137`), `is_operational` (`!maintenance_mode`; `:140-142`), and `can_issue_erc` (operational AND `erc_validation_enabled`; `:145-147`).
+`GovernanceConfig` provides three helper predicates: `validate_config` (range checks on energy limits, validity period, and confidence; `programs/governance/src/state/poa_config.rs:119-137`), `is_operational` (`!maintenance_mode`; `:140-142`), and `can_issue_erc` (operational AND `erc_validation_enabled`; `:145-147`).
 
 `GovernanceStats` (`programs/governance/src/state/poa_config.rs:150-191`) is a Borsh return type, not an account; it is the projection returned by `get_governance_stats`.
 
@@ -182,13 +182,13 @@ Instructions are dispatched in `programs/governance/src/lib.rs:41-215` and imple
 
 ### 4.1 Initialization (`handlers/initialize.rs`)
 
-#### `initialize_poa`
+#### `initialize_governance`
 
 - **Signers:** `authority` (becomes the PoA authority).
-- **Accounts:** `poa_config` (`init`, seed `[b"poa_config"]`), `authority`, `system_program` (`programs/governance/src/contexts.rs:8-20`).
+- **Accounts:** `governance_config` (`init`, seed `[b"poa_config"]`), `authority`, `system_program` (`programs/governance/src/contexts.rs:8-20`).
 - **Preconditions:** none beyond PDA non-existence; `validate_config` must pass.
 - **Effects:** Sets authority to the signer; fixed name `"REC"` and contact `"engineering_erc@utcc.ac.th"`; defaults `version=1`, `maintenance_mode=false`, `erc_validation_enabled=true`, `min_energy_amount=100`, `max_erc_amount=1_000_000`, `erc_validity_period=31_536_000` (1 year), `require_oracle_validation=false`, `min_oracle_confidence=80`, `allow_certificate_transfers=true`, `min_quorum_votes=100`; zeroes counters and pending-authority state; validates config (`programs/governance/src/handlers/initialize.rs:10-66`).
-- **Event:** `PoAInitialized` (`programs/governance/src/handlers/initialize.rs:68-72`).
+- **Event:** `GovernanceInitialized` (`programs/governance/src/handlers/initialize.rs:68-72`).
 - **Errors:** the `validate_config` range errors (`InvalidMinimumEnergy`, `InvalidMaximumEnergy`, `InvalidValidityPeriod`, `InvalidOracleConfidence`).
 
 ### 4.2 ERC certificate (`handlers/erc.rs`)
@@ -196,8 +196,9 @@ Instructions are dispatched in `programs/governance/src/lib.rs:41-215` and imple
 #### `issue_erc(certificate_id, energy_amount, renewable_source, validation_data)`
 
 - **Signers:** `authority` (PoA) and `owner` (meter owner) (`programs/governance/src/contexts.rs:58`, `:80`).
-- **Accounts:** `poa_config` (`has_one = authority`), `erc_certificate` (`init`, seed `[b"erc_certificate", certificate_id]`), `meter_account` (registry-owned, validated via `owner = registry::ID`), `owner` (must equal the meter's owner field), `registry` (singleton PDA whose authority must equal the governance authority), `registry_program` (pinned to `registry::ID`), `authority`, `system_program` (`programs/governance/src/contexts.rs:26-82`).
+- **Accounts:** `governance_config` (`has_one = authority`), `erc_certificate` (`init`, seed `[b"erc_certificate", certificate_id]`), `meter_account` (registry-owned, validated via `owner = registry::ID`), `owner` (must equal the meter's owner field), `registry` (singleton PDA whose authority must equal the governance authority), `registry_program` (pinned to `registry::ID`), `authority`, `system_program` (`programs/governance/src/contexts.rs:26-82`).
 - **Preconditions:** `can_issue_erc()`; `energy_amount` within `[min_energy_amount, max_erc_amount]`; string-length bounds (`certificate_id ≤ 64`, `renewable_source ≤ 64`, `validation_data ≤ 256`); `energy_amount ≤ unclaimed_generation` where `unclaimed = total_generation − claimed_erc_generation − settled_net_generation` (saturating); if `require_oracle_validation`, `oracle_authority != default` (`programs/governance/src/handlers/erc.rs:16-72`).
+- **Meter deserialization:** the registry-owned meter is read by slicing exactly `&meter_data[8..8 + size_of::<MeterAccount>()]` (not the open-ended `[8..]` remainder) after the `len() >= 8 + size_of::<MeterAccount>()` check — `from_bytes` panics on a length mismatch, so an account with trailing bytes would otherwise DoS issuance (`programs/governance/src/handlers/erc.rs:18-27`).
 - **Effects:** Performs a CPI to `registry::mark_erc_claimed(energy_amount)` to debit unclaimed generation, then initializes the certificate (`status=Valid`, `validated_for_trading=false`, `expires_at = now + erc_validity_period`, owner = meter owner) and increments `total_ercs_issued` / `total_energy_certified` (`programs/governance/src/handlers/erc.rs:74-129`).
 - **Event:** `ErcIssued` (`programs/governance/src/handlers/erc.rs:131-137`).
 - **Errors:** `ErcValidationDisabled`, `BelowMinimumEnergy`, `ExceedsMaximumEnergy`, `CertificateIdTooLong`, `SourceNameTooLong`, `ValidationDataTooLong`, `InsufficientUnclaimedGeneration`, `OracleValidationRequired`, `InvalidMeterAccount`, `UnauthorizedAuthority`.
@@ -205,7 +206,7 @@ Instructions are dispatched in `programs/governance/src/lib.rs:41-215` and imple
 #### `validate_erc_for_trading`
 
 - **Signers:** `authority` (PoA).
-- **Accounts:** `poa_config` (`has_one`), `erc_certificate` (seed re-derived from stored `certificate_id[..id_len]`), `authority` (`programs/governance/src/contexts.rs:85-100`).
+- **Accounts:** `governance_config` (`has_one`), `erc_certificate` (seed re-derived from stored `certificate_id[..id_len]`), `authority` (`programs/governance/src/contexts.rs:85-100`).
 - **Preconditions:** `is_operational()`; `status == Valid`; `!validated_for_trading`; not expired (`programs/governance/src/handlers/erc.rs:147-167`).
 - **Effects:** Sets `validated_for_trading = true`, records `trading_validated_at`, increments `total_ercs_validated` (`programs/governance/src/handlers/erc.rs:170-175`).
 - **Event:** `ErcValidatedForTrading` (`programs/governance/src/handlers/erc.rs:177-184`).
@@ -214,7 +215,7 @@ Instructions are dispatched in `programs/governance/src/lib.rs:41-215` and imple
 #### `revoke_erc(reason)`
 
 - **Signers:** `authority` (PoA).
-- **Accounts:** `poa_config` (`has_one`), `erc_certificate`, `authority` (`programs/governance/src/contexts.rs:103-118`).
+- **Accounts:** `governance_config` (`has_one`), `erc_certificate`, `authority` (`programs/governance/src/contexts.rs:103-118`).
 - **Preconditions:** `is_operational()`; `reason` non-empty and `≤ 128`; `can_revoke()` (status `Valid` or `Pending`) (`programs/governance/src/handlers/erc.rs:195-215`).
 - **Effects:** Sets `status = Revoked`, `revoked_at`, clears `validated_for_trading`, writes the reason buffer, increments `total_ercs_revoked` (`programs/governance/src/handlers/erc.rs:220-236`).
 - **Event:** `ErcRevoked` (`programs/governance/src/handlers/erc.rs:238-247`).
@@ -223,7 +224,7 @@ Instructions are dispatched in `programs/governance/src/lib.rs:41-215` and imple
 #### `transfer_erc`
 
 - **Signers:** `current_owner` (the certificate owner — note this instruction does **not** require the PoA authority).
-- **Accounts:** `poa_config` (read-only, no `has_one`), `erc_certificate` (`constraint = owner == current_owner`), `current_owner`, `new_owner` (`programs/governance/src/contexts.rs:121-139`).
+- **Accounts:** `governance_config` (read-only, no `has_one`), `erc_certificate` (`constraint = owner == current_owner`), `current_owner`, `new_owner` (`programs/governance/src/contexts.rs:121-139`).
 - **Preconditions:** `is_operational()`; either `allow_certificate_transfers` is set **or** the current owner equals the PoA authority (issuance transfer); `can_transfer()` (`Valid` + `validated_for_trading`); not expired; `new_owner != owner` (`programs/governance/src/handlers/erc.rs:258-288`).
 - **Effects:** Reassigns `owner`, increments `transfer_count`, records `last_transferred_at` (`programs/governance/src/handlers/erc.rs:295-298`).
 - **Event:** `ErcTransferred` (`programs/governance/src/handlers/erc.rs:300-309`).
@@ -231,7 +232,7 @@ Instructions are dispatched in `programs/governance/src/lib.rs:41-215` and imple
 
 ### 4.3 Configuration (`handlers/config.rs`)
 
-All four instructions share the `UpdateGovernanceConfig` context (`poa_config` `has_one = authority`, `authority`; `programs/governance/src/contexts.rs:143-153`).
+All four instructions share the `UpdateGovernanceConfig` context (`governance_config` `has_one = authority`, `authority`; `programs/governance/src/contexts.rs:143-153`).
 
 | Instruction | Effect | Preconditions | Event | Citation |
 | --- | --- | --- | --- | --- |
@@ -245,7 +246,7 @@ All four instructions share the `UpdateGovernanceConfig` context (`poa_config` `
 #### `initialize_zone_config(zone_id, incentive_multiplier, wheeling_charge)`
 
 - **Signers:** `authority` (PoA).
-- **Accounts:** `zone_config` (`init`, seed `[b"zone_config", zone_id]`), `poa_config` (`has_one = authority`), `authority`, `system_program` (`programs/governance/src/contexts.rs:336-356`).
+- **Accounts:** `zone_config` (`init`, seed `[b"zone_config", zone_id]`), `governance_config` (`has_one = authority`), `authority`, `system_program` (`programs/governance/src/contexts.rs:336-356`).
 - **Effects:** Initializes the zone with the supplied multiplier and charge, `loss_factor = 1_000` (1.000×), `maintenance_mode = false` (`programs/governance/src/handlers/dao.rs:198-217`).
 - **Event:** none (`msg!` log only).
 
@@ -253,24 +254,26 @@ All four instructions share the `UpdateGovernanceConfig` context (`poa_config` `
 
 - **Signers:** `proposer`.
 - **Accounts:** `proposal` (`init`, seed `[b"proposal", target_zone, proposal_id]`), `proposer`, `meter_account` (registry-owned), `system_program` (`programs/governance/src/contexts.rs:263-283`).
-- **Preconditions:** `voting_period_seconds > 0` (`InvalidProposalStatus`); the supplied meter's `owner` must equal `proposer` (`MeterOwnerMismatch`) (`programs/governance/src/handlers/dao.rs:18-39`).
-- **Effects:** Initializes the proposal (`status = Active`, zeroed tallies, `expires_at = now + voting_period_seconds` via `checked_add`) (`programs/governance/src/handlers/dao.rs:41-53`).
-- **Event:** `ProposalCreated` (`programs/governance/src/handlers/dao.rs:55-63`).
-- **Errors:** `InvalidProposalStatus`, `InvalidMeterAccount`, `MeterOwnerMismatch`, `MathOverflow`.
+- **Preconditions:** `voting_period_seconds > 0` (`InvalidProposalStatus`); the supplied meter's `owner` must equal `proposer` (`MeterOwnerMismatch`); the meter's `zone_id` must equal the supplied `target_zone` (`MeterZoneMismatch`) — a proposer may only open a proposal for the zone their meter is in, so `target_zone` cannot be an attacker-chosen value unrelated to the meter (`programs/governance/src/handlers/dao.rs:18-45`).
+- **Meter deserialization:** the registry-owned meter is read by slicing exactly `&meter_data[8..8 + size_of::<MeterAccount>()]` (not the open-ended `[8..]` remainder) before `bytemuck::from_bytes`, after asserting `len() >= 8 + size_of::<MeterAccount>()` — `from_bytes` panics on a length mismatch, so an account carrying trailing bytes would otherwise DoS the instruction (`programs/governance/src/handlers/dao.rs:27-33`).
+- **Effects:** Initializes the proposal (`status = Active`, zeroed tallies, `expires_at = now + voting_period_seconds` via `checked_add`) (`programs/governance/src/handlers/dao.rs:47-59`).
+- **Event:** `ProposalCreated` (`programs/governance/src/handlers/dao.rs:61-69`).
+- **Errors:** `InvalidProposalStatus`, `InvalidMeterAccount`, `MeterOwnerMismatch`, `MeterZoneMismatch`, `MathOverflow`.
 
 #### `cast_vote(choice)`
 
 - **Signers:** `voter`.
 - **Accounts:** `proposal` (`mut`), `vote_record` (`init`, seed `[b"vote", proposal, voter]` — its existence prevents double-voting), `voter`, `meter_account` (registry-owned), `system_program` (`programs/governance/src/contexts.rs:285-306`).
-- **Preconditions:** `proposal.status == Active`; `now < expires_at`; the supplied meter's `owner` must equal `voter` (`programs/governance/src/handlers/dao.rs:77-103`).
-- **Effects:** Computes weight = `max(100, total_generation / 1_000)`; adds weight to `votes_for` or `votes_against` (`checked_add`); writes the `VoteRecord` (`programs/governance/src/handlers/dao.rs:89-120`).
-- **Event:** `VoteCast` (`programs/governance/src/handlers/dao.rs:122-128`).
-- **Errors:** `InvalidProposalStatus`, `ProposalExpired`, `InvalidMeterAccount`, `MeterOwnerMismatch`, `MathOverflow`.
+- **Preconditions:** `proposal.status == Active`; `now < expires_at`; the supplied meter's `owner` must equal `voter` (`MeterOwnerMismatch`); the meter's `zone_id` must equal `proposal.target_zone` (`MeterZoneMismatch`) — a prosumer cannot swing another zone's proposal with an unrelated high-generation meter (`programs/governance/src/handlers/dao.rs:83-115`).
+- **Meter deserialization:** as in `create_proposal`, the meter is read via `&meter_data[8..8 + size_of::<MeterAccount>()]` after the `len() >= 8 + size_of::<MeterAccount>()` check, avoiding the `from_bytes` length-mismatch panic that an over-long account would trigger (`programs/governance/src/handlers/dao.rs:96-103`).
+- **Effects:** Computes weight = `max(100, total_generation / 1_000)`; adds weight to `votes_for` or `votes_against` (`checked_add`); writes the `VoteRecord` (`programs/governance/src/handlers/dao.rs:116-132`).
+- **Event:** `VoteCast` (`programs/governance/src/handlers/dao.rs:134-140`).
+- **Errors:** `InvalidProposalStatus`, `ProposalExpired`, `InvalidMeterAccount`, `MeterOwnerMismatch`, `MeterZoneMismatch`, `MathOverflow`.
 
 #### `execute_proposal`
 
 - **Signers:** `executor` (any signer; permissionless finalization).
-- **Accounts:** `poa_config` (read-only, supplies `min_quorum_votes`), `zone_config` (`mut`, seed `[b"zone_config", zone_id]`), `proposal` (`mut`, constrained `target_zone == zone_config.zone_id` and status `Active` or `Passed`), `executor` (`programs/governance/src/contexts.rs:308-334`).
+- **Accounts:** `governance_config` (read-only, supplies `min_quorum_votes`), `zone_config` (`mut`, seed `[b"zone_config", zone_id]`), `proposal` (`mut`, constrained `target_zone == zone_config.zone_id` and status `Active` or `Passed`), `executor` (`programs/governance/src/contexts.rs:308-334`).
 - **Preconditions:** `now >= proposal.expires_at` (`ProposalNotExpired`); after auto-finalization, `status == Passed` (`InvalidProposalStatus`) (`programs/governance/src/handlers/dao.rs:142-164`).
 - **Effects:** Auto-finalizes an `Active` proposal — `Rejected` if `total_votes < min_quorum` or `votes_for <= votes_against`, else `Passed`; applies the parameter change to `zone_config` (with `LossFactor` requiring `new_value > 0`); sets `status = Executed` (`programs/governance/src/handlers/dao.rs:147-185`).
 - **Event:** `ProposalExecuted` (`programs/governance/src/handlers/dao.rs:187-193`).
@@ -285,7 +288,7 @@ All four instructions share the `UpdateGovernanceConfig` context (`poa_config` `
 | `cancel_authority_change` | current `authority` | Clears pending state | pending != default (`NoAuthorityChangePending`) | `AuthorityChangeCancelled` | `handlers/authority.rs:99-120` |
 | `set_oracle_authority(oracle_authority, min_confidence, require_validation)` | current `authority` | Sets oracle authority/confidence/requirement | `min_confidence ≤ 100` (`InvalidOracleConfidence`) | `OracleAuthoritySet` | `handlers/authority.rs:123-152` |
 
-`approve_authority_change` uses the `ApproveAuthorityChange` context (`programs/governance/src/contexts.rs:178-188`), whose `poa_config` is **not** `has_one`-gated; authorization is enforced in-handler by requiring the signer to equal `pending_authority`.
+`approve_authority_change` uses the `ApproveAuthorityChange` context (`programs/governance/src/contexts.rs:178-188`), whose `governance_config` is **not** `has_one`-gated; authorization is enforced in-handler by requiring the signer to equal `pending_authority`.
 
 ### 4.6 Aggregator allow-list (`handlers/aggregator.rs`)
 
@@ -294,19 +297,19 @@ All four instructions share the `UpdateGovernanceConfig` context (`poa_config` `
 | `admit_aggregator(aggregator)` | current `authority` | `init_if_needed` the `AggregatorEntry`; sets `active = true`; idempotent re-admission flips a revoked entry back active without failing | `AggregatorAdmitted` | `handlers/aggregator.rs:9-28` |
 | `revoke_aggregator` | current `authority` | Sets `active = false`, retains the PDA as an audit trail | `AggregatorRevoked` | `handlers/aggregator.rs:33-46` |
 
-Both contexts gate `poa_config` with `has_one = authority` (`programs/governance/src/contexts.rs:224`, `:247`).
+Both contexts gate `governance_config` with `has_one = authority` (`programs/governance/src/contexts.rs:224`, `:247`).
 
 ### 4.7 Statistics (`handlers/stats.rs`)
 
 #### `get_governance_stats`
 
-A read-only view returning a `GovernanceStats` value projecting `PoAConfig` fields, with the fixed-buffer name/contact rehydrated via `String::from_utf8_lossy` (`programs/governance/src/handlers/stats.rs:5-54`). Context `GetGovernanceStats` requires only the `poa_config` PDA, no signer (`programs/governance/src/contexts.rs:155-162`).
+A read-only view returning a `GovernanceStats` value projecting `GovernanceConfig` fields, with the fixed-buffer name/contact rehydrated via `String::from_utf8_lossy` (`programs/governance/src/handlers/stats.rs:5-54`). Context `GetGovernanceStats` requires only the `governance_config` PDA, no signer (`programs/governance/src/contexts.rs:155-162`).
 
 ## 5. Invariants & Security Properties
 
 ### 5.1 PoA authority gating
 
-All configuration-mutating, ERC-administrative (issue, validate, revoke), zone-initialization, oracle-configuration, and aggregator instructions enforce `has_one = authority` on the `poa_config` PDA, rejecting non-authority signers with `UnauthorizedAuthority` (`programs/governance/src/contexts.rs:31`, `:90`, `:108`, `:149`, `:172`, `:196`, `:210`, `:224`, `:247`, `:350`). The singleton PDA seed `[b"poa_config"]` guarantees a single canonical config account (`programs/governance/src/contexts.rs:13`).
+All configuration-mutating, ERC-administrative (issue, validate, revoke), zone-initialization, oracle-configuration, and aggregator instructions enforce `has_one = authority` on the `governance_config` PDA, rejecting non-authority signers with `UnauthorizedAuthority` (`programs/governance/src/contexts.rs:31`, `:90`, `:108`, `:149`, `:172`, `:196`, `:210`, `:224`, `:247`, `:350`). The singleton PDA seed `[b"poa_config"]` guarantees a single canonical config account (`programs/governance/src/contexts.rs:13`).
 
 ### 5.2 Two-step transfer safety
 
@@ -322,11 +325,11 @@ ERC issuance is bounded by unclaimed meter generation: `unclaimed = total_genera
 
 ### 5.5 DAO weight and finalization integrity
 
-Voting weight is derived from the registry-owned meter's `total_generation`, and the meter account is bound to `owner = registry::ID` at the context level so a forged account cannot manufacture weight (`programs/governance/src/contexts.rs:299-304`); the handler additionally requires `meter.owner == voter` (`MeterOwnerMismatch`, `programs/governance/src/handlers/dao.rs:99-103`). Double-voting is prevented structurally by the `init` of the per-(proposal, voter) `vote_record` PDA, which fails if the record already exists (`programs/governance/src/contexts.rs:289-296`). Tally updates use `checked_add` returning `MathOverflow` (`programs/governance/src/handlers/dao.rs:109-111`). Execution is permissionless but requires the voting window to have closed and quorum (`min_quorum_votes`) plus a strict majority to mark a proposal `Passed` before any state change (`programs/governance/src/handlers/dao.rs:142-164`).
+Voting weight is derived from the registry-owned meter's `total_generation`, and the meter account is bound to `owner = registry::ID` at the context level so a forged account cannot manufacture weight (`programs/governance/src/contexts.rs:299-304`); the handler additionally requires `meter.owner == voter` (`MeterOwnerMismatch`, `programs/governance/src/handlers/dao.rs:104-109`) and `meter.zone_id == proposal.target_zone` (`MeterZoneMismatch`, `programs/governance/src/handlers/dao.rs:110-115`), so a prosumer cannot swing another zone's proposal with an unrelated high-generation meter. The symmetric binding on `create_proposal` (`meter.zone_id == target_zone`, `programs/governance/src/handlers/dao.rs:39-44`) prevents an attacker-chosen `target_zone` divorced from the meter. Double-voting is prevented structurally by the `init` of the per-(proposal, voter) `vote_record` PDA, which fails if the record already exists (`programs/governance/src/contexts.rs:289-296`). Tally updates use `checked_add` returning `MathOverflow` (`programs/governance/src/handlers/dao.rs:109-111`). Execution is permissionless but requires the voting window to have closed and quorum (`min_quorum_votes`) plus a strict majority to mark a proposal `Passed` before any state change (`programs/governance/src/handlers/dao.rs:142-164`).
 
 ### 5.6 Cross-program account binding
 
-ERC issuance and DAO proposal/vote contexts bind the supplied registry-owned accounts via `owner = registry::ID` constraints, and the issuance context further pins `registry_program.key() == registry::ID` and verifies the registry singleton's authority equals the governance authority (`programs/governance/src/contexts.rs:46`, `:61-78`, `:280`, `:303`). Manual deserialization through the `bytemuck` `MeterAccount` mirror checks the account is at least discriminator + struct size before casting (`programs/governance/src/handlers/erc.rs:18-22`, `programs/governance/src/handlers/dao.rs:27-33`).
+ERC issuance and DAO proposal/vote contexts bind the supplied registry-owned accounts via `owner = registry::ID` constraints, and the issuance context further pins `registry_program.key() == registry::ID` and verifies the registry singleton's authority equals the governance authority (`programs/governance/src/contexts.rs:46`, `:61-78`, `:280`, `:303`). Manual deserialization through the `bytemuck` `MeterAccount` mirror checks the account is at least discriminator + struct size, then slices **exactly** `[8..8 + size_of::<MeterAccount>()]` rather than the open-ended `[8..]` remainder before casting — `from_bytes` panics on a length mismatch, so an over-long account would otherwise be a DoS vector (`programs/governance/src/handlers/erc.rs:18-27`, `programs/governance/src/handlers/dao.rs:27-33`, `:96-103`).
 
 ## 6. Cross-Program Interfaces (CPI)
 
@@ -336,7 +339,7 @@ During `issue_erc`, the program invokes `registry::cpi::mark_erc_claimed(energy_
 
 ### 6.2 trading → governance (inbound, type reuse)
 
-The `trading` program depends on `governance` with the `cpi` feature (`programs/trading/Cargo.toml:35`) and imports the `ErcCertificate`, `ErcStatus`, and `PoAConfig` types (`programs/trading/src/lib.rs:18`). When an order supplies an ERC, trading validates `status == Valid`, not expired, `validated_for_trading == true`, and `energy_amount ≤ erc.energy_amount` (`programs/trading/src/lib.rs:227-242`). It also deserializes the governance `PoAConfig` to read configuration (`programs/trading/src/utils.rs:2-11`, account at `programs/trading/src/lib.rs:1533`). This is a read/validation relationship over governance-owned account data, not an invocation of a governance instruction.
+The `trading` program depends on `governance` with the `cpi` feature (`programs/trading/Cargo.toml:35`) and imports the `ErcCertificate`, `ErcStatus`, and `GovernanceConfig` types (`programs/trading/src/lib.rs:18`). When an order supplies an ERC, trading validates `status == Valid`, not expired, `validated_for_trading == true`, and `energy_amount ≤ erc.energy_amount` (`programs/trading/src/lib.rs:227-242`). It also deserializes the governance `GovernanceConfig` to read configuration (`programs/trading/src/utils.rs:2-11`, account at `programs/trading/src/lib.rs:1533`). This is a read/validation relationship over governance-owned account data, not an invocation of a governance instruction.
 
 ### 6.3 oracle → governance (inbound, allow-list validation, no invoke)
 
@@ -346,7 +349,7 @@ The `oracle` program depends on `governance` with the `cpi` feature for types an
 
 | Event | Emitted by | Citation |
 | --- | --- | --- |
-| `PoAInitialized` | `initialize_poa` | `events.rs:3-8`; `handlers/initialize.rs:68` |
+| `GovernanceInitialized` | `initialize_governance` | `events.rs:3-8`; `handlers/initialize.rs:68` |
 | `ErcIssued` | `issue_erc` | `events.rs:10-17`; `handlers/erc.rs:131` |
 | `ErcValidatedForTrading` | `validate_erc_for_trading` | `events.rs:19-24`; `handlers/erc.rs:177` |
 | `GovernanceConfigUpdated` | `update_governance_config` | `events.rs:26-32`; `handlers/config.rs:18` |
@@ -369,7 +372,7 @@ The `oracle` program depends on `governance` with the `cpi` feature for types an
 
 ## 8. Error Codes
 
-All codes are defined in `programs/governance/src/errors.rs:3-99`.
+All codes are defined in `programs/governance/src/errors.rs:3-101`.
 
 | Code | Message | Line |
 | --- | --- | --- |
@@ -414,7 +417,8 @@ All codes are defined in `programs/governance/src/errors.rs:3-99`.
 | `RevocationReasonTooLong` | Revocation reason too long | `errors.rs:92` |
 | `InsufficientQuorum` | Proposal did not reach quorum | `errors.rs:94` |
 | `MeterOwnerMismatch` | Meter account does not belong to signer | `errors.rs:96` |
-| `MathOverflow` | Math overflow | `errors.rs:98` |
+| `MeterZoneMismatch` | Meter's zone does not match the proposal's target zone | `errors.rs:98` |
+| `MathOverflow` | Math overflow | `errors.rs:100` |
 
 (Several codes — `InvalidRecipient`, `OracleConfidenceTooLow`, `InvalidOracleAuthority`, `InsufficientVotingPower`, `VoterNotRegisteredInZone`, `InsufficientQuorum` — are declared but not referenced by the current handlers; they are reserved for forthcoming or alternative validation paths.)
 
@@ -422,7 +426,7 @@ All codes are defined in `programs/governance/src/errors.rs:3-99`.
 
 ### 9.1 Unit / compile-time tests
 
-- `programs/governance/src/size_test.rs:3-7` asserts `size_of::<PoAConfig>() == 405`, guarding the manually computed `LEN`.
+- `programs/governance/src/size_test.rs:3-7` asserts `size_of::<GovernanceConfig>() == 405`, guarding the manually computed `LEN`.
 - `programs/governance/src/handlers/dao.rs:220-230` contains a placeholder unit test (`test_governance_logic_placeholder`).
 
 These run under `cd gridtokenx-anchor && cargo test -p governance` (per-crate test invocation; the repo has no root Cargo workspace).

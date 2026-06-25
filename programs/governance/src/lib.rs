@@ -38,8 +38,8 @@ macro_rules! compute_checkpoint {
 pub mod governance {
     use super::*;
 
-    pub fn initialize_poa(ctx: Context<InitializePoa>) -> Result<()> {
-        compute_fn!("initialize_poa" => {
+    pub fn initialize_governance(ctx: Context<InitializeGovernance>) -> Result<()> {
+        compute_fn!("initialize_governance" => {
             handlers::initialize::handler(ctx)
         })
     }
@@ -162,7 +162,7 @@ pub mod governance {
         })
     }
 
-    // === AGGREGATOR ALLOW-LIST (PoA admission of off-chain validator nodes) ===
+    // === AGGREGATOR ALLOW-LIST (Governance admission of off-chain validator nodes) ===
 
     pub fn admit_aggregator(ctx: Context<AdmitAggregator>, aggregator: Pubkey) -> Result<()> {
         compute_fn!("admit_aggregator" => {

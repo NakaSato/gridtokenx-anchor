@@ -135,7 +135,7 @@ Reproduce: `npm run test:cu-profile` (asserts each instruction < 200k default bu
 
 | Instruction | CU |
 | ----------- | --: |
-| `governance.initialize_poa` | 16 417 |
+| `governance.initialize_governance` | 16 417 |
 | `governance.propose_authority_change` | 13 328 |
 | `governance.approve_authority_change` | 13 278 |
 | `governance.set_oracle_authority` | 13 324 |
@@ -244,7 +244,7 @@ the bond plumbing mirrors the §5 treasury stake (~19.5k CU).
 
 Compute-unit cost of the trading order book path — market/zone setup, escrow
 deposit/withdraw, create sell/buy order, on-chain `match_orders` (CDA), and cancel.
-Same method as §4-6. The fabricated governance PoAConfig/ErcCertificate mirror
+Same method as §4-6. The fabricated governance GovernanceConfig/ErcCertificate mirror
 `tests/order_guards_litesvm.ts`. Token transfers use classic SPL (Token program).
 
 Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`).

@@ -51,7 +51,7 @@ async function main() {
     [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, "le", 4)],
     tradingProgram.programId
   );
-  const [poaConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
 
   console.log("📈 Starting Batch Market Clearing Simulator...");
   console.log("Generating randomized order book...");
@@ -85,7 +85,7 @@ async function main() {
         zoneMarket: zoneMarketPda,
         order: b.pda,
         authority: b.user.publicKey,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         systemProgram: SystemProgram.programId,
       } as any)
       .signers([b.user])
@@ -100,7 +100,7 @@ async function main() {
         zoneMarket: zoneMarketPda,
         order: s.pda,
         authority: s.user.publicKey,
-        governanceConfig: poaConfigPda,
+        governanceConfig: governanceConfigPda,
         ercCertificate: null,
         systemProgram: SystemProgram.programId,
       } as any)
@@ -143,7 +143,7 @@ async function main() {
               sellOrder: sell.pda,
               tradeRecord: tradeRecordPda,
               authority: provider.wallet.publicKey, // Crank pays gas
-              governanceConfig: poaConfigPda,
+              governanceConfig: governanceConfigPda,
               systemProgram: SystemProgram.programId,
             } as any)
             .rpc();

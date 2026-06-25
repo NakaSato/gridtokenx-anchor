@@ -135,7 +135,7 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
   - `OrderExpired`: bank clock warped past a non-zero `expires_at` (via litesvm `setClock`) → rejected.
 - [x] **Order-path validation guards — DONE** via a second in-process litesvm harness
   (`tests/order_guards_litesvm.ts`, **9/9**). Boots trading market+zone+escrow + the governance program.
-  Key trick: `PoAConfig` (`governance_config`) and `ErcCertificate` are plain Borsh `#[account]`s, so the
+  Key trick: `GovernanceConfig` (`governance_config`) and `ErcCertificate` are plain Borsh `#[account]`s, so the
   tests **fabricate** them with `svm.setAccount` + the governance Anchor coder (camelCase account names
   `poAConfig`/`ercCertificate`), pinning the exact field a guard keys on — no need to drive governance's
   issue/config instructions. `governance_config` is an `UncheckedAccount` (owner unchecked); the ERC is

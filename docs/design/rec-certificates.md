@@ -18,12 +18,12 @@ A REC is an **individual, indivisible certificate** keyed by a string `certifica
 
 | Handler | Purpose |
 |---|---|
-| `issue(certificate_id, energy_amount, renewable_source, validation_data)` | Mint a certificate. Validates against `PoAConfig` limits; CPIs `registry::mark_erc_claimed` to mark the generation claimed (anti-double-claim); creates `ErcCertificate` with `status = Valid`, `owner = meter_owner`. |
+| `issue(certificate_id, energy_amount, renewable_source, validation_data)` | Mint a certificate. Validates against `GovernanceConfig` limits; CPIs `registry::mark_erc_claimed` to mark the generation claimed (anti-double-claim); creates `ErcCertificate` with `status = Valid`, `owner = meter_owner`. |
 | `validate_for_trading()` | Gate the certificate for trading: requires `status == Valid`, not already validated, not expired; sets `validated_for_trading = true`. |
 | `transfer()` | Move ownership: requires `Valid` + `validated_for_trading`, not expired, not self-transfer; bumps `transfer_count`. |
 | `revoke(reason)` | Authority-only burn: requires a reason (≤128 bytes); sets `status = Revoked`, clears the trading flag. |
 
-State machine: `issue` → **Valid** → `validate_for_trading` → **(tradable)** → `transfer`*; or **Valid** → `revoke` → **Revoked** (terminal). Expiry (`expires_at`, from `PoAConfig.erc_validity_period`, max 2 years) blocks validation/transfer.
+State machine: `issue` → **Valid** → `validate_for_trading` → **(tradable)** → `transfer`*; or **Valid** → `revoke` → **Revoked** (terminal). Expiry (`expires_at`, from `GovernanceConfig.erc_validity_period`, max 2 years) blocks validation/transfer.
 
 ---
 
@@ -39,7 +39,7 @@ State machine: `issue` → **Valid** → `validate_for_trading` → **(tradable)
 
 Note the **no-`String`-on-chain** convention: strings are fixed `[u8; N]` + a `*_len`, rehydrated with `from_utf8_lossy`.
 
-`PoAConfig` (singleton, `[b"poa_config"]`) holds the issuance policy: `erc_validation_enabled`, `min_energy_amount`/`max_erc_amount`, `erc_validity_period`, `require_oracle_validation`+`oracle_authority`, `allow_certificate_transfers`, and running stats (`total_ercs_issued/validated/revoked`, `total_energy_certified`).
+`GovernanceConfig` (singleton, `[b"poa_config"]`) holds the issuance policy: `erc_validation_enabled`, `min_energy_amount`/`max_erc_amount`, `erc_validity_period`, `require_oracle_validation`+`oracle_authority`, `allow_certificate_transfers`, and running stats (`total_ercs_issued/validated/revoked`, `total_energy_certified`).
 
 ---
 

@@ -1,9 +1,9 @@
 use crate::events::*;
-use crate::InitializePoa;
+use crate::InitializeGovernance;
 use anchor_lang::prelude::*;
 
-pub fn handler(ctx: Context<InitializePoa>) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+pub fn handler(ctx: Context<InitializeGovernance>) -> Result<()> {
+    let poa_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     // Authority Configuration
@@ -65,7 +65,7 @@ pub fn handler(ctx: Context<InitializePoa>) -> Result<()> {
     // Validate configuration
     poa_config.validate_config()?;
 
-    emit!(PoAInitialized {
+    emit!(GovernanceInitialized {
         authority: ctx.accounts.authority.key(),
         authority_name: "REC".to_string(),
         timestamp: clock.unix_timestamp,

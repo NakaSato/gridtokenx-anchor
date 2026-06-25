@@ -8,7 +8,7 @@ pub fn update_governance_config(
     erc_validation_enabled: bool,
     allow_certificate_transfers: bool,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     poa_config.erc_validation_enabled = erc_validation_enabled;
@@ -29,7 +29,7 @@ pub fn set_maintenance_mode(
     ctx: Context<UpdateGovernanceConfig>,
     maintenance_enabled: bool,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     poa_config.maintenance_mode = maintenance_enabled;
@@ -50,7 +50,7 @@ pub fn update_erc_limits(
     max_erc_amount: u64,
     erc_validity_period: i64,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     require!(min_energy_amount > 0, GovernanceError::InvalidMinimumEnergy);
@@ -90,7 +90,7 @@ pub fn update_authority_info(
     ctx: Context<UpdateGovernanceConfig>,
     contact_info: String,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.poa_config;
+    let poa_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     require!(

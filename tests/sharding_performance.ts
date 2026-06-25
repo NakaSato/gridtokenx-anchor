@@ -26,7 +26,7 @@ describe("sharding-performance", () => {
   const payer = (provider.wallet as any).payer as Keypair;
 
   let registryPda: PublicKey;
-  let poaConfigPda: PublicKey;
+  let governanceConfigPda: PublicKey;
   let marketPda: PublicKey;
   let zoneMarketPda: PublicKey;
   
@@ -35,7 +35,7 @@ describe("sharding-performance", () => {
 
   before(async () => {
     [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], registryProgram.programId);
-    [poaConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
     [marketPda] = PublicKey.findProgramAddressSync([Buffer.from("market")], tradingProgram.programId);
     [zoneMarketPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, 'le', 4)],
@@ -55,7 +55,7 @@ describe("sharding-performance", () => {
     }
 
     try {
-        await governanceProgram.methods.initializePoa().accounts({ poaConfig: poaConfigPda, authority, systemProgram: SystemProgram.programId } as any).rpc();
+        await governanceProgram.methods.initializeGovernance().accounts({ governanceConfig: governanceConfigPda, authority, systemProgram: SystemProgram.programId } as any).rpc();
     } catch (e) {}
 
     try {
@@ -180,11 +180,11 @@ describe("sharding-performance", () => {
         ));
 
         await tradingProgram.methods.createBuyOrder(buyOrderId, new BN(100), new BN(60)).accounts({
-            market: marketPda, zoneMarket: zoneMarketPda, order: buyPda, authority: buyer.publicKey, systemProgram: SystemProgram.programId, governanceConfig: poaConfigPda
+            market: marketPda, zoneMarket: zoneMarketPda, order: buyPda, authority: buyer.publicKey, systemProgram: SystemProgram.programId, governanceConfig: governanceConfigPda
         } as any).signers([buyer]).rpc();
         
         await tradingProgram.methods.createSellOrder(sellOrderId, new BN(100), new BN(50)).accounts({
-            market: marketPda, zoneMarket: zoneMarketPda, order: sellPda, authority: seller.publicKey, systemProgram: SystemProgram.programId, governanceConfig: poaConfigPda, ercCertificate: null
+            market: marketPda, zoneMarket: zoneMarketPda, order: sellPda, authority: seller.publicKey, systemProgram: SystemProgram.programId, governanceConfig: governanceConfigPda, ercCertificate: null
         } as any).signers([seller]).rpc();
 
         buyOrders.push(buyPda);
@@ -210,7 +210,7 @@ describe("sharding-performance", () => {
             tradeRecord: tradePda,
             authority: authority,
             systemProgram: SystemProgram.programId,
-            governanceConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
         } as any).rpc();
         matchPromises.push(promise);
     }

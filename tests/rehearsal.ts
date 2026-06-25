@@ -25,7 +25,7 @@ describe("Island Cluster Rehearsal", () => {
         govProgram.programId
       );
 
-      const [poaConfigPda] = PublicKey.findProgramAddressSync(
+      const [governanceConfigPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("poa_config")],
         govProgram.programId
       );
@@ -35,9 +35,9 @@ describe("Island Cluster Rehearsal", () => {
       // We need to make sure Governance is initialized first
       try {
         await govProgram.methods
-          .initializePoa()
+          .initializeGovernance()
           .accounts({
-            poaConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             authority: authority.publicKey,
             systemProgram: SystemProgram.programId,
           })
@@ -55,7 +55,7 @@ describe("Island Cluster Rehearsal", () => {
           )
           .accounts({
             zoneConfig: zoneConfigPda,
-            poaConfig: poaConfigPda,
+            governanceConfig: governanceConfigPda,
             authority: authority.publicKey,
             systemProgram: SystemProgram.programId,
           })

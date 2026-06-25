@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[event]
-pub struct PoAInitialized {
+pub struct GovernanceInitialized {
     pub authority: Pubkey,
     pub authority_name: String,
     pub timestamp: i64,

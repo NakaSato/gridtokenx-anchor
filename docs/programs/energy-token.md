@@ -41,7 +41,9 @@ The GRID mint is created as an SPL Token-2022 mint with 9 decimals (`mint::decim
 
 ### REC-validator gating
 
-A Renewable Energy Certificate (REC) validator is an authorized signer whose co-signature attests that the energy underlying a mint corresponds to a valid certificate. The program stores up to five REC-validator public keys in its configuration (`state.rs:15`). When the registered count is zero, mints proceed without a REC co-signer (preserving backward compatibility before any validator is registered); once one or more validators are registered, every mint path requires one of them to co-sign (`lib.rs:119-134`, `lib.rs:212-227`, `lib.rs:405-415`).
+A Renewable Energy Certificate (REC) validator is an authorized signer whose co-signature attests that the energy underlying a mint corresponds to a valid certificate. The program stores up to five REC-validator public keys in its configuration (`state.rs:15`). The REC co-signature gate is **mandatory on every mint path** — `mint_to_wallet`, `mint_generation`, and `mint_tokens_direct` each require a registered REC validator to co-sign (`lib.rs:120-139`, `lib.rs:210-227`, `lib.rs:405-410`). The earlier backward-compatibility allowance (when the registered count was zero, mints proceeded without a co-signer) has been **removed**: a freshly initialized token cannot mint at all until at least one validator is registered via `add_rec_validator`, because a zero count means no key can match and the membership check rejects (`RecValidatorNotFound`).
+
+The membership check itself is centralized in a single free function, `rec_validator_registered(token_info, key)` (`lib.rs:54-56`), the single source of truth for the REC gate. It returns `true` iff `key` is one of the registered validators, scanning only the populated prefix (`rec_validators[..rec_validators_count]`). Every mint path calls it, so the check can never drift between paths.
 
 ## 3. State Model
 
@@ -117,41 +119,41 @@ Attaches Metaplex metadata to the existing GRID mint (`lib.rs:62-103`).
 Mints GRID to a destination token account (`lib.rs:106-165`).
 
 - **Parameters:** `amount: u64`.
-- **Signers:** `authority` (must equal `token_info.authority`, `lib.rs:110-113`), `payer`, and an optional `rec_validator: Option<Signer>` (`lib.rs:560`).
-- **Accounts:** `mint` (constrained to `token_info.mint`), `token_info` PDA, `destination` token account (constrained `token::mint = mint`, `token::authority = destination_owner`), `destination_owner` (unchecked), and the token, associated-token, and system programs (`lib.rs:531-568`).
-- **Preconditions:** if `rec_validators_count > 0`, the supplied `rec_validator` must be present and listed in `rec_validators` (`lib.rs:119-134`).
-- **State effects:** issues a Token-2022 `mint_to` CPI signed by the `token_info` PDA (seed `[b"token_info_2022"]`, `lib.rs:146-149`). `total_supply` is deliberately not updated here (`lib.rs:155-156`).
-- **Events:** `TokensMinted { recipient, amount, timestamp }` (`lib.rs:158-162`).
-- **Error paths:** `UnauthorizedAuthority` (`lib.rs:112`), `RecValidatorNotFound` (`lib.rs:125`, `lib.rs:133`).
+- **Signers:** `authority` (must equal `token_info.authority`, `lib.rs:120-123`), `payer`, and `rec_validator: Option<Signer>` (`lib.rs:559`). The signer is typed `Option` only so a missing co-signer surfaces as `RecValidatorNotFound` rather than a coarse "not enough keys"; it is **not** optional in policy — the handler rejects `None` (`lib.rs:130-135`).
+- **Accounts:** `mint` (constrained to `token_info.mint`), `token_info` PDA, `destination` token account (constrained `token::mint = mint`, `token::authority = destination_owner`), `destination_owner` (unchecked), and the token, associated-token, and system programs (`lib.rs:531-567`).
+- **Preconditions:** the supplied `rec_validator` is **mandatory** — `None` is rejected with `RecValidatorNotFound`, and the key must be listed in `rec_validators` per `rec_validator_registered` (`lib.rs:120-139`).
+- **State effects:** issues a Token-2022 `mint_to` CPI signed by the `token_info` PDA (seed `[b"token_info_2022"]`, `lib.rs:145-154`). `total_supply` is deliberately not updated here (`lib.rs:160-161`).
+- **Events:** `TokensMinted { recipient, amount, timestamp }` (`lib.rs:163-167`).
+- **Error paths:** `UnauthorizedAuthority` (`lib.rs:122`), `RecValidatorNotFound` (`lib.rs:135`, `lib.rs:138`).
 
 ### 4.5 `mint_generation`
 
 Idempotent generation mint keyed by `(meter_id, window_start_ms)` (`lib.rs:181-265`).
 
 - **Parameters:** `meter_id: [u8; 16]`, `window_start_ms: i64`, `amount: u64`.
-- **Signers:** `authority`, `payer`, optional `rec_validator: Option<Signer>` (`lib.rs:610-616`).
-- **Accounts:** identical mint accounts to `mint_to_wallet`, plus the `mint_record` PDA at `[b"gen_mint", meter_id, window_start_ms.to_le_bytes()]` created with `init_if_needed` (`lib.rs:586-621`).
+- **Signers:** `authority`, `payer`, `rec_validator: Option<Signer>` (`lib.rs:614`) — `Option`-typed for the same error-shaping reason as `mint_to_wallet`, but **mandatory** in policy (the handler rejects `None`).
+- **Accounts:** identical mint accounts to `mint_to_wallet`, plus the `mint_record` PDA at `[b"gen_mint", meter_id, window_start_ms.to_le_bytes()]` created with `init_if_needed` (`lib.rs:585-621`).
 - **Preconditions and ordering:**
   1. **Idempotency short-circuit first.** If `mint_record.minted` is already `true`, the instruction returns `Ok(())` as a no-op, never re-running the CPI (`lib.rs:190-192`).
   2. **Window alignment.** `window_start_ms` must be positive and a multiple of `900_000` ms (15 minutes); otherwise `MisalignedWindow` (`lib.rs:198-201`).
-  3. **Authority and REC checks** identical to `mint_to_wallet` (`lib.rs:203-228`).
+  3. **Authority and REC checks** identical to `mint_to_wallet` — the mandatory `rec_validator` co-signer and `rec_validator_registered` membership check (`lib.rs:208-228`).
 - **State effects:** mints via Token-2022 `mint_to` signed by the `token_info` PDA (`lib.rs:231-246`), and only *after* a successful mint stamps the record (`meter_id`, `window_start_ms`, `amount`, `minted = true`, `bump`) so a failed mint leaves the window retryable (`lib.rs:248-256`).
 - **Events:** `TokensMinted { recipient, amount, timestamp }` (`lib.rs:258-262`).
-- **Error paths:** `MisalignedWindow` (`lib.rs:200`), `UnauthorizedAuthority` (`lib.rs:206`), `RecValidatorNotFound` (`lib.rs:218`, `lib.rs:226`). The idempotency design is per-instruction (not per-transaction) so a replayed recipient batched with fresh ones no-ops without aborting the whole transaction (`lib.rs:179-180`).
+- **Error paths:** `MisalignedWindow` (`lib.rs:205`), `UnauthorizedAuthority` (`lib.rs:212`), `RecValidatorNotFound` (`lib.rs:223`, `lib.rs:226`). The idempotency design is per-instruction (not per-transaction) so a replayed recipient batched with fresh ones no-ops without aborting the whole transaction (`lib.rs:184-185`).
 
 ### 4.6 `mint_tokens_direct`
 
 Registry/admin mint path optimized for Sealevel parallelism (`lib.rs:392-448`).
 
 - **Parameters:** `amount: u64`.
-- **Signers:** `authority`, and a mandatory `rec_validator: Signer` (`lib.rs:707`, `lib.rs:716`).
-- **Accounts:** `token_info` PDA (read-only, no write lock, `lib.rs:691-696`), `mint` (constrained to `token_info.mint`), `user_token_account`, and a `registry_authority` unchecked account constrained to equal the stored `registry_authority` (`lib.rs:709-713`).
-- **Preconditions:** authorization succeeds if the signer is either the admin (`token_info.authority`) or the `registry_authority` (`lib.rs:397-401`). If `rec_validators_count > 0`, `rec_validator` must be a registered validator (`lib.rs:405-415`).
-- **State effects:** mints via `mint_to` signed by the `token_info` PDA (`lib.rs:424-437`); `total_supply` is not updated (`lib.rs:439`).
-- **Events:** `GridTokensMinted { meter_owner, amount, timestamp }` (`lib.rs:441-445`).
-- **Error paths:** `UnauthorizedAuthority` (`lib.rs:401`, plus the `registry_authority` constraint at `lib.rs:711`), `RecValidatorNotFound` (`lib.rs:414`).
+- **Signers:** `authority`, and a mandatory `rec_validator: Signer` (`lib.rs:725`).
+- **Accounts:** `token_info` PDA (read-only, no write lock, `lib.rs:691-697`), `mint` (constrained to `token_info.mint`), `user_token_account` (bound `token::mint = mint`, `token::token_program = token_program` — defense-in-depth parity with the `destination` binding on the other mint paths; the `mint_to` CPI already rejects a wrong-mint account, but the constraint fails earlier in account validation, `lib.rs:709-714`), and a `registry_authority` unchecked account constrained to equal the stored `registry_authority` (`lib.rs:718-722`).
+- **Preconditions:** authorization succeeds if the signer is either the admin (`token_info.authority`) or the `registry_authority` (`lib.rs:397-401`). The `rec_validator` co-signer is **mandatory** and must be a registered validator per `rec_validator_registered` (`lib.rs:405-410`).
+- **State effects:** mints via `mint_to` signed by the `token_info` PDA (`lib.rs:419-431`); `total_supply` is not updated (`lib.rs:434`).
+- **Events:** `GridTokensMinted { meter_owner, amount, timestamp }` (`lib.rs:436-442`). Note `meter_owner` emits `user_token_account.owner` — the recipient **wallet**, not the token-account address — because downstream REC/provenance consumers key on the owner (`lib.rs:439`).
+- **Error paths:** `UnauthorizedAuthority` (`lib.rs:401`, plus the `registry_authority` constraint at `lib.rs:720`), `RecValidatorNotFound` (`lib.rs:407`).
 
-Note that `rec_validator` is a *mandatory* signer in this instruction's account context (`lib.rs:716`), unlike the optional signer in `mint_to_wallet` and `mint_generation`; when no validators are registered the membership check is skipped but a signer account must still be supplied.
+The REC gate is **mandatory on all three mint paths** — `mint_tokens_direct` is no longer distinguished from `mint_to_wallet` / `mint_generation` in this respect. The only typing difference is that `rec_validator` is a plain `Signer` here (`lib.rs:725`) rather than the `Option<Signer>` used on the other two paths; in all three, a registered co-signer is required and an unregistered or absent one is rejected with `RecValidatorNotFound`.
 
 ### 4.7 `transfer_tokens`
 
@@ -210,7 +212,7 @@ Updates the stored registry authority (`lib.rs:479-488`).
 
 1. **Mint authority is the `token_info` PDA.** The GRID mint is created with `mint::authority = token_info` (`lib.rs:640`), and every mint CPI signs with the seed `[b"token_info_2022"]` and the stored bump (`lib.rs:146-149`, `lib.rs:236-237`, `lib.rs:424-425`). No external key can mint GRID; only the program, acting under that PDA, can.
 
-2. **REC provenance gating is enforced on every mint path.** All three minting instructions check that, when `rec_validators_count > 0`, the supplied REC validator is a member of `rec_validators` (`lib.rs:119-134`, `lib.rs:212-227`, `lib.rs:405-415`). This couples GRID issuance to certificate attestation. Before any validator is registered (count 0), mints are permitted without a REC co-signer, which is an intentional backward-compatibility allowance (`lib.rs:115-118`).
+2. **REC provenance gating is mandatory on every mint path.** All three minting instructions require the supplied REC validator to be a member of `rec_validators`, checked through the shared `rec_validator_registered` helper (`lib.rs:120-139`, `lib.rs:208-227`, `lib.rs:405-410`). This couples GRID issuance to certificate attestation with no opt-out: the former backward-compatibility allowance (mints permitted without a co-signer while the validator count was zero) has been removed, so a freshly initialized token cannot mint until at least one validator is registered (count 0 ⇒ no key matches ⇒ `RecValidatorNotFound`).
 
 3. **Authorization is constrained on every privileged instruction.** Admin-gated instructions check `authority == token_info.authority` either via in-handler `require!` or via account constraints (`lib.rs:110-113`, `lib.rs:206`, `lib.rs:459-462`, `lib.rs:481-484`, `has_one` at `lib.rs:655`). `mint_tokens_direct` additionally accepts the configured `registry_authority` and constrains the supplied `registry_authority` account against the stored value (`lib.rs:397-401`, `lib.rs:709-713`).
 
@@ -241,11 +243,11 @@ Defined in `programs/energy-token/src/events.rs`.
 
 | Event | Fields | Emitted by / when |
 | --- | --- | --- |
-| `GridTokensMinted` | `meter_owner: Pubkey`, `amount: u64`, `timestamp: i64` (`events.rs:5-10`) | `mint_tokens_direct` after a successful mint (`lib.rs:441-445`). |
-| `TokensMinted` | `recipient: Pubkey`, `amount: u64`, `timestamp: i64` (`events.rs:12-17`) | `mint_to_wallet` (`lib.rs:158-162`) and `mint_generation` (`lib.rs:258-262`) after a successful mint. |
-| `TotalSupplySynced` | `authority: Pubkey`, `supply: u64`, `timestamp: i64` (`events.rs:19-24`) | `sync_total_supply` after updating the cached supply (`lib.rs:469-473`). |
+| `GridTokensMinted` | `meter_owner: Pubkey`, `amount: u64`, `timestamp: i64` (`events.rs:5-10`) | `mint_tokens_direct` after a successful mint; `meter_owner` carries `user_token_account.owner` (the recipient wallet), not the token-account key (`lib.rs:436-442`). |
+| `TokensMinted` | `recipient: Pubkey`, `amount: u64`, `timestamp: i64` (`events.rs:12-17`) | `mint_to_wallet` (`lib.rs:163-167`) and `mint_generation` (`lib.rs:258-262`) after a successful mint. |
+| `TotalSupplySynced` | `authority: Pubkey`, `supply: u64`, `timestamp: i64` (`events.rs:19-24`) | `sync_total_supply` after updating the cached supply (`lib.rs:466-470`). |
 
-In every emitting handler the timestamp is hoisted via `let now = Clock::get()?.unix_timestamp;` before the `emit!` macro, avoiding a sysvar syscall inside macro expansion (`lib.rs:138`, `lib.rs:230`, `lib.rs:421`, `lib.rs:468`).
+In every emitting handler the timestamp is hoisted via `let now = Clock::get()?.unix_timestamp;` before the `emit!` macro, avoiding a sysvar syscall inside macro expansion (`lib.rs:143`, `lib.rs:230`, `lib.rs:416`, `lib.rs:465`).
 
 ## 8. Error Codes
 
@@ -261,7 +263,7 @@ Defined in `programs/energy-token/src/error.rs` as `EnergyTokenError`.
 | `UnauthorizedRegistry` | "Unauthorized registry program" | Defined; registry authorization currently uses `UnauthorizedAuthority` (`error.rs:17-18`). |
 | `ValidatorAlreadyExists` | "Validator already exists in the list" | `add_rec_validator` rejects a duplicate key (`error.rs:19-20`, `lib.rs:307`). |
 | `MaxValidatorsReached` | "Maximum number of validators reached" | `add_rec_validator` rejects when count is 5 (`error.rs:21-22`, `lib.rs:300`). |
-| `RecValidatorNotFound` | "REC validator not found in the registered list" | A required REC co-signer is missing or not registered (`error.rs:23-24`, `lib.rs:125`, `lib.rs:218`, `lib.rs:414`). |
+| `RecValidatorNotFound` | "REC validator not found in the registered list" | A required REC co-signer is missing or not registered — raised on all three mint paths (`error.rs:23-24`, `lib.rs:135`, `lib.rs:223`, `lib.rs:407`). |
 | `RemoveValidatorNotFound` | "Validator to remove not found in the registered list" | `remove_rec_validator` could not find the key (`error.rs:25-26`, `lib.rs:337`). |
 | `MisalignedWindow` | "Window start must be a positive 15-minute (900_000 ms) boundary" | `mint_generation` window-alignment check failed (`error.rs:27-28`, `lib.rs:200`). |
 
