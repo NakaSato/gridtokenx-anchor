@@ -132,6 +132,25 @@ async function main() {
       console.log('  ℹ️  Energy Token already exists or failed:', e.message);
     }
   }
+
+  // 2-rec. Register the platform REC validator on the energy-token TokenInfo.
+  // Without at least one registered validator, `rec_validators_count == 0` and every
+  // surplus-mint (mint_generation) fails RecValidatorNotFound (6024). The dev wallet is
+  // token_info.authority AND the chain-bridge Vault platform_admin signer, so the one
+  // key satisfies both the `authority` and `rec_validator` signer slots in the bridge-
+  // signed mint. Idempotent: a re-run hits ValidatorAlreadyExists and is swallowed.
+  console.log('\n[2-rec/5] Registering REC validator (energy token)...');
+  try {
+    await energyTokenProgram.methods
+      .addRecValidator(authority, 'rec')
+      .accounts({ tokenInfo: tokenInfoPda, authority: authority } as any)
+      .rpc();
+    console.log('  ✅ REC validator registered:', authority.toBase58());
+  } catch (e: any) {
+    // ValidatorAlreadyExists on a re-run, or token not yet initialized — both safe to skip.
+    console.log('  ℹ️  REC validator already registered or skipped:', e.message);
+  }
+
   // 2a. Initialize Staking Vault
   console.log('\n[2a/5] Initializing Staking Vault...');
   const [grxVaultPda] = PublicKey.findProgramAddressSync(
