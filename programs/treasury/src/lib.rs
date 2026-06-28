@@ -54,6 +54,39 @@ fn reward_debt_for(amount: u64, acc: u128) -> Result<u128> {
         .map_err(Into::into)
 }
 
+/// Swap peg math (extracted from `swap_grx_for_thbg` so it is unit-testable):
+/// `gross = grx_in * rate / 1e9`, `fee = gross * fee_bps / 1e4`, `net = gross - fee`.
+/// Enforces `net > 0` (ZeroAmount) and the peg invariant
+/// `thbg_supply + net <= attested_reserve` (PegBreach). All products use checked u128
+/// math (MathOverflow on overflow / u64 truncation). Returns `(net, fee, new_supply)`.
+fn compute_swap_grx_for_thbg(
+    grx_in: u64,
+    rate: u64,
+    fee_bps: u16,
+    thbg_supply: u64,
+    attested_reserve: u64,
+) -> Result<(u64, u64, u64)> {
+    let gross = (grx_in as u128)
+        .checked_mul(rate as u128)
+        .ok_or(TreasuryError::MathOverflow)?
+        / GRX_ATOMS_PER_WHOLE;
+    let fee = gross
+        .checked_mul(fee_bps as u128)
+        .ok_or(TreasuryError::MathOverflow)?
+        / 10_000;
+    let net = gross.saturating_sub(fee);
+    require!(net > 0, TreasuryError::ZeroAmount);
+    let new_supply = (thbg_supply as u128)
+        .checked_add(net)
+        .ok_or(TreasuryError::MathOverflow)?;
+    require!(new_supply <= attested_reserve as u128, TreasuryError::PegBreach);
+    Ok((
+        u64::try_from(net).map_err(|_| TreasuryError::MathOverflow)?,
+        u64::try_from(fee).map_err(|_| TreasuryError::MathOverflow)?,
+        u64::try_from(new_supply).map_err(|_| TreasuryError::MathOverflow)?,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,18 +129,69 @@ mod tests {
         assert_eq!(earned, 0);
     }
 
-    // Peg arithmetic: thbg_out for a swap = grx_in * rate / 1e9, fee deducted.
+    fn err_code(e: anchor_lang::error::Error) -> u32 {
+        match e {
+            anchor_lang::error::Error::AnchorError(ae) => ae.error_code_number,
+            other => panic!("expected AnchorError, got {other:?}"),
+        }
+    }
+    fn code_of(v: TreasuryError) -> u32 { err_code(v.into()) }
+
+    // Peg arithmetic exercising the REAL handler math: 3 GRX × rate 4_000_000 / 1e9 = 12 THBG
+    // gross; fee 25 bps = 30_000; net 11_970_000; supply 0 -> net, reserve ample.
     #[test]
     fn swap_output_matches_rate_and_fee() {
-        let grx_in: u128 = 3_000_000_000; // 3 GRX
-        let rate: u128 = 4_000_000; // 4 THBG (6dp) per whole GRX
-        let fee_bps: u128 = 25;
-        let gross = grx_in * rate / GRX_ATOMS_PER_WHOLE; // 12_000_000 = 12 THBG
-        let fee = gross * fee_bps / 10_000;
-        let net = gross - fee;
-        assert_eq!(gross, 12_000_000);
+        let (net, fee, new_supply) =
+            compute_swap_grx_for_thbg(3_000_000_000, 4_000_000, 25, 0, 1_000_000_000).unwrap();
         assert_eq!(fee, 30_000);
         assert_eq!(net, 11_970_000);
+        assert_eq!(new_supply, 11_970_000);
+    }
+
+    // thbg_supply accumulates: existing 1_000_000 + net 11_970_000 = 12_970_000 <= reserve.
+    #[test]
+    fn swap_adds_net_to_existing_supply() {
+        let (_net, _fee, new_supply) =
+            compute_swap_grx_for_thbg(3_000_000_000, 4_000_000, 25, 1_000_000, 100_000_000).unwrap();
+        assert_eq!(new_supply, 12_970_000);
+    }
+
+    // Dust input rounds to zero net output -> ZeroAmount (not a free mint of 0).
+    #[test]
+    fn swap_zero_net_is_rejected() {
+        // grx_in 1 atom * rate 1 / 1e9 = 0 gross -> net 0.
+        let e = compute_swap_grx_for_thbg(1, 1, 0, 0, u64::MAX).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::ZeroAmount));
+    }
+
+    // Peg ceiling is inclusive: supply + net == reserve is allowed.
+    #[test]
+    fn swap_peg_ceiling_is_inclusive() {
+        // net = 12_000_000 (fee_bps 0), supply 0, reserve exactly 12_000_000.
+        let (net, _fee, new_supply) =
+            compute_swap_grx_for_thbg(3_000_000_000, 4_000_000, 0, 0, 12_000_000).unwrap();
+        assert_eq!(net, 12_000_000);
+        assert_eq!(new_supply, 12_000_000);
+    }
+
+    // One atom over the reserve ceiling -> PegBreach.
+    #[test]
+    fn swap_over_reserve_breaches_peg() {
+        let e = compute_swap_grx_for_thbg(3_000_000_000, 4_000_000, 0, 0, 11_999_999).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::PegBreach));
+    }
+
+    // fee overflowing the u64 cast is reachable: a huge gross (> u64::MAX) with a near-100%
+    // fee leaves net small enough to clear the peg, but fee itself exceeds u64 -> MathOverflow.
+    // (grx_in*rate can't overflow u128 since u64*u64 < u128::MAX, and net > u64::MAX always
+    // breaches the peg first — so the fee cast is the only reachable MathOverflow path.)
+    #[test]
+    fn swap_fee_u64_overflow_rejected() {
+        // gross = 1e10 * 1.8e19 / 1e9 ~ 1.8e20 (> u64::MAX); fee_bps 9999 -> fee ~1.8e20 (> u64::MAX);
+        // net ~1.8e16 (fits u64) and clears the ample reserve.
+        let e =
+            compute_swap_grx_for_thbg(10_000_000_000, u64::MAX, 9_999, 0, u64::MAX).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::MathOverflow));
     }
 }
 
@@ -476,28 +560,15 @@ pub mod treasury {
                     TreasuryError::StaleAttestation
                 );
 
-                let gross = (grx_in as u128)
-                    .checked_mul(t.grx_per_thbg_rate as u128)
-                    .ok_or(TreasuryError::MathOverflow)?
-                    / GRX_ATOMS_PER_WHOLE;
-                let fee = gross
-                    .checked_mul(t.swap_fee_bps as u128)
-                    .ok_or(TreasuryError::MathOverflow)?
-                    / 10_000;
-                let net = gross.saturating_sub(fee);
-                require!(net > 0, TreasuryError::ZeroAmount);
+                let (net, fee, new_supply) = compute_swap_grx_for_thbg(
+                    grx_in,
+                    t.grx_per_thbg_rate,
+                    t.swap_fee_bps,
+                    t.thbg_supply,
+                    t.attested_reserve,
+                )?;
 
-                let new_supply = (t.thbg_supply as u128)
-                    .checked_add(net)
-                    .ok_or(TreasuryError::MathOverflow)?;
-                require!(new_supply <= t.attested_reserve as u128, TreasuryError::PegBreach);
-
-                (
-                    t.bump,
-                    u64::try_from(net).map_err(|_| TreasuryError::MathOverflow)?,
-                    u64::try_from(fee).map_err(|_| TreasuryError::MathOverflow)?,
-                    u64::try_from(new_supply).map_err(|_| TreasuryError::MathOverflow)?,
-                )
+                (t.bump, net, fee, new_supply)
             };
 
             // Pull GRX collateral from the user into the swap vault.
