@@ -74,4 +74,8 @@ pub enum TradingError {
     TreasurySettlementRequired,
     #[msg("Settlement collector shard id out of range (must be < NUM_SETTLE_SHARDS)")]
     InvalidShardId,
+    // Appended at the END to preserve existing error-code numbering (inserting mid-enum
+    // shifts every later code and breaks tests/clients that assert numeric codes).
+    #[msg("Cross-zone settlement requires the ZoneCapacity account (committed_flow ceiling)")]
+    ZoneCapacityRequired,
 }

@@ -118,6 +118,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   const LOW_CAP = 50;
   let lowZonePda: PublicKey;
   let lowZoneShardPda: PublicKey;
+  let lowZoneCapacityPda: PublicKey;
 
   function send(ixs: TransactionInstruction[], signers: Keypair[]) {
     const tx = new Transaction();
@@ -246,7 +247,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       buyerExpires?: number; sellerExpires?: number;
       energyAmount?: number; matchAmount?: number; matchPrice?: number;
       wheeling?: number; loss?: number;
-      zoneMarket?: PublicKey; zoneShard?: PublicKey;
+      zoneMarket?: PublicKey; zoneShard?: PublicKey; zoneCapacity?: PublicKey | null;
     } = {}
   ): Promise<TransactionInstruction[]> {
     const seedA = o.seedA ?? 0xa1, seedB = o.seedB ?? 0xb2;
@@ -258,6 +259,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const matchPrice = o.matchPrice ?? MATCH_PRICE;
     const zoneMarket = o.zoneMarket ?? zoneMarketPda;
     const zoneShard = o.zoneShard ?? zoneShardPda;
+    const zoneCapacity = o.zoneCapacity ?? null; // Tier-A: cross-zone passes it via remaining_accounts[1]
     const wheeling = o.wheeling ?? 1, loss = o.loss ?? 1;
 
     const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(seedA, 0);
@@ -298,8 +300,12 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
         treasuryProgram: withTreasury ? treasuryId : null,
         treasuryState: withTreasury ? treasuryPda : null,
       } as any)
-      // Governance poa_config is the FIRST remaining account (maintenance gate).
-      .remainingAccounts([{ pubkey: governanceConfigPda, isSigner: false, isWritable: false }])
+      // Governance poa_config is remaining_accounts[0] (maintenance gate); ZoneCapacity, when
+      // supplied (cross-zone), is remaining_accounts[1] (writable — committed_flow counter).
+      .remainingAccounts([
+        { pubkey: governanceConfigPda, isSigner: false, isWritable: false },
+        ...(zoneCapacity ? [{ pubkey: zoneCapacity, isSigner: false, isWritable: true }] : []),
+      ])
       .instruction();
 
     return [buyerEd, sellerEd, settleIx];
@@ -391,6 +397,9 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     [lowZoneShardPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_shard"), lowZonePda.toBuffer(), Buffer.from([shardByte])], tradingId);
     send([await trading.methods.initializeZoneMarket(LOW_ZONE, 16, new BN(LOW_CAP)).accounts({ market: marketPda, zoneMarket: lowZonePda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeZoneMarketShard(shardByte).accounts({ zoneMarket: lowZonePda, zoneShard: lowZoneShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
+    // Tier-A: cross-zone capacity counter for the low-cap zone.
+    [lowZoneCapacityPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_capacity"), lowZonePda.toBuffer()], tradingId);
+    send([await trading.methods.initZoneCapacity().accounts({ zoneMarket: lowZonePda, zoneCapacity: lowZoneCapacityPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeMarketShard(shardByte).accounts({ market: marketPda, marketShard: marketShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeZoneMarketShard(shardByte).accounts({ zoneMarket: zoneMarketPda, zoneShard: zoneShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeCollectors().accounts({ payer: payer.publicKey, currencyMint, feeCollector: collectorPda("fee_collector", currencyMint), wheelingCollector: collectorPda("wheeling_collector", currencyMint), lossCollector: collectorPda("loss_collector", currencyMint), marketAuthority: marketAuthorityPda, tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId } as any).instruction()], []);
@@ -505,7 +514,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       seedA: 0x19, seedB: 0x1a,
       buyerZone: 8, sellerZone: 8,
       energyAmount: 100, matchAmount: 60,
-      zoneMarket: lowZonePda, zoneShard: lowZoneShardPda,
+      zoneMarket: lowZonePda, zoneShard: lowZoneShardPda, zoneCapacity: lowZoneCapacityPda,
     }), true);
     expect(blob, blob).to.match(/CapacityExceeded/);
   });

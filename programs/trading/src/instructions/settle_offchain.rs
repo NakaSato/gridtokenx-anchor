@@ -85,6 +85,30 @@ fn require_governance_operational(info: &AccountInfo) -> Result<()> {
     Ok(())
 }
 
+/// Validate a remaining-account as the canonical `ZoneCapacity` PDA for `zone_market` and
+/// return its loader. Cross-zone settlements pass this account (writable) via
+/// `remaining_accounts` — it CANNOT be a typed context field because the settle context is
+/// already at the BPF stack ceiling (a typed Option field overflows `try_accounts`; see
+/// settle-context-stack-limit). `AccountLoader::try_from` checks owner + discriminator; the
+/// PDA derivation and the `zone_market` parent binding are checked here so a settler can't
+/// substitute another zone's counter to bypass the ceiling.
+fn load_zone_capacity<'info>(
+    info: &'info AccountInfo<'info>,
+    zone_market_key: &Pubkey,
+    program_id: &Pubkey,
+) -> Result<AccountLoader<'info, ZoneCapacity>> {
+    let (expected, _) =
+        Pubkey::find_program_address(&[b"zone_capacity", zone_market_key.as_ref()], program_id);
+    require_keys_eq!(*info.key, expected, TradingError::ZoneCapacityRequired);
+    let loader = AccountLoader::<ZoneCapacity>::try_from(info)?;
+    require_keys_eq!(
+        loader.load()?.zone_market,
+        *zone_market_key,
+        TradingError::ZoneCapacityRequired
+    );
+    Ok(loader)
+}
+
 /// Hard ceiling on combined network charges (wheeling + line loss) as a fraction of trade
 /// value. A settler must not be able to siphon the seller's proceeds to the collectors by
 /// inflating these caller-supplied charges. 20% is a conservative sanity bound; exact
@@ -211,8 +235,12 @@ pub struct SettleOffchainMatchContext<'info> {
     // Bound to the canonical singleton market PDA — blocks substituting a fee=0 market.
     #[account(seeds = [b"market"], bump)]
     pub market: AccountLoader<'info, Market>,
+    // READ-ONLY (Tier-A): settle only READS zone_market (capacity + zone_id). The cross-zone
+    // committed_flow counter lives on the ZoneCapacity PDA, passed via remaining_accounts on
+    // the cross-zone path (the context is at the BPF stack ceiling — no room for a typed field).
+    // So intra-zone settles don't write-lock zone_market and can run in parallel.
     // Must belong to `market` — blocks substituting a zero-capacity / wrong-zone book.
-    #[account(mut, constraint = zone_market.load()?.market == market.key())]
+    #[account(constraint = zone_market.load()?.market == market.key())]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
 
     // NOTE: the governance poa_config account is passed as the FIRST remaining account, not a
@@ -363,7 +391,10 @@ pub struct BatchMatchPair {
 pub struct SettleOffchainMatchBatchContext<'info> {
     #[account(seeds = [b"market"], bump)]
     pub market: AccountLoader<'info, Market>,
-    #[account(mut, constraint = zone_market.load()?.market == market.key())]
+    // READ-ONLY (Tier-A): settle only reads zone_market (capacity + zone_id); committed_flow
+    // lives on the ZoneCapacity PDA passed via remaining_accounts (cross-zone only), so
+    // intra-zone batches don't write-lock zone_market.
+    #[account(constraint = zone_market.load()?.market == market.key())]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
 
     // NOTE: governance poa_config is passed as the LAST remaining account (after the
@@ -494,7 +525,9 @@ pub fn settle_offchain_match(
     require!(seller_payload.expires_at == 0 || clock.unix_timestamp < seller_payload.expires_at, TradingError::OrderExpired);
 
     let market = ctx.accounts.market.load()?;
-    let mut zone_market = ctx.accounts.zone_market.load_mut()?;
+    // Tier-A: zone_market READ-ONLY (capacity + zone_id reads). committed_flow lives on the
+    // ZoneCapacity PDA, written only on the cross-zone path via remaining_accounts.
+    let zone_market = ctx.accounts.zone_market.load()?;
     let mut market_shard = ctx.accounts.market_shard.load_mut()?;
     let mut zone_shard = ctx.accounts.zone_shard.load_mut()?;
 
@@ -505,9 +538,15 @@ pub fn settle_offchain_match(
     if zone_market.capacity > 0
         && (seller_payload.zone_id != zone_market.zone_id || buyer_payload.zone_id != zone_market.zone_id)
     {
-        let new_total_flow = zone_market.committed_flow.checked_add(match_amount).ok_or(TradingError::Overflow)?;
+        // Cross-zone → ZoneCapacity (writable) is MANDATORY as remaining_accounts[1] (index 0
+        // is the governance poa_config); omitting it cannot bypass the ceiling. committed_flow
+        // is the single source of truth.
+        let zc_info = ctx.remaining_accounts.get(1).ok_or(TradingError::ZoneCapacityRequired)?;
+        let zc_loader = load_zone_capacity(zc_info, &ctx.accounts.zone_market.key(), ctx.program_id)?;
+        let mut zc = zc_loader.load_mut()?;
+        let new_total_flow = zc.committed_flow.checked_add(match_amount).ok_or(TradingError::Overflow)?;
         require!(new_total_flow <= zone_market.capacity, TradingError::CapacityExceeded);
-        zone_market.committed_flow = new_total_flow;
+        zc.committed_flow = new_total_flow;
     }
 
     let buyer_remaining = buyer_payload.energy_amount.saturating_sub(ctx.accounts.buyer_nullifier.filled_amount);
@@ -720,21 +759,34 @@ pub fn batch_settle_offchain_match<'info>(
 
     let sysvar_info = &ctx.accounts.sysvar_instructions;
     let remaining_accounts = ctx.remaining_accounts;
-    // Per-pair accounts (match_count*6) followed by ONE trailing governance poa_config account.
-    require!(remaining_accounts.len() == match_count * 6 + 1, TradingError::InvalidAmount);
+    // Layout: match_count*6 per-pair accounts, then poa_config (at match_count*6), then an
+    // OPTIONAL ZoneCapacity account (at match_count*6 + 1) for cross-zone batches (Tier-A).
+    let base = match_count * 6;
+    require!(
+        remaining_accounts.len() == base + 1 || remaining_accounts.len() == base + 2,
+        TradingError::InvalidAmount
+    );
 
     // Governance gate — batch settlement is the primary fund path; halt under maintenance.
     // poa_config is the trailing remaining account (stack-limit workaround).
-    require_governance_operational(&remaining_accounts[match_count * 6])?;
+    require_governance_operational(&remaining_accounts[base])?;
 
     let clock = Clock::get()?;
     let market = ctx.accounts.market.load()?;
-    let mut zone_market = ctx.accounts.zone_market.load_mut()?;
+    // Tier-A: zone_market READ-ONLY; committed_flow on the ZoneCapacity PDA (cross-zone only).
+    let zone_market = ctx.accounts.zone_market.load()?;
     let mut market_shard = ctx.accounts.market_shard.load_mut()?;
     let mut zone_shard = ctx.accounts.zone_shard.load_mut()?;
 
     // Hoist keys/program ids out of the loop to avoid repeated borrows.
     let program_id = ctx.program_id;
+    // Optional cross-zone capacity counter (remaining_accounts[base + 1]); loaded once,
+    // load_mut per cross-zone match. None when the batch is purely intra-zone.
+    let zone_capacity_loader: Option<AccountLoader<ZoneCapacity>> = if remaining_accounts.len() > base + 1 {
+        Some(load_zone_capacity(&remaining_accounts[base + 1], &ctx.accounts.zone_market.key(), program_id)?)
+    } else {
+        None
+    };
     let currency_mint_key = ctx.accounts.currency_mint.key();
     let energy_mint_key = ctx.accounts.energy_mint.key();
     let token_prog_key = ctx.accounts.token_program.key();
@@ -838,13 +890,16 @@ pub fn batch_settle_offchain_match<'info>(
         batch_total_value = batch_total_value.checked_add(total_value).ok_or(TradingError::Overflow)?;
 
         // Zone capacity check and update (cross-zone wheeling flow only — see single path).
-        // Cross-zone if EITHER leg is remote relative to this zone_market.
+        // Cross-zone if EITHER leg is remote relative to this zone_market. Cross-zone matches
+        // REQUIRE the ZoneCapacity account; committed_flow is the single source of truth.
         if zone_market.capacity > 0
             && (m.seller_payload.zone_id != zone_market.zone_id || m.buyer_payload.zone_id != zone_market.zone_id)
         {
-            let new_total_flow = zone_market.committed_flow.checked_add(m.match_amount).ok_or(TradingError::Overflow)?;
+            let zcl = zone_capacity_loader.as_ref().ok_or(TradingError::ZoneCapacityRequired)?;
+            let mut zc = zcl.load_mut()?;
+            let new_total_flow = zc.committed_flow.checked_add(m.match_amount).ok_or(TradingError::Overflow)?;
             require!(new_total_flow <= zone_market.capacity, TradingError::CapacityExceeded);
-            zone_market.committed_flow = new_total_flow;
+            zc.committed_flow = new_total_flow;
         }
 
         // Transfers
