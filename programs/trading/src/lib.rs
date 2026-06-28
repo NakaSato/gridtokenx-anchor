@@ -58,15 +58,6 @@ pub struct ClearAuctionResult {
     pub total_matches: u32,
 }
 
-/// Match pair for batch execution
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
-pub struct MatchPair {
-    pub buy_order: Pubkey,
-    pub sell_order: Pubkey,
-    pub amount: u64,
-    pub price: u64,
-}
-
 declare_id!("CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX");
 
 // ============================================================================
@@ -454,131 +445,6 @@ pub mod trading {
         Ok(())
     }
 
-    pub fn add_order_to_batch(ctx: Context<AddOrderToBatchContext>) -> Result<()> {
-        compute_fn!("add_order_to_batch" => {
-        require!(
-            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
-            TradingError::MaintenanceMode
-        );
-
-        let mut market = ctx.accounts.market.load_mut()?;
-        let order = ctx.accounts.order.load()?;
-
-        // Check batch processing is enabled
-        require!(
-            market.batch_config.enabled == 1,
-            TradingError::BatchProcessingDisabled
-        );
-
-        // Validate order is active
-        require!(
-            order.status == OrderStatus::Active as u8
-                || order.status == OrderStatus::PartiallyFilled as u8,
-            TradingError::InactiveBuyOrder
-        );
-
-        // Single Clock::get() syscall reused for both batch init and expiry check
-        let clock = Clock::get()?;
-
-        // Initialize new batch if needed
-        if market.has_current_batch == 0 {
-            market.current_batch = BatchInfo {
-                batch_id: market.total_trades as u64,
-                order_count: 0,
-                _padding1: [0; 4],
-                total_volume: 0,
-                created_at: clock.unix_timestamp,
-                expires_at: clock.unix_timestamp + market.batch_config.batch_timeout_seconds as i64,
-                order_ids: [Pubkey::default(); 32],
-            };
-            market.has_current_batch = 1;
-        }
-
-        // Check batch not expired
-        require!(
-            clock.unix_timestamp < market.current_batch.expires_at,
-            TradingError::BatchTooLarge
-        );
-
-        // Check batch size limit
-        let order_count = market.current_batch.order_count as usize;
-        require!(
-            order_count < market.batch_config.max_batch_size as usize,
-            TradingError::BatchSizeExceeded
-        );
-        require!(order_count < 32, TradingError::BatchTooLarge);
-
-        let batch_id = market.current_batch.batch_id;
-
-        // Add order to batch
-        market.current_batch.order_ids[order_count] = ctx.accounts.order.key();
-        market.current_batch.order_count += 1;
-        market.current_batch.total_volume += order.amount.saturating_sub(order.filled_amount);
-
-        emit!(crate::events::OrderAddedToBatch {
-            order_id: ctx.accounts.order.key(),
-            batch_id,
-            timestamp: clock.unix_timestamp,
-        });
-        });
-
-        Ok(())
-    }
-
-    pub fn execute_batch(
-        ctx: Context<ExecuteBatchContext>,
-        match_pairs: Vec<MatchPair>,
-    ) -> Result<()> {
-        compute_fn!("execute_batch" => {
-        require!(
-            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
-            TradingError::MaintenanceMode
-        );
-
-        let mut market = ctx.accounts.market.load_mut()?;
-
-        // Check batch exists and is valid
-        require!(market.has_current_batch == 1, TradingError::EmptyBatch);
-        require!(
-            market.current_batch.order_count > 0,
-            TradingError::EmptyBatch
-        );
-        require!(
-            market.current_batch.order_count as usize == match_pairs.len(),
-            TradingError::BatchSizeExceeded
-        );
-
-        // Extract batch data before modifying market
-        let batch_id = market.current_batch.batch_id;
-        let order_count = market.current_batch.order_count;
-        let clock = Clock::get()?;
-
-        // Accumulate volume with overflow-safe saturating add
-        let total_volume: u64 = match_pairs
-            .iter()
-            .fold(0u64, |acc, pair| acc.saturating_add(pair.amount));
-
-        // Update market stats
-        market.total_volume = market.total_volume.saturating_add(total_volume);
-        market.total_trades += 1;
-        market.last_clearing_price = match_pairs.first().map_or(0, |p| p.price);
-
-        // Clear batch
-        market.has_current_batch = 0;
-        market.current_batch = BatchInfo::default();
-
-        emit!(crate::events::BatchExecuted {
-            authority: ctx.accounts.authority.key(),
-            batch_id,
-            order_count,
-            total_volume,
-            timestamp: clock.unix_timestamp,
-        });
-        });
-
-        Ok(())
-    }
-
     pub fn batch_settle_offchain_match<'info>(
         ctx: Context<'info, SettleOffchainMatchBatchContext<'info>>,
         matches: Vec<BatchMatchPair>,
@@ -894,35 +760,6 @@ pub mod trading {
             trade_volume,
             vwap: market.volume_weighted_price,
             timestamp: current_timestamp,
-        });
-        });
-
-        Ok(())
-    }
-
-    pub fn cancel_batch(ctx: Context<CancelBatchContext>) -> Result<()> {
-        compute_fn!("cancel_batch" => {
-        require!(
-            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
-            TradingError::MaintenanceMode
-        );
-
-        let mut market = ctx.accounts.market.load_mut()?;
-
-        // Check batch exists
-        require!(market.has_current_batch == 1, TradingError::EmptyBatch);
-
-        let clock = Clock::get()?;
-        let batch_id = market.current_batch.batch_id;
-
-        // Clear batch
-        market.has_current_batch = 0;
-        market.current_batch = BatchInfo::default();
-
-        emit!(crate::events::BatchCancelled {
-            batch_id,
-            authority: ctx.accounts.authority.key(),
-            timestamp: clock.unix_timestamp,
         });
         });
 
@@ -1612,34 +1449,6 @@ pub mod trading {
         #[account(mut, has_one = authority)]
         pub market: AccountLoader<'info, Market>,
         pub authority: Signer<'info>,
-    }
-
-    #[derive(Accounts)]
-    pub struct AddOrderToBatchContext<'info> {
-        #[account(mut)]
-        pub market: AccountLoader<'info, Market>,
-        pub order: AccountLoader<'info, Order>,
-        #[account(mut)]
-        pub authority: Signer<'info>,
-        pub governance_config: Account<'info, GovernanceConfig>,
-    }
-
-    #[derive(Accounts)]
-    pub struct ExecuteBatchContext<'info> {
-        #[account(mut)]
-        pub market: AccountLoader<'info, Market>,
-        #[account(mut)]
-        pub authority: Signer<'info>,
-        pub governance_config: Account<'info, GovernanceConfig>,
-    }
-
-    #[derive(Accounts)]
-    pub struct CancelBatchContext<'info> {
-        #[account(mut)]
-        pub market: AccountLoader<'info, Market>,
-        #[account(mut)]
-        pub authority: Signer<'info>,
-        pub governance_config: Account<'info, GovernanceConfig>,
     }
 
     #[derive(Accounts)]

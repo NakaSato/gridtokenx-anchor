@@ -64,29 +64,6 @@ pub struct SettlementThbgMintSet {
 }
 
 #[event]
-pub struct BatchExecuted {
-    pub authority: Pubkey,
-    pub batch_id: u64,
-    pub order_count: u32,
-    pub total_volume: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct OrderAddedToBatch {
-    pub order_id: Pubkey,
-    pub batch_id: u64,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct BatchCancelled {
-    pub batch_id: u64,
-    pub authority: Pubkey,
-    pub timestamp: i64,
-}
-
-#[event]
 pub struct MaintenanceModeChanged {
     pub authority: Pubkey,
     pub maintenance_mode: bool,

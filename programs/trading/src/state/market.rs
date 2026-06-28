@@ -23,7 +23,13 @@ pub struct Market {
     pub min_price_per_kwh: u64,     // 8 — minimum allowed price (must be > 0)
     pub max_price_per_kwh: u64,     // 8 — maximum allowed price (0 = no cap)
 
-    // === BATCH PROCESSING ===
+    // === BATCH PROCESSING (RESERVED / DEAD) ===
+    // The on-chain batch-builder instructions (add_order_to_batch / execute_batch /
+    // cancel_batch) were removed: batch_config.enabled was never set by any instruction,
+    // so the path was unreachable. These fields are KEPT to preserve the zero-copy account
+    // layout (removing them would shift every field below + break existing Market accounts).
+    // initialize_market still zero-inits batch_config; nothing reads these now. The live
+    // batched settlement path is batch_settle_offchain_match (off-chain signed).
     pub batch_config: BatchConfig, // 24
     pub current_batch: BatchInfo,  // 1064 (8+4+4+8+8+8 + 32*32)
     pub has_current_batch: u8,
