@@ -1991,3 +1991,113 @@ pub struct DisburseSlashFund<'info> {
 
     pub token_program: Interface<'info, TokenInterface>,
 }
+
+#[cfg(test)]
+mod slash_math_tests {
+    use super::*;
+
+    fn err_code(e: anchor_lang::error::Error) -> u32 {
+        match e {
+            anchor_lang::error::Error::AnchorError(ae) => ae.error_code_number,
+            other => panic!("expected AnchorError, got {other:?}"),
+        }
+    }
+    fn code_of(v: RegistryError) -> u32 { err_code(v.into()) }
+
+    // UserAccount is zero_copy/Pod — a host struct literal builds it directly.
+    fn ua(status: ValidatorStatus, staked: u64) -> UserAccount {
+        UserAccount {
+            authority: Pubkey::default(),
+            user_type: UserType::Prosumer,
+            _padding1: [0; 3],
+            lat_e7: 0,
+            long_e7: 0,
+            _padding2: [0; 4],
+            h3_index: 0,
+            status: UserStatus::Active,
+            validator_status: status,
+            shard_id: 0,
+            airdrop_claimed: 0,
+            _padding3: [0; 4],
+            registered_at: 0,
+            meter_count: 0,
+            _padding4: [0; 4],
+            staked_grx: staked,
+            last_stake_at: 0,
+            resign_at: 0,
+        }
+    }
+
+    // --- compute_slash_amount ---
+
+    #[test]
+    fn slashes_a_fraction_of_the_bond() {
+        // 50% of a 1_000_000 bond = 500_000.
+        let amt = compute_slash_amount(&ua(ValidatorStatus::Active, 1_000_000), 5_000).unwrap();
+        assert_eq!(amt, 500_000);
+    }
+
+    #[test]
+    fn full_slash_equals_the_bond() {
+        let amt = compute_slash_amount(&ua(ValidatorStatus::Active, 1_000_000), 10_000).unwrap();
+        assert_eq!(amt, 1_000_000);
+    }
+
+    #[test]
+    fn slash_amount_is_capped_at_the_bond() {
+        // bps > 10000 would compute > bond; .min(bond) caps it.
+        let amt = compute_slash_amount(&ua(ValidatorStatus::Active, 1_000_000), u16::MAX).unwrap();
+        assert_eq!(amt, 1_000_000);
+    }
+
+    #[test]
+    fn resigning_validator_is_still_slashable() {
+        // Honest-exit (Resigning) stays slashable through the cooldown — not a slash dodge.
+        let amt = compute_slash_amount(&ua(ValidatorStatus::Resigning, 1_000_000), 5_000).unwrap();
+        assert_eq!(amt, 500_000);
+    }
+
+    #[test]
+    fn rejects_slashing_a_non_active_validator() {
+        for s in [ValidatorStatus::None, ValidatorStatus::Slashed, ValidatorStatus::Suspended] {
+            let e = compute_slash_amount(&ua(s, 1_000_000), 5_000).unwrap_err();
+            assert_eq!(err_code(e), code_of(RegistryError::NotActiveValidator));
+        }
+    }
+
+    #[test]
+    fn rejects_slashing_a_zero_bond() {
+        let e = compute_slash_amount(&ua(ValidatorStatus::Active, 0), 5_000).unwrap_err();
+        assert_eq!(err_code(e), code_of(RegistryError::InsufficientStakingBalance));
+    }
+
+    // --- apply_slash_status ---
+
+    #[test]
+    fn full_forfeiture_is_terminal_slashed() {
+        let mut u = ua(ValidatorStatus::Active, 0);
+        apply_slash_status(&mut u, 10_000, 500); // bps==10000 -> Slashed even if remaining>0
+        assert!(matches!(u.validator_status, ValidatorStatus::Slashed));
+    }
+
+    #[test]
+    fn zero_remaining_is_terminal_slashed() {
+        let mut u = ua(ValidatorStatus::Active, 0);
+        apply_slash_status(&mut u, 5_000, 0); // remaining==0 -> Slashed
+        assert!(matches!(u.validator_status, ValidatorStatus::Slashed));
+    }
+
+    #[test]
+    fn below_bond_floor_is_suspended() {
+        let mut u = ua(ValidatorStatus::Active, 0);
+        apply_slash_status(&mut u, 5_000, MIN_VALIDATOR_STAKE - 1); // partial, under floor
+        assert!(matches!(u.validator_status, ValidatorStatus::Suspended));
+    }
+
+    #[test]
+    fn at_or_above_floor_stays_active() {
+        let mut u = ua(ValidatorStatus::Active, 0);
+        apply_slash_status(&mut u, 5_000, MIN_VALIDATOR_STAKE); // partial, still bonded
+        assert!(matches!(u.validator_status, ValidatorStatus::Active));
+    }
+}
