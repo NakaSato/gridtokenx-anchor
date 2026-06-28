@@ -1168,11 +1168,10 @@ pub mod trading {
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
             TradingError::MaintenanceMode
         );
+        // Authority is enforced by `has_one = authority` on the market account in
+        // UpdateMarketParamsContext (fires in account validation, before this body), so an
+        // explicit `authority == market.authority` require here is dead — removed.
         let mut market = ctx.accounts.market.load_mut()?;
-        require!(
-            ctx.accounts.authority.key() == market.authority,
-            TradingError::UnauthorizedAuthority
-        );
         market.market_fee_bps = fee_bps;
         market.clearing_enabled = if clearing { 1 } else { 0 };
         if min_price > 0 {

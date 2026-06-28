@@ -81,7 +81,12 @@ pub mod oracle {
         zone_id: i32,
     ) -> Result<()> {
         compute_fn!("submit_meter_reading" => {
-            // Validate meter_id length
+            // Validate meter_id length. The MeterIdTooLong *error* is practically
+            // unreachable — the meter_state PDA seed `[b"meter", meter_id.as_bytes()]`
+            // already rejects len > 32 (= MAX_METER_ID_LEN) with MaxSeedLengthExceeded in
+            // account validation. Kept deliberately: it is the explicit precondition that
+            // keeps the fixed-size copy into `id_bytes` below provably panic-free without
+            // reasoning about seed limits.
             require!(
                 meter_id.len() <= MAX_METER_ID_LEN,
                 OracleError::MeterIdTooLong

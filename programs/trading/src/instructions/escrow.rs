@@ -314,6 +314,10 @@ pub struct SweepCollectorsContext<'info> {
 
 pub fn sweep_collectors(ctx: Context<SweepCollectorsContext>, shard_id: u8) -> Result<()> {
     compute_fn!("sweep_collectors" => {
+        // Defense-in-depth: the InvalidShardId error is practically unreachable here because
+        // the shard collectors are `mut` (must already exist) — an out-of-range shard_id
+        // derives uninitialized PDAs that fail account validation first. Kept as the explicit
+        // range contract (cf. initialize_sharded_collectors, where `init` makes it reachable).
         require!(shard_id < treasury::NUM_SETTLE_SHARDS, TradingError::InvalidShardId);
         let authority_bump = ctx.bumps.market_authority;
         let authority_seeds = &[b"market_authority".as_ref(), &[authority_bump]];
