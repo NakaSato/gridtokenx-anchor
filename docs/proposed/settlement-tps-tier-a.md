@@ -65,12 +65,29 @@ the instruction. It must route intra-zone batches to the new instruction and cro
 existing one. The on-chain change is inert until the builder is updated. **Not verifiable from the
 anchor repo alone.**
 
-## Measurement gap (bench-first, still open)
-`tests/batch_settle_tps.ts` is **closed-loop / latency-bound** (`dropped=0 reverted=0` — zero
-same-slot write drops), so it cannot show contention or a parallelism win. Proving the TPS gain
-needs a **true open-loop generator**: submit N concurrent same-zone settles across distinct
-`settle_shard_id`s without per-tx confirm, measure same-slot landings / wall-clock. Build this
-first to size the win; correctness of A does not depend on it.
+## Measurement (bench-first) — DONE, contention confirmed
+`tests/batch_settle_tps.ts` is now a true open-loop generator (`fireSettle`/`awaitConfirmed`/
+worker-pool/goodput-retry) and emits a slot-level metric `BENCH_BATCH_SLOTTPS`
+(`landed_per_slot`, `slot_tps`, `slot_span`). Validator run 2026-06-28, `SHARD_SPREAD=1`
+(distinct market_shard/zone_shard per settle):
+
+```
+conc=1  landed_per_slot=0.65  slot_tps=1.62  slot_span=17
+conc=4  landed_per_slot=0.65  slot_tps=1.62  slot_span=17   (IDENTICAL)
+```
+
+Throughput is **flat** as concurrency rises 1→4 — 4× concurrent settles land the same ~0.65/slot,
+so they serialize on a shared-mut account. With shards spread, the only writables still shared are
+`zone_market` and `treasury_state`. A parallel path would land ~4×/slot at conc=4. This empirically
+confirms the static analysis: a per-settle shared-mut account is the throughput ceiling.
+
+**Caveat:** the bench settles in THBG, so `treasury_state` is also in the shared-mut set — the run
+cannot by itself separate `zone_market`'s contribution from `treasury_state`'s. Both are addressed
+by sharding (`treasury_state` recording is sharded via `SettlementShard`/`record_settlement_sharded`
+§2c; `zone_market` is this doc's Tier A). To attribute precisely, run once with treasury wiring
+omitted (generic-currency settle) — then `zone_market` is the sole shared writable and the same flat
+curve isolates it. (Validator auto-stops at 1800s TTL; the conc=8 datapoint was cut, but conc 1→4
+flat is already conclusive that a serializer binds.)
 
 ## Test plan (litesvm, on-chain correctness)
 - intra variant: a same-zone batch settles with `zone_market` passed **read-only** (assert it is
