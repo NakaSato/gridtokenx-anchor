@@ -87,6 +87,31 @@ fn compute_swap_grx_for_thbg(
     ))
 }
 
+/// Redeem peg math (extracted from `redeem_thbg_for_grx` for unit-testing):
+/// `grx_out = thbg_in * 1e9 / rate`. Collateral guards — burning more THBG than the
+/// tracked supply (SupplyUnderflow) or paying out more GRX than the swap vault holds
+/// (InsufficientVault) — so a rate change can never let a redeemer drain the vault.
+/// Returns `(grx_out, new_supply)`.
+fn compute_redeem_thbg_for_grx(
+    thbg_in: u64,
+    rate: u64,
+    thbg_supply: u64,
+    vault_amount: u64,
+) -> Result<(u64, u64)> {
+    require!(thbg_in <= thbg_supply, TreasuryError::SupplyUnderflow);
+    let grx_out = (thbg_in as u128)
+        .checked_mul(GRX_ATOMS_PER_WHOLE)
+        .ok_or(TreasuryError::MathOverflow)?
+        / (rate as u128);
+    require!(grx_out > 0, TreasuryError::ZeroAmount);
+    let grx_out = u64::try_from(grx_out).map_err(|_| TreasuryError::MathOverflow)?;
+    require!(grx_out <= vault_amount, TreasuryError::InsufficientVault);
+    let new_supply = thbg_supply
+        .checked_sub(thbg_in)
+        .ok_or(TreasuryError::SupplyUnderflow)?;
+    Ok((grx_out, new_supply))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,6 +216,55 @@ mod tests {
         // net ~1.8e16 (fits u64) and clears the ample reserve.
         let e =
             compute_swap_grx_for_thbg(10_000_000_000, u64::MAX, 9_999, 0, u64::MAX).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::MathOverflow));
+    }
+
+    // --- redeem peg math ---
+
+    // 12 THBG (6dp) at rate 4_000_000 (4 THBG per whole GRX) -> 3 GRX; supply fully burned.
+    #[test]
+    fn redeem_output_matches_rate() {
+        let (grx_out, new_supply) =
+            compute_redeem_thbg_for_grx(12_000_000, 4_000_000, 12_000_000, 1_000_000_000_000).unwrap();
+        assert_eq!(grx_out, 3_000_000_000);
+        assert_eq!(new_supply, 0);
+    }
+
+    // Burning more THBG than the tracked supply -> SupplyUnderflow (peg ledger guard).
+    #[test]
+    fn redeem_over_supply_rejected() {
+        let e = compute_redeem_thbg_for_grx(12_000_001, 4_000_000, 12_000_000, u64::MAX).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::SupplyUnderflow));
+    }
+
+    // Dust input rounds GRX out to zero -> ZeroAmount (no free burn).
+    #[test]
+    fn redeem_dust_zero_out_rejected() {
+        // thbg_in 1 * 1e9 / rate 2e9 = 0 grx_out.
+        let e = compute_redeem_thbg_for_grx(1, 2_000_000_000, 100, u64::MAX).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::ZeroAmount));
+    }
+
+    // grx_out exceeding the vault's GRX collateral -> InsufficientVault (drain guard).
+    #[test]
+    fn redeem_over_vault_rejected() {
+        // grx_out = 3e9 but vault holds only 3e9 - 1.
+        let e = compute_redeem_thbg_for_grx(12_000_000, 4_000_000, 12_000_000, 2_999_999_999).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::InsufficientVault));
+    }
+
+    // Vault exactly covering the payout is allowed (inclusive bound).
+    #[test]
+    fn redeem_vault_exactly_covers() {
+        let (grx_out, _) =
+            compute_redeem_thbg_for_grx(12_000_000, 4_000_000, 12_000_000, 3_000_000_000).unwrap();
+        assert_eq!(grx_out, 3_000_000_000);
+    }
+
+    // grx_out overflowing the u64 cast (rate 1 -> grx_out = thbg_in * 1e9) -> MathOverflow.
+    #[test]
+    fn redeem_grx_out_overflow_rejected() {
+        let e = compute_redeem_thbg_for_grx(u64::MAX, 1, u64::MAX, u64::MAX).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::MathOverflow));
     }
 }
@@ -627,28 +701,15 @@ pub mod treasury {
                 require!(t.paused == 0, TreasuryError::Paused);
                 require!(t.grx_per_thbg_rate > 0, TreasuryError::RateNotSet);
 
-                // Burning more THBG than the tracked supply would desync the peg ledger.
-                require!(thbg_in <= t.thbg_supply, TreasuryError::SupplyUnderflow);
-
-                let grx_out = (thbg_in as u128)
-                    .checked_mul(GRX_ATOMS_PER_WHOLE)
-                    .ok_or(TreasuryError::MathOverflow)?
-                    / (t.grx_per_thbg_rate as u128);
-                require!(grx_out > 0, TreasuryError::ZeroAmount);
-                let grx_out = u64::try_from(grx_out).map_err(|_| TreasuryError::MathOverflow)?;
-
-                // The swap vault is the redemption collateral; never pay out more GRX than it
-                // physically holds. Guards against rate changes (set_params) decoupling the
-                // payout from deposited collateral and draining other swappers' GRX.
-                require!(
-                    grx_out <= ctx.accounts.swap_vault.amount,
-                    TreasuryError::InsufficientVault
-                );
-
-                let new_supply = t
-                    .thbg_supply
-                    .checked_sub(thbg_in)
-                    .ok_or(TreasuryError::SupplyUnderflow)?;
+                // Math + collateral guards (SupplyUnderflow / InsufficientVault) — the swap
+                // vault is the redemption collateral, so a rate change (set_params) can never
+                // let a redeemer drain more GRX than was deposited.
+                let (grx_out, new_supply) = compute_redeem_thbg_for_grx(
+                    thbg_in,
+                    t.grx_per_thbg_rate,
+                    t.thbg_supply,
+                    ctx.accounts.swap_vault.amount,
+                )?;
                 (t.bump, grx_out, new_supply)
             };
 
