@@ -34,6 +34,20 @@ The account-lock model proves the serialization deterministically (two txs writi
 account cannot co-execute). A bench is needed only to size the *magnitude* of the win — see
 "Measurement gap".
 
+## Companion fix already landed: `treasury_state` dead write-lock (batch path)
+
+The flat-curve run left two shared-mut accounts: `zone_market` AND `treasury_state`. Investigation
+showed `treasury_state` was a **dead write-lock** on the batch path: `SettleOffchainMatchBatchContext`
+declared it `#[account(mut)]`, but the batch records via `record_settlement_batch_sharded`, whose
+treasury account is **read-only** (the accumulator lives on the per-shard `settlement_shard`; only the
+recorder gate reads `treasury`). The trading handler only `.load()`s it. So `mut` write-locked the
+treasury singleton on every THBG batch settle with no writer. **Fixed** → `treasury_state` is now
+read-only in the batch context (the single `settle_offchain_match` path keeps `mut` — its
+`record_settlement` CPI writes the singleton). litesvm 217 passing. This removes one of the two
+empirical serializers; `zone_market` (below) is the remaining one — so a re-run should still be flat,
+which now **isolates** `zone_market` (no treasury-less run needed). The on-chain re-run is pending a
+fresh ledger (the in-place upgrade was blocked by an upgrade-authority mismatch on the persisted ledger).
+
 ## Design (batch path, additive + backward-compatible)
 
 Add a new instruction `batch_settle_offchain_match_intra` with a context identical to

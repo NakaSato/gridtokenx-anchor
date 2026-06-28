@@ -432,7 +432,13 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     // batch's gross settled value is recorded with a single CPI onto the per-shard
     // accumulator (parallel-friendly) plus the per-(zone,batch) SettlementRecord.
     pub treasury_program: Option<Program<'info, treasury::program::Treasury>>,
-    #[account(mut)]
+    // READ-ONLY: the batch path records via `record_settlement_batch_sharded`, whose treasury
+    // account is read-only (only the recorder gate reads it — no `total_settled_thbg` write;
+    // the accumulator lives on the per-shard `settlement_shard`). The trading handler only
+    // `.load()`s treasury_state (currency check). Declaring it `mut` here would write-lock the
+    // treasury singleton on EVERY THBG batch settle — a global serializer with no writer.
+    // (The single `settle_offchain_match` path keeps `mut`: its `record_settlement` CPI writes
+    // the singleton accumulator.)
     pub treasury_state: Option<AccountLoader<'info, treasury::Treasury>>,
     /// Per-shard settlement accumulator (`[b"settle_shard", &[shard_id]]`), bumped via
     /// CPI instead of the global `total_settled_thbg`. Required when recording fires.
