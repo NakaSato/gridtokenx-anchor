@@ -73,11 +73,38 @@ The read-only variant must reject cross-zone matches *before* any transfer, so a
 never bypass the capacity ceiling by routing a cross-zone trade through the unthrottled intra
 instruction. This is the single most important review point.
 
-## Off-chain dependency (blocker)
-The settle-tx builder (Chain Bridge — not in this repo) constructs the account list and chooses
-the instruction. It must route intra-zone batches to the new instruction and cross-zone to the
-existing one. The on-chain change is inert until the builder is updated. **Not verifiable from the
-anchor repo alone.**
+## Off-chain dependency — LOCATED
+The settle-tx builder is NOT in Chain Bridge. It is `InstructionBuilder` in
+`gridtokenx-blockchain-core/src/rpc/instructions.rs` (the settle instruction is aliased `ln`).
+The batch builder (~line 531; the per-pair `2*i` Ed25519 layout, "one batch settles into one
+zone_market" at ~line 511) adds `AccountMeta::new(zone_market_pda, false)` — i.e. WRITABLE.
+Tier A: when the batch is intra-zone (all matches' zone_id == the zone_market's zone — the
+builder already requires single-zone), emit `AccountMeta::new_readonly(zone_market_pda, false)`
+and target the new intra instruction's discriminator. Cross-zone keeps the writable meta + the
+existing instruction. Anchor TS clients pick mutability from the IDL automatically, but this
+Rust builder hard-codes it, so it MUST be edited for the win to materialize.
+
+## On-chain implementation difficulty (why this is a dedicated, validator-backed task)
+The `committed_flow` write is PER-MATCH, interleaved inside the settle loop (settle_offchain.rs
+~836-842, cross-zone branch) — not a single post-loop step. So a shared core between the
+existing mut-`zone_market` handler and a read-only intra handler is NOT a clean extract: either
+(a) the core takes `Option<&mut ZoneMarket>` and the intra path passes `None` (rejecting
+cross-zone up front), or (b) restructure the loop to accumulate the cross-zone flow delta and
+apply one write after — (a) is less invasive. Anchor contexts can't be generic, so the two
+instructions need two `#[derive(Accounts)]` structs (mut vs read-only zone_market) both calling
+the shared core fn. Because this rewrites the fund-moving settle loop, it needs VALIDATOR
+integration tests (escrow_settlement.ts / batch_settle_thbg.ts), not just litesvm — and the
+local validator is unstable under the bootstrap fixture (see settlement-tps memory). Do it as a
+focused task with a stable validator / CI, not as a tail-of-session change.
+
+### Concrete step list
+1. anchor: `fn settle_batch_core(..., zone_flow: Option<&mut ZoneMarket>)` extracting the loop;
+   existing `batch_settle_offchain_match` passes `Some`, new `batch_settle_offchain_match_intra`
+   passes `None` + `require!` all matches intra-zone (capacity-bypass guard — the key review point).
+2. anchor: `SettleOffchainMatchBatchIntraContext` = batch context with `zone_market` read-only.
+3. blockchain-core: `instructions.rs` batch builder — intra-zone → `new_readonly` zone_market +
+   intra discriminator.
+4. test: litesvm (zone_market not writable on intra; cross-zone rejected) + validator regression.
 
 ## Measurement (bench-first) — DONE, contention confirmed
 `tests/batch_settle_tps.ts` is now a true open-loop generator (`fireSettle`/`awaitConfirmed`/
