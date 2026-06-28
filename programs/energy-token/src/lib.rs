@@ -552,6 +552,26 @@ pub mod energy_token {
         token_info.registry_authority = new_registry_authority;
         Ok(())
     }
+
+    /// Rotate the admin authority (current authority only).
+    ///
+    /// `token_info.authority` gates every privileged path (mint_to_wallet,
+    /// mint_generation, add/remove_rec_validator, sync_total_supply, set_*). It was
+    /// previously fixed at `initialize_token` with no rotation path, so a deployment
+    /// whose authority must become a different signer (e.g. an off-chain bridge's
+    /// signing key) had to be re-initialized. This transfers authority in place. The
+    /// CURRENT authority must sign, so it cannot be hijacked.
+    pub fn set_authority(ctx: Context<SetAuthority>, new_authority: Pubkey) -> Result<()> {
+        compute_fn!("set_authority" => {
+            let mut token_info = ctx.accounts.token_info.load_mut()?;
+            require!(
+                ctx.accounts.authority.key() == token_info.authority,
+                EnergyTokenError::UnauthorizedAuthority
+            );
+            token_info.authority = new_authority;
+        });
+        Ok(())
+    }
 }
 
 // Account structs
@@ -815,6 +835,18 @@ pub struct SyncTotalSupply<'info> {
 
 #[derive(Accounts)]
 pub struct SetRegistryAuthority<'info> {
+    #[account(
+        mut,
+        seeds = [b"token_info_2022"],
+        bump,
+    )]
+    pub token_info: AccountLoader<'info, TokenInfo>,
+
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SetAuthority<'info> {
     #[account(
         mut,
         seeds = [b"token_info_2022"],
