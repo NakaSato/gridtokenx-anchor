@@ -105,6 +105,76 @@ fn net_seller_after_charges(total: u64, market_fee: u64, wheeling: u64, loss: u6
     Ok(total - deductions)
 }
 
+#[cfg(test)]
+mod net_seller_tests {
+    use super::*;
+
+    /// Pull the Anchor custom error code out of an `anchor_lang::error::Error`.
+    /// `#[error_code]` lays the variants out starting at 6000 (Anchor's user
+    /// error offset), so comparing codes is the stable way to assert which
+    /// `TradingError` was returned without depending on Display strings.
+    fn err_code(e: anchor_lang::error::Error) -> u32 {
+        match e {
+            anchor_lang::error::Error::AnchorError(ae) => ae.error_code_number,
+            other => panic!("expected AnchorError, got {other:?}"),
+        }
+    }
+
+    fn code_of(variant: TradingError) -> u32 {
+        err_code(variant.into())
+    }
+
+    #[test]
+    fn normal_case_deducts_fee_and_network() {
+        // network = 5 + 5 = 10, cap = 1000*2000/10000 = 200 (ok),
+        // deductions = 10 + 10 = 20, net = 1000 - 20 = 980.
+        let net = net_seller_after_charges(1000, 10, 5, 5).unwrap();
+        assert_eq!(net, 980);
+    }
+
+    #[test]
+    fn zero_charges_returns_total() {
+        let net = net_seller_after_charges(1000, 0, 0, 0).unwrap();
+        assert_eq!(net, 1000);
+    }
+
+    #[test]
+    fn network_exactly_at_cap_passes() {
+        // cap = 1000 * 2000 / 10000 = 200. wheeling + loss == 200 exactly.
+        let net = net_seller_after_charges(1000, 0, 100, 100).unwrap();
+        // deductions = 0 + 200 = 200, net = 800.
+        assert_eq!(net, 800);
+    }
+
+    #[test]
+    fn network_one_over_cap_rejected() {
+        // cap = 200; network = 201 > cap.
+        let e = net_seller_after_charges(1000, 0, 100, 101).unwrap_err();
+        assert_eq!(err_code(e), code_of(TradingError::ChargesExceedCap));
+    }
+
+    #[test]
+    fn deductions_exceeding_total_rejected() {
+        // network = 100 (<= cap 200), but market_fee = 950 → deductions = 1050 > 1000.
+        let e = net_seller_after_charges(1000, 950, 50, 50).unwrap_err();
+        assert_eq!(err_code(e), code_of(TradingError::ChargesExceedValue));
+    }
+
+    #[test]
+    fn network_sum_overflow_rejected() {
+        // wheeling + loss overflows u64.
+        let e = net_seller_after_charges(u64::MAX, 0, u64::MAX, 1).unwrap_err();
+        assert_eq!(err_code(e), code_of(TradingError::Overflow));
+    }
+
+    #[test]
+    fn cap_multiply_overflow_rejected() {
+        // total * MAX_NETWORK_CHARGE_BPS (2000) overflows u64.
+        let e = net_seller_after_charges(u64::MAX, 0, 0, 0).unwrap_err();
+        assert_eq!(err_code(e), code_of(TradingError::Overflow));
+    }
+}
+
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
 #[cfg(not(feature = "localnet"))]

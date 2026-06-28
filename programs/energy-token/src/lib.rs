@@ -55,6 +55,66 @@ fn rec_validator_registered(token_info: &TokenInfo, key: &Pubkey) -> bool {
     token_info.rec_validators[..token_info.rec_validators_count as usize].contains(key)
 }
 
+#[cfg(test)]
+mod rec_validator_tests {
+    use super::*;
+
+    /// TokenInfo is `#[account(zero_copy)] #[repr(C)]` plain data (Pubkey arrays
+    /// + ints), so a host struct literal constructs it directly — no Default,
+    /// no on-chain account needed.
+    fn token_info_with(validators: [Pubkey; 5], count: u8) -> TokenInfo {
+        TokenInfo {
+            authority: Pubkey::default(),
+            registry_authority: Pubkey::default(),
+            registry_program: Pubkey::default(),
+            mint: Pubkey::default(),
+            total_supply: 0,
+            created_at: 0,
+            rec_validators: validators,
+            rec_validators_count: count,
+            _padding: [0u8; 7],
+        }
+    }
+
+    #[test]
+    fn key_present_within_count_is_true() {
+        let k = Pubkey::new_from_array([1u8; 32]);
+        let mut vs = [Pubkey::default(); 5];
+        vs[1] = k;
+        let ti = token_info_with(vs, 2);
+        assert!(rec_validator_registered(&ti, &k));
+    }
+
+    #[test]
+    fn key_in_unpopulated_tail_is_false() {
+        // Key sits at index 3 but count is only 2 → outside the populated prefix.
+        let k = Pubkey::new_from_array([2u8; 32]);
+        let mut vs = [Pubkey::default(); 5];
+        vs[3] = k;
+        let ti = token_info_with(vs, 2);
+        assert!(!rec_validator_registered(&ti, &k));
+    }
+
+    #[test]
+    fn absent_key_is_false() {
+        let present = Pubkey::new_from_array([3u8; 32]);
+        let absent = Pubkey::new_from_array([4u8; 32]);
+        let mut vs = [Pubkey::default(); 5];
+        vs[0] = present;
+        let ti = token_info_with(vs, 1);
+        assert!(!rec_validator_registered(&ti, &absent));
+    }
+
+    #[test]
+    fn count_zero_is_always_false() {
+        // Even if the key physically sits in the array, count 0 means none are registered.
+        let k = Pubkey::new_from_array([5u8; 32]);
+        let vs = [k; 5];
+        let ti = token_info_with(vs, 0);
+        assert!(!rec_validator_registered(&ti, &k));
+    }
+}
+
 #[program]
 pub mod energy_token {
     use super::*;
