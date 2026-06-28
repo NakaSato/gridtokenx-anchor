@@ -48,6 +48,23 @@ empirical serializers; `zone_market` (below) is the remaining one — so a re-ru
 which now **isolates** `zone_market` (no treasury-less run needed). The on-chain re-run is pending a
 fresh ledger (the in-place upgrade was blocked by an upgrade-authority mismatch on the persisted ledger).
 
+### Post-fix bench (treasury_state read-only landed) — fix validated, zone_market isolated
+Re-ran on a fresh ledger after the treasury_state fix (shard-spread):
+
+```
+            pre-fix (treasury_state mut)   post-fix (read-only)
+conc=1      0.65/slot  slot_tps 1.62       0.61/slot  1.53
+conc=4      0.65/slot  1.62  (FLAT)        0.79/slot  1.96  (+~30%, wall 8.8s->6.8s)
+conc=8      (TTL-cut)                       0.61/slot  1.53
+```
+
+Pre-fix conc 1→4 was flat (fully serialized). Post-fix conc=4 unflattens → the treasury_state
+write-lock WAS a real serializer (now removed). But throughput still doesn't scale to 4× and
+conc=8 dips, so `zone_market` remains the binding serializer — Tier A is still required for the
+rest. (Single noisy run; conc=8 non-monotonic — directional, repeat for rigor.) Fixture lesson:
+the re-run works from a FRESH ledger (`rm -rf test-ledger`) via bootstrap.ts + init-treasury.ts —
+no lighter fixture needed; prior failures were stale-ledger idempotency, not validator load.
+
 ## Design (batch path, additive + backward-compatible)
 
 Add a new instruction `batch_settle_offchain_match_intra` with a context identical to
