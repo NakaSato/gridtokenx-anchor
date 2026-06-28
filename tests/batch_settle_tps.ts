@@ -74,7 +74,7 @@ const envInt = (k: string, d: number) => {
   return Number.isFinite(n) && n > 0 ? n : d;
 };
 
-interface PreparedTx { edIxs: any[]; settleIx: any; alt: any; }
+interface PreparedTx { edIxs: any[]; settleIx: any; alt: any; payer: Keypair; }
 
 describe("batch_settle THBG — TPS sweep (§2b)", () => {
   const provider = anchor.AnchorProvider.env();
@@ -107,6 +107,10 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   // so the client freely chooses the shard — this isolates whether the per-shard
   // PDA or the GLOBAL treasury_state/collectors are the settlement bottleneck.
   const SHARD_SPREAD = process.env.BENCH_TPS_SHARD_SPREAD === "1";
+  // BENCH_TPS_MULTIPAYER=1 gives each settle its own funded fee-payer keypair, so concurrent
+  // settles don't serialize on a single shared payer account (the residual write-lock once
+  // Tier-A made zone_market read-only). Isolates whether the settle path now scales.
+  const MULTIPAYER = process.env.BENCH_TPS_MULTIPAYER === "1";
   let shardCursor = 0;
 
   const tpda = (p: Program<any>, seed: string) =>
@@ -247,6 +251,15 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     // = the old single-collector serialization).
     const settleShardByte = SHARD_SPREAD ? (idx % NUM_SETTLE_SHARDS) : 0;
 
+    // Distinct funded fee-payer per settle (multipayer) so concurrent settles don't write-lock
+    // one shared payer account; funded here (outside the timed loop). Falls back to `payer`.
+    const txPayer = MULTIPAYER ? Keypair.generate() : payer;
+    if (MULTIPAYER) {
+      await provider.sendAndConfirm(new Transaction().add(
+        SystemProgram.transfer({ fromPubkey: authority, toPubkey: txPayer.publicKey, lamports: 0.1 * LAMPORTS_PER_SOL })
+      ));
+    }
+
     const settleIx = await trading.methods
       .batchSettleOffchainMatch([matchPair] as any, merkleRoot, vatAmount, 700, thisBatchId, settleShardByte)
       .accounts({
@@ -254,7 +267,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
         marketAuthority: marketAuthorityPda, marketShard: marketShardPda, zoneShard: zoneShardPda,
         feeCollector: shardedCollectorPda("fee_collector", settleShardByte),
         wheelingCollector: shardedCollectorPda("wheeling_collector", settleShardByte),
-        lossCollector: shardedCollectorPda("loss_collector", settleShardByte), payer: authority,
+        lossCollector: shardedCollectorPda("loss_collector", settleShardByte), payer: txPayer.publicKey,
         sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
         tokenProgram: TOKEN_2022_PROGRAM_ID, secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
@@ -289,7 +302,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       await new Promise((r) => setTimeout(r, 400));
     }
     expect(alt, "ALT activated").to.not.be.null;
-    return { edIxs, settleIx, alt };
+    return { edIxs, settleIx, alt, payer: txPayer };
   }
 
   // Confirm-per-tx send (warmup only): blocks until confirmed or throws.
@@ -297,9 +310,9 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     let lastErr: any = null;
     for (let attempt = 0; attempt < 4; attempt++) {
       const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash("confirmed");
-      const msg = new TransactionMessage({ payerKey: authority, recentBlockhash: blockhash, instructions: [...p.edIxs, p.settleIx] }).compileToV0Message([p.alt]);
+      const msg = new TransactionMessage({ payerKey: p.payer.publicKey, recentBlockhash: blockhash, instructions: [...p.edIxs, p.settleIx] }).compileToV0Message([p.alt]);
       const vtx = new VersionedTransaction(msg);
-      vtx.sign([payer]);
+      vtx.sign([p.payer]);
       try {
         const sig = await provider.connection.sendTransaction(vtx, { skipPreflight: true });
         const conf = await provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
@@ -314,9 +327,9 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   // sig, or null if the RPC rejected the submit outright. The shared blockhash is
   // passed in so the timed burst doesn't pay a getLatestBlockhash RPC per send.
   async function fireSettle(p: PreparedTx, blockhash: string): Promise<string | null> {
-    const msg = new TransactionMessage({ payerKey: authority, recentBlockhash: blockhash, instructions: [...p.edIxs, p.settleIx] }).compileToV0Message([p.alt]);
+    const msg = new TransactionMessage({ payerKey: p.payer.publicKey, recentBlockhash: blockhash, instructions: [...p.edIxs, p.settleIx] }).compileToV0Message([p.alt]);
     const vtx = new VersionedTransaction(msg);
-    vtx.sign([payer]);
+    vtx.sign([p.payer]);
     try { return await provider.connection.sendTransaction(vtx, { skipPreflight: true }); }
     catch { return null; }
   }
