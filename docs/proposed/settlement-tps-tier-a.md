@@ -97,7 +97,30 @@ integration tests (escrow_settlement.ts / batch_settle_thbg.ts), not just litesv
 local validator is unstable under the bootstrap fixture (see settlement-tps memory). Do it as a
 focused task with a stable validator / CI, not as a tail-of-session change.
 
-### Concrete step list
+### RECOMMENDED strategy: ZoneCapacity PDA (avoids the loop extract)
+After reading the full ~250-line batch handler, the two-instruction shared-core approach is the
+WORSE option — extracting the fund loop (per-match committed_flow + treasury recording + CPIs) into
+a free fn with ~15 params is error-prone and hard to verify byte-identical. Prefer instead:
+
+- Move `committed_flow` OFF `zone_market` onto a dedicated `ZoneCapacity` PDA
+  (`[b"zone_capacity", zone_market]`, fields: `zone_market: Pubkey`, `committed_flow: u64`).
+  `capacity` STAYS on `zone_market` (read-only config).
+- ONE batch instruction (no duplication, no core-extract): `zone_market` becomes read-only
+  (capacity/zone_id reads); add `zone_capacity: Option<AccountLoader<ZoneCapacity>>` (`mut`).
+- Per-match cross-zone branch writes `zone_capacity` instead of `zone_market`. SECURITY GUARD:
+  a cross-zone match with `zone_capacity == None` must REJECT (else capacity bypass) — this is
+  the one critical review point.
+- Intra-zone batches omit `zone_capacity` → `zone_market` read-only → parallel. Cross-zone pass
+  it (mut) → serialized on `ZoneCapacity` only (correct; hard physical ceiling, minority path).
+- Migration: add an `init_zone_capacity` instruction; existing zones start `committed_flow` at 0
+  (localnet has no real committed flow to carry). The `committed_flow` field on `zone_market`
+  becomes reserved/dead (keep for layout, like the batch-builder fields).
+
+This is one instruction, no fund-loop duplication, and the read-only `zone_market` change is the
+whole win. Still needs validator regression (escrow_settlement.ts / batch_settle_thbg.ts) +
+the blockchain-core builder edit (intra → read-only zone_market, pass/omit zone_capacity).
+
+### Concrete step list (two-instruction variant — fallback if ZoneCapacity rejected)
 1. anchor: `fn settle_batch_core(..., zone_flow: Option<&mut ZoneMarket>)` extracting the loop;
    existing `batch_settle_offchain_match` passes `Some`, new `batch_settle_offchain_match_intra`
    passes `None` + `require!` all matches intra-zone (capacity-bypass guard — the key review point).
