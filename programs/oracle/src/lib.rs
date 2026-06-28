@@ -562,3 +562,115 @@ pub struct UpdateValidationConfig<'info> {
 
     pub authority: Signer<'info>,
 }
+
+#[cfg(test)]
+mod validate_meter_reading_tests {
+    use super::*;
+
+    // Anchor `#[error_code]` lays variants out from 6000; compare codes (stable) not
+    // Display strings. Mirrors trading's net_seller_tests house style.
+    fn err_code(e: anchor_lang::error::Error) -> u32 {
+        match e {
+            anchor_lang::error::Error::AnchorError(ae) => ae.error_code_number,
+            other => panic!("expected AnchorError, got {other:?}"),
+        }
+    }
+    fn code_of(v: OracleError) -> u32 { err_code(v.into()) }
+
+    // OracleData is zero_copy + repr(C) Pod (plain ints/Pubkeys), so a host struct
+    // literal builds it directly — no on-chain account needed.
+    fn od(min: u64, max: u64, ratio: u16, anomaly: u8) -> OracleData {
+        OracleData {
+            authority: Pubkey::default(),
+            chain_bridge: Pubkey::default(),
+            total_readings: 0,
+            last_reading_timestamp: 0,
+            last_clearing: 0,
+            created_at: 0,
+            min_energy_value: min,
+            max_energy_value: max,
+            total_valid_readings: 0,
+            total_rejected_readings: 0,
+            quality_score_updated_at: 0,
+            total_global_energy_produced: 0,
+            total_global_energy_consumed: 0,
+            last_cleared_epoch: 0,
+            min_reading_interval: 0,
+            max_production_consumption_ratio: ratio,
+            active: 1,
+            anomaly_detection_enabled: anomaly,
+            last_quality_score: 0,
+            _padding: [0; 1],
+        }
+    }
+
+    #[test]
+    fn accepts_a_reading_within_bounds_and_ratio() {
+        // min 10, max 1000, ratio 10x, anomaly on. 100*100=10000 <= 1000*50=50000.
+        assert!(validate_meter_reading(100, 50, &od(10, 1000, 1000, 1)).is_ok());
+    }
+
+    #[test]
+    fn rejects_nonzero_produced_below_min() {
+        let e = validate_meter_reading(5, 0, &od(10, 1000, 1000, 1)).unwrap_err();
+        assert_eq!(err_code(e), code_of(OracleError::EnergyValueOutOfRange));
+    }
+
+    #[test]
+    fn zero_produced_bypasses_min_bound() {
+        // produced == 0 is allowed (unilateral consumer); consumed 50 is within bounds.
+        assert!(validate_meter_reading(0, 50, &od(10, 1000, 1000, 1)).is_ok());
+    }
+
+    #[test]
+    fn rejects_produced_above_max() {
+        let e = validate_meter_reading(2000, 0, &od(10, 1000, 1000, 1)).unwrap_err();
+        assert_eq!(err_code(e), code_of(OracleError::EnergyValueOutOfRange));
+    }
+
+    #[test]
+    fn rejects_nonzero_consumed_below_min() {
+        let e = validate_meter_reading(0, 5, &od(10, 1000, 1000, 1)).unwrap_err();
+        assert_eq!(err_code(e), code_of(OracleError::EnergyValueOutOfRange));
+    }
+
+    #[test]
+    fn rejects_anomalous_production_consumption_ratio() {
+        // ratio 1x (100). 300*100=30000 > 100*100=10000 → anomalous.
+        let e = validate_meter_reading(300, 100, &od(1, 100_000, 100, 1)).unwrap_err();
+        assert_eq!(err_code(e), code_of(OracleError::AnomalousReading));
+    }
+
+    #[test]
+    fn accepts_ratio_exactly_at_limit() {
+        // 100*100 == 100*100 → boundary is inclusive (<=).
+        assert!(validate_meter_reading(100, 100, &od(1, 100_000, 100, 1)).is_ok());
+    }
+
+    #[test]
+    fn zero_consumed_skips_ratio_check() {
+        // consumed == 0 with anomaly on → ratio check skipped (unilateral producer).
+        assert!(validate_meter_reading(99_999, 0, &od(1, 100_000, 100, 1)).is_ok());
+    }
+
+    #[test]
+    fn anomaly_disabled_allows_any_ratio() {
+        assert!(validate_meter_reading(99_999, 1, &od(1, 100_000, 100, 0)).is_ok());
+    }
+
+    #[test]
+    fn rejects_overflow_in_produced_times_100() {
+        // produced * 100 overflows u64 → InvalidConfiguration (not a silent wrap).
+        let p = u64::MAX / 10; // *100 overflows
+        let e = validate_meter_reading(p, 1, &od(0, u64::MAX, u16::MAX, 1)).unwrap_err();
+        assert_eq!(err_code(e), code_of(OracleError::InvalidConfiguration));
+    }
+
+    #[test]
+    fn rejects_overflow_in_ratio_times_consumed() {
+        // produced*100 fits, but max_ratio * consumed overflows → InvalidConfiguration.
+        let c = u64::MAX / 2;
+        let e = validate_meter_reading(1, c, &od(0, u64::MAX, u16::MAX, 1)).unwrap_err();
+        assert_eq!(err_code(e), code_of(OracleError::InvalidConfiguration));
+    }
+}
