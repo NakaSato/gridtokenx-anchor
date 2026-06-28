@@ -215,3 +215,14 @@ from one wallet, so each tx write-locks that account). That is a bench artifact:
 settlers use distinct payers. zone_market is no longer the bottleneck. Single noisy runs —
 directional. NEXT lever (if needed): multi-payer bench to confirm scaling, then Tier-B
 (per-shard capacity budget) only if cross-zone volume justifies it.
+
+## RIGOROUS RESULT (N=40) — corrects the small-N "plateau"
+The earlier ~1/slot was small-N (N=16) under-driving. At N=40 (multipayer, shard-spread) the
+validator packs 3.00 settles/slot, slot_tps 7.50, identical across conc=1/8/16 (39 landed in 13
+slots). This CONFIRMS Tier-A: pre-Tier-A, same-zone settles share the zone_market WRITABLE lock
+→ deterministically <=1/slot (cannot co-execute); observing 3/slot is only possible because
+zone_market is read-only → Sealevel runs them in parallel across distinct shards. Flat across the
+concurrency window = once N saturates the validator, in-flight depth is irrelevant; 3/slot is the
+single-node scheduler's packing rate for the ~102k-CU settle tx. Higher throughput would need a
+multi-node cluster (more parallel lanes) or lighter txs (signature-packing for >1 match/tx).
+Lesson: drive the bench with N >> validator slot-capacity or small-N noise dominates.
