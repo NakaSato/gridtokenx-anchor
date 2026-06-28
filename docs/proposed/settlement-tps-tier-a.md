@@ -137,6 +137,20 @@ This is one instruction, no fund-loop duplication, and the read-only `zone_marke
 whole win. Still needs validator regression (escrow_settlement.ts / batch_settle_thbg.ts) +
 the blockchain-core builder edit (intra → read-only zone_market, pass/omit zone_capacity).
 
+### IMPLEMENTATION CONSTRAINT (proven 2026-06-28, step-2 attempt — reverted)
+Adding `zone_capacity` as a typed `Option<AccountLoader<ZoneCapacity>>` FIELD to
+`SettleOffchainMatchContext` OVERFLOWS the BPF stack — runtime "Access violation in stack
+frame" (the single settle context is already at the ceiling; see [[settle-context-stack-limit]]).
+So `zone_capacity` MUST be passed via `remaining_accounts` with MANUAL validation (PDA derive +
+owner + `zone_market` binding + manual `load_mut`/write of `committed_flow`), exactly like the
+governance `poa_config` workaround already in the batch path. The batch context MAY have room for
+a typed field (fewer named accounts) but for uniformity use remaining_accounts on both. This makes
+step 2 meaningfully more involved than a typed Option field. Step 1 (ZoneCapacity PDA + init) is
+landed on branch `feat/tier-a-zone-capacity` (PR #3) and is unaffected.
+
+Also confirmed: the whole settle litesvm/validator suite (settle_offchain_guards, batch_settle_*,
+escrow_settlement) must be rewired — intra-zone calls omit zone_capacity, cross-zone init + pass it.
+
 ### Concrete step list (two-instruction variant — fallback if ZoneCapacity rejected)
 1. anchor: `fn settle_batch_core(..., zone_flow: Option<&mut ZoneMarket>)` extracting the loop;
    existing `batch_settle_offchain_match` passes `Some`, new `batch_settle_offchain_match_intra`
