@@ -33,6 +33,21 @@ pub struct ZoneMarket {
 
 /// Sharded zone market statistics for reduced contention
 /// Tracks volume and trades on a per-shard basis within a zone
+/// Per-zone transmission-capacity counter, split OUT of `ZoneMarket` so the hot settle
+/// path can keep `ZoneMarket` read-only (no write-lock) on the common intra-zone case.
+/// Only cross-zone (wheeling) settlements — which actually consume inter-zone capacity —
+/// pass this account `mut` and bump `committed_flow`; intra-zone settles omit it entirely
+/// and so don't serialize on `ZoneMarket`. The hard ceiling (`ZoneMarket.capacity`) stays
+/// read-only config on `ZoneMarket`.
+#[account(zero_copy)]
+#[repr(C)]
+pub struct ZoneCapacity {
+    pub zone_market: Pubkey, // 32 — parent ZoneMarket (binding)
+    pub committed_flow: u64, // 8  — cumulative cross-zone committed flow
+    pub bump: u8,            // 1
+    pub _padding: [u8; 7],   // 7 -> 48 (8-aligned)
+}
+
 #[account(zero_copy)]
 #[repr(C)]
 pub struct ZoneMarketShard {

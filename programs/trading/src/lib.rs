@@ -12,7 +12,8 @@ pub use crate::error::TradingError;
 pub use crate::instructions::*;
 pub use crate::state::{
     BatchConfig, BatchInfo, Market, MarketShard, Order, OrderNullifier, OrderStatus, OrderType,
-    PriceLevel, PricePoint, TradeRecord, ZoneMarket, ZoneMarketShard, ZoneConfig, MAX_DEPTH_LEVELS,
+    PriceLevel, PricePoint, TradeRecord, ZoneCapacity, ZoneMarket, ZoneMarketShard, ZoneConfig,
+    MAX_DEPTH_LEVELS,
 };
 pub use crate::utils::get_governance_config;
 pub use governance::{ErcCertificate, ErcStatus, GovernanceConfig};
@@ -181,6 +182,19 @@ pub mod trading {
         shard_id: u8,
     ) -> Result<()> {
         instructions::initialize_zone_market_shard(ctx, shard_id)
+    }
+
+    /// One-time creation of the per-zone `ZoneCapacity` PDA (Tier-A). Holds the cross-zone
+    /// `committed_flow` counter moved off `ZoneMarket` so the settle hot path can keep
+    /// `ZoneMarket` read-only on intra-zone batches. Idempotent per zone_market.
+    pub fn init_zone_capacity(ctx: Context<InitializeZoneCapacityContext>) -> Result<()> {
+        compute_fn!("init_zone_capacity" => {
+            let mut zc = ctx.accounts.zone_capacity.load_init()?;
+            zc.zone_market = ctx.accounts.zone_market.key();
+            zc.committed_flow = 0;
+            zc.bump = ctx.bumps.zone_capacity;
+        });
+        Ok(())
     }
 
     pub fn create_sell_order(
@@ -1308,6 +1322,22 @@ pub mod trading {
         pub market: AccountLoader<'info, Market>,
         #[account(init, payer = authority, space = 8 + std::mem::size_of::<ZoneMarket>(), seeds = [b"zone_market", market.key().as_ref(), &zone_id.to_le_bytes()], bump)]
         pub zone_market: AccountLoader<'info, ZoneMarket>,
+        #[account(mut)]
+        pub authority: Signer<'info>,
+        pub system_program: Program<'info, System>,
+    }
+
+    #[derive(Accounts)]
+    pub struct InitializeZoneCapacityContext<'info> {
+        pub zone_market: AccountLoader<'info, ZoneMarket>,
+        #[account(
+            init,
+            payer = authority,
+            space = 8 + std::mem::size_of::<ZoneCapacity>(),
+            seeds = [b"zone_capacity", zone_market.key().as_ref()],
+            bump
+        )]
+        pub zone_capacity: AccountLoader<'info, ZoneCapacity>,
         #[account(mut)]
         pub authority: Signer<'info>,
         pub system_program: Program<'info, System>,
