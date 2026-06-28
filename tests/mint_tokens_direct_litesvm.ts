@@ -5,12 +5,12 @@
 // Guards exercised (lib.rs:452):
 //   UnauthorizedAuthority  — caller is neither token_info.authority (admin) nor registry_authority
 //   RecValidatorNotFound   — REC validators registered (count > 0) but co-signer not in the set
-//   count==0 opt-out        — when NO validator is registered, the REC gate is SKIPPED and the
-//                            mint succeeds. This is an INTENTIONAL divergence from mint_to_wallet /
-//                            mint_generation (which reject at count==0, no opt-out) — it exists so
-//                            the registry's claim_airdrop bootstrap can pass itself as a placeholder
-//                            rec_validator before any validator is seeded. Locked here as a
-//                            regression so the divergence can't drift silently.
+//   count==0 skip (HARDENED) — when NO validator is registered the REC gate cannot be satisfied.
+//                            The skip is now restricted to the REGISTRY caller (is_registry) so the
+//                            airdrop/settle bootstrap still works, while a human ADMIN is rejected
+//                            (RecValidatorNotFound) — it can no longer mint un-RECed just because
+//                            the validator set is empty. (mint_to_wallet/mint_generation reject at
+//                            count==0 outright; this keeps only the registry bootstrap path.)
 //   control (count>0)       — admin + a registered REC co-signer → mint succeeds, balance grows.
 //
 // mint_tokens_direct mints to a pre-existing Token-2022 ATA bound to the canonical mint.
@@ -45,7 +45,8 @@ describe("energy-token mint_tokens_direct guards (litesvm)", () => {
   let program: Program<EnergyToken>;
   let programId: PublicKey;
 
-  const payer = Keypair.generate();   // token authority (admin) + registry_authority + funder
+  const payer = Keypair.generate();   // token authority (admin) + funder
+  const registryAuth = Keypair.generate(); // distinct registry_authority (the registry CPI caller)
   const destOwner = Keypair.generate();
   const v1 = Keypair.generate();      // a registered REC validator
   const v2 = Keypair.generate();      // a non-registered validator
@@ -84,7 +85,7 @@ describe("energy-token mint_tokens_direct guards (litesvm)", () => {
       mint: mintPda,
       userTokenAccount: destAta,
       authority,
-      registryAuthority: payer.publicKey, // must equal token_info.registry_authority
+      registryAuthority: registryAuth.publicKey, // must equal token_info.registry_authority
       recValidator,
       tokenProgram: TOKEN_2022_PROGRAM_ID,
     } as any).instruction();
@@ -104,8 +105,9 @@ describe("energy-token mint_tokens_direct guards (litesvm)", () => {
     [mintPda] = PublicKey.findProgramAddressSync([Buffer.from("mint_2022")], programId);
     [infoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], programId);
 
-    // registry_program_id = default, registry_authority = payer, admin authority = payer.
-    send([await program.methods.initializeToken(PublicKey.default, payer.publicKey).accounts({
+    // admin authority = payer; registry_authority = a DISTINCT key so the admin vs registry
+    // distinction is testable (count==0 REC-skip is registry-only after the hardening).
+    send([await program.methods.initializeToken(PublicKey.default, registryAuth.publicKey).accounts({
       tokenInfo: infoPda, mint: mintPda, authority: payer.publicKey,
       systemProgram: SystemProgram.programId, tokenProgram: TOKEN_2022_PROGRAM_ID, rent: anchorPkg.web3.SYSVAR_RENT_PUBKEY,
     } as any).instruction()]);
@@ -114,7 +116,7 @@ describe("energy-token mint_tokens_direct guards (litesvm)", () => {
     send([createAssociatedTokenAccountInstruction(payer.publicKey, destAta, destOwner.publicKey, mintPda, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID)]);
   });
 
-  // --- count == 0 phase: REC gate is skipped (intentional airdrop-bootstrap opt-out) ---
+  // --- count == 0 phase: REC-skip is restricted to the registry caller (hardened) ---
 
   it("rejects a caller that is neither admin nor registry_authority (UnauthorizedAuthority)", async () => {
     svm.airdrop(attacker.publicKey, BigInt(1_000_000_000));
@@ -123,10 +125,18 @@ describe("energy-token mint_tokens_direct guards (litesvm)", () => {
     expect(blob, blob).to.match(/UnauthorizedAuthority/);
   });
 
-  it("mints with NO registered validator while count==0 (opt-out; diverges from mint_to_wallet)", async () => {
+  it("rejects a HUMAN ADMIN minting with no registered validator at count==0 (RecValidatorNotFound)", async () => {
+    // Hardening: the count==0 REC-skip is registry-only. The admin (payer) is NOT the
+    // registry_authority, so it cannot mint un-RECed just because the validator set is empty.
+    const blob = sendExpectFail([await directIx(payer.publicKey, v2.publicKey, 100)], [v2]);
+    expect(blob, blob).to.match(/RecValidatorNotFound/);
+  });
+
+  it("allows the REGISTRY caller to mint at count==0 (airdrop/settle bootstrap preserved)", async () => {
+    svm.airdrop(registryAuth.publicKey, BigInt(1_000_000_000));
     const before = destBalance();
-    // v2 is not (yet) a registered validator, count is still 0 → gate skipped, mint succeeds.
-    send([await directIx(payer.publicKey, v2.publicKey, 100)], [v2]);
+    // authority == registry_authority → is_registry → REC-skip permitted while count==0.
+    send([await directIx(registryAuth.publicKey, registryAuth.publicKey, 100)], [registryAuth]);
     expect(destBalance() - before).to.equal(100n);
   });
 
