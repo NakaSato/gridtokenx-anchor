@@ -196,3 +196,22 @@ flat is already conclusive that a serializer binds.)
 - Tier B: shard the cross-zone capacity budget per shard (`capacity/N`) so cross-zone also
   parallelizes — semantics shift (per-shard budget, possible utilization loss); only if
   cross-zone volume justifies it.
+
+## CAPSTONE RESULT (2026-06-28) — Tier-A implemented + measured
+Implemented across both repos (anchor PR #3: ZoneCapacity + both settle paths read-only;
+blockchain-core PR #1: builder emits zone_market read-only). Verified: litesvm 219, validator
+escrow_settlement 4/4 + batch_settle_thbg 2/2. TPS bench (fresh ledger, shard-spread):
+
+```
+            pre-Tier-A        post-Tier-A
+conc=1      0.61/slot 1.5     1.07/slot 2.68
+conc=4/8    0.65/slot 1.6     0.83/slot 2.08
+```
+
+Removing the zone_market write-lock raised per-slot throughput ~30-60% and conc=1 now packs
+>1 settle/slot (impossible while zone_market serialized). It still does NOT scale with
+concurrency — the residual serializer is the SHARED FEE-PAYER (the bench pays every settle
+from one wallet, so each tx write-locks that account). That is a bench artifact: production
+settlers use distinct payers. zone_market is no longer the bottleneck. Single noisy runs —
+directional. NEXT lever (if needed): multi-payer bench to confirm scaling, then Tier-B
+(per-shard capacity budget) only if cross-zone volume justifies it.
