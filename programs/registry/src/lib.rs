@@ -847,28 +847,8 @@ pub mod registry {
                     user_account.resign_at,
                 )
             };
-            require!(amount <= staked, RegistryError::InsufficientStakingBalance);
-            require!(
-                now.saturating_sub(last_stake_at) >= UNSTAKE_COOLDOWN_SECS,
-                RegistryError::UnstakingLocked
-            );
-
-            // Anti-slash-escape: the bond stays locked below the floor while the validator is
-            // still slashable. An Active validator is always locked; a Resigning one stays
-            // locked until the resign cooldown elapses (the window during which it remains
-            // slashable). Only after that — or for a Suspended/Slashed/None account — may the
-            // bond be drawn below MIN_VALIDATOR_STAKE. Excess above MIN is always withdrawable.
-            let bond_locked = match validator_status {
-                ValidatorStatus::Active => true,
-                ValidatorStatus::Resigning => {
-                    now.saturating_sub(resign_at) < RESIGN_COOLDOWN_SECS
-                }
-                _ => false,
-            };
-            require!(
-                !(bond_locked && staked.saturating_sub(amount) < MIN_VALIDATOR_STAKE),
-                RegistryError::ValidatorStakeLocked
-            );
+            // Balance + cooldown + anti-slash-escape bond lock (see check_unstake_allowed).
+            check_unstake_allowed(amount, staked, last_stake_at, resign_at, now, validator_status)?;
 
             // Registry PDA is the vault authority — sign the withdrawal.
             let bump = ctx.bumps.registry;
@@ -1316,6 +1296,37 @@ fn compute_slash_amount(user: &UserAccount, slash_bps: u16) -> Result<u64> {
         .ok_or(RegistryError::MathOverflow)?
         / 10_000u128) as u64;
     Ok(amt.min(bond))
+}
+
+/// Validator-bond unstake guard (pure, extracted for unit-testing). Enforces, in order:
+/// sufficient balance (InsufficientStakingBalance), the post-stake cooldown
+/// (UnstakingLocked), and the anti-slash-escape bond lock (ValidatorStakeLocked) — an
+/// Active validator (always), or a Resigning one still within its resign cooldown, cannot
+/// draw the bond below MIN_VALIDATOR_STAKE; excess above the floor is always withdrawable,
+/// and Suspended/Slashed/None accounts are unlocked.
+fn check_unstake_allowed(
+    amount: u64,
+    staked: u64,
+    last_stake_at: i64,
+    resign_at: i64,
+    now: i64,
+    validator_status: ValidatorStatus,
+) -> Result<()> {
+    require!(amount <= staked, RegistryError::InsufficientStakingBalance);
+    require!(
+        now.saturating_sub(last_stake_at) >= UNSTAKE_COOLDOWN_SECS,
+        RegistryError::UnstakingLocked
+    );
+    let bond_locked = match validator_status {
+        ValidatorStatus::Active => true,
+        ValidatorStatus::Resigning => now.saturating_sub(resign_at) < RESIGN_COOLDOWN_SECS,
+        _ => false,
+    };
+    require!(
+        !(bond_locked && staked.saturating_sub(amount) < MIN_VALIDATOR_STAKE),
+        RegistryError::ValidatorStakeLocked
+    );
+    Ok(())
 }
 
 /// Post-slash validator status transition (shared): full forfeiture (bps == 10000 or
@@ -2099,5 +2110,74 @@ mod slash_math_tests {
         let mut u = ua(ValidatorStatus::Active, 0);
         apply_slash_status(&mut u, 5_000, MIN_VALIDATOR_STAKE); // partial, still bonded
         assert!(matches!(u.validator_status, ValidatorStatus::Active));
+    }
+
+    // --- check_unstake_allowed (validator-bond unstake guard) ---
+
+    const NOW: i64 = 10_000_000; // well past any cooldown when last_stake_at = 0
+
+    #[test]
+    fn unstake_rejects_more_than_staked() {
+        let e = check_unstake_allowed(11, 10, 0, 0, NOW, ValidatorStatus::Suspended).unwrap_err();
+        assert_eq!(err_code(e), code_of(RegistryError::InsufficientStakingBalance));
+    }
+
+    #[test]
+    fn unstake_rejects_within_cooldown() {
+        // last_stake_at 100s ago < 24h cooldown. Suspended isolates the cooldown check.
+        let e = check_unstake_allowed(1, 1_000, NOW - 100, 0, NOW, ValidatorStatus::Suspended)
+            .unwrap_err();
+        assert_eq!(err_code(e), code_of(RegistryError::UnstakingLocked));
+    }
+
+    #[test]
+    fn unstake_cooldown_boundary_is_inclusive() {
+        // exactly UNSTAKE_COOLDOWN_SECS elapsed → allowed (>=).
+        assert!(check_unstake_allowed(
+            1, 1_000, NOW - UNSTAKE_COOLDOWN_SECS, 0, NOW, ValidatorStatus::Suspended
+        ).is_ok());
+    }
+
+    #[test]
+    fn unstake_active_below_floor_is_locked() {
+        // Active bond can never drop below MIN_VALIDATOR_STAKE.
+        let e = check_unstake_allowed(
+            10, MIN_VALIDATOR_STAKE + 5, 0, 0, NOW, ValidatorStatus::Active
+        ).unwrap_err();
+        assert_eq!(err_code(e), code_of(RegistryError::ValidatorStakeLocked));
+    }
+
+    #[test]
+    fn unstake_active_excess_above_floor_is_allowed() {
+        // Withdraw excess while staying bonded.
+        assert!(check_unstake_allowed(
+            50, MIN_VALIDATOR_STAKE + 100, 0, 0, NOW, ValidatorStatus::Active
+        ).is_ok());
+    }
+
+    #[test]
+    fn unstake_resigning_within_cooldown_below_floor_is_locked() {
+        // Still slashable during the resign window → bond stays locked below the floor.
+        let e = check_unstake_allowed(
+            10, MIN_VALIDATOR_STAKE, 0, NOW - 100, NOW, ValidatorStatus::Resigning
+        ).unwrap_err();
+        assert_eq!(err_code(e), code_of(RegistryError::ValidatorStakeLocked));
+    }
+
+    #[test]
+    fn unstake_resigning_after_cooldown_unlocks_full_exit() {
+        // Resign cooldown elapsed → honest exit may draw the whole bond below the floor.
+        assert!(check_unstake_allowed(
+            MIN_VALIDATOR_STAKE, MIN_VALIDATOR_STAKE, 0, NOW - RESIGN_COOLDOWN_SECS, NOW,
+            ValidatorStatus::Resigning
+        ).is_ok());
+    }
+
+    #[test]
+    fn unstake_suspended_below_floor_is_allowed() {
+        // Suspended/Slashed/None are not slashable → bond unlocked.
+        assert!(check_unstake_allowed(
+            MIN_VALIDATOR_STAKE, MIN_VALIDATOR_STAKE, 0, 0, NOW, ValidatorStatus::Suspended
+        ).is_ok());
     }
 }
