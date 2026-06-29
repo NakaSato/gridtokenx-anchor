@@ -3,9 +3,9 @@ import { Program } from "@anchor-lang/core";
 import { Registry } from "../target/types/registry";
 import { EnergyToken } from "../target/types/energy_token";
 import { PublicKey, Keypair, SystemProgram, Transaction } from "@solana/web3.js";
-import { 
-  TOKEN_PROGRAM_ID, 
-  ASSOCIATED_TOKEN_PROGRAM_ID, 
+import {
+  TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction
 } from "@solana/spl-token";
@@ -95,7 +95,7 @@ async function main() {
       mintPda,
       keypair.publicKey,
       false,
-      TOKEN_PROGRAM_ID,
+      TOKEN_2022_PROGRAM_ID,
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
 
@@ -112,7 +112,7 @@ async function main() {
             userAta,
             keypair.publicKey,
             mintPda,
-            TOKEN_PROGRAM_ID,
+            TOKEN_2022_PROGRAM_ID,
             ASSOCIATED_TOKEN_PROGRAM_ID
           )
         );
@@ -171,7 +171,7 @@ async function main() {
           mint: mintPda,
           userTokenAccount: userAta,
           tokenInfo: tokenInfoPda,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
         } as any)
         .rpc();
 

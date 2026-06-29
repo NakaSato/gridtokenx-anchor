@@ -71,12 +71,17 @@ async function main() {
 
   const oracleProgram = anchor.workspace.Oracle as Program<Oracle>;
   
-  // Load API Gateway Keypair (Admin)
+  // API Gateway = the registry-authorized oracle submitter. Prefer an explicit
+  // test-api-gateway.json; otherwise fall back to the provider/ANCHOR_WALLET key
+  // (which app.sh init authorizes as the oracle gateway on localnet).
   let apiGateway: Keypair;
+  const gatewayPath = fs.existsSync("test-api-gateway.json")
+    ? "test-api-gateway.json"
+    : process.env.ANCHOR_WALLET || "";
   try {
-    apiGateway = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync("test-api-gateway.json", "utf8"))));
+    apiGateway = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(gatewayPath, "utf8"))));
   } catch (e) {
-    console.error("Failed to load test-api-gateway.json. Have you run bootstrap.ts?");
+    console.error("No oracle gateway key: provide test-api-gateway.json or set ANCHOR_WALLET.");
     process.exit(1);
   }
 
