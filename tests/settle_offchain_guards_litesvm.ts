@@ -263,7 +263,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       energyAmount?: number; matchAmount?: number; matchPrice?: number;
       wheeling?: number; loss?: number;
       zoneMarket?: PublicKey; zoneShard?: PublicKey; zoneCapacity?: PublicKey | null;
-      recMint?: PublicKey | null;
+      recMint?: PublicKey | null; recTokenProgram?: PublicKey;
     } = {}
   ): Promise<TransactionInstruction[]> {
     const seedA = o.seedA ?? 0xa1, seedB = o.seedB ?? 0xb2;
@@ -337,7 +337,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
               { pubkey: o.recMint, isSigner: false, isWritable: false },
               { pubkey: escrowPda(seller.publicKey, o.recMint), isSigner: false, isWritable: true },
               { pubkey: escrowPda(buyer.publicKey, o.recMint), isSigner: false, isWritable: true },
-              { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+              { pubkey: o.recTokenProgram ?? TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
             ]
           : []),
       ])
@@ -572,6 +572,31 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const buyerRec = Buffer.from(svm.getAccount(buyerRecEscrow)!.data).readBigUInt64LE(64);
     expect(sellerRec.toString()).to.equal("0");
     expect(buyerRec.toString()).to.equal(REC_AMOUNT.toString());
+  });
+
+  it("rejects a REC group whose token program != the rec_mint owner (InvalidRecMint)", async () => {
+    const [recMintPda] = PublicKey.findProgramAddressSync([Buffer.from("rec_mint")], GOVERNANCE_PROGRAM_ID);
+    // Fabricate the Token-2022 REC mint at the PDA so the rec_mint binding + decimals read
+    // succeed; the guard under test fires right after, before any escrow is touched.
+    const mintBuf = Buffer.alloc(MINT_SIZE);
+    MintLayout.encode(
+      { mintAuthorityOption: 1, mintAuthority: payer.publicKey, supply: 1_000_000n, decimals: 6,
+        isInitialized: true, freezeAuthorityOption: 0, freezeAuthority: PublicKey.default },
+      mintBuf
+    );
+    svm.setAccount(recMintPda, {
+      lamports: Number(svm.minimumBalanceForRentExemption(BigInt(MINT_SIZE))),
+      data: mintBuf, owner: TOKEN_2022_PROGRAM_ID, executable: false,
+    });
+    // Headroom so the settle reaches the REC leg (energy/currency transfer first).
+    patchTokenAmount(escrowPda(buyer.publicKey, currencyMint), 5_000n);
+    patchTokenAmount(escrowPda(seller.publicKey, energyMintPda), BigInt(2 * MATCH_AMOUNT));
+
+    // Pass legacy SPL Token (a real program, but NOT the Token-2022 owner of rec_mint).
+    const blob = sendV0(await buildSettleIxs(false, {
+      seedA: 0x71, seedB: 0x72, recMint: recMintPda, recTokenProgram: TOKEN_PROGRAM_ID,
+    }), true);
+    expect(blob, blob).to.match(/InvalidRecMint/);
   });
 
   it("settles without REC movement when the REC group is omitted (opt-in control)", async () => {
