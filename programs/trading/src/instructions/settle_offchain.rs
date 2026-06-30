@@ -129,6 +129,99 @@ fn net_seller_after_charges(total: u64, market_fee: u64, wheeling: u64, loss: u6
     Ok(total - deductions)
 }
 
+/// The fungible REC base units that must move for a settled energy quantity. `match_amount`
+/// is 9-decimal energy atomic (kWh × 1e9); the REC mint is 6-decimal with 1 kWh = 1_000 base
+/// units (the same factor the order-time gate applies to its kWh `energy_amount`). So REC =
+/// match_amount × 1_000 / 1e9. u128 intermediate; truncates a sub-kWh remainder downward.
+fn rec_base_units_for(match_amount: u64) -> Result<u64> {
+    u64::try_from(
+        (match_amount as u128)
+            .checked_mul(1_000)
+            .ok_or(TradingError::Overflow)?
+            / crate::ENERGY_AMOUNT_DECIMALS_DIVISOR as u128,
+    )
+    .map_err(|_| TradingError::Overflow.into())
+}
+
+/// Move the fungible REC token seller→buyer on settlement, mirroring the energy-token
+/// transfer. OPT-IN: the REC accounts arrive via `remaining_accounts` because the settle
+/// context is at the BPF stack ceiling (see settle-context-stack-limit). When the group is
+/// absent the trade settles without REC movement — back-compat with the opt-in order-time
+/// REC balance gate in `create_sell_order`. Layout at `base`:
+///   [base]   = rec_mint            (bound to governance `[b"rec_mint"]`)
+///   [base+1] = seller_rec_escrow   (bound to `[b"escrow", seller, rec_mint]`)
+///   [base+2] = buyer_rec_escrow    (bound to `[b"escrow", buyer,  rec_mint]`)
+///   [base+3] = rec_token_program
+/// Both escrow addresses are seed-bound, so a settler can neither drain a victim's REC nor
+/// redirect the buyer's REC to an arbitrary account. SPL authority on the escrows is
+/// `market_authority`, which signs the transfer.
+#[allow(clippy::too_many_arguments)]
+fn transfer_rec_if_present<'info>(
+    remaining: &'info [AccountInfo<'info>],
+    base: usize,
+    seller: &Pubkey,
+    buyer: &Pubkey,
+    rec_amount: u64,
+    market_authority: AccountInfo<'info>,
+    signer: &[&[&[u8]]],
+    program_id: &Pubkey,
+) -> Result<()> {
+    let rec_mint_info = match remaining.get(base) {
+        Some(info) => info,
+        None => return Ok(()), // opt-in: no REC group passed → settle without REC movement
+    };
+    let seller_escrow_info = remaining.get(base + 1).ok_or(TradingError::InvalidRecMint)?;
+    let buyer_escrow_info = remaining.get(base + 2).ok_or(TradingError::InvalidRecMint)?;
+    let rec_token_program_info = remaining.get(base + 3).ok_or(TradingError::InvalidRecMint)?;
+
+    // Bind the mint to the canonical governance rec_mint PDA (same derivation the order-time
+    // gate uses), and confirm it deserializes as a real mint to read its decimals.
+    let (expected_rec_mint, _) = Pubkey::find_program_address(&[b"rec_mint"], &governance::ID);
+    require_keys_eq!(*rec_mint_info.key, expected_rec_mint, TradingError::InvalidRecMint);
+    let rec_mint = InterfaceAccount::<Mint>::try_from(rec_mint_info)
+        .map_err(|_| error!(TradingError::InvalidRecMint))?;
+
+    // Bind both escrows to their canonical [b"escrow", user, rec_mint] PDAs.
+    let (expected_seller, _) = Pubkey::find_program_address(
+        &[b"escrow", seller.as_ref(), rec_mint_info.key.as_ref()],
+        program_id,
+    );
+    require_keys_eq!(
+        *seller_escrow_info.key,
+        expected_seller,
+        TradingError::RecAccountOwnerMismatch
+    );
+    let (expected_buyer, _) = Pubkey::find_program_address(
+        &[b"escrow", buyer.as_ref(), rec_mint_info.key.as_ref()],
+        program_id,
+    );
+    require_keys_eq!(
+        *buyer_escrow_info.key,
+        expected_buyer,
+        TradingError::RecAccountOwnerMismatch
+    );
+
+    // A zero-REC match (sub-kWh dust) binds the accounts but moves nothing.
+    if rec_amount == 0 {
+        return Ok(());
+    }
+    anchor_spl::token_interface::transfer_checked(
+        CpiContext::new_with_signer(
+            *rec_token_program_info.key,
+            anchor_spl::token_interface::TransferChecked {
+                from: seller_escrow_info.to_account_info(),
+                mint: rec_mint_info.to_account_info(),
+                to: buyer_escrow_info.to_account_info(),
+                authority: market_authority,
+            },
+            signer,
+        ),
+        rec_amount,
+        rec_mint.decimals,
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod net_seller_tests {
     use super::*;
@@ -576,9 +669,12 @@ pub fn settle_offchain_match<'info>(
     // they consume no inter-zone transmission line. A trade is cross-zone if EITHER leg is
     // remote relative to this zone_market — checking only the seller lets a remote-buyer /
     // local-seller trade bypass the throttle.
-    if zone_market.capacity > 0
-        && (seller_payload.zone_id != zone_market.zone_id || buyer_payload.zone_id != zone_market.zone_id)
-    {
+    // A trade is cross-zone if EITHER leg is remote relative to this zone_market. Hoisted so
+    // the optional REC group's base index can account for whether slot [2] is consumed by the
+    // mandatory ZoneCapacity account below.
+    let cross_zone = zone_market.capacity > 0
+        && (seller_payload.zone_id != zone_market.zone_id || buyer_payload.zone_id != zone_market.zone_id);
+    if cross_zone {
         // Cross-zone → ZoneCapacity (writable) is MANDATORY as remaining_accounts[2] (index 0
         // is the governance poa_config, index 1 the trade_nullifier); omitting it cannot bypass
         // the ceiling. committed_flow is the single source of truth.
@@ -699,6 +795,22 @@ pub fn settle_offchain_match<'info>(
         }, signer),
         match_amount,
         ctx.accounts.energy_mint.decimals
+    )?;
+
+    // REC (renewable attribute): seller escrow -> buyer escrow. OPT-IN — moves only when the
+    // REC group is passed via remaining_accounts. Base index follows the conditional
+    // ZoneCapacity slot: [3..] cross-zone (slot [2] taken), [2..] intra-zone.
+    let rec_base = if cross_zone { 3 } else { 2 };
+    let rec_amount = rec_base_units_for(match_amount)?;
+    transfer_rec_if_present(
+        ctx.remaining_accounts,
+        rec_base,
+        &seller_payload.user,
+        &buyer_payload.user,
+        rec_amount,
+        ctx.accounts.market_authority.to_account_info(),
+        signer,
+        ctx.program_id,
     )?;
     compute_checkpoint!("after_settle_cpis");
 
@@ -1049,6 +1161,13 @@ pub fn batch_settle_offchain_match<'info>(
             }, signer),
             m.match_amount, ctx.accounts.energy_mint.decimals
         )?;
+        // NOTE: REC-token movement is NOT wired into the batch path — only the single-match
+        // `settle_offchain_match` moves the renewable attribute (opt-in, via remaining_accounts).
+        // The batch layout is a rigid `match_count*7 + 1|2` scheme with strict length asserts;
+        // a trailing per-pair REC group would need length-disambiguation that adds risk to this
+        // security-critical path, and the batch is single-tx-capped at 1 match in practice
+        // (Ed25519-per-match data can't ALT-compress), so the single path covers real settlement.
+        // Follow-up: extend the batch remaining_accounts scheme with an optional REC group.
         compute_checkpoint!("after_settle_cpis");
 
         buyer_nullifier.filled_amount = buyer_nullifier.filled_amount.saturating_add(m.match_amount);

@@ -44,6 +44,8 @@ import {
   TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   MINT_SIZE,
+  MintLayout,
+  AccountLayout,
   createInitializeMint2Instruction,
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
@@ -203,6 +205,14 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     tpda([Buffer.from("escrow"), user.toBuffer(), mint.toBuffer()]);
   const collectorPda = (label: string, mint: PublicKey) =>
     tpda([Buffer.from(label), mint.toBuffer()]);
+  // Overwrite an existing SPL token account's amount (offset 64) to give a match headroom
+  // independent of prior tests' escrow draining.
+  const patchTokenAmount = (pda: PublicKey, amount: bigint) => {
+    const acct = svm.getAccount(pda)!;
+    const data = Buffer.from(acct.data);
+    data.writeBigUInt64LE(amount, 64);
+    svm.setAccount(pda, { lamports: acct.lamports, data, owner: acct.owner, executable: false });
+  };
   const nullifierPda = (user: PublicKey, orderId: Buffer) =>
     tpda([Buffer.from("nullifier"), user.toBuffer(), orderId]);
 
@@ -253,6 +263,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       energyAmount?: number; matchAmount?: number; matchPrice?: number;
       wheeling?: number; loss?: number;
       zoneMarket?: PublicKey; zoneShard?: PublicKey; zoneCapacity?: PublicKey | null;
+      recMint?: PublicKey | null;
     } = {}
   ): Promise<TransactionInstruction[]> {
     const seedA = o.seedA ?? 0xa1, seedB = o.seedB ?? 0xb2;
@@ -313,10 +324,22 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       // TradeNullifier is remaining_accounts[1] (writable — created on first settle, replay
       // guard); ZoneCapacity, when supplied (cross-zone), is remaining_accounts[2] (writable —
       // committed_flow counter).
+      // Governance poa_config is remaining_accounts[0] (maintenance gate); the per-match
+      // TradeNullifier is remaining_accounts[1]; ZoneCapacity, when cross-zone, is [2]. The
+      // OPT-IN REC group follows: [rec_base..] = rec_mint, seller_rec_escrow, buyer_rec_escrow,
+      // rec_token_program, where rec_base = 3 cross-zone (slot [2] taken) else 2.
       .remainingAccounts([
         { pubkey: governanceConfigPda, isSigner: false, isWritable: false },
         { pubkey: tradeNullifier, isSigner: false, isWritable: true },
         ...(zoneCapacity ? [{ pubkey: zoneCapacity, isSigner: false, isWritable: true }] : []),
+        ...(o.recMint
+          ? [
+              { pubkey: o.recMint, isSigner: false, isWritable: false },
+              { pubkey: escrowPda(seller.publicKey, o.recMint), isSigner: false, isWritable: true },
+              { pubkey: escrowPda(buyer.publicKey, o.recMint), isSigner: false, isWritable: true },
+              { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+            ]
+          : []),
       ])
       .instruction();
 
@@ -495,6 +518,70 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const be = svm.getAccount(buyerEngEscrow)!;
     const buyerEngAmt = Buffer.from(be.data).readBigUInt64LE(64);
     expect(buyerEngAmt.toString()).to.equal((1n + BigInt(MATCH_AMOUNT)).toString());
+  });
+
+  // --- OPT-IN REC movement on settle (single path) ---
+  // The fungible REC token (governance [b"rec_mint"], Token-2022, 6-dec, 1 kWh = 1_000 base
+  // units) moves seller->buyer escrow when the REC group is passed via remaining_accounts.
+  // Fabricate the rec_mint + both REC escrows directly (no governance deploy needed) and patch
+  // currency/energy escrow headroom so this match is independent of prior tests' draining.
+  it("moves REC seller->buyer escrow on settle (opt-in)", async () => {
+    const [recMintPda] = PublicKey.findProgramAddressSync([Buffer.from("rec_mint")], GOVERNANCE_PROGRAM_ID);
+    const sellerRecEscrow = escrowPda(seller.publicKey, recMintPda);
+    const buyerRecEscrow = escrowPda(buyer.publicKey, recMintPda);
+
+    // Fabricate the Token-2022 REC mint (no extensions → 82-byte base layout) at the PDA.
+    const mintBuf = Buffer.alloc(MINT_SIZE);
+    MintLayout.encode(
+      { mintAuthorityOption: 1, mintAuthority: payer.publicKey, supply: 1_000_000n, decimals: 6,
+        isInitialized: true, freezeAuthorityOption: 0, freezeAuthority: PublicKey.default },
+      mintBuf
+    );
+    svm.setAccount(recMintPda, {
+      lamports: Number(svm.minimumBalanceForRentExemption(BigInt(MINT_SIZE))),
+      data: mintBuf, owner: TOKEN_2022_PROGRAM_ID, executable: false,
+    });
+
+    // Fabricate the two REC escrow token accounts (authority = market_authority, like every
+    // escrow). Seller funded with 100_000 base units (= 100 kWh × 1_000); buyer starts empty.
+    const REC_AMOUNT = 100_000n; // MATCH_AMOUNT(=100e9 atomic = 100 kWh) × 1_000 / 1e9
+    const makeRecEscrow = (pda: PublicKey, amount: bigint) => {
+      const buf = Buffer.alloc(AccountLayout.span);
+      AccountLayout.encode(
+        { mint: recMintPda, owner: marketAuthorityPda, amount, delegateOption: 0, delegate: PublicKey.default,
+          state: 1, isNativeOption: 0, isNative: 0n, delegatedAmount: 0n, closeAuthorityOption: 0,
+          closeAuthority: PublicKey.default },
+        buf
+      );
+      svm.setAccount(pda, {
+        lamports: Number(svm.minimumBalanceForRentExemption(BigInt(AccountLayout.span))),
+        data: buf, owner: TOKEN_2022_PROGRAM_ID, executable: false,
+      });
+    };
+    makeRecEscrow(sellerRecEscrow, REC_AMOUNT);
+    makeRecEscrow(buyerRecEscrow, 0n);
+
+    // Guarantee currency/energy headroom for this match regardless of prior tests.
+    patchTokenAmount(escrowPda(buyer.publicKey, currencyMint), 5_000n);
+    patchTokenAmount(escrowPda(seller.publicKey, energyMintPda), BigInt(2 * MATCH_AMOUNT));
+
+    // Settle a fresh match (new seeds) intra-zone, with the REC group appended.
+    sendV0(await buildSettleIxs(false, { seedA: 0x21, seedB: 0x22, recMint: recMintPda }), false);
+
+    const sellerRec = Buffer.from(svm.getAccount(sellerRecEscrow)!.data).readBigUInt64LE(64);
+    const buyerRec = Buffer.from(svm.getAccount(buyerRecEscrow)!.data).readBigUInt64LE(64);
+    expect(sellerRec.toString()).to.equal("0");
+    expect(buyerRec.toString()).to.equal(REC_AMOUNT.toString());
+  });
+
+  it("settles without REC movement when the REC group is omitted (opt-in control)", async () => {
+    // Same fresh-match shape, no recMint → settle path skips REC entirely (back-compat).
+    patchTokenAmount(escrowPda(buyer.publicKey, currencyMint), 5_000n);
+    patchTokenAmount(escrowPda(seller.publicKey, energyMintPda), BigInt(2 * MATCH_AMOUNT));
+    sendV0(await buildSettleIxs(false, { seedA: 0x23, seedB: 0x24 }), false);
+    // No REC accounts touched; the energy leg still moved (proves the match settled).
+    const buyerEng = Buffer.from(svm.getAccount(escrowPda(buyer.publicKey, energyMintPda))!.data).readBigUInt64LE(64);
+    expect(buyerEng > 0n).to.equal(true);
   });
 
   // --- Negative coverage for the other settle-path guards (all previously untested).
