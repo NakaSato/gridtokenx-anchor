@@ -153,10 +153,15 @@ describe("trading-settlement", () => {
     const wheelingCollector = await ensureAta(currencyMint, Keypair.generate().publicKey, TOKEN_PROGRAM_ID);
     const lossCollector = await ensureAta(currencyMint, Keypair.generate().publicKey, TOKEN_PROGRAM_ID);
 
+    // Energy is 9-decimal atomic (kWh * 1e9). settle normalizes the currency value by
+    // 1e9 (total = amount * price / 1e9), so a 100 kWh match must be wired atomic,
+    // otherwise total rounds to 0 and the seller is paid nothing.
+    const ENERGY_ATOMIC = 100 * 1_000_000_000; // 100 kWh
+
     // Mint tokens to Escrows
     await mintTo(provider.connection, payer, currencyMint, buyerCurrencyEscrow, payer, 1000000);
     await energyTokenProgram.methods
-      .mintToWallet(new BN(100))
+      .mintToWallet(new BN(ENERGY_ATOMIC))
       .accounts({
         mint: energyMintPda,
         tokenInfo: energyTokenInfoPda,
@@ -177,7 +182,7 @@ describe("trading-settlement", () => {
       tradingProgram.programId
     );
     await tradingProgram.methods
-      .createSellOrder(sellOrderId, new BN(100), new BN(50))
+      .createSellOrder(sellOrderId, new BN(ENERGY_ATOMIC), new BN(50))
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,
@@ -196,7 +201,7 @@ describe("trading-settlement", () => {
       tradingProgram.programId
     );
     await tradingProgram.methods
-      .createBuyOrder(buyOrderId, new BN(100), new BN(60))
+      .createBuyOrder(buyOrderId, new BN(ENERGY_ATOMIC), new BN(60))
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,
@@ -209,7 +214,10 @@ describe("trading-settlement", () => {
       .rpc();
 
     // Per-match TradeNullifier (F3c): created on first settle (init), reverts a replay.
-    const settleTradeId = Buffer.alloc(16, 0x42);
+    // Unique per run so it never collides with another test's trade_id (e.g.
+    // atomic_settlement_service_layout.ts also uses 0x42) on a persistent validator.
+    const settleTradeId = Buffer.alloc(16);
+    settleTradeId.writeBigUInt64LE(BigInt(Date.now()), 0);
     const [settleTradeNullifier] = PublicKey.findProgramAddressSync(
       [Buffer.from("trade"), settleTradeId],
       tradingProgram.programId
@@ -217,7 +225,7 @@ describe("trading-settlement", () => {
 
     // Execute Settlement with an explicit compute-unit limit
     const settlementBuilder = tradingProgram.methods
-      .executeAtomicSettlement(new BN(100), new BN(55), new BN(1), new BN(1), [...settleTradeId])
+      .executeAtomicSettlement(new BN(ENERGY_ATOMIC), new BN(55), new BN(1), new BN(1), [...settleTradeId])
       .accounts({
         market: marketPda,
         buyOrder: buyOrderPda,
@@ -262,7 +270,7 @@ describe("trading-settlement", () => {
     // net_seller = 5500 - 13 - 1 - 1 = 5485
     
     expect(Number(sellerBalance.value.amount)).to.be.at.least(5480);
-    expect(Number(buyerBalance.value.amount)).to.equal(100);
+    expect(Number(buyerBalance.value.amount)).to.equal(ENERGY_ATOMIC);
   });
 
   it("Reconciles stored total_supply with canonical mint supply", async () => {

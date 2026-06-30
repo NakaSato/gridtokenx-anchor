@@ -339,13 +339,15 @@ describe("escrow-settlement", () => {
   it("settles a signed off-chain match between two escrows", async () => {
     // Buyer holds currency, seller holds energy; both pre-create their receiving escrows.
     const buyer = await freshUserWith(currencyMint, 10_000);
-    const seller = await freshUserWith(energyMintPda, 200);
+    // Energy is 9-dec atomic; the match is 100 kWh = 100*1e9 atomic (divisor 6c4118b:
+    // total = match_amount*price/1e9, so 100e9*50/1e9 = 5000 — currency asserts unchanged).
+    const seller = await freshUserWith(energyMintPda, 100 * 1_000_000_000);
     // Receiving-side escrows must exist (settle does not init them).
     const sellerCur = await freshUserWith(currencyMint, 10); // seller currency wallet to seed escrow
     const buyerEng = await freshUserWith(energyMintPda, 10); // buyer energy wallet to seed escrow
 
     await deposit(buyer.kp, buyer.ata, currencyMint, 10_000);
-    await deposit(seller.kp, seller.ata, energyMintPda, 200);
+    await deposit(seller.kp, seller.ata, energyMintPda, 100 * 1_000_000_000);
     // Seed the receiving escrows under the SAME buyer/seller keys.
     // (re-fund the buyer/seller wallets with the opposite asset, then deposit)
     const buyerEngAta = getAssociatedTokenAddressSync(energyMintPda, buyer.kp.publicKey, false, TOKEN_2022_PROGRAM_ID);
@@ -360,7 +362,7 @@ describe("escrow-settlement", () => {
 
     const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(0xa1, 0);
     const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xb2, 0);
-    const matchAmount = 100, matchPrice = 50;
+    const matchAmount = 100 * 1_000_000_000, matchPrice = 50; // 100 kWh atomic; total = 5000
 
     const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.kp.publicKey, energyAmount: matchAmount, pricePerKwh: 60, side: 0, zoneId, expiresAt: 0 });
     const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.kp.publicKey, energyAmount: matchAmount, pricePerKwh: 50, side: 1, zoneId, expiresAt: 0 });
@@ -374,10 +376,6 @@ describe("escrow-settlement", () => {
     // Per-match TradeNullifier (F3c): claimed on first settle, reverts a replay.
     const tradeId = Buffer.alloc(16); tradeId.writeUInt32LE(0xa1, 0); tradeId.writeUInt32LE(0xb2, 4);
     const tradeNullifier = PublicKey.findProgramAddressSync([Buffer.from("trade"), tradeId], tradingProgram.programId)[0];
-    // NOTE (divisor 6c4118b): matchAmount/matchPrice (100*50) and the escrow funding above
-    // are pre-divisor numbers → total_currency_value rounds to 0, so the currency-balance
-    // asserts below need 1e9-scaling (match_amount in energy-atomic units) like
-    // settle_offchain_guards_litesvm.ts. Tracked separately from the F3c ABI wiring here.
 
     // Settlement writes per-payer shards (selected by payer pubkey % num_shards); they
     // must be initialized first.
@@ -519,7 +517,8 @@ describe("escrow-settlement", () => {
       );
     }
 
-    // total = 100*50 = 5000; fee = 5000*25/10000 = 12; wheeling=1; loss=1; net = 4986.
+    // total = match_amount*price/1e9 = 100e9*50/1e9 = 5000; fee = 5000*25/10000 = 12;
+    // wheeling=1; loss=1; net = 4986. Energy leg = matchAmount (100e9) transferred to buyer.
     // seller/buyer escrows use fresh keys each run (seeded with 1), so absolute checks hold.
     const sellerCurEscrow = escrowPda(seller.kp.publicKey, currencyMint);
     const buyerEngEscrow = escrowPda(buyer.kp.publicKey, energyMintPda);

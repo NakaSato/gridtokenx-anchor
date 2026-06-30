@@ -49,6 +49,11 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
   let energyMint: PublicKey; // Token-2022
 
   const zoneId = 0;
+  // Energy is 9-decimal atomic (kWh * 1e9). execute_atomic_settlement normalizes the
+  // currency leg by 1e9: total = amount * price / 1e9 (commit 6c4118b). So a 100 kWh match
+  // must be wired as 100 * 1e9 atomic units, else total rounds to 0 and the seller receives
+  // nothing. price stays 6-dec currency (55 → total = 100e9 * 55 / 1e9 = 5500).
+  const MATCH_ENERGY = 100 * 1_000_000_000; // 100 kWh atomic
 
   before(async () => {
     [marketPda] = PublicKey.findProgramAddressSync([Buffer.from("market")], tradingProgram.programId);
@@ -104,7 +109,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
 
     // Fund escrows: 1,000,000 currency to buyer, 100 energy to seller.
     await mintTo(provider.connection, payer, currencyMint, buyerCurrencyEscrow, payer, 1_000_000, [], undefined, TOKEN_PROGRAM_ID);
-    await mintTo(provider.connection, payer, energyMint, sellerEnergyEscrow, payer, 100, [], undefined, TOKEN_2022_PROGRAM_ID);
+    await mintTo(provider.connection, payer, energyMint, sellerEnergyEscrow, payer, MATCH_ENERGY, [], undefined, TOKEN_2022_PROGRAM_ID);
 
     // On-chain orders.
     const sellOrderId = new BN(Date.now());
@@ -113,7 +118,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       tradingProgram.programId
     );
     await tradingProgram.methods
-      .createSellOrder(sellOrderId, new BN(100), new BN(50))
+      .createSellOrder(sellOrderId, new BN(MATCH_ENERGY), new BN(50))
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,
@@ -132,7 +137,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       tradingProgram.programId
     );
     await tradingProgram.methods
-      .createBuyOrder(buyOrderId, new BN(100), new BN(60))
+      .createBuyOrder(buyOrderId, new BN(MATCH_ENERGY), new BN(60))
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,
@@ -145,9 +150,6 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       .rpc();
 
     // Per-match TradeNullifier (F3c): created on first settle (init), reverts a replay.
-    // NOTE (divisor 6c4118b): amount=100/price=55 predate the 1e9 normalization, so
-    // total_currency_value rounds to 0 and the seller-currency assert below needs
-    // 1e9-scaled numbers — tracked with the other divisor test-number updates.
     const tradeId = Buffer.alloc(16, 0x42);
     const [tradeNullifier] = PublicKey.findProgramAddressSync(
       [Buffer.from("trade"), tradeId],
@@ -157,7 +159,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
     // Settlement with the SERVICE's account layout: tokenProgram = classic
     // (currency), secondaryTokenProgram = Token-2022 (energy).
     await tradingProgram.methods
-      .executeAtomicSettlement(new BN(100), new BN(55), new BN(1), new BN(1), [...tradeId])
+      .executeAtomicSettlement(new BN(MATCH_ENERGY), new BN(55), new BN(1), new BN(1), [...tradeId])
       .accounts({
         market: marketPda,
         buyOrder: buyOrderPda,
@@ -182,10 +184,11 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       .signers([escrowAuth])
       .rpc();
 
-    // Buyer received all 100 energy; seller received currency net of fee+wheeling+loss.
+    // Buyer received all the energy; seller received currency net of fee+wheeling+loss.
+    // total = MATCH_ENERGY * 55 / 1e9 = 5500; seller nets ~5498 (fee + 1 wheeling + 1 loss).
     const buyerEnergy = await provider.connection.getTokenAccountBalance(buyerEnergyAccount);
     const sellerCurrency = await provider.connection.getTokenAccountBalance(sellerCurrencyAccount);
-    expect(Number(buyerEnergy.value.amount), "buyer energy").to.equal(100);
+    expect(Number(buyerEnergy.value.amount), "buyer energy").to.equal(MATCH_ENERGY);
     expect(Number(sellerCurrency.value.amount), "seller currency").to.be.at.least(5480);
 
     const fee = await provider.connection.getTokenAccountBalance(feeCollector);
