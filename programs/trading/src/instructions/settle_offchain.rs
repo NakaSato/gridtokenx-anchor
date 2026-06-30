@@ -181,6 +181,16 @@ fn transfer_rec_if_present<'info>(
     let rec_mint = InterfaceAccount::<Mint>::try_from(rec_mint_info)
         .map_err(|_| error!(TradingError::InvalidRecMint))?;
 
+    // Pin the CPI token program to the one that actually owns the rec_mint (its account
+    // owner) — `transfer_checked` would revert on an owner mismatch anyway, but binding it
+    // up front rejects a caller-supplied bogus/no-op program instead of silently skipping
+    // the REC leg.
+    require_keys_eq!(
+        *rec_token_program_info.key,
+        *rec_mint_info.owner,
+        TradingError::InvalidRecMint
+    );
+
     // Bind both escrows to their canonical [b"escrow", user, rec_mint] PDAs.
     let (expected_seller, _) = Pubkey::find_program_address(
         &[b"escrow", seller.as_ref(), rec_mint_info.key.as_ref()],
