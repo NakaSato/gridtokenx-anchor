@@ -556,7 +556,16 @@ pub fn settle_offchain_match(
     // --- 3. SETTLEMENT ---
     // checked_mul, not saturating: clamping a money product to u64::MAX would pay out
     // and record a garbage value instead of rejecting an impossible match.
-    let total_currency_value = match_amount.checked_mul(match_price).ok_or(TradingError::Overflow)?;
+    // match_amount is 9-decimal energy atomic; match_price is 6-decimal currency.
+    // Divide the 1e15-scaled product by 1e9 (energy decimals) to land in 6-decimal
+    // currency base units — otherwise the seller is overpaid 1e9x. u128 intermediate.
+    let total_currency_value = u64::try_from(
+        (match_amount as u128)
+            .checked_mul(match_price as u128)
+            .ok_or(TradingError::Overflow)?
+            / crate::ENERGY_AMOUNT_DECIMALS_DIVISOR,
+    )
+    .map_err(|_| TradingError::Overflow)?;
     let market_fee = total_currency_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
     let net_seller_amount = net_seller_after_charges(total_currency_value, market_fee, wheeling_charge_val, loss_cost_val)?;
 
@@ -884,7 +893,14 @@ pub fn batch_settle_offchain_match<'info>(
         let seller_rem = m.seller_payload.energy_amount.saturating_sub(seller_nullifier.filled_amount);
         require!(m.match_amount <= buyer_rem && m.match_amount <= seller_rem, TradingError::InvalidAmount);
 
-        let total_value = m.match_amount.checked_mul(m.match_price).ok_or(TradingError::Overflow)?;
+        // 9-dec energy amount * 6-dec price / 1e9 → 6-dec currency base (see single path).
+        let total_value = u64::try_from(
+            (m.match_amount as u128)
+                .checked_mul(m.match_price as u128)
+                .ok_or(TradingError::Overflow)?
+                / crate::ENERGY_AMOUNT_DECIMALS_DIVISOR,
+        )
+        .map_err(|_| TradingError::Overflow)?;
         let market_fee = total_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
         let net_seller = net_seller_after_charges(total_value, market_fee, m.wheeling_charge, m.loss_cost)?;
         batch_total_value = batch_total_value.checked_add(total_value).ok_or(TradingError::Overflow)?;

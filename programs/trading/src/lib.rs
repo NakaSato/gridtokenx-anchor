@@ -18,6 +18,13 @@ pub use crate::state::{
 pub use crate::utils::get_governance_config;
 pub use governance::{ErcCertificate, ErcStatus, GovernanceConfig};
 
+/// Divisor that normalizes an energy `amount` (9-decimal atomic, kWh * 1e9)
+/// multiplied by a 6-decimal currency `price` back down to 6-decimal currency
+/// base units: `amount * price / 1e9`. Equals the energy mint's decimal factor
+/// (10^9). Used by every settlement currency-value computation so the seller is
+/// paid the true trade value, not 1e9x it.
+pub const ENERGY_AMOUNT_DECIMALS_DIVISOR: u128 = 1_000_000_000;
+
 // ============================================================================
 // AUCTION CLEARING TYPES (Inlined to avoid Anchor macro issues)
 // ============================================================================
@@ -1040,7 +1047,19 @@ pub mod trading {
             TradingError::InvalidAmount
         );
 
-        let total_currency_value = amount.saturating_mul(price);
+        // `amount` is energy in 9-decimal atomic units (kWh * 1e9); `price` is
+        // currency-per-kWh in 6-decimal atomic units. Their raw product is scaled
+        // by 1e15, but the currency leg settles in 6-decimal base units — so divide
+        // by 1e9 (the energy decimals) to land in currency base. Without this the
+        // seller is overpaid 1e9x. u128 intermediate so a large amount*price can't
+        // overflow u64 before the divide.
+        let total_currency_value = u64::try_from(
+            (amount as u128)
+                .checked_mul(price as u128)
+                .ok_or(TradingError::Overflow)?
+                / crate::ENERGY_AMOUNT_DECIMALS_DIVISOR,
+        )
+        .map_err(|_| TradingError::Overflow)?;
         let market_fee = total_currency_value
             .checked_mul(market.market_fee_bps as u64)
             .map(|v| v / 10000)
