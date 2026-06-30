@@ -138,7 +138,7 @@ fn rec_base_units_for(match_amount: u64) -> Result<u64> {
         (match_amount as u128)
             .checked_mul(1_000)
             .ok_or(TradingError::Overflow)?
-            / crate::ENERGY_AMOUNT_DECIMALS_DIVISOR as u128,
+            / crate::ENERGY_AMOUNT_DECIMALS_DIVISOR,
     )
     .map_err(|_| TradingError::Overflow.into())
 }
