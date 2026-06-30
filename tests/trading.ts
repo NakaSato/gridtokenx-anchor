@@ -208,13 +208,21 @@ describe("trading-settlement", () => {
       .signers([consumer])
       .rpc();
 
+    // Per-match TradeNullifier (F3c): created on first settle (init), reverts a replay.
+    const settleTradeId = Buffer.alloc(16, 0x42);
+    const [settleTradeNullifier] = PublicKey.findProgramAddressSync(
+      [Buffer.from("trade"), settleTradeId],
+      tradingProgram.programId
+    );
+
     // Execute Settlement with an explicit compute-unit limit
     const settlementBuilder = tradingProgram.methods
-      .executeAtomicSettlement(new BN(100), new BN(55), new BN(1), new BN(1))
+      .executeAtomicSettlement(new BN(100), new BN(55), new BN(1), new BN(1), [...settleTradeId])
       .accounts({
         market: marketPda,
         buyOrder: buyOrderPda,
         sellOrder: sellOrderPda,
+        tradeNullifier: settleTradeNullifier,
         buyerCurrencyEscrow: buyerCurrencyEscrow,
         sellerEnergyEscrow: sellerEnergyEscrow,
         sellerCurrencyAccount: sellerCurrencyAccount,

@@ -7,6 +7,11 @@ import { Program } from '@anchor-lang/core';
 import { Registry } from '../target/types/registry';
 import { Governance } from '../target/types/governance';
 import { PublicKey, Keypair, SystemProgram } from '@solana/web3.js';
+import {
+  TOKEN_2022_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+} from '@solana/spl-token';
 import BN from 'bn.js';
 import * as fs from 'fs';
 
@@ -82,6 +87,26 @@ async function main() {
     [Buffer.from('erc_certificate'), Buffer.from(certId)],
     governance.programId,
   );
+  // Fungible REC mint (1 token = 1 MWh, 6 decimals) + producer ATA (owner = meter owner).
+  const [recMint] = PublicKey.findProgramAddressSync([Buffer.from('rec_mint')], governance.programId);
+  const recAta = getAssociatedTokenAddressSync(recMint, owner.publicKey, false, TOKEN_2022_PROGRAM_ID);
+
+  // Ensure the REC mint exists (idempotent).
+  try {
+    await governance.methods
+      .initRecMint()
+      .accounts({
+        governanceConfig: poaPda,
+        recMint,
+        authority,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log('  ✅ REC mint initialized');
+  } catch (e: any) {
+    if (!/already in use|0x0/.test(e.message ?? '')) console.log('  ⚠️ init_rec_mint:', e.message);
+  }
 
   console.log('Issuing ERC', certId);
   try {
@@ -94,6 +119,10 @@ async function main() {
         owner: owner.publicKey,
         registry: registryPda,
         registryProgram: registry.programId,
+        recMint,
+        recTokenAccount: recAta,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         authority,
         systemProgram: SystemProgram.programId,
       } as any)

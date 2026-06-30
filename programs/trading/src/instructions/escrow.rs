@@ -84,6 +84,84 @@ pub fn deposit_escrow(ctx: Context<DepositEscrowContext>, amount: u64) -> Result
     Ok(())
 }
 
+// CUSTODIAL escrow funding (Option A). The platform funds a user's escrow on the
+// user's behalf — the depositing `user` is an instruction arg (NON-signer), and a
+// platform `funder` Signer authorizes the source transfer + pays rent. This is the
+// custodial analogue of `deposit_escrow`: in this deployment user wallets never sign
+// on-chain (IAM holds keys at rest; Chain Bridge signs as `platform_admin`), so the
+// self-signed `deposit_escrow` cannot be driven. Off-chain authorization is enforced
+// by Chain Bridge RBAC (only the trading-service role may submit this); on-chain the
+// escrow address is still seed-bound to [user, mint] so funds can only ever land in
+// the named user's escrow.
+#[derive(Accounts)]
+#[instruction(user: Pubkey)]
+pub struct FundEscrowCustodialContext<'info> {
+    #[account(mut)]
+    pub funder: Signer<'info>,
+
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
+
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = funder,
+        token::token_program = token_program,
+    )]
+    pub funder_source: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    #[account(
+        init_if_needed,
+        payer = funder,
+        seeds = [b"escrow", user.as_ref(), mint.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = market_authority,
+        token::token_program = token_program,
+    )]
+    pub user_escrow: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// CHECK: global escrow authority PDA — only its key is used.
+    #[account(seeds = [b"market_authority"], bump)]
+    pub market_authority: UncheckedAccount<'info>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+pub fn fund_escrow_custodial(
+    ctx: Context<FundEscrowCustodialContext>,
+    user: Pubkey,
+    amount: u64,
+) -> Result<()> {
+    compute_fn!("fund_escrow_custodial" => {
+        require!(amount > 0, TradingError::InvalidAmount);
+
+        let decimals = ctx.accounts.mint.decimals;
+        transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.key(),
+                TransferChecked {
+                    from: ctx.accounts.funder_source.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
+                    to: ctx.accounts.user_escrow.to_account_info(),
+                    authority: ctx.accounts.funder.to_account_info(),
+                },
+            ),
+            amount,
+            decimals,
+        )?;
+
+        let now = Clock::get()?.unix_timestamp;
+        emit!(EscrowDeposited {
+            user,
+            mint: ctx.accounts.mint.key(),
+            amount,
+            timestamp: now,
+        });
+    });
+    Ok(())
+}
+
 #[derive(Accounts)]
 pub struct WithdrawEscrowContext<'info> {
     #[account(mut)]

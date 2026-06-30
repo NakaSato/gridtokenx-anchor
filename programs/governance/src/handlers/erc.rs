@@ -1,8 +1,9 @@
 use crate::errors::*;
 use crate::events::*;
 use crate::state::*;
-use crate::{IssueErc, ValidateErc};
+use crate::{InitRecMint, IssueErc, RetireRec, ValidateErc};
 use anchor_lang::prelude::*;
+use anchor_spl::token_interface;
 
 pub fn issue(
     ctx: Context<IssueErc>,
@@ -141,6 +142,62 @@ pub fn issue(
         timestamp: clock.unix_timestamp,
     });
 
+    // === Mint fungible REC tokens to the producer (1 token = 1 MWh) ===
+    // `energy_amount` is kWh; the REC mint has 6 decimals so 1 MWh = 1_000_000 base
+    // units, hence 1 kWh = 1_000 base units. Producer = meter owner (the `owner` signer,
+    // verified == rec_token_account authority by the ATA constraint).
+    let rec_amount = energy_amount
+        .checked_mul(1_000)
+        .ok_or(GovernanceError::MathOverflow)?;
+    let gov_bump = ctx.bumps.governance_config;
+    let seeds: &[&[u8]] = &[b"poa_config", std::slice::from_ref(&gov_bump)];
+    let signer = &[seeds];
+    let cpi_accounts = token_interface::MintTo {
+        mint: ctx.accounts.rec_mint.to_account_info(),
+        to: ctx.accounts.rec_token_account.to_account_info(),
+        authority: ctx.accounts.governance_config.to_account_info(),
+    };
+    token_interface::mint_to(
+        CpiContext::new_with_signer(ctx.accounts.token_program.key(), cpi_accounts, signer),
+        rec_amount,
+    )?;
+
+    emit!(RecMinted {
+        owner: meter_owner,
+        energy_amount,
+        rec_amount,
+        timestamp: clock.unix_timestamp,
+    });
+
+    Ok(())
+}
+
+/// Initialize the fungible REC mint (PDA `[b"rec_mint"]`, 6 decimals, mint authority =
+/// governance_config PDA). Run once before issuing certificates. The mint is created
+/// entirely via account constraints.
+pub fn init_rec_mint(_ctx: Context<InitRecMint>) -> Result<()> {
+    Ok(())
+}
+
+/// Retire (burn) REC tokens — the standard REC end-of-life: the holder surrenders the
+/// green attribute, removing supply. `amount` is in base units (6 decimals; 1 kWh = 1_000).
+pub fn retire_rec(ctx: Context<RetireRec>, amount: u64) -> Result<()> {
+    require!(amount > 0, GovernanceError::InvalidAmount);
+    let now = Clock::get()?.unix_timestamp;
+    let cpi_accounts = token_interface::Burn {
+        mint: ctx.accounts.rec_mint.to_account_info(),
+        from: ctx.accounts.holder_token_account.to_account_info(),
+        authority: ctx.accounts.holder.to_account_info(),
+    };
+    token_interface::burn(
+        CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts),
+        amount,
+    )?;
+    emit!(RecRetired {
+        holder: ctx.accounts.holder.key(),
+        amount,
+        timestamp: now,
+    });
     Ok(())
 }
 

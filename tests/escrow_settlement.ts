@@ -285,10 +285,15 @@ describe("escrow-settlement", () => {
     const buyerPayload = { orderId: [...buyerOrderId], user: attacker.publicKey, energyAmount: new BN(100), pricePerKwh: new BN(60), side: 0, zoneId, expiresAt: new BN(0) };
     const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(100), pricePerKwh: new BN(50), side: 1, zoneId, expiresAt: new BN(0) };
 
+    // Per-match TradeNullifier (F3c). This test reverts in try_accounts (escrow seed
+    // mismatch) before the handler reads it, but the arg+account are required to encode.
+    const tradeId = Buffer.alloc(16, 0x91);
+    const tradeNullifier = PublicKey.findProgramAddressSync([Buffer.from("trade"), tradeId], tradingProgram.programId)[0];
+
     let threw = false;
     try {
       await tradingProgram.methods
-        .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(100), new BN(55), new BN(1), new BN(1))
+        .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(100), new BN(55), new BN(1), new BN(1), [...tradeId])
         .accounts({
           market: marketPda,
           zoneMarket: zoneMarketPda,
@@ -314,7 +319,8 @@ describe("escrow-settlement", () => {
           treasuryProgram: null,
           treasuryState: null,
         } as any)
-        .remainingAccounts(govRemaining) // 0.3 governance gate (poa_config)
+        // gov (poa_config) @0, trade_nullifier @1 — order mirrors the handler reads.
+        .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }])
         .rpc();
     } catch (e: any) {
       threw = true;
@@ -365,6 +371,14 @@ describe("escrow-settlement", () => {
     const buyerPayload = { orderId: [...buyerOrderId], user: buyer.kp.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(60), side: 0, zoneId, expiresAt: new BN(0) };
     const sellerPayload = { orderId: [...sellerOrderId], user: seller.kp.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(50), side: 1, zoneId, expiresAt: new BN(0) };
 
+    // Per-match TradeNullifier (F3c): claimed on first settle, reverts a replay.
+    const tradeId = Buffer.alloc(16); tradeId.writeUInt32LE(0xa1, 0); tradeId.writeUInt32LE(0xb2, 4);
+    const tradeNullifier = PublicKey.findProgramAddressSync([Buffer.from("trade"), tradeId], tradingProgram.programId)[0];
+    // NOTE (divisor 6c4118b): matchAmount/matchPrice (100*50) and the escrow funding above
+    // are pre-divisor numbers → total_currency_value rounds to 0, so the currency-balance
+    // asserts below need 1e9-scaling (match_amount in energy-atomic units) like
+    // settle_offchain_guards_litesvm.ts. Tracked separately from the F3c ABI wiring here.
+
     // Settlement writes per-payer shards (selected by payer pubkey % num_shards); they
     // must be initialized first.
     const marketAcct: any = await tradingProgram.account.market.fetch(marketPda);
@@ -381,7 +395,7 @@ describe("escrow-settlement", () => {
     } catch (e) { /* already initialized */ }
 
     const settleIx = await tradingProgram.methods
-      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), new BN(1), new BN(1))
+      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), new BN(1), new BN(1), [...tradeId])
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,
@@ -409,7 +423,8 @@ describe("escrow-settlement", () => {
         treasuryProgram: null,
         treasuryState: null,
       } as any)
-      .remainingAccounts(govRemaining) // 0.3 governance gate (poa_config)
+      // gov (poa_config) @0, trade_nullifier @1 — order mirrors the handler reads.
+      .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }])
       .instruction();
 
     // The settle path carries ~20 accounts + two Ed25519 verify ixs, which overflows a

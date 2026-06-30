@@ -12,8 +12,8 @@ pub use crate::error::TradingError;
 pub use crate::instructions::*;
 pub use crate::state::{
     BatchConfig, BatchInfo, Market, MarketShard, Order, OrderNullifier, OrderStatus, OrderType,
-    PriceLevel, PricePoint, TradeRecord, ZoneCapacity, ZoneMarket, ZoneMarketShard, ZoneConfig,
-    MAX_DEPTH_LEVELS,
+    PriceLevel, PricePoint, TradeNullifier, TradeRecord, ZoneCapacity, ZoneMarket, ZoneMarketShard,
+    ZoneConfig, MAX_DEPTH_LEVELS,
 };
 pub use crate::utils::get_governance_config;
 pub use governance::{ErcCertificate, ErcStatus, GovernanceConfig};
@@ -254,6 +254,32 @@ pub mod trading {
             );
         }
 
+        // Fungible REC provenance gate (opt-in via remaining_accounts[0]): when the seller
+        // appends their REC token account, require it to be the real governance rec_mint,
+        // owned by the seller, holding at least `energy_amount * 1_000` base units (REC mint
+        // is 6-dec; 1 kWh = 1_000 units, matching the kWh-denominated `energy_amount` the ERC
+        // check above uses). Omitting it leaves placement unchanged (backwards compatible).
+        if let Some(rec_info) = ctx.remaining_accounts.first() {
+            let rec_acct = InterfaceAccount::<anchor_spl::token_interface::TokenAccount>::try_from(
+                rec_info,
+            )
+            .map_err(|_| error!(TradingError::InvalidRecMint))?;
+            let (expected_mint, _) = Pubkey::find_program_address(&[b"rec_mint"], &governance::ID);
+            require_keys_eq!(rec_acct.mint, expected_mint, TradingError::InvalidRecMint);
+            require_keys_eq!(
+                rec_acct.owner,
+                ctx.accounts.authority.key(),
+                TradingError::RecAccountOwnerMismatch
+            );
+            let required_rec = energy_amount
+                .checked_mul(1_000)
+                .ok_or(TradingError::Overflow)?;
+            require!(
+                rec_acct.amount >= required_rec,
+                TradingError::InsufficientRecBalance
+            );
+        }
+
         // No redundant market load — price bounds already checked above.
         let mut zone_market = ctx.accounts.zone_market.load_mut()?;
         let mut order = ctx.accounts.order.load_init()?;
@@ -333,6 +359,67 @@ pub mod trading {
             price_per_kwh: max_price_per_kwh,
             timestamp: clock.unix_timestamp,
         });
+        });
+        Ok(())
+    }
+
+    /// Custodial order record (Option A): platform records a buy/sell order PDA on a
+    /// user's behalf. The order PDA is seed-bound to [b"order", user, order_id] with
+    /// `user` stored as the non-signing authority; the platform `funder` signs + pays
+    /// rent. Mirrors create_{buy,sell}_order validation. Off-chain authorization is
+    /// enforced by Chain Bridge RBAC (trading-service role only).
+    pub fn record_order_custodial(
+        ctx: Context<RecordOrderCustodialContext>,
+        order_id_val: u64,
+        user: Pubkey,
+        is_buy: bool,
+        energy_amount: u64,
+        price_per_kwh: u64,
+    ) -> Result<()> {
+        compute_fn!("record_order_custodial" => {
+        require!(
+            get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
+            TradingError::MaintenanceMode
+        );
+        require!(energy_amount > 0, TradingError::InvalidAmount);
+        require!(price_per_kwh > 0, TradingError::InvalidPrice);
+
+        {
+            let market_ref = ctx.accounts.market.load()?;
+            require!(
+                price_per_kwh >= market_ref.min_price_per_kwh,
+                TradingError::PriceBelowMinimum
+            );
+            if market_ref.max_price_per_kwh > 0 {
+                require!(
+                    price_per_kwh <= market_ref.max_price_per_kwh,
+                    TradingError::PriceAboveMaximum
+                );
+            }
+        }
+
+        let mut zone_market = ctx.accounts.zone_market.load_mut()?;
+        let mut order = ctx.accounts.order.load_init()?;
+        let clock = Clock::get()?;
+
+        if is_buy {
+            order.buyer = user;
+            order.seller = Pubkey::default();
+            order.order_type = OrderType::Buy as u8;
+        } else {
+            order.seller = user;
+            order.buyer = Pubkey::default();
+            order.order_type = OrderType::Sell as u8;
+        }
+        order.order_id = order_id_val;
+        order.amount = energy_amount;
+        order.filled_amount = 0;
+        order.price_per_kwh = price_per_kwh;
+        order.status = OrderStatus::Active as u8;
+        order.created_at = clock.unix_timestamp;
+        order.expires_at = clock.unix_timestamp + 86400;
+
+        zone_market.active_orders += 1;
         });
         Ok(())
     }
@@ -1013,7 +1100,12 @@ pub mod trading {
         price: u64,
         wheeling_charge_val: u64,
         loss_cost_val: u64,
+        // Per-match id (matcher UUID). Consumed by the context's `trade_nullifier`
+        // `init` seeds — its existence on replay reverts the tx, so the same match
+        // can never double-settle even when the orders still have headroom (F3c).
+        trade_id: [u8; 16],
     ) -> Result<()> {
+        let _ = trade_id; // bound via #[instruction] → trade_nullifier seeds; not read here
         compute_fn!("execute_atomic_settlement" => {
         require!(
             get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
@@ -1250,14 +1342,15 @@ pub mod trading {
         Ok(())
     }
 
-    pub fn settle_offchain_match(
-        ctx: Context<SettleOffchainMatchContext>,
+    pub fn settle_offchain_match<'info>(
+        ctx: Context<'info, SettleOffchainMatchContext<'info>>,
         buyer_payload: OffchainOrderPayload,
         seller_payload: OffchainOrderPayload,
         match_amount: u64,
         match_price: u64,
         wheeling_charge_val: u64,
         loss_cost_val: u64,
+        trade_id: [u8; 16],
     ) -> Result<()> {
         instructions::settle_offchain_match(
             ctx,
@@ -1267,6 +1360,7 @@ pub mod trading {
             match_price,
             wheeling_charge_val,
             loss_cost_val,
+            trade_id,
         )
     }
 
@@ -1305,6 +1399,17 @@ pub mod trading {
     /// Withdraw from the caller's own escrow PDA back to their wallet.
     pub fn withdraw_escrow(ctx: Context<WithdrawEscrowContext>, amount: u64) -> Result<()> {
         instructions::withdraw_escrow(ctx, amount)
+    }
+
+    /// Custodial escrow funding (Option A): platform funds `user`'s escrow on their
+    /// behalf. `user` is a non-signing instruction arg; the platform `funder` signs.
+    /// Off-chain authorization is enforced by Chain Bridge RBAC.
+    pub fn fund_escrow_custodial(
+        ctx: Context<FundEscrowCustodialContext>,
+        user: Pubkey,
+        amount: u64,
+    ) -> Result<()> {
+        instructions::fund_escrow_custodial(ctx, user, amount)
     }
 
     // ============================================
@@ -1376,6 +1481,10 @@ pub mod trading {
         pub system_program: Program<'info, System>,
         /// CHECK: Manual deserialization to handle length mismatch in localnet
         pub governance_config: UncheckedAccount<'info>,
+        // OPTIONAL (remaining_accounts[0]): the seller's fungible REC token account
+        // (Token-2022, governance rec_mint). When appended, the provenance gate fires —
+        // see the handler. Kept out of the named context to avoid forcing every existing
+        // create_sell_order caller to pass an extra account.
     }
 
     #[derive(Accounts)]
@@ -1388,6 +1497,21 @@ pub mod trading {
         pub order: AccountLoader<'info, Order>,
         #[account(mut)]
         pub authority: Signer<'info>,
+        pub system_program: Program<'info, System>,
+        /// CHECK: Manual deserialization to handle length mismatch in localnet
+        pub governance_config: UncheckedAccount<'info>,
+    }
+
+    #[derive(Accounts)]
+    #[instruction(order_id_val: u64, user: Pubkey)]
+    pub struct RecordOrderCustodialContext<'info> {
+        pub market: AccountLoader<'info, Market>,
+        #[account(mut)]
+        pub zone_market: AccountLoader<'info, ZoneMarket>,
+        #[account(init, payer = funder, space = 8 + std::mem::size_of::<Order>(), seeds = [b"order", user.as_ref(), &order_id_val.to_le_bytes()], bump)]
+        pub order: AccountLoader<'info, Order>,
+        #[account(mut)]
+        pub funder: Signer<'info>,
         pub system_program: Program<'info, System>,
         /// CHECK: Manual deserialization to handle length mismatch in localnet
         pub governance_config: UncheckedAccount<'info>,
@@ -1446,6 +1570,7 @@ pub mod trading {
     }
 
     #[derive(Accounts)]
+    #[instruction(amount: u64, price: u64, wheeling_charge_val: u64, loss_cost_val: u64, trade_id: [u8; 16])]
     pub struct ExecuteAtomicSettlementContext<'info> {
         #[account(mut)]
         pub market: AccountLoader<'info, Market>,
@@ -1453,6 +1578,18 @@ pub mod trading {
         pub buy_order: AccountLoader<'info, Order>,
         #[account(mut)]
         pub sell_order: AccountLoader<'info, Order>,
+        // PER-MATCH REPLAY GUARD (F3c): created on first settle, so a re-sent match (the
+        // orders' per-fill `filled_amount` alone does NOT block a partial replay while
+        // headroom remains) finds this PDA already initialized and `init` reverts the tx.
+        // Paid by market_authority (the platform signer). Keyed by the matcher's trade_id.
+        #[account(
+            init,
+            payer = market_authority,
+            space = TradeNullifier::LEN,
+            seeds = [b"trade", trade_id.as_ref()],
+            bump
+        )]
+        pub trade_nullifier: Account<'info, TradeNullifier>,
         /// CHECK: Buyer's token account for currency (Escrow)
         #[account(mut, owner = token_program.key())]
         pub buyer_currency_escrow: UncheckedAccount<'info>,
@@ -1477,6 +1614,7 @@ pub mod trading {
         pub energy_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
         pub currency_mint: InterfaceAccount<'info, anchor_spl::token_interface::Mint>,
         pub escrow_authority: Signer<'info>,
+        #[account(mut)] // mut: pays rent for the trade_nullifier init
         pub market_authority: Signer<'info>,
         pub token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
         pub system_program: Program<'info, System>,

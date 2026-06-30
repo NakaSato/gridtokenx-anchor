@@ -60,8 +60,13 @@ const governanceIdl = require("../target/idl/governance.json");
 
 const ZONE = 0; // intra-zone match → capacity throttle exempt (settle_offchain.rs:369)
 let shardByte = 0;
-const MATCH_AMOUNT = 100;
-const MATCH_PRICE = 50; // total currency = 100*50 = 5000
+// Energy is 9-decimal atomic (kWh * 1e9). settle_offchain normalizes the currency
+// value by 1e9: total = match_amount * match_price / 1e9 (commit 6c4118b). So a 100 kWh
+// match must be wired as 100 * 1e9 atomic units, otherwise total rounds to 0 and the
+// network-charge cap (settle_offchain.rs:126) trips on any nonzero wheeling/loss.
+const ENERGY_DECIMALS = 1_000_000_000;
+const MATCH_AMOUNT = 100 * ENERGY_DECIMALS; // 100 kWh atomic
+const MATCH_PRICE = 50; // total currency = 100 * 50 = 5000 (6-dec base units)
 
 // Mirrors OffchainOrderPayload::get_message() byte layout in settle_offchain.rs.
 function orderMessage(p: {
@@ -264,6 +269,10 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
 
     const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(seedA, 0);
     const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(seedB, 0);
+    // Per-match trade_id (the matcher's unique UUID) — derived from the seeds so it is stable
+    // for a replay of the same match (→ same TradeNullifier PDA) but distinct across matches.
+    const tradeId = Buffer.alloc(16); tradeId.writeUInt32LE(seedA, 0); tradeId.writeUInt32LE(seedB, 4);
+    const tradeNullifier = tpda([Buffer.from("trade"), tradeId]);
 
     const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount, pricePerKwh: 60, side: buyerSide, zoneId: buyerZone, expiresAt: buyerExpires });
     const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount, pricePerKwh: 50, side: sellerSide, zoneId: sellerZone, expiresAt: sellerExpires });
@@ -274,7 +283,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(energyAmount), pricePerKwh: new BN(50), side: sellerSide, zoneId: sellerZone, expiresAt: new BN(sellerExpires) };
 
     const settleIx = await trading.methods
-      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), new BN(wheeling), new BN(loss))
+      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), new BN(wheeling), new BN(loss), [...tradeId])
       .accounts({
         market: marketPda,
         zoneMarket,
@@ -300,10 +309,13 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
         treasuryProgram: withTreasury ? treasuryId : null,
         treasuryState: withTreasury ? treasuryPda : null,
       } as any)
-      // Governance poa_config is remaining_accounts[0] (maintenance gate); ZoneCapacity, when
-      // supplied (cross-zone), is remaining_accounts[1] (writable — committed_flow counter).
+      // Governance poa_config is remaining_accounts[0] (maintenance gate); the per-match
+      // TradeNullifier is remaining_accounts[1] (writable — created on first settle, replay
+      // guard); ZoneCapacity, when supplied (cross-zone), is remaining_accounts[2] (writable —
+      // committed_flow counter).
       .remainingAccounts([
         { pubkey: governanceConfigPda, isSigner: false, isWritable: false },
+        { pubkey: tradeNullifier, isSigner: false, isWritable: true },
         ...(zoneCapacity ? [{ pubkey: zoneCapacity, isSigner: false, isWritable: true }] : []),
       ])
       .instruction();
@@ -448,13 +460,15 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
         .instruction();
       send([ix], []);
     };
-    await mintEnergy(sellerEngAta, seller.publicKey, 200);
+    // Seller energy must cover the atomic match amount (1 settle drains MATCH_AMOUNT);
+    // 2x headroom. Buyer energy is a 1-unit receiving seed.
+    await mintEnergy(sellerEngAta, seller.publicKey, 2 * MATCH_AMOUNT);
     await mintEnergy(buyerEngAta, buyer.publicKey, 1);
 
-    // Deposits: buyer currency 5000 + energy 1 (receiving seed); seller energy 200 + currency 1 (receiving seed).
+    // Deposits: buyer currency 5000 + energy 1 (receiving seed); seller energy 2*MATCH_AMOUNT + currency 1 (receiving seed).
     await depositEscrow(buyer, currencyMint, buyerCurAta, 5_000, TOKEN_PROGRAM_ID);
     await depositEscrow(buyer, energyMintPda, buyerEngAta, 1, TOKEN_2022_PROGRAM_ID);
-    await depositEscrow(seller, energyMintPda, sellerEngAta, 200, TOKEN_2022_PROGRAM_ID);
+    await depositEscrow(seller, energyMintPda, sellerEngAta, 2 * MATCH_AMOUNT, TOKEN_2022_PROGRAM_ID);
     await depositEscrow(seller, currencyMint, sellerCurAta, 1, TOKEN_PROGRAM_ID);
 
     // Advance the bank slot so the hand-built ALTs (last_extended_slot = 0) resolve as active.
@@ -474,7 +488,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
 
     const sellerCurEscrow = escrowPda(seller.publicKey, currencyMint);
     const buyerEngEscrow = escrowPda(buyer.publicKey, energyMintPda);
-    // total = 100*50 = 5000; fee=12, wheeling=1, loss=1 → seller nets 4986 (+1 seed).
+    // total = MATCH_AMOUNT*50/1e9 = 100*50 = 5000; fee=12, wheeling=1, loss=1 → seller nets 4986 (+1 seed).
     const sc = svm.getAccount(sellerCurEscrow)!;
     const sellerCurAmt = Buffer.from(sc.data).readBigUInt64LE(64); // SPL token amount @ offset 64
     expect(sellerCurAmt.toString()).to.equal((1n + 4986n).toString());
@@ -526,6 +540,47 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     // nullifier blocks double-settlement of a signed order.
     const blob = sendV0(await buildSettleIxs(false), true); // default seeds a1/b2
     expect(blob, blob).to.match(/InvalidAmount/);
+  });
+
+  it("F3c: replaying a PARTIAL-fill match double-settles (per-order nullifier gap)", async () => {
+    // PROVE-IT (currently RED). The OrderNullifier is a per-ORDER fill accumulator, NOT a
+    // per-MATCH nullifier: it only blocks fills BEYOND an order's energy_amount. The CDA
+    // engine emits partial fills (match_amount < energy_amount, engine.rs:316,349), and a
+    // lost `chain.tx.result` reply makes trading re-sign + re-send the SAME match with a
+    // fresh blockhash — defeating the bridge's sha256(serialized_tx) dedup
+    // (nats_provider.rs:99-104). While the order still has headroom, the replayed match
+    // re-executes the transfers = DOUBLE SETTLEMENT.
+    //
+    // Orders sized 100, matched at 40 → remaining 60 after the first settle, so a replayed
+    // 40 still satisfies `match_amount <= remaining` (settle_offchain.rs:552-554). The
+    // unrelated full-fill replay test above (match 100 == energy 100 → remaining 0) does
+    // NOT cover this — it is the false-confidence gap. The per-match TradeNullifier PDA
+    // (keyed by trade_id, claimed in settle_offchain.rs step 2b) closes it: the first
+    // partial settle lands, the replay finds the PDA program-owned → MatchAlreadySettled,
+    // even though the order still has 60 headroom. (Before the fix the replay SUCCEEDED.)
+    const seedA = 0x51, seedB = 0x52;
+    const buyerCurAta = getAssociatedTokenAddressSync(currencyMint, buyer.publicKey, false, TOKEN_PROGRAM_ID);
+    // The control test drained buyer currency escrow to 0; fund 2 matches (2 * 40*50 = 4000).
+    await depositEscrow(buyer, currencyMint, buyerCurAta, 4_000, TOKEN_PROGRAM_ID);
+
+    const sellerEngEscrow = escrowPda(seller.publicKey, energyMintPda);
+    const readEnergy = () => Buffer.from(svm.getAccount(sellerEngEscrow)!.data).readBigUInt64LE(64);
+    const before = readEnergy();
+
+    // First settle of the partial match — lands (wheeling/loss 0 to keep currency math simple).
+    const partial = { seedA, seedB, energyAmount: 100, matchAmount: 40, matchPrice: 50, wheeling: 0, loss: 0 };
+    sendV0(await buildSettleIxs(false, partial), false);
+    const mid = readEnergy();
+    expect((before - mid).toString(), "first partial settle moves 40 energy").to.equal("40");
+
+    // Replay the SAME match. CORRECT: revert (already settled). CURRENT: succeeds → the
+    // sendV0(expectFail=true) throws "expected tx to fail but it succeeded", failing this
+    // test and proving the double-settle. Post-fix the replay reverts and this goes green.
+    const blob = sendV0(await buildSettleIxs(false, partial), true);
+    expect(blob, blob).to.match(/InvalidAmount|already settled|replay|Nullifier|MatchAlreadySettled/);
+
+    // Defense-in-depth: the seller's energy escrow must NOT have moved a second time.
+    expect((mid - readEnergy()).toString(), "replay must move no energy").to.equal("0");
   });
 
   it("rejects the ed25519 offset-redirection bypass (declared pk != signed payload user)", async () => {

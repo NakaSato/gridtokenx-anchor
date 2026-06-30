@@ -64,7 +64,7 @@ npm run simnet:ci   # --ci (headless, fast)
 
 ### Init / simulation scripts (run against a live validator)
 
-`scripts/*.ts` run via `npx tsx`. Order matters: `bootstrap.ts` then `init-registry.ts` → `init-oracle.ts` → `init-market.ts` → `init-governance.ts` → `init-zone-config.ts` (also `npm exec` via `anchor run init-zone-config`). Lifecycle/load sims: `simulate-trading.ts`, `simulate-market-clearing.ts`, `simulate-meter-stream.ts`, `simulate-token-lifecycle.ts`, `execute-settlement.ts`.
+`scripts/*.ts` run via `npx tsx`. Order matters: `bootstrap.ts` then `init-registry.ts` → `init-oracle.ts` → `init-market.ts` → `init-governance.ts` → `init-rec-mint.ts` (fungible REC mint, after governance) → `init-zone-config.ts` (also `npm exec` via `anchor run init-zone-config`). Lifecycle/load sims: `simulate-trading.ts`, `simulate-market-clearing.ts`, `simulate-meter-stream.ts`, `simulate-token-lifecycle.ts`, `execute-settlement.ts`.
 
 ---
 

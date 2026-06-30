@@ -226,3 +226,34 @@ concurrency window = once N saturates the validator, in-flight depth is irreleva
 single-node scheduler's packing rate for the ~102k-CU settle tx. Higher throughput would need a
 multi-node cluster (more parallel lanes) or lighter txs (signature-packing for >1 match/tx).
 Lesson: drive the bench with N >> validator slot-capacity or small-N noise dominates.
+
+## MEASURED BASELINE (2026-06-29) — the writable contrast is now empirical, not asserted
+The §RIGOROUS claim "pre-Tier-A → <=1/slot" was a *prediction*; it is now *measured*. The settle
+binary was rebuilt with `zone_market` writable (`#[account(mut)]` + `load_mut`, the pre-Tier-A
+state) on a throwaway worktree, deploy-upgraded to the same validator, same N=40 multipayer
+shard-spread bench:
+
+```
+                 writable (baseline)   read-only (Tier-A)
+conc=1           1.11/slot  2.78 tps    3.00/slot  7.50 tps
+conc=8           1.11/slot  2.78 tps    3.00/slot  7.50 tps
+conc=16          1.00/slot  2.50 tps    3.00/slot  7.50 tps
+slot_span (N=40) 36-40                  13
+```
+
+Writable → ~1/slot (40 settles smeared over 36-40 slots): every settle write-locks the SAME
+`zone_market` PDA (fixed `zone_id`; shard rotation doesn't touch it) → Sealevel cannot co-schedule
+them. Read-only → 3/slot (same 40 in 13 slots) → parallel. **~2.7× throughput.** Flat across the
+concurrency window both sides = single-node packing rate, not in-flight depth.
+
+The differentiator is the CLIENT/IDL writability of `zone_market` in the tx message — Sealevel
+locks come from the message header, NOT the program's `load()` vs `load_mut()`. Marking the account
+`mut` in the program only *permits* the client (via IDL) to send it writable.
+
+**STALE-IDL GOTCHA (fixed).** This run exposed a real bug: `target/idl/trading.json` still had
+`settle*_offchain_match.zone_market writable=True` while the source was read-only — `cargo build-sbf`
+/ `npm run build:programs` do NOT regenerate the IDL. Any client built from that stale IDL sends
+`zone_market` writable and *silently serializes settlement* (loses the entire Tier-A win). Fix:
+`anchor idl build -p trading -o target/idl/trading.json` (verified flips to `writable=None`). The
+production `blockchain-core` InstructionBuilder (PR #1) already emits it read-only, so this was the
+local Anchor artifact only — but regen-IDL must be part of any settle-context change.

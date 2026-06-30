@@ -78,4 +78,14 @@ pub enum TradingError {
     // shifts every later code and breaks tests/clients that assert numeric codes).
     #[msg("Cross-zone settlement requires the ZoneCapacity account (committed_flow ceiling)")]
     ZoneCapacityRequired,
+    #[msg("This match (trade_id) has already been settled on-chain (replay rejected)")]
+    MatchAlreadySettled,
+    #[msg("Trade nullifier account does not match the expected per-match PDA")]
+    InvalidTradeNullifier,
+    #[msg("REC token account mint is not the governance rec_mint PDA")]
+    InvalidRecMint,
+    #[msg("REC token account owner does not match the order seller")]
+    RecAccountOwnerMismatch,
+    #[msg("Seller holds insufficient REC tokens to cover the energy offered")]
+    InsufficientRecBalance,
 }

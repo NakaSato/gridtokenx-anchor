@@ -98,4 +98,6 @@ pub enum GovernanceError {
     MeterZoneMismatch,
     #[msg("Math overflow")]
     MathOverflow,
+    #[msg("Amount must be greater than zero")]
+    InvalidAmount,
 }

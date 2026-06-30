@@ -118,12 +118,12 @@ async function main() {
 
   console.log(`\n📦 Setting up escrow accounts...`);
   const buyerCurrencyEscrow = await ensureAta(provider.connection, payer, currencyMint, escrowAuth.publicKey, TOKEN_PROGRAM_ID);
-  const sellerEnergyEscrow = await ensureAta(provider.connection, payer, energyMintPda, escrowAuth.publicKey, TOKEN_PROGRAM_ID);
+  const sellerEnergyEscrow = await ensureAta(provider.connection, payer, energyMintPda, escrowAuth.publicKey, TOKEN_2022_PROGRAM_ID);
 
   // 4. Setup Receiver Accounts
   console.log(`\n🏦 Setting up receiver and collector accounts...`);
   const sellerCurrencyAccount = await ensureAta(provider.connection, payer, currencyMint, prosumerKey.publicKey, TOKEN_PROGRAM_ID);
-  const buyerEnergyAccount = await ensureAta(provider.connection, payer, energyMintPda, consumerKey.publicKey, TOKEN_PROGRAM_ID);
+  const buyerEnergyAccount = await ensureAta(provider.connection, payer, energyMintPda, consumerKey.publicKey, TOKEN_2022_PROGRAM_ID);
 
   const feeCollector = await ensureAta(provider.connection, payer, currencyMint, authority, TOKEN_PROGRAM_ID);
   const wheelingCollector = await ensureAta(provider.connection, payer, currencyMint, Keypair.generate().publicKey, TOKEN_PROGRAM_ID);
@@ -150,7 +150,7 @@ async function main() {
         destinationOwner: escrowAuth.publicKey,
         authority: authority,
         payer: authority,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
     } as any)
@@ -227,7 +227,7 @@ async function main() {
         marketAuthority: authority,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
-        secondaryTokenProgram: TOKEN_PROGRAM_ID,
+        secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
         governanceConfig: governanceConfigPda,
       } as any)
       .signers([escrowAuth]);
