@@ -15,12 +15,6 @@ async function main() {
     const zoneId = 1;
     const incentiveMultiplierBps = new anchor.BN(15000); // 1.5x
 
-    const discriminator = anchor.BorshInstructionCoder.forInstruction(
-        'initializeZoneConfig',
-        { initializeZoneConfig: { zoneId, incentiveMultiplierBps } }
-    );
-    console.log('Instruction discriminator (hex):', discriminator.slice(0, 8).toString('hex'));
-
     const [zoneConfigPda] = PublicKey.findProgramAddressSync(
         [
             Buffer.from('zone_config'),

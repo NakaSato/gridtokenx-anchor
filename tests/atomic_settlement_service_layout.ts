@@ -150,7 +150,10 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       .rpc();
 
     // Per-match TradeNullifier (F3c): created on first settle (init), reverts a replay.
-    const tradeId = Buffer.alloc(16, 0x42);
+    // Unique per run so the nullifier PDA never collides on a persistent validator (a
+    // fixed id makes a re-run revert MatchAlreadySettled; it also clashed with trading.ts).
+    const tradeId = Buffer.alloc(16);
+    tradeId.writeBigUInt64LE(BigInt(Date.now()), 0);
     const [tradeNullifier] = PublicKey.findProgramAddressSync(
       [Buffer.from("trade"), tradeId],
       tradingProgram.programId
