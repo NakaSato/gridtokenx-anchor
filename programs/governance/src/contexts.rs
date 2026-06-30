@@ -1,6 +1,10 @@
 use crate::errors::GovernanceError;
 use crate::state::*;
 use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token_interface::{
+    Mint as MintInterface, TokenAccount as TokenAccountInterface, TokenInterface,
+};
 
 // ========== INITIALIZATION ==========
 
@@ -76,9 +80,69 @@ pub struct IssueErc<'info> {
     /// CHECK: pinned to the real registry program ID
     #[account(constraint = registry_program.key() == registry::ID @ GovernanceError::InvalidMeterAccount)]
     pub registry_program: UncheckedAccount<'info>,
+    /// Fungible REC mint (1 token = 1 MWh, 6 decimals). Created by `init_rec_mint`.
+    #[account(mut, seeds = [b"rec_mint"], bump)]
+    pub rec_mint: Box<InterfaceAccount<'info, MintInterface>>,
+    /// Producer's REC associated token account (owner = meter owner signer).
+    /// REC tokens are minted here on issuance.
+    #[account(
+        init_if_needed,
+        payer = authority,
+        associated_token::mint = rec_mint,
+        associated_token::authority = owner,
+        associated_token::token_program = token_program,
+    )]
+    pub rec_token_account: Box<InterfaceAccount<'info, TokenAccountInterface>>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+// ========== FUNGIBLE REC TOKEN (1 token = 1 MWh) ==========
+
+#[derive(Accounts)]
+pub struct InitRecMint<'info> {
+    #[account(
+        seeds = [b"poa_config"],
+        bump,
+        has_one = authority @ GovernanceError::UnauthorizedAuthority
+    )]
+    pub governance_config: Account<'info, GovernanceConfig>,
+    /// Fungible REC mint: 1 token = 1 MWh, 6 decimals (base unit = 1 Wh; 1 kWh = 1000 units).
+    /// Mint authority = governance_config PDA `[b"poa_config"]`.
+    #[account(
+        init,
+        payer = authority,
+        seeds = [b"rec_mint"],
+        bump,
+        mint::decimals = 6,
+        mint::authority = governance_config,
+        mint::token_program = token_program,
+    )]
+    pub rec_mint: Box<InterfaceAccount<'info, MintInterface>>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RetireRec<'info> {
+    #[account(mut, seeds = [b"rec_mint"], bump)]
+    pub rec_mint: Box<InterfaceAccount<'info, MintInterface>>,
+    /// Holder retiring (burning) their REC tokens to claim the green attribute.
+    #[account(mut)]
+    pub holder: Signer<'info>,
+    #[account(
+        mut,
+        associated_token::mint = rec_mint,
+        associated_token::authority = holder,
+        associated_token::token_program = token_program,
+    )]
+    pub holder_token_account: Box<InterfaceAccount<'info, TokenAccountInterface>>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 #[derive(Accounts)]

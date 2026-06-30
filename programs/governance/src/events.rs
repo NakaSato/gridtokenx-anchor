@@ -16,6 +16,24 @@ pub struct ErcIssued {
     pub timestamp: i64,
 }
 
+/// Fungible REC tokens minted to a producer alongside certificate issuance.
+/// `rec_amount` is base units (6 decimals; 1 token = 1 MWh, 1 kWh = 1_000 units).
+#[event]
+pub struct RecMinted {
+    pub owner: Pubkey,
+    pub energy_amount: u64,
+    pub rec_amount: u64,
+    pub timestamp: i64,
+}
+
+/// Fungible REC tokens retired (burned) — the green attribute is permanently claimed.
+#[event]
+pub struct RecRetired {
+    pub holder: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
 #[event]
 pub struct ErcValidatedForTrading {
     pub certificate_id: String,

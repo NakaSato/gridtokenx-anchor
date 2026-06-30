@@ -144,14 +144,25 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       .signers([consumer])
       .rpc();
 
+    // Per-match TradeNullifier (F3c): created on first settle (init), reverts a replay.
+    // NOTE (divisor 6c4118b): amount=100/price=55 predate the 1e9 normalization, so
+    // total_currency_value rounds to 0 and the seller-currency assert below needs
+    // 1e9-scaled numbers — tracked with the other divisor test-number updates.
+    const tradeId = Buffer.alloc(16, 0x42);
+    const [tradeNullifier] = PublicKey.findProgramAddressSync(
+      [Buffer.from("trade"), tradeId],
+      tradingProgram.programId
+    );
+
     // Settlement with the SERVICE's account layout: tokenProgram = classic
     // (currency), secondaryTokenProgram = Token-2022 (energy).
     await tradingProgram.methods
-      .executeAtomicSettlement(new BN(100), new BN(55), new BN(1), new BN(1))
+      .executeAtomicSettlement(new BN(100), new BN(55), new BN(1), new BN(1), [...tradeId])
       .accounts({
         market: marketPda,
         buyOrder: buyOrderPda,
         sellOrder: sellOrderPda,
+        tradeNullifier,
         buyerCurrencyEscrow,
         sellerEnergyEscrow,
         sellerCurrencyAccount,

@@ -68,6 +68,20 @@ pub mod governance {
         })
     }
 
+    /// Initialize the fungible REC mint (1 token = 1 MWh, 6 decimals). Run once.
+    pub fn init_rec_mint(ctx: Context<InitRecMint>) -> Result<()> {
+        compute_fn!("init_rec_mint" => {
+            handlers::erc::init_rec_mint(ctx)
+        })
+    }
+
+    /// Retire (burn) REC tokens; `amount` is base units (6 decimals).
+    pub fn retire_rec(ctx: Context<RetireRec>, amount: u64) -> Result<()> {
+        compute_fn!("retire_rec" => {
+            handlers::erc::retire_rec(ctx, amount)
+        })
+    }
+
     pub fn update_governance_config(
         ctx: Context<UpdateGovernanceConfig>,
         erc_validation_enabled: bool,

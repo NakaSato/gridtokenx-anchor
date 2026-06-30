@@ -199,6 +199,43 @@ mod net_seller_tests {
     }
 }
 
+/// Create the per-match `TradeNullifier` PDA, reverting `MatchAlreadySettled` if it already
+/// exists. Existence is the replay guard (see `state::nullifier::TradeNullifier`). The PDA is
+/// keyed by `trade_id` alone — global across orders/zones — and a `trade_id` is unique per
+/// match by construction (the off-chain matcher assigns a fresh UUID per `OrderMatch`). The
+/// create is atomic with the settle, so a never-committed match leaves no marker and a genuine
+/// retry of an un-landed match still proceeds; only a re-sent match that ALREADY committed
+/// finds the PDA program-owned and reverts.
+fn claim_trade_nullifier<'info>(
+    acct: &AccountInfo<'info>,
+    trade_id: &[u8; 16],
+    payer: AccountInfo<'info>,
+    system_program: AccountInfo<'info>,
+    program_id: &Pubkey,
+) -> Result<()> {
+    let (expected, bump) = Pubkey::find_program_address(&[b"trade", trade_id], program_id);
+    require_keys_eq!(*acct.key, expected, TradingError::InvalidTradeNullifier);
+    // Program-owned already ⇒ a prior settle of THIS match committed. Reject the replay.
+    require!(acct.owner != program_id, TradingError::MatchAlreadySettled);
+    let lamports = Rent::get()?.minimum_balance(TradeNullifier::LEN);
+    let bump_arr = [bump];
+    let seeds: [&[u8]; 3] = [b"trade", trade_id.as_ref(), &bump_arr];
+    let signer_seeds: &[&[&[u8]]] = &[&seeds];
+    anchor_lang::system_program::create_account(
+        CpiContext::new_with_signer(
+            system_program.key(),
+            anchor_lang::system_program::CreateAccount { from: payer, to: acct.clone() },
+            signer_seeds,
+        ),
+        lamports,
+        TradeNullifier::LEN as u64,
+        program_id,
+    )?;
+    let disc = TradeNullifier::DISCRIMINATOR;
+    acct.try_borrow_mut_data()?[..disc.len()].copy_from_slice(disc);
+    Ok(())
+}
+
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
 #[cfg(not(feature = "localnet"))]
@@ -384,6 +421,9 @@ pub struct BatchMatchPair {
     pub match_price: u64,
     pub wheeling_charge: u64,
     pub loss_cost: u64,
+    /// Unique per-match id (the off-chain matcher's UUID). Keys the per-match TradeNullifier
+    /// PDA so a re-sent batch can never double-settle a match that already landed (F3c).
+    pub trade_id: [u8; 16],
 }
 
 #[derive(Accounts)]
@@ -482,14 +522,15 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     pub settlement_record: Option<UncheckedAccount<'info>>,
 }
 
-pub fn settle_offchain_match(
-    ctx: Context<SettleOffchainMatchContext>,
+pub fn settle_offchain_match<'info>(
+    ctx: Context<'info, SettleOffchainMatchContext<'info>>,
     buyer_payload: OffchainOrderPayload,
     seller_payload: OffchainOrderPayload,
     match_amount: u64,
     match_price: u64,
     wheeling_charge_val: u64,
     loss_cost_val: u64,
+    trade_id: [u8; 16],
 ) -> Result<()> {
     compute_fn!("settle_offchain_match" => {
     // --- 0. GOVERNANCE GATE ---
@@ -538,10 +579,10 @@ pub fn settle_offchain_match(
     if zone_market.capacity > 0
         && (seller_payload.zone_id != zone_market.zone_id || buyer_payload.zone_id != zone_market.zone_id)
     {
-        // Cross-zone → ZoneCapacity (writable) is MANDATORY as remaining_accounts[1] (index 0
-        // is the governance poa_config); omitting it cannot bypass the ceiling. committed_flow
-        // is the single source of truth.
-        let zc_info = ctx.remaining_accounts.get(1).ok_or(TradingError::ZoneCapacityRequired)?;
+        // Cross-zone → ZoneCapacity (writable) is MANDATORY as remaining_accounts[2] (index 0
+        // is the governance poa_config, index 1 the trade_nullifier); omitting it cannot bypass
+        // the ceiling. committed_flow is the single source of truth.
+        let zc_info = ctx.remaining_accounts.get(2).ok_or(TradingError::ZoneCapacityRequired)?;
         let zc_loader = load_zone_capacity(zc_info, &ctx.accounts.zone_market.key(), ctx.program_id)?;
         let mut zc = zc_loader.load_mut()?;
         let new_total_flow = zc.committed_flow.checked_add(match_amount).ok_or(TradingError::Overflow)?;
@@ -552,6 +593,24 @@ pub fn settle_offchain_match(
     let buyer_remaining = buyer_payload.energy_amount.saturating_sub(ctx.accounts.buyer_nullifier.filled_amount);
     let seller_remaining = seller_payload.energy_amount.saturating_sub(ctx.accounts.seller_nullifier.filled_amount);
     require!(match_amount <= buyer_remaining && match_amount <= seller_remaining, TradingError::InvalidAmount);
+
+    // --- 2b. PER-MATCH REPLAY GUARD ---
+    // The per-ORDER nullifier above only caps cumulative fill; it does NOT stop replaying the
+    // SAME partial match while the order still has headroom (F3c). Claim the per-match
+    // TradeNullifier PDA (remaining_accounts[1], mandatory) — a re-sent match that already
+    // committed finds it program-owned and reverts MatchAlreadySettled. Created atomically, so
+    // a never-landed match leaves no marker and a genuine retry still settles.
+    let trade_nullifier_info = ctx
+        .remaining_accounts
+        .get(1)
+        .ok_or(TradingError::InvalidTradeNullifier)?;
+    claim_trade_nullifier(
+        trade_nullifier_info,
+        &trade_id,
+        ctx.accounts.payer.to_account_info(),
+        ctx.accounts.system_program.to_account_info(),
+        ctx.program_id,
+    )?;
 
     // --- 3. SETTLEMENT ---
     // checked_mul, not saturating: clamping a money product to u64::MAX would pay out
@@ -768,9 +827,10 @@ pub fn batch_settle_offchain_match<'info>(
 
     let sysvar_info = &ctx.accounts.sysvar_instructions;
     let remaining_accounts = ctx.remaining_accounts;
-    // Layout: match_count*6 per-pair accounts, then poa_config (at match_count*6), then an
-    // OPTIONAL ZoneCapacity account (at match_count*6 + 1) for cross-zone batches (Tier-A).
-    let base = match_count * 6;
+    // Layout: match_count*7 per-pair accounts (6 settle accounts + 1 TradeNullifier each),
+    // then poa_config (at match_count*7), then an OPTIONAL ZoneCapacity account (at
+    // match_count*7 + 1) for cross-zone batches (Tier-A).
+    let base = match_count * 7;
     require!(
         remaining_accounts.len() == base + 1 || remaining_accounts.len() == base + 2,
         TradingError::InvalidAmount
@@ -814,7 +874,7 @@ pub fn batch_settle_offchain_match<'info>(
         verify_ed25519_signature(sysvar_info, (i * 2) as u16, &m.buyer_payload.user, &m.buyer_payload.get_message())?;
         verify_ed25519_signature(sysvar_info, (i * 2 + 1) as u16, &m.seller_payload.user, &m.seller_payload.get_message())?;
 
-        let offset = i * 6;
+        let offset = i * 7;
 
         // --- ACCOUNT BINDING: every remaining account must be the canonical PDA for the
         // SIGNED payload, otherwise an attacker could substitute a victim escrow (theft)
@@ -892,6 +952,18 @@ pub fn batch_settle_offchain_match<'info>(
         let buyer_rem = m.buyer_payload.energy_amount.saturating_sub(buyer_nullifier.filled_amount);
         let seller_rem = m.seller_payload.energy_amount.saturating_sub(seller_nullifier.filled_amount);
         require!(m.match_amount <= buyer_rem && m.match_amount <= seller_rem, TradingError::InvalidAmount);
+
+        // PER-MATCH REPLAY GUARD (F3c): the per-ORDER nullifiers above only cap cumulative
+        // fill — they do NOT stop replaying this exact partial match while the order has
+        // headroom. Claim the per-match TradeNullifier (offset+6); a re-sent batch whose
+        // match already committed finds it program-owned and reverts MatchAlreadySettled.
+        claim_trade_nullifier(
+            &remaining_accounts[offset + 6],
+            &m.trade_id,
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            program_id,
+        )?;
 
         // 9-dec energy amount * 6-dec price / 1e9 → 6-dec currency base (see single path).
         let total_value = u64::try_from(

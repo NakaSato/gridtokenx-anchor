@@ -215,7 +215,10 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     ];
     const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(60), side: 0, zoneId, expiresAt: new BN(0) };
     const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(50), side: 1, zoneId, expiresAt: new BN(0) };
-    const matchPair = { buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), wheelingCharge: new BN(1), lossCost: new BN(1) };
+    // Per-match trade_id (F3c) — keys the TradeNullifier replay guard.
+    const tradeId = Buffer.concat([buyerOrderId.subarray(0, 8), sellerOrderId.subarray(0, 8)]);
+    const tradeNullifier = PublicKey.findProgramAddressSync([Buffer.from("trade"), tradeId], trading.programId)[0];
+    const matchPair = { buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), wheelingCharge: new BN(1), lossCost: new BN(1), tradeId: [...tradeId] };
 
     const marketAcct: any = await trading.account.market.fetch(marketPda);
     const zoneAcct: any = await trading.account.zoneMarket.fetch(zoneMarketPda);
@@ -241,6 +244,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       escrowPda(seller.publicKey, thbgMint),
       escrowPda(seller.publicKey, energyMintPda),
       escrowPda(buyer.publicKey, energyMintPda),
+      tradeNullifier, // per-match replay guard (7th per-pair account)
     ].map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
     // Trailing governance poa_config account (0.3 settlement gate).
     remaining.push({ pubkey: governanceConfigPda, isSigner: false, isWritable: false });

@@ -12,6 +12,10 @@ import {
 const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
   "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
 );
+import {
+  TOKEN_2022_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
 import { assert } from "chai";
 import type { Governance } from "../target/types/governance";
 import type { Registry } from "../target/types/registry";
@@ -70,6 +74,19 @@ describe("Governance Program", () => {
 
   const governanceConfigPda = getGovernancePda(govProgram.programId);
 
+  // Fungible REC mint (1 token = 1 MWh, 6 decimals) — PDA [b"rec_mint"].
+  const recMintPda = PublicKey.findProgramAddressSync(
+    [Buffer.from("rec_mint")],
+    govProgram.programId,
+  )[0];
+  // Producer REC ATA: meter owner == the test wallet authority.
+  const recAta = getAssociatedTokenAddressSync(
+    recMintPda,
+    authority.publicKey,
+    false,
+    TOKEN_2022_PROGRAM_ID,
+  );
+
   // Unique IDs per run to avoid collision on a persistent ledger
   const RUN_TAG = Date.now().toString(36);
   const CERT_ID = `ERC-${RUN_TAG}`;
@@ -100,6 +117,22 @@ describe("Governance Program", () => {
 
     // 1. Initialize governance (idempotent)
     await initializeGovernance(provider, govProgram);
+
+    // 1b. Initialize the fungible REC mint (idempotent — ignore "already in use").
+    try {
+      await govProgram.methods
+        .initRecMint()
+        .accounts({
+          governanceConfig: governanceConfigPda,
+          recMint: recMintPda,
+          authority: authority.publicKey,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        } as any)
+        .rpc();
+    } catch (e: any) {
+      if (!/already in use|0x0/.test(e.message ?? "")) throw e;
+    }
 
     // ── Compute DAO PDAs ─────────────────────────────────────────────────
     const zoneIdBuf = Buffer.alloc(4);
@@ -367,11 +400,16 @@ describe("Governance Program", () => {
           governanceConfig: governanceConfigPda,
           ercCertificate: ercPda,
           meterAccount: meterAccountPda,
+          owner: authority.publicKey,
           registry: registryPda,
           registryProgram: regProgram.programId,
+          recMint: recMintPda,
+          recTokenAccount: recAta,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           authority: authority.publicKey,
           systemProgram: SystemProgram.programId,
-        })
+        } as any)
         .rpc();
 
       const cert: any = await govProgram.account.ercCertificate.fetch(ercPda);
@@ -467,9 +505,13 @@ describe("Governance Program", () => {
           owner: authority.publicKey,
           registry: registryPda,
           registryProgram: regProgram.programId,
+          recMint: recMintPda,
+          recTokenAccount: recAta,
+          tokenProgram: TOKEN_2022_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           authority: authority.publicKey,
           systemProgram: SystemProgram.programId,
-        })
+        } as any)
         .rpc();
     } catch (e: any) {
       if (

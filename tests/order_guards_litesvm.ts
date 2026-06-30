@@ -26,6 +26,8 @@ import {
 import {
   TOKEN_PROGRAM_ID,
   MINT_SIZE,
+  ACCOUNT_SIZE,
+  AccountLayout,
   createInitializeMint2Instruction,
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
@@ -57,6 +59,7 @@ describe("trading order-path validation guards (litesvm)", () => {
   let marketPda: PublicKey;
   let zoneMarketPda: PublicKey;
   let marketAuthorityPda: PublicKey;
+  let recMintPda: PublicKey;
 
   function send(ixs: TransactionInstruction[], signers: Keypair[]) {
     const tx = new Transaction();
@@ -232,6 +235,7 @@ describe("trading order-path validation guards (litesvm)", () => {
     [zoneMarketPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(ZONE).toArrayLike(Buffer, "le", 4)], tradingId);
     [marketAuthorityPda] = PublicKey.findProgramAddressSync([Buffer.from("market_authority")], tradingId);
+    [recMintPda] = PublicKey.findProgramAddressSync([Buffer.from("rec_mint")], governanceId);
 
     send([await trading.methods.initializeMarket(16).accounts({ market: marketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000)).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
@@ -296,6 +300,98 @@ describe("trading order-path validation guards (litesvm)", () => {
     const erc = await installErc({ status: "valid", expiresAt: FUTURE, validated: true, energyAmount: 50 });
     const blob = sendExpectFail([await sellOrderIx(6, 100, 50, erc, cfg)], []); // 100 > 50
     expect(blob, blob).to.match(/ExceedsErcAmount/);
+  });
+
+  // ── Fungible REC provenance gate (opt-in via remaining_accounts[0]) ──────────
+  // The gate reads the seller's REC token account from remaining_accounts. We
+  // fabricate that SPL token account directly (mint/owner/amount set by hand) — no
+  // issue_erc chain needed; the gate only reads those three fields.
+  function fabricateRecAccount(key: PublicKey, mint: PublicKey, owner: PublicKey, amount: number) {
+    const data = Buffer.alloc(ACCOUNT_SIZE);
+    AccountLayout.encode(
+      {
+        mint,
+        owner,
+        amount: BigInt(amount),
+        delegateOption: 0,
+        delegate: PublicKey.default,
+        delegatedAmount: 0n,
+        state: 1, // Initialized
+        isNativeOption: 0,
+        isNative: 0n,
+        closeAuthorityOption: 0,
+        closeAuthority: PublicKey.default,
+      },
+      data,
+    );
+    svm.setAccount(key, {
+      lamports: Number(svm.minimumBalanceForRentExemption(BigInt(ACCOUNT_SIZE))),
+      data,
+      owner: TOKEN_PROGRAM_ID, // InterfaceAccount accepts SPL Token or Token-2022
+      executable: false,
+      rentEpoch: 0,
+    } as any);
+  }
+
+  // create_sell_order builder that appends the REC account as remaining_accounts[0].
+  async function sellOrderWithRecIx(
+    orderId: number,
+    energyAmount: number,
+    price: number,
+    ercKey: PublicKey | null,
+    cfgKey: PublicKey,
+    recAccount: PublicKey,
+  ) {
+    return trading.methods
+      .createSellOrder(new BN(orderId), new BN(energyAmount), new BN(price))
+      .accounts({
+        market: marketPda,
+        zoneMarket: zoneMarketPda,
+        order: orderPda(payer.publicKey, orderId),
+        ercCertificate: ercKey,
+        authority: payer.publicKey,
+        systemProgram: SystemProgram.programId,
+        governanceConfig: cfgKey,
+      } as any)
+      .remainingAccounts([{ pubkey: recAccount, isSigner: false, isWritable: false }])
+      .instruction();
+  }
+
+  it("accepts a sell order when the seller holds enough REC (100 kWh needs 100_000 base units)", async () => {
+    const cfg = await installConfig(false);
+    const erc = await installErc({ status: "valid", expiresAt: FUTURE, validated: true, energyAmount: 100 });
+    const recAta = getAssociatedTokenAddressSync(recMintPda, payer.publicKey, false, TOKEN_PROGRAM_ID);
+    fabricateRecAccount(recAta, recMintPda, payer.publicKey, 100_000); // exactly 100 kWh worth
+    send([await sellOrderWithRecIx(30, 100, 50, erc, cfg, recAta)], []);
+    expect(svm.getAccount(orderPda(payer.publicKey, 30))).to.not.be.null;
+  });
+
+  it("rejects a sell order when the seller holds too little REC (InsufficientRecBalance)", async () => {
+    const cfg = await installConfig(false);
+    const erc = await installErc({ status: "valid", expiresAt: FUTURE, validated: true, energyAmount: 200 });
+    const recAta = getAssociatedTokenAddressSync(recMintPda, payer.publicKey, false, TOKEN_PROGRAM_ID);
+    fabricateRecAccount(recAta, recMintPda, payer.publicKey, 100_000); // 100 kWh worth
+    const blob = sendExpectFail([await sellOrderWithRecIx(31, 200, 50, erc, cfg, recAta)], []); // needs 200_000
+    expect(blob, blob).to.match(/InsufficientRecBalance/);
+  });
+
+  it("rejects a REC account whose mint is not the governance rec_mint (InvalidRecMint)", async () => {
+    const cfg = await installConfig(false);
+    const erc = await installErc({ status: "valid", expiresAt: FUTURE, validated: true, energyAmount: 100 });
+    const fake = Keypair.generate().publicKey;
+    fabricateRecAccount(fake, currencyMint, payer.publicKey, 1_000_000); // wrong mint
+    const blob = sendExpectFail([await sellOrderWithRecIx(32, 100, 50, erc, cfg, fake)], []);
+    expect(blob, blob).to.match(/InvalidRecMint/);
+  });
+
+  it("rejects a REC account not owned by the seller (RecAccountOwnerMismatch)", async () => {
+    const cfg = await installConfig(false);
+    const erc = await installErc({ status: "valid", expiresAt: FUTURE, validated: true, energyAmount: 100 });
+    const other = Keypair.generate().publicKey;
+    const recAcct = Keypair.generate().publicKey;
+    fabricateRecAccount(recAcct, recMintPda, other, 1_000_000); // owner != payer
+    const blob = sendExpectFail([await sellOrderWithRecIx(33, 100, 50, erc, cfg, recAcct)], []);
+    expect(blob, blob).to.match(/RecAccountOwnerMismatch/);
   });
 
   it("rejects cancelling an order that is no longer cancellable (OrderNotCancellable)", async () => {

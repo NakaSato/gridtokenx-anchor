@@ -155,6 +155,20 @@ config/telemetry instructions, not signature-verifying settlement. The CI
 assertion turns an accidental extra syscall or a serialized hot-path account into
 a test failure.
 
+**Fungible REC token (1 token = 1 MWh) — approximate.** The REC mint path is profiled
+in `tests/governance_rec_token_litesvm.ts` (full registry→governance→Token-2022 flow),
+which uses random keypairs, so these are *not* in the deterministic `cu-baseline.json`
+gate and may jitter by a few k CU on the PDA-init paths:
+
+| Instruction | CU (approx) |
+| ----------- | --: |
+| `governance.issue_erc` (registry `mark_erc_claimed` CPI + Token-2022 `mint_to` + ATA init) | ~68 000 |
+| `governance.retire_rec` (burn) | ~13 200 |
+
+`issue_erc` is the heaviest governance path because it CPIs registry *and* mints REC into a
+freshly-init'd ATA, yet still sits at ~34% of the 200k budget — adding the fungible-REC
+mint to the provenance path left ample headroom.
+
 ---
 
 ## 5. Treasury Instruction CU Profile (in-process, litesvm)

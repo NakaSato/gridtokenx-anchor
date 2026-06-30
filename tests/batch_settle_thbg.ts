@@ -275,11 +275,14 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
 
       const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(60), side: 0, zoneId, expiresAt: new BN(0) };
       const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(50), side: 1, zoneId, expiresAt: new BN(0) };
-      matchPairs.push({ buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), wheelingCharge: new BN(1), lossCost: new BN(1) });
+      // Per-match trade_id (F3c) — unique per pair; keys the TradeNullifier replay guard.
+      const tradeId = Buffer.concat([buyerOrderId.subarray(0, 8), sellerOrderId.subarray(0, 8)]);
+      const tradeNullifier = PublicKey.findProgramAddressSync([Buffer.from("trade"), tradeId], trading.programId)[0];
+      matchPairs.push({ buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), wheelingCharge: new BN(1), lossCost: new BN(1), tradeId: [...tradeId] });
 
-      // remaining_accounts per match (order from settle_offchain.rs):
+      // remaining_accounts per match (order from settle_offchain.rs, now 7/pair):
       // [buyer_nullifier, seller_nullifier, buyer_currency_escrow,
-      //  seller_currency_escrow, seller_energy_escrow, buyer_energy_escrow]
+      //  seller_currency_escrow, seller_energy_escrow, buyer_energy_escrow, trade_nullifier]
       remaining.push(
         nullifierPda(buyer.publicKey, buyerOrderId),
         nullifierPda(seller.publicKey, sellerOrderId),
@@ -287,9 +290,10 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
         escrowPda(seller.publicKey, thbgMint),
         escrowPda(seller.publicKey, energyMintPda),
         escrowPda(buyer.publicKey, energyMintPda),
+        tradeNullifier,
       );
     }
-    // Pair accounts (match_count*6) followed by ONE trailing governance poa_config account (0.3).
+    // Pair accounts (match_count*7, incl. per-match trade_nullifier) followed by ONE trailing governance poa_config account (0.3).
     const remainingMeta = [
       ...remaining.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true })),
       { pubkey: governanceConfigPda, isSigner: false, isWritable: false },

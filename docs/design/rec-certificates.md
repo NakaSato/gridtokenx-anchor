@@ -85,12 +85,15 @@ The rationale (source comment `lib.rs:115`): without the co-sign, the admin mint
 
 So a sell order's energy is doubly provenanced: the token was minted under a REC validator's signature, and the order itself must reference a `Valid`, trading-validated certificate (trading program ERC checks, `lib.rs:230-240`).
 
+**Fungible-REC balance gate on `create_sell_order` (opt-in).** Beyond the certificate check, the seller may append their REC token account as `remaining_accounts[0]`; when present the trading program requires it to be the real governance `rec_mint` PDA, owned by the seller, holding **≥ `energy_amount × 1_000` base units** (REC mint is 6-dec; 1 kWh = 1_000 units, matching the kWh-denominated `energy_amount`). Errors: `InvalidRecMint`, `RecAccountOwnerMismatch`, `InsufficientRecBalance`. Omitting the account leaves placement unchanged (backwards compatible) — the gate is *opt-in via remaining_accounts*, not a forced context account, so existing callers are unaffected. It is a **balance check only**: no REC is escrowed or transferred on settlement (a future enhancement).
+
 ---
 
 ## 6. Key Errors
 
 - Governance: `ErcValidationDisabled`, `InvalidErcStatus`, `AlreadyValidated`, `BelowMinimumEnergy`, `ExceedsMaximumEnergy`, `ErcExpired`, `InsufficientUnclaimedGeneration`, `AlreadyRevoked`, `CannotTransferToSelf`, `NotValidatedForTrading`, `MathOverflow` (REC base-unit conversion), `InvalidAmount` (`retire_rec` zero).
 - Energy-token: `RecValidatorNotFound`, `ValidatorAlreadyExists`, `MaxValidatorsReached`, `RemoveValidatorNotFound`, `MisalignedWindow`.
+- Trading (fungible-REC gate): `InvalidRecMint`, `RecAccountOwnerMismatch`, `InsufficientRecBalance`.
 
 ---
 
