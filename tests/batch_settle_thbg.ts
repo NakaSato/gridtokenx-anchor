@@ -372,8 +372,11 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
 
   it("records a per-(zone,batch) SettlementRecord via record_settlement_batch", async () => {
     const { buyer, seller } = await seedUsers();
-    const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(0xa1, 0);
-    const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xb2, 0);
+    // Per-run salt in bytes [4..8) so trade_id / nullifier PDAs are unique each run
+    // (a fixed id reverts MatchAlreadySettled on a re-run against a persistent validator).
+    const runSalt = (Date.now() & 0xffffffff) >>> 0;
+    const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(0xa1, 0); buyerOrderId.writeUInt32LE(runSalt, 4);
+    const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xb2, 0); sellerOrderId.writeUInt32LE(runSalt, 4);
     const { edIxs, settleIx, alt, settlementRecord } =
       await prepareSettle([{ buyer, seller, buyerOrderId, sellerOrderId }], { withTreasury: true, thisBatchId: batchId });
 

@@ -188,6 +188,10 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   // matchAmount=100 rounds total_value to 0 — a degenerate (no-currency) swap.
   const matchAmount = 100 * 1_000_000_000, matchPrice = 50;
   const currencyValue = (matchAmount * matchPrice) / 1_000_000_000; // = 5000
+  // Per-run salt written into order-id bytes [4..8) so trade_id (= buyerId[0..8] +
+  // sellerId[0..8]) and the per-order/per-match nullifier PDAs are unique each run —
+  // otherwise a re-run on a persistent validator reverts MatchAlreadySettled.
+  const RUN_SALT = (Date.now() & 0xffffffff) >>> 0;
 
   async function seedPair(): Promise<{ buyer: Keypair; seller: Keypair }> {
     const buyer = await freshUser();
@@ -209,7 +213,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
 
   // Build one fully-prepared 1-match settle (edIxs + settleIx + activated ALT).
   async function prepareOne(buyer: Keypair, seller: Keypair, idx: number): Promise<PreparedTx> {
-    const oid = (n: number) => { const x = Buffer.alloc(16); x.writeUInt32LE(n, 0); return x; };
+    const oid = (n: number) => { const x = Buffer.alloc(16); x.writeUInt32LE(n, 0); x.writeUInt32LE(RUN_SALT, 4); return x; };
     const buyerOrderId = oid(0x1000 + idx * 2);
     const sellerOrderId = oid(0x1001 + idx * 2);
     const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount: matchAmount, pricePerKwh: 60, side: 0, zoneId, expiresAt: 0 });
