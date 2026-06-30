@@ -1094,8 +1094,8 @@ pub mod trading {
         Ok(())
     }
 
-    pub fn execute_atomic_settlement(
-        ctx: Context<ExecuteAtomicSettlementContext>,
+    pub fn execute_atomic_settlement<'info>(
+        ctx: Context<'info, ExecuteAtomicSettlementContext<'info>>,
         amount: u64,
         price: u64,
         wheeling_charge_val: u64,
@@ -1252,6 +1252,69 @@ pub mod trading {
             amount,
             energy_decimals,
         )?;
+
+        // REC (renewable attribute) leg — OPT-IN via remaining_accounts[0..4] =
+        // [rec_mint, seller_rec_escrow, buyer_rec_escrow, rec_token_program]. Brings the
+        // production settle path to REC parity with `settle_offchain_match`. Consistent with
+        // this handler's custodial model: `escrow_authority` signs (as the currency/energy
+        // legs do) and the REC escrows are matcher-supplied CHECK accounts. rec_mint is pinned
+        // to the governance PDA, the token program to the mint's owner, and `transfer_checked`
+        // enforces both escrows hold rec_mint. Absent group → settle unchanged (back-compat).
+        if let Some(rec_mint_info) = ctx.remaining_accounts.first() {
+            let seller_rec = ctx
+                .remaining_accounts
+                .get(1)
+                .ok_or(TradingError::InvalidRecMint)?;
+            let buyer_rec = ctx
+                .remaining_accounts
+                .get(2)
+                .ok_or(TradingError::InvalidRecMint)?;
+            let rec_token_program = ctx
+                .remaining_accounts
+                .get(3)
+                .ok_or(TradingError::InvalidRecMint)?;
+            let (expected_rec_mint, _) =
+                Pubkey::find_program_address(&[b"rec_mint"], &governance::ID);
+            require_keys_eq!(
+                *rec_mint_info.key,
+                expected_rec_mint,
+                TradingError::InvalidRecMint
+            );
+            let rec_mint =
+                InterfaceAccount::<anchor_spl::token_interface::Mint>::try_from(rec_mint_info)
+                    .map_err(|_| error!(TradingError::InvalidRecMint))?;
+            // Pin the CPI program to the rec_mint's owning token program (transfer_checked
+            // would revert on a mismatch anyway; binding rejects a bogus/no-op program up front).
+            require_keys_eq!(
+                *rec_token_program.key,
+                *rec_mint_info.owner,
+                TradingError::InvalidRecMint
+            );
+            // REC base units = energy `amount` (9-dec atomic kWh) × 1_000 / 1e9 — the same
+            // factor the order-time gate applies (1 kWh = 1_000 of the 6-dec REC base units).
+            let rec_amount = u64::try_from(
+                (amount as u128)
+                    .checked_mul(1_000)
+                    .ok_or(TradingError::Overflow)?
+                    / crate::ENERGY_AMOUNT_DECIMALS_DIVISOR,
+            )
+            .map_err(|_| TradingError::Overflow)?;
+            if rec_amount > 0 {
+                anchor_spl::token_interface::transfer_checked(
+                    CpiContext::new(
+                        *rec_token_program.key,
+                        anchor_spl::token_interface::TransferChecked {
+                            from: seller_rec.to_account_info(),
+                            mint: rec_mint_info.to_account_info(),
+                            to: buyer_rec.to_account_info(),
+                            authority: ctx.accounts.escrow_authority.to_account_info(),
+                        },
+                    ),
+                    rec_amount,
+                    rec_mint.decimals,
+                )?;
+            }
+        }
         compute_checkpoint!("after_settlement_cpis");
 
         // Update State
