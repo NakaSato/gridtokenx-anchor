@@ -183,16 +183,21 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     return thbgAta;
   }
 
-  const matchAmount = 100, matchPrice = 50;
+  // Energy 9-dec atomic (100 kWh = 100 * 1e9). Currency leg divides by 1e9
+  // (settle_offchain.rs:1081): total_value = amount*price/1e9 = 5000. A raw
+  // matchAmount=100 rounds total_value to 0 — a degenerate (no-currency) swap.
+  const matchAmount = 100 * 1_000_000_000, matchPrice = 50;
+  const currencyValue = (matchAmount * matchPrice) / 1_000_000_000; // = 5000
 
   async function seedPair(): Promise<{ buyer: Keypair; seller: Keypair }> {
     const buyer = await freshUser();
     const seller = await freshUser();
     const buyerThbgAta = await fundThbg(buyer, 10_000);
     const sellerEnergyAta = await createAtaFor(energyMintPda, seller.publicKey);
-    await mintEnergyTo(sellerEnergyAta, seller.publicKey, 200);
+    // Energy leg transfers the full atomic amount (now 100e9) — fund the escrow to match.
+    await mintEnergyTo(sellerEnergyAta, seller.publicKey, matchAmount);
     await deposit(buyer, buyerThbgAta, thbgMint, 10_000);
-    await deposit(seller, sellerEnergyAta, energyMintPda, 200);
+    await deposit(seller, sellerEnergyAta, energyMintPda, matchAmount);
     // Receiving escrows (seller currency, buyer energy) must exist before settle.
     const sellerThbgAta = await fundThbg(seller, 10);
     await deposit(seller, sellerThbgAta, thbgMint, 1);
@@ -233,7 +238,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     try { await trading.methods.initializeZoneMarketShard(zShardByte).accounts({ zoneMarket: zoneMarketPda, zoneShard: zoneShardPda, payer: authority, systemProgram: SystemProgram.programId } as any).rpc(); } catch {}
 
     const merkleRoot = Array.from({ length: 32 }, (_, i) => (i + 1) & 0xff);
-    const vatAmount = new BN(Math.floor(matchAmount * matchPrice * 0.07));
+    const vatAmount = new BN(Math.floor(currencyValue * 0.07));
     const thisBatchId = freshBatchId();
     const [settlementRecord] = settlementRecordPda(zoneId, thisBatchId, treasury.programId);
 

@@ -229,7 +229,13 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     } catch { /* already initialized */ }
   });
 
-  const matchAmount = 100, matchPrice = 50;
+  // Energy is 9-dec atomic (100 kWh = 100 * 1e9). The currency leg divides by 1e9
+  // (ENERGY_AMOUNT_DECIMALS_DIVISOR, settle_offchain.rs:1081): total_value =
+  // match_amount * price / 1e9 = 100e9 * 50 / 1e9 = 5000. A raw matchAmount=100
+  // would round total_value to 0 (degenerate swap), so it must be atomic.
+  const matchAmount = 100 * 1_000_000_000, matchPrice = 50;
+  // 6-dec currency value actually settled on-chain (post-divisor).
+  const currencyValue = (matchAmount * matchPrice) / 1_000_000_000; // = 5000
 
   // Seed buyer (THBG) + seller (energy), pre-create both receiving escrows so a
   // settle has somewhere to deliver. Returns the funded keypairs.
@@ -238,9 +244,11 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     const seller = await freshUser();
     const buyerThbgAta = await fundThbg(buyer, 10_000);
     const sellerEnergyAta = await createAtaFor(energyMintPda, seller.publicKey);
-    await mintEnergyTo(sellerEnergyAta, seller.publicKey, 200);
+    // Seller's energy escrow must hold >= matchAmount (the energy leg transfers the
+    // full atomic amount, now 100e9). 200 was only enough for the old raw amount.
+    await mintEnergyTo(sellerEnergyAta, seller.publicKey, matchAmount);
     await deposit(buyer, buyerThbgAta, thbgMint, 10_000);
-    await deposit(seller, sellerEnergyAta, energyMintPda, 200);
+    await deposit(seller, sellerEnergyAta, energyMintPda, matchAmount);
 
     // Receiving escrows (seller currency, buyer energy) must exist before settle.
     const sellerThbgAta = await fundThbg(seller, 10);
@@ -310,7 +318,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     try { await trading.methods.initializeZoneMarketShard(zShardByte).accounts({ zoneMarket: zoneMarketPda, zoneShard: zoneShardPda, payer: authority, systemProgram: SystemProgram.programId } as any).rpc(); } catch {}
 
     const merkleRoot = Array.from({ length: 32 }, (_, i) => (i + 1) & 0xff);
-    const vatAmount = new BN(Math.floor(matches.length * matchAmount * matchPrice * 0.07));
+    const vatAmount = new BN(Math.floor(matches.length * currencyValue * 0.07));
     const [settlementRecord] = settlementRecordPda(zoneId, opts.thisBatchId, treasury.programId);
 
     // Optional treasury accounts: passed as null when exercising the
@@ -370,8 +378,9 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
       await prepareSettle([{ buyer, seller, buyerOrderId, sellerOrderId }], { withTreasury: true, thisBatchId: batchId });
 
     // §2c Part B: record_settlement_batch_sharded bumps the per-shard accumulator
-    // by the gross `value` (= total_value = matchAmount*matchPrice), NOT the global
-    // total_settled_thbg (which stays flat until aggregate_settlement_shards). Capture
+    // by the gross `value` (= total_value = matchAmount*matchPrice/1e9 = currencyValue),
+    // NOT the global total_settled_thbg (which stays flat until aggregate_settlement_shards).
+    // Capture
     // both pre-settle figures to assert the shard delta and the global no-op.
     const shardBefore = new BN(
       (await treasury.account.settlementShard.fetch(settleShardPda)).settledThbg.toString()
@@ -404,10 +413,10 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     expect(rec.batchId.toString()).to.equal(batchId.toString());
     expect(rec.vatRateBps).to.equal(700);
     expect(Buffer.from(rec.merkleRoot).equals(Buffer.from(merkleRoot00()))).to.equal(true);
-    expect(rec.totalValue.toString()).to.equal((matchAmount * matchPrice).toString());
+    expect(rec.totalValue.toString()).to.equal(currencyValue.toString());
 
     // §2c assertion: the per-shard accumulator advanced by exactly the gross settled
-    // value (= rec.total_value = matchAmount*matchPrice), and the global total did NOT
+    // value (= rec.total_value = matchAmount*matchPrice/1e9 = currencyValue), and the global total did NOT
     // move (it reconciles only via aggregate_settlement_shards). This is the parallel
     // win: no global write-lock on the settle hot path.
     const shardAfter = new BN(
@@ -416,7 +425,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     const globalAfter = new BN(
       (await treasury.account.treasury.fetch(treasuryPda)).totalSettledThbg.toString()
     );
-    expect(shardAfter.sub(shardBefore).toString()).to.equal((matchAmount * matchPrice).toString());
+    expect(shardAfter.sub(shardBefore).toString()).to.equal(currencyValue.toString());
     expect(globalAfter.sub(globalBefore).toString()).to.equal("0");
 
     // Buyer received the energy; total settled advanced.
