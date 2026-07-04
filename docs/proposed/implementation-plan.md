@@ -194,7 +194,7 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
 - [x] Root-caused the contention: **NOT the shard.** Spreading across all 16 shards (`BENCH_TPS_SHARD_SPREAD=1`) gave identical numbers (0.59/0.57, still 2 rounds). Serialization is the global writable accounts every settle touches — `treasury_state` (`total_settled_thbg` accumulator) + the 3 fixed fee/wheeling/loss collectors. Settlement is global-write-bound by design; sharding parallelizes order submission, not settlement.
 - [ ] True open-loop (no per-round barrier) for peak TPS; shard the treasury accumulator/collectors (or amortize more matches per CPI, blocked by 1-match cap) to parallelize settlement; per-match marginal CU once sig packaging reworked.
 
-## §2c — Shard the settlement write set (throughput) — Part A+B DONE; TPS win blocked on zone_market + open-loop bench
+## §2c — Shard the settlement write set (throughput) — DONE (Part A+B + Tier-A, ~2.7-3x measured)
 
 Goal: lift settle TPS off the ~0.5 TPS floor. §2b root-caused the ceiling (line 123):
 settlement is **global-write-bound** — every settle write-locks the same accounts, so
@@ -269,15 +269,17 @@ under a live validator (Solana 3.1.10), not litesvm.
      (intra read-only / cross mut) or moving `committed_flow` to the per-shard `zone_shard` with periodic global
      reconciliation — a separate, larger change.
 
-**Net:** Part B sharding is correct and shipped (collector + treasury locks gone, on-chain verified), but it does
-**not** move measured TPS, because (1) the bench harness is latency-bound and (2) `zone_market`'s unconditional
-`mut` lock is the dominant remaining serializer. Closing the throughput gap is gated on the two open items below.
-
-### §2c open (throughput, deferred)
-- True open-loop TPS generator (no per-round confirm barrier) — without it, neither the win nor the remaining
-  bottleneck is measurable on the current closed-loop harness.
-- Make `zone_market` read-only on the settle hot path (shard `committed_flow` into `zone_shard` + reconcile, or
-  split intra/cross settle instructions) — the last global `mut` lock on settlement.
+**Update (2026-06-28/29, both then-open items now closed):** the two blockers this section originally flagged —
+a true open-loop generator and `zone_market`'s unconditional `mut` lock — are done. `batch_settle_tps.ts` gained
+a multipayer/shard-spread open-loop mode (`BENCH_TPS_MULTIPAYER=1`, fire-without-confirm + post-hoc
+slot-density measurement) that isolates true validator packing rate from client confirm-poll latency. Tier-A
+(full design + empirical A/B in [`settlement-tps-tier-a.md`](settlement-tps-tier-a.md)) moved `zone_market` to
+read-only (committed_flow lives on the per-zone `ZoneCapacity` PDA instead) in both settle paths. Measured
+result at N=40: **writable ~1/slot vs read-only 3/slot — ~2.7-3x** wall-clock-independent throughput, litesvm
+219 + on-chain `escrow_settlement`/`batch_settle_thbg` green. Remaining ceiling (~3 settles/slot, single node)
+is the validator's per-tx packing rate for a ~102k-CU settlement, not a write-lock — further gains would need a
+multi-node cluster or amortizing more matches per tx (blocked on the existing single-tx batch cap, see
+`batch-settle-single-tx-cap` note elsewhere), a separate and much larger lever than this section's scope.
 
 ## §3 — Feasibility spike (GATE — before any trustless work) — DO THIRD
 

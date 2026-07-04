@@ -1,7 +1,12 @@
 # Settlement TPS — Tier A: unblock the `zone_market` write-lock
 
-Status: **proposed** (design only — not implemented). Money-path change; implement with
-validator integration tests + the off-chain settle-tx builder, not autonomously.
+Status: **DONE — implemented and measured** (2026-06-28/29, see CAPSTONE/RIGOROUS/MEASURED
+results below). `zone_market` is read-only in both settle paths (`settle_offchain.rs`,
+confirmed no `mut`/`load_mut` on it as of this revision); `ZoneCapacity` carries
+`committed_flow`. Empirically verified ~2.7-3x throughput win (writable 1/slot vs
+read-only 3/slot, N=40 multipayer bench) and litesvm/on-chain green. The rest of this
+doc is the design record of how that was reached — kept for the reasoning, not as an
+open TODO.
 
 ## Problem (verified, 2026-06-28)
 
