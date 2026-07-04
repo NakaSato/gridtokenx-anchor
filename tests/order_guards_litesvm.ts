@@ -238,7 +238,7 @@ describe("trading order-path validation guards (litesvm)", () => {
     [recMintPda] = PublicKey.findProgramAddressSync([Buffer.from("rec_mint")], governanceId);
 
     send([await trading.methods.initializeMarket(16).accounts({ market: marketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
-    send([await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000)).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
+    send([await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000), 0).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
 
     // Currency mint + collectors + a funded escrow (for the withdraw_escrow guard).
     const mintRent = Number(svm.minimumBalanceForRentExemption(BigInt(MINT_SIZE)));

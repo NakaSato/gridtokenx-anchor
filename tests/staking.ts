@@ -34,7 +34,7 @@ describe("registry_staking", () => {
   async function admitValidator(v: PublicKey): Promise<PublicKey> {
     const [entry] = PublicKey.findProgramAddressSync([Buffer.from("aggregator"), v.toBuffer()], governance.programId);
     try {
-      await governance.methods.admitAggregator(v)
+      await governance.methods.admitAggregator(v, 0)
         .accounts({ governanceConfig: governanceConfigPda, aggregatorEntry: entry, authority, systemProgram: SystemProgram.programId } as any)
         .rpc();
     } catch { /* already admitted */ }

@@ -94,6 +94,8 @@ pub enum TradingError {
     TariffRateExceedsCap,
     #[msg("Settlement payer is not a governance-admitted, active aggregator")]
     AggregatorNotAdmitted,
+    #[msg("Settlement payer's aggregator is not admitted for this zone's market segment (Wholesale/Retail)")]
+    AggregatorSegmentMismatch,
     #[msg("Aggregator entry account is not the canonical PDA / malformed")]
     InvalidAggregatorEntry,
 }

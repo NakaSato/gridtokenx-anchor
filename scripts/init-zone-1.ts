@@ -33,7 +33,7 @@ async function main() {
     
     try {
         const tx = await tradingProgram.methods
-            .initializeZoneMarket(zoneId, 1, new anchor.BN(1000000))
+            .initializeZoneMarket(zoneId, 1, new anchor.BN(1000000), 0)
             .accounts({
                 market: marketPda,
                 zoneMarket: zoneMarketPda,

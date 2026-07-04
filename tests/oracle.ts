@@ -373,7 +373,7 @@ describe("Oracle Program", () => {
         govProgram.programId,
       )[0];
       await govProgram.methods
-        .admitAggregator(aggregator.publicKey)
+        .admitAggregator(aggregator.publicKey, 0)
         .accounts({
           governanceConfig: getGovernancePda(govProgram.programId),
           aggregatorEntry: aggregatorEntryPda,

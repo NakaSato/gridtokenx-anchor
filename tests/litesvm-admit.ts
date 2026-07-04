@@ -15,16 +15,21 @@ export const GOVERNANCE_PROGRAM_ID = new PublicKey(
  *
  * AggregatorEntry borsh layout:
  *   [0..8] discriminator | [8..40] aggregator | [40..48] admitted_at
- *   [48..56] updated_at | [56] active | [57] bump
+ *   [48..56] updated_at | [56] active | [57] bump | [58] segment
+ *
+ * `segment` (role-map.md fix #6): 0 = Retail (default), 1 = Wholesale. Only trading's
+ * settlement operator gate reads it (Wholesale zones only); registry's validator-bond
+ * gate doesn't care about segment at all.
  */
-export function admitAggregator(svm: LiteSVM, aggregator: PublicKey): PublicKey {
+export function admitAggregator(svm: LiteSVM, aggregator: PublicKey, segment: number = 0): PublicKey {
   const [entry] = PublicKey.findProgramAddressSync(
     [Buffer.from("aggregator"), aggregator.toBuffer()],
     GOVERNANCE_PROGRAM_ID,
   );
-  const data = Buffer.alloc(58);
+  const data = Buffer.alloc(59);
   aggregator.toBuffer().copy(data, 8); // aggregator at [8..40]
   data[56] = 1; // active = true
+  data[58] = segment;
   svm.setAccount(entry, {
     lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))),
     data,

@@ -178,9 +178,9 @@ pub mod governance {
 
     // === AGGREGATOR ALLOW-LIST (Governance admission of off-chain validator nodes) ===
 
-    pub fn admit_aggregator(ctx: Context<AdmitAggregator>, aggregator: Pubkey) -> Result<()> {
+    pub fn admit_aggregator(ctx: Context<AdmitAggregator>, aggregator: Pubkey, segment: u8) -> Result<()> {
         compute_fn!("admit_aggregator" => {
-            handlers::aggregator::admit_aggregator(ctx, aggregator)
+            handlers::aggregator::admit_aggregator(ctx, aggregator, segment)
         })
     }
 

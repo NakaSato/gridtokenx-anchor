@@ -233,7 +233,7 @@ async function main() {
     // prosumer (governance authority = provider wallet), then pass its AggregatorEntry PDA.
     const [aggregatorEntry] = PublicKey.findProgramAddressSync([Buffer.from("aggregator"), prosumerKey.publicKey.toBuffer()], governanceProgram.programId);
     try {
-      await governanceProgram.methods.admitAggregator(prosumerKey.publicKey)
+      await governanceProgram.methods.admitAggregator(prosumerKey.publicKey, 0)
         .accounts({ governanceConfig: governanceConfigPda, aggregatorEntry, authority: provider.wallet.publicKey, systemProgram: SystemProgram.programId } as any)
         .rpc();
     } catch { /* already admitted */ }

@@ -958,7 +958,7 @@ describe("Governance Program", () => {
 
     it("admits an aggregator (authority only)", async () => {
       await govProgram.methods
-        .admitAggregator(aggregator.publicKey)
+        .admitAggregator(aggregator.publicKey, 0)
         .accounts({
           governanceConfig: governanceConfigPda,
           aggregatorEntry: aggregatorEntryPda,
@@ -989,7 +989,7 @@ describe("Governance Program", () => {
 
       try {
         await govProgram.methods
-          .admitAggregator(victim.publicKey)
+          .admitAggregator(victim.publicKey, 0)
           .accounts({
             governanceConfig: governanceConfigPda,
             aggregatorEntry: victimEntry,
@@ -1023,7 +1023,7 @@ describe("Governance Program", () => {
 
       // Idempotent re-admission flips it back to active (init_if_needed).
       await govProgram.methods
-        .admitAggregator(aggregator.publicKey)
+        .admitAggregator(aggregator.publicKey, 0)
         .accounts({
           governanceConfig: governanceConfigPda,
           aggregatorEntry: aggregatorEntryPda,

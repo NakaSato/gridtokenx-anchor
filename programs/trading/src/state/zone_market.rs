@@ -15,7 +15,12 @@ pub struct ZoneMarket {
     pub market: Pubkey,                     // 32
     pub zone_id: u32,                       // 4
     pub num_shards: u8,                     // 1
-    pub _padding1: [u8; 3],                 // 3
+    /// Market segment (role-map.md fix #6): 0 = Retail (MEA/PEA), 1 = Wholesale (EGAT).
+    /// Consumes one byte of what was `_padding1`; struct size unchanged. Gates which
+    /// aggregators (by their own `AggregatorEntry.segment`) may settle in this zone —
+    /// see `require_admitted_aggregator` in `settle_offchain.rs`.
+    pub segment: u8,                        // 1
+    pub _padding1: [u8; 2],                 // 2
     pub total_volume: u64,                  // 8
     pub active_orders: u32,                 // 4
     pub total_trades: u32,                  // 4

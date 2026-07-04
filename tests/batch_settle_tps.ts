@@ -277,7 +277,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     // own admission here.
     const txPayerAggregatorEntry = PublicKey.findProgramAddressSync([Buffer.from("aggregator"), txPayer.publicKey.toBuffer()], governance.programId)[0];
     if (MULTIPAYER) {
-      await governance.methods.admitAggregator(txPayer.publicKey).accounts({
+      await governance.methods.admitAggregator(txPayer.publicKey, 0).accounts({
         aggregatorEntry: txPayerAggregatorEntry, governanceConfig: governanceConfigPda, authority, systemProgram: SystemProgram.programId,
       } as any).rpc();
     }

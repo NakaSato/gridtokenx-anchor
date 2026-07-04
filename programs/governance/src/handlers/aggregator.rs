@@ -6,7 +6,7 @@ use anchor_lang::prelude::*;
 ///
 /// Idempotent re-admission: if the entry already exists (was revoked), this flips it back to
 /// `active` rather than failing — the account is created via `init_if_needed`.
-pub fn admit_aggregator(ctx: Context<AdmitAggregator>, aggregator: Pubkey) -> Result<()> {
+pub fn admit_aggregator(ctx: Context<AdmitAggregator>, aggregator: Pubkey, segment: u8) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let entry = &mut ctx.accounts.aggregator_entry;
 
@@ -18,6 +18,9 @@ pub fn admit_aggregator(ctx: Context<AdmitAggregator>, aggregator: Pubkey) -> Re
     }
     entry.active = true;
     entry.updated_at = now;
+    // 0 = Retail (MEA/PEA), 1 = Wholesale (EGAT) — role-map.md fix #6. Re-settable on
+    // re-admission, same as `active`.
+    entry.segment = segment;
 
     emit!(AggregatorAdmitted {
         authority: ctx.accounts.authority.key(),

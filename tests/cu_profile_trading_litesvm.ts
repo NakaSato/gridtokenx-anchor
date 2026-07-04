@@ -147,7 +147,7 @@ describe("trading CDA order-path CU profile (litesvm)", () => {
   });
 
   it("trading.initialize_zone_market", async () => {
-    const ix = await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000)).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction();
+    const ix = await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000), 0).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction();
     expect(cu("trading.initialize_zone_market", ix)).to.be.below(BUDGET);
   });
 

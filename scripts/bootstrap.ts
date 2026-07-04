@@ -307,7 +307,7 @@ async function main() {
   );
   try {
     await governanceProgram.methods
-      .admitAggregator(authority)
+      .admitAggregator(authority, 0) // segment 0 = Retail; all bootstrapped zones are Retail
       .accounts({
         aggregatorEntry: aggregatorEntryPda,
         governanceConfig: PublicKey.findProgramAddressSync([Buffer.from('governance_config')], governanceProgram.programId)[0],
@@ -330,7 +330,7 @@ async function main() {
     console.log(`     Zone ${zoneId} PDA: ${zoneMarketPda.toBase58()}`); // Log zoneMarketPda unconditionally
     try {
       const tx = await tradingProgram.methods
-        .initializeZoneMarket(zoneId, 1, new BN(0)) // 1 shard per zone, 0 capacity (infinite)
+        .initializeZoneMarket(zoneId, 1, new BN(0), 0) // 1 shard per zone, 0 capacity (infinite)
         .accounts({
           market: marketPda,
           zoneMarket: zoneMarketPda,

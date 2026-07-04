@@ -163,6 +163,7 @@ pub mod trading {
         zone_id: u32,
         num_shards: u8,
         capacity: u64,
+        segment: u8,
     ) -> Result<()> {
         compute_fn!("initialize_zone_market" => {
         let mut zone_market = ctx.accounts.zone_market.load_init()?;
@@ -170,6 +171,7 @@ pub mod trading {
         zone_market.zone_id = zone_id;
         zone_market.num_shards = num_shards;
         zone_market.capacity = capacity;
+        zone_market.segment = segment;
         zone_market.committed_flow = 0;
         zone_market.total_volume = 0;
         zone_market.active_orders = 0;

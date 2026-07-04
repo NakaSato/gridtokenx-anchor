@@ -32,7 +32,7 @@ describe("trading init_zone_capacity (litesvm, Tier-A step 1)", () => {
     [zoneMarketPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_market"), marketPda.toBuffer(), new BN(ZONE).toArrayLike(Buffer, "le", 4)], id);
     [zoneCapacityPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_capacity"), zoneMarketPda.toBuffer()], id);
     send([await trading.methods.initializeMarket(16).accounts({ market: marketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()]);
-    send([await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000)).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()]);
+    send([await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000), 0).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()]);
   });
   it("creates the ZoneCapacity PDA bound to its zone_market, committed_flow 0", async () => {
     send([await trading.methods.initZoneCapacity().accounts({ zoneMarket: zoneMarketPda, zoneCapacity: zoneCapacityPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()]);

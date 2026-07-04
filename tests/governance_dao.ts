@@ -82,7 +82,7 @@ describe("governance-dao-integration", () => {
             systemProgram: SystemProgram.programId,
         } as any).rpc());
     await ensureInitialized("initializeZoneMarket", () =>
-        tradingProgram.methods.initializeZoneMarket(0, 1, new BN(1_000_000)).accounts({
+        tradingProgram.methods.initializeZoneMarket(0, 1, new BN(1_000_000), 0).accounts({
             market: marketPda,
             zoneMarket: zoneMarketPda,
             authority: authority,

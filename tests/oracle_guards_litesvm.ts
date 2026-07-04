@@ -219,7 +219,7 @@ describe("oracle validation/gateway/epoch/aggregator guards (litesvm)", () => {
 
   it("lets a governance-admitted aggregator clear the market", async () => {
     // Admit the aggregator on governance's PoA allow-list.
-    await send([await governance.methods.admitAggregator(aggregator.publicKey)
+    await send([await governance.methods.admitAggregator(aggregator.publicKey, 0)
       .accounts({
         governanceConfig,
         aggregatorEntry: aggEntryPda(aggregator.publicKey),

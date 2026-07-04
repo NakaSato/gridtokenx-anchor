@@ -18,6 +18,11 @@ pub struct AggregatorEntry {
     pub active: bool,
     /// Canonical PDA bump.
     pub bump: u8,
+    /// Market segment this aggregator is admitted to operate in (role-map.md fix #6):
+    /// 0 = Retail (MEA/PEA), 1 = Wholesale (EGAT). Appended at the end so existing raw-byte
+    /// readers (registry's `register_validator`, trading's `require_admitted_aggregator`),
+    /// which only read `[8..40)` and `[56]`, are unaffected by the size change.
+    pub segment: u8,
 }
 
 impl AggregatorEntry {
@@ -25,5 +30,6 @@ impl AggregatorEntry {
         + 8  // admitted_at
         + 8  // updated_at
         + 1  // active
-        + 1; // bump
+        + 1  // bump
+        + 1; // segment
 }

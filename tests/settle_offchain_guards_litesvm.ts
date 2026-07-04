@@ -15,6 +15,7 @@
 //   - InvalidAmount: a zero match amount.
 //   - CapacityExceeded: a cross-zone match overrunning the zone's wheeling capacity.
 //   - AggregatorNotAdmitted: settle payer is not a governance-admitted, active aggregator (#8b).
+//   - AggregatorSegmentMismatch: a Retail-admitted aggregator settling in a Wholesale zone (#6).
 //
 // The ~23-account settle is compressed through a hand-built ALT (see sendV0/installAlt):
 // a v0 message can't serialize >1232 bytes even in litesvm (web3.js caps the buffer).
@@ -129,6 +130,11 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   let lowZonePda: PublicKey;
   let lowZoneShardPda: PublicKey;
   let lowZoneCapacityPda: PublicKey;
+
+  // A Wholesale-segment zone (role-map.md fix #6) for the AggregatorSegmentMismatch case.
+  const WHOLESALE_ZONE = 42;
+  let wholesaleZonePda: PublicKey;
+  let wholesaleZoneShardPda: PublicKey;
 
   function send(ixs: TransactionInstruction[], signers: Keypair[]) {
     const tx = new Transaction();
@@ -446,15 +452,20 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
 
     // --- trading market + zone + shards + collectors ---
     send([await trading.methods.initializeMarket(16).accounts({ market: marketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
-    send([await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000)).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
+    send([await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000), 0).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     // Low-cap zone for the CapacityExceeded case.
     [lowZonePda] = PublicKey.findProgramAddressSync([Buffer.from("zone_market"), marketPda.toBuffer(), new BN(LOW_ZONE).toArrayLike(Buffer, "le", 4)], tradingId);
     [lowZoneShardPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_shard"), lowZonePda.toBuffer(), Buffer.from([shardByte])], tradingId);
-    send([await trading.methods.initializeZoneMarket(LOW_ZONE, 16, new BN(LOW_CAP)).accounts({ market: marketPda, zoneMarket: lowZonePda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
+    send([await trading.methods.initializeZoneMarket(LOW_ZONE, 16, new BN(LOW_CAP), 0).accounts({ market: marketPda, zoneMarket: lowZonePda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeZoneMarketShard(shardByte).accounts({ zoneMarket: lowZonePda, zoneShard: lowZoneShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     // Tier-A: cross-zone capacity counter for the low-cap zone.
     [lowZoneCapacityPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_capacity"), lowZonePda.toBuffer()], tradingId);
     send([await trading.methods.initZoneCapacity().accounts({ zoneMarket: lowZonePda, zoneCapacity: lowZoneCapacityPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
+    // Wholesale-segment zone for the AggregatorSegmentMismatch case (segment = 1).
+    [wholesaleZonePda] = PublicKey.findProgramAddressSync([Buffer.from("zone_market"), marketPda.toBuffer(), new BN(WHOLESALE_ZONE).toArrayLike(Buffer, "le", 4)], tradingId);
+    [wholesaleZoneShardPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_shard"), wholesaleZonePda.toBuffer(), Buffer.from([shardByte])], tradingId);
+    send([await trading.methods.initializeZoneMarket(WHOLESALE_ZONE, 16, new BN(1_000_000), 1).accounts({ market: marketPda, zoneMarket: wholesaleZonePda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
+    send([await trading.methods.initializeZoneMarketShard(shardByte).accounts({ zoneMarket: wholesaleZonePda, zoneShard: wholesaleZoneShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeMarketShard(shardByte).accounts({ market: marketPda, marketShard: marketShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeZoneMarketShard(shardByte).accounts({ zoneMarket: zoneMarketPda, zoneShard: zoneShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     send([await trading.methods.initializeCollectors().accounts({ payer: payer.publicKey, currencyMint, feeCollector: collectorPda("fee_collector", currencyMint), wheelingCollector: collectorPda("wheeling_collector", currencyMint), lossCollector: collectorPda("loss_collector", currencyMint), marketAuthority: marketAuthorityPda, tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId } as any).instruction()], []);
@@ -797,6 +808,23 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     } finally {
       svm.setAccount(aggregatorEntryPda, { lamports: entryAcct.lamports, data: Buffer.from(entryAcct.data), owner: entryAcct.owner, executable: false });
     }
+  });
+
+  it("rejects a Retail-admitted aggregator settling in a Wholesale zone (AggregatorSegmentMismatch)", async () => {
+    // Segment gate (role-map.md fix #6): `payer`'s AggregatorEntry was admitted with
+    // segment=0 (Retail, litesvm-admit.ts default). Settling in the Wholesale zone
+    // (segment=1) must reject even though the payer IS an active, admitted aggregator —
+    // just not for this segment. Retail-zone settles (every other test in this file)
+    // stay unaffected since the segment check only fires for Wholesale zones.
+    const blob = sendV0(
+      await buildSettleIxs(false, {
+        seedA: 0x81, seedB: 0x82,
+        zoneMarket: wholesaleZonePda, zoneShard: wholesaleZoneShardPda,
+        buyerZone: WHOLESALE_ZONE, sellerZone: WHOLESALE_ZONE,
+      }),
+      true,
+    );
+    expect(blob, blob).to.match(/AggregatorSegmentMismatch/);
   });
 
   it("rejects settlement while the system is in maintenance mode (MaintenanceMode)", async () => {

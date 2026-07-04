@@ -280,7 +280,7 @@ pub struct SetOracleAuthority<'info> {
 // ========== AGGREGATOR ALLOW-LIST ==========
 
 #[derive(Accounts)]
-#[instruction(aggregator: Pubkey)]
+#[instruction(aggregator: Pubkey, segment: u8)]
 pub struct AdmitAggregator<'info> {
     #[account(
         seeds = [b"governance_config"],

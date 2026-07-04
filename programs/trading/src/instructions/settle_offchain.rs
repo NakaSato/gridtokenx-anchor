@@ -148,7 +148,7 @@ fn tariff_rates(info: &AccountInfo, program_id: &Pubkey) -> Result<(u64, u64)> {
 /// already a real dependency here — the raw read is only to fit the stack ceiling). Layout:
 /// [0..8) disc | [8..40) aggregator | [40..48) admitted_at | [48..56) updated_at | [56] active
 /// | [57] bump.
-fn require_admitted_aggregator(payer: &Pubkey, info: &AccountInfo) -> Result<()> {
+fn require_admitted_aggregator(payer: &Pubkey, info: &AccountInfo, zone_segment: u8) -> Result<()> {
     require_keys_eq!(*info.owner, governance::ID, TradingError::AggregatorNotAdmitted);
     let (expected, _bump) = Pubkey::find_program_address(&[b"aggregator", payer.as_ref()], &governance::ID);
     require_keys_eq!(*info.key, expected, TradingError::AggregatorNotAdmitted);
@@ -156,6 +156,16 @@ fn require_admitted_aggregator(payer: &Pubkey, info: &AccountInfo) -> Result<()>
     require!(data.len() >= 57, TradingError::InvalidAggregatorEntry);
     require!(&data[8..40] == payer.as_ref(), TradingError::AggregatorNotAdmitted);
     require!(data[56] == 1, TradingError::AggregatorNotAdmitted);
+    // Segment gate (role-map.md fix #6): byte [58], appended after this repo's
+    // AggregatorEntry grew a `segment` field. Tolerant of a shorter (pre-segment) legacy
+    // account — defaults to 0 (Retail) rather than erroring, so already-admitted entries
+    // aren't broken by the field addition. A Wholesale zone (segment == 1) requires the
+    // aggregator itself be Wholesale-admitted; Retail zones (0, the default) accept any
+    // admitted aggregator regardless of its segment byte — unchanged, backward compatible.
+    if zone_segment == 1 {
+        let aggregator_segment = if data.len() >= 59 { data[58] } else { 0 };
+        require!(aggregator_segment == 1, TradingError::AggregatorSegmentMismatch);
+    }
     Ok(())
 }
 
@@ -674,14 +684,22 @@ pub fn settle_offchain_match<'info>(
         .ok_or(TradingError::InvalidGovernanceAccount)?;
     require_governance_operational(gov_info)?;
 
-    // --- 0b. OPERATOR GATE (role-map.md fix #8b) ---
+    // Tier-A: zone_market READ-ONLY (capacity + zone_id + segment reads). committed_flow
+    // lives on the ZoneCapacity PDA, written only on the cross-zone path via
+    // remaining_accounts. Loaded early — the operator gate below needs `segment`.
+    let zone_market = ctx.accounts.zone_market.load()?;
+
+    // --- 0b. OPERATOR GATE (role-map.md fix #8b/#6) ---
     // The settlement payer must be a governance-admitted, active aggregator — settlement
-    // cannot be submitted by an arbitrary funded wallet. Mandatory remaining_accounts[3].
+    // cannot be submitted by an arbitrary funded wallet. A Wholesale zone additionally
+    // requires the aggregator itself be admitted for the Wholesale segment (EGAT); Retail
+    // zones (the default) accept any admitted aggregator, unchanged. Mandatory
+    // remaining_accounts[3].
     let aggregator_entry_info = ctx
         .remaining_accounts
         .get(3)
         .ok_or(TradingError::AggregatorNotAdmitted)?;
-    require_admitted_aggregator(&ctx.accounts.payer.key(), aggregator_entry_info)?;
+    require_admitted_aggregator(&ctx.accounts.payer.key(), aggregator_entry_info, zone_market.segment)?;
 
     // --- 1. Ed25519 SIGNATURE VERIFICATION ---
     let sysvar_info = &ctx.accounts.sysvar_instructions;
@@ -706,9 +724,6 @@ pub fn settle_offchain_match<'info>(
     require!(seller_payload.expires_at == 0 || clock.unix_timestamp < seller_payload.expires_at, TradingError::OrderExpired);
 
     let market = ctx.accounts.market.load()?;
-    // Tier-A: zone_market READ-ONLY (capacity + zone_id reads). committed_flow lives on the
-    // ZoneCapacity PDA, written only on the cross-zone path via remaining_accounts.
-    let zone_market = ctx.accounts.zone_market.load()?;
     let mut market_shard = ctx.accounts.market_shard.load_mut()?;
     let mut zone_shard = ctx.accounts.zone_shard.load_mut()?;
 
@@ -1013,14 +1028,17 @@ pub fn batch_settle_offchain_match<'info>(
     // per-match caller args). Fetched once; every pair in the batch shares one rate.
     let (wheeling_bps, loss_bps) = tariff_rates(&remaining_accounts[base + 1], ctx.program_id)?;
 
-    // Operator gate (role-map.md fix #8b) — payer must be a governance-admitted, active
-    // aggregator. Same check as the single-match path.
-    require_admitted_aggregator(&ctx.accounts.payer.key(), &remaining_accounts[base + 2])?;
-
     let clock = Clock::get()?;
     let market = ctx.accounts.market.load()?;
     // Tier-A: zone_market READ-ONLY; committed_flow on the ZoneCapacity PDA (cross-zone only).
+    // Loaded before the operator gate below — it needs `segment`.
     let zone_market = ctx.accounts.zone_market.load()?;
+
+    // Operator gate (role-map.md fix #8b/#6) — payer must be a governance-admitted, active
+    // aggregator; a Wholesale zone additionally requires a Wholesale-admitted aggregator.
+    // Same check as the single-match path.
+    require_admitted_aggregator(&ctx.accounts.payer.key(), &remaining_accounts[base + 2], zone_market.segment)?;
+
     let mut market_shard = ctx.accounts.market_shard.load_mut()?;
     let mut zone_shard = ctx.accounts.zone_shard.load_mut()?;
 
