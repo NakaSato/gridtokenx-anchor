@@ -1,9 +1,9 @@
 # GridTokenX — Blockchain Node Network Design
 
-> **⚠️ STALE (2026-07-04):** the two-layer wheeling framing below (`wheeling charge =
-> transmission (EGAT) + distribution (MEA/PEA)`, §lines ~220, ~234) conflicts with
-> `role-map.md`'s 2nd-pass revision — wheeling reassigned entirely to MEA/PEA for retail
-> P2P trades. Not reconciled yet; treat those specific lines as unverified.
+> **Revised 2026-07-05:** §4.3's wheeling framing corrected — the bundled regulatory rate
+> (transmission-cost-recovery folded into MEA/PEA's tariff) is unchanged, but the on-chain
+> signer is MEA/PEA alone, not a separate EGAT signer. See `role-map.md`'s 2026-07-04
+> 2nd-pass revision.
 
 > **⚠️ STATUS: MIXED — network/account layout + settlement audit commitment implemented; trustless adjudication PROPOSED (updated 2026-06-21).** The permissioned-Solana model, the treasury program, the PDA/vault layout (§5), and the non-custodial settlement call are real. The **Merkle/VAT audit commitment** part of the Tier-2 layer is now in code: `treasury::record_settlement_batch` (`programs/treasury/src/lib.rs:210`) writes a **per-`(zone, batch)` `SettlementRecord` PDA holding `merkle_root`, `vat_amount`/`vat_rate_bps`, `total_value`, zone & batch ids** and bumps the global `total_settled_thbg`; the trading batch path records it via CPI (on-chain verified, `tests/batch_settle_thbg.ts`). The legacy single-match `treasury::record_settlement(ctx, value)` (value-only) still backs `settle_offchain_match`. **Still PROPOSED:** the **trustless settlement-validity layer** (§3.2, §6, §7) — on-chain Merkle-root *verification*, challenge-response, and fraud proofs. The commitment above is **commit-only** (off-chain verifiers consume the root); the §3 feasibility spike found the on-chain exclusion-proof verify cheap (~3.6k CU) but it is gated on a settlement-finality / challenge-window redesign, since current settlement is immediate and non-reversible. **Collateral conflict resolved:** decision D1 keeps the **GRX** validator bond (`registry::stake_grx` / `MIN_VALIDATOR_STAKE`); the THBG-denominated bond in the slashing doc is deferred — §2's GRX collateral is the decided design, not a conflict.
 
@@ -222,8 +222,10 @@ The node network maps onto Thailand's two-tier electricity market structure, whi
                 +-------------> TREASURY <-------+
                               (shared on-chain)
 
-  wheeling charge = transmission (EGAT) + distribution (MEA/PEA)
-  applies even when a trade stays within one distribution zone
+  wheeling charge signed on-chain by MEA/PEA alone (retail trades never reach
+  EGAT's transmission grid); the bundled rate itself reflects transmission-
+  cost-recovery baked into MEA/PEA's regulatory tariff, applying even when a
+  trade stays within one distribution zone
 ```
 
 ### 4.1 Wholesale Layer (EGAT)
@@ -234,9 +236,9 @@ Under the Enhanced Single Buyer model, EGAT holds a monopoly over high-voltage t
 
 The retail layer is where most aggregator nodes operate, because peer-to-peer trading occurs within distribution zones where prosumers and consumers are electrically close. The two distribution utilities have geographically exclusive territories: MEA has distribution rights in Bangkok and its metropolitan vicinity, while PEA covers the remainder of the country. Each distribution zone hosts one private-sector aggregator that performs clearing under the supervision of MEA or PEA according to territory.
 
-### 4.3 Wheeling as a Two-Layer Charge
+### 4.3 Wheeling: a Bundled Rate, a Single On-Chain Signer
 
-A point that materially affects the economic analysis is that the wheeling charge is a two-layer charge. It covers both transmission wheeling (paid to EGAT) and distribution wheeling (paid to MEA and PEA), and it applies even when a third-party-access transaction occurs entirely within a single distribution network. This explains why the wheeling charge used in the economic analysis (approximately 1.10 baht per unit) is not a single-layer cost; it is the combined transmission-plus-distribution charge.
+A point that materially affects the economic analysis is that the wheeling *rate* bundles two cost layers, even though it has one on-chain *signer*. The ERC's tariff structure already folds transmission-cost-recovery into what MEA/PEA bill, so the rate applies (and stays at its ~1.10 baht magnitude) even when a third-party-access transaction occurs entirely within a single distribution network — it is not a single-layer, distribution-only cost. On-chain, however, this bundled rate is set and signed by a single `wheeling_authority`: MEA/PEA. Retail P2P trades on this platform never leave the local distribution grid to traverse EGAT's transmission network directly, so EGAT holds no on-chain wheeling-signer role — its on-chain role is confined to the wholesale layer (§4.1), a separate market segment from retail P2P trading (see `role-map.md`'s 2026-07-04 2nd-pass revision).
 
 ### 4.4 Differentiated Governance
 

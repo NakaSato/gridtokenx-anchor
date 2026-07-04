@@ -1,12 +1,17 @@
 # GridTokenX — Full Cost and Fee Structure (Wheeling, VAT, Transaction Fees)
 
-> **⚠️ STALE (2026-07-04): this doc's two-layer wheeling model (EGAT transmission +
-> MEA/PEA distribution, always combined) conflicts with `role-map.md`'s 2nd-pass
-> revision, which reassigns wheeling entirely to MEA/PEA for this platform's retail P2P
-> trades (they never leave the local distribution grid to reach EGAT's transmission
-> network). Not reconciled yet — treat this doc's wheeling figures/framing (§ below,
-> and any two-layer cost breakdown) as unverified against the current on-chain model
-> until a dedicated revision pass.
+> **Revised 2026-07-05 (on-chain authority reconciliation):** §3 originally implied the
+> wheeling charge is signed on-chain by two separate authorities (EGAT for a transmission
+> layer, MEA/PEA for a distribution layer). That's wrong for *this platform's on-chain
+> model* — see `role-map.md`'s 2nd-pass revision — but the underlying **regulatory
+> figure** (~1.07-1.151 THB/kWh) is unaffected: real ERC tariff structure already bundles
+> transmission-cost-recovery into the distribution-level charge MEA/PEA bill, even for a
+> trade that never physically leaves one distribution zone. So the number stays the same;
+> only the on-chain signer changed from "two authorities" to "MEA/PEA alone." The
+> economic model in §9-10 (`w` as a flat additive term, not a percentage) was already
+> correct and needed no change — it's what the 2026-07-05 code fix
+> (`TariffConfig.wheeling_rate_per_kwh`, replacing a mistaken bps-of-trade-value field)
+> now actually implements on-chain.
 
 > **⚠️ STATUS: RESEARCH FRAMEWORK — economic figures external; on-chain hooks now mostly implemented (updated 2026-06-21).** Tariff, wheeling, Ft, and VAT figures are external regulatory facts (illustrative, not yet final). On the code side: the swap fee (`grx_per_thbg_rate`, fee in bps) is implemented; and **on-chain VAT recording** (§4.3) + **per-batch Merkle-committed settlement** (§5) are now implemented too: `treasury::record_settlement_batch` (`programs/treasury/src/lib.rs:210`) writes a per-`(zone, batch)` `SettlementRecord` PDA carrying `merkle_root[32]`, `vat_amount`, `vat_rate_bps`, `total_value`, and bumps `total_settled_thbg`; the trading batch path (`trading::batch_settle_offchain_match`) records it via CPI, mandatory for THBG markets. On-chain verified in `tests/batch_settle_thbg.ts`. **Caveats vs the §5 spec:** the commitment is **per-batch, commit-only** (matching the continuous CDA, not a single per-epoch root) and the root is **not verified on-chain** (off-chain audit/fraud-proof consumes it — see the §3 feasibility spike); **VAT is data-only** (recorded for e-Tax/audit, no on-chain VAT arithmetic enforcement — decision D4). The single-match `settle_offchain_match` path still uses the value-only `record_settlement`.
 
@@ -30,7 +35,7 @@ A peer-to-peer energy trade in GridTokenX carries several distinct cost componen
   +----------------------------------------------+
   | clearing price P* (market-derived)           |  e.g. 2.59
   +----------------------------------------------+
-  | + wheeling charge (transmission+distribution)|  ~ 1.10
+  | + wheeling charge (MEA/PEA, bundled rate)    |  ~ 1.10
   +----------------------------------------------+
   | + VAT 7% (on energy value)                   |  on energy
   +----------------------------------------------+
@@ -67,7 +72,7 @@ The Ft is a variable surcharge the ERC resets every four months to reflect fuel 
 
 The wheeling charge is the fee for using the grid to transport P2P-traded energy, and it is the largest single deduction in the cost stack. It has two structural features that are essential to tokenomics.
 
-First, it is a two-layer charge. The ERC has set the wheeling charge basis on the existing tariff structure, which already includes both transmission and distribution service-charge components. The charge therefore covers transmission (paid in respect of EGAT's grid) and distribution (paid in respect of MEA's or PEA's grid), and it applies even when a trade occurs entirely within a single distribution zone. This is why the wheeling charge is on the order of 1.10 baht per unit rather than a single-layer cost: the figures under consideration range from approximately 1.07 baht (draft Direct PPA pilot) to 1.151 baht (ERC Sandbox), and the final rate is not yet settled.
+First, the regulatory *rate* is a bundled figure, but the on-chain *authority* is single. The ERC has set the wheeling charge basis on the existing tariff structure, which already includes both transmission and distribution service-charge components — so the ~1.10 baht figure reflects transmission-cost-recovery baked into what MEA/PEA bill, even for a trade that occurs entirely within one distribution zone; it is not a single-layer, distribution-only number. This is why the wheeling charge is on that order rather than a smaller distribution-only cost: the figures under consideration range from approximately 1.07 baht (draft Direct PPA pilot) to 1.151 baht (ERC Sandbox), and the final rate is not yet settled. On-chain, this bundled rate is signed by a single `wheeling_authority` (MEA/PEA) — retail P2P trades on this platform never leave the local distribution grid to reach EGAT's transmission network directly, so EGAT has no on-chain tariff-signer role here (see `role-map.md`); MEA/PEA's rate already carries the transmission-cost pass-through.
 
 Second, it is not yet final. The wheeling charge depends on the finalization of the Third-Party Access (TPA) Code, which the ERC is still coordinating with the utilities. Because the charge consumes roughly half of the usable price spread, its final value is the single most important external variable for the system's economics, and the system has no control over it. The sensitivity of the win-win-win outcome to this charge is analyzed in the pricing documents.
 
@@ -149,7 +154,7 @@ Using illustrative numbers for Type 3–4 On-Peak: retail $R_{\text{retail}} = 4
 
 ## 11. Summary
 
-The full cost structure of a GridTokenX trade comprises energy-price components (retail tariff, buyback floor, Ft), grid-and-regulatory components (the two-layer wheeling charge, TPA administrative fees, and VAT on energy value only), and platform components (negligible batched blockchain fees, the swap fee, and the aggregator margin). The wheeling charge is the largest deduction and the most important external uncertainty, consuming roughly half the usable spread and not yet finalized. VAT applies only to the energy value, with the token-transfer exemption contingent on token classification. Blockchain fees are negligible per unit because of batching, which is what protects the narrow spread. The swap fee and aggregator margin are the platform's revenue and must fit inside the spread that remains, which is structurally narrow in the Thai market — and that narrowness is the economic reason the system's low-overhead architecture is a necessary condition rather than a convenience.
+The full cost structure of a GridTokenX trade comprises energy-price components (retail tariff, buyback floor, Ft), grid-and-regulatory components (the MEA/PEA-signed wheeling charge — a bundled rate reflecting both transmission and distribution cost-recovery — TPA administrative fees, and VAT on energy value only), and platform components (negligible batched blockchain fees, the swap fee, and the aggregator margin). The wheeling charge is the largest deduction and the most important external uncertainty, consuming roughly half the usable spread and not yet finalized. VAT applies only to the energy value, with the token-transfer exemption contingent on token classification. Blockchain fees are negligible per unit because of batching, which is what protects the narrow spread. The swap fee and aggregator margin are the platform's revenue and must fit inside the spread that remains, which is structurally narrow in the Thai market — and that narrowness is the economic reason the system's low-overhead architecture is a necessary condition rather than a convenience.
 
 ---
 
