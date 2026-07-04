@@ -90,7 +90,7 @@ describe("energy-token REC-validator gating guards (litesvm)", () => {
     [mintPda] = PublicKey.findProgramAddressSync([Buffer.from("mint_2022")], programId);
     [infoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], programId);
     // ERC-is-REC-issuer gate: add/removeRecValidator now require the caller to match
-    // governance's authority. Fabricate a poa_config with payer as that authority.
+    // governance's authority. Fabricate a governance_config with payer as that authority.
     governanceConfigPda = fabricateGovernanceConfig(svm, payer.publicKey);
 
     send([await program.methods.initializeToken(PublicKey.default, payer.publicKey).accounts({

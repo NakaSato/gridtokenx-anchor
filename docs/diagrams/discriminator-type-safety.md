@@ -132,7 +132,7 @@ the disc proves *type*, the bindings prove *identity*.
   disc check; use Anchor's loaders.
 - **Not zeroing disc on close** → revival attack; use `close`.
 - **Renaming a struct/instruction** → changes the discriminator → breaks existing accounts/clients
-  (memory: `PoAConfig→GovernanceConfig` kept the **PDA seed** `poa_config`, but a *type* rename
+  (memory: `PoAConfig→GovernanceConfig` kept the **PDA seed** `governance_config`, but a *type* rename
   shifts the account disc — handle migrations).
 - **Assuming cross-program uniqueness guarantees** → disc tags type by name; combine with the
   **owner** check (different program = different owner) for cross-program safety.

@@ -39,7 +39,7 @@ describe("generation-mint idempotency", () => {
 
   let energyMintPda: PublicKey;
   let energyTokenInfoPda: PublicKey;
-  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
 
   // gen_mint record PDA: seeds = [b"gen_mint", meter_id(16), window_start_ms.to_le_bytes()(8)].
   const genMintPda = (meterId: Buffer, windowStartMs: BN) =>

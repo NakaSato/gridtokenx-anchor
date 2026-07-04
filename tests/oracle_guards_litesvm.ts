@@ -123,7 +123,7 @@ describe("oracle validation/gateway/epoch/aggregator guards (litesvm)", () => {
     }
 
     oracleData = PublicKey.findProgramAddressSync([Buffer.from("oracle_data")], oracleId)[0];
-    governanceConfig = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceId)[0];
+    governanceConfig = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceId)[0];
 
     svm.setClock(new Clock(svm.getClock().slot, 0n, 0n, 0n, BigInt(NOW)));
 

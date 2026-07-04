@@ -1,20 +1,25 @@
-// Regression lock for the PoAConfig -> GovernanceConfig rename (commit ae35805).
+// Regression lock for the PoAConfig -> GovernanceConfig type rename (commit ae35805)
+// AND the later poa_config -> governance_config PDA seed migration (2026-07-04).
 //
-// The rename touched the account struct (PoAConfig -> GovernanceConfig), the
-// instruction/event names (initialize_poa -> initialize_governance, the *_poa_config
-// mutator -> update_governance_config, the PoA* events -> Governance*), and rippled
-// through scripts/tests/docs. The ONE thing that must NOT change is the on-chain PDA
-// address: the seed stays b"poa_config" (programs/governance/src/contexts.rs, 15x) so
-// existing accounts need no migration. This suite locks both halves:
+// The type rename (ae35805) touched the account struct (PoAConfig -> GovernanceConfig),
+// the instruction/event names (initialize_poa -> initialize_governance, the
+// *_poa_config mutator -> update_governance_config, the PoA* events -> Governance*),
+// and rippled through scripts/tests/docs, while DELIBERATELY keeping the PDA seed at
+// b"poa_config" (no migration needed for the then-live localnet state).
 //
-//   1. Artifact invariants (IDL) -- renamed names present, old names gone, and the only
-//      surviving "PoA" string is the AggregatorEntry doc comment (the consensus concept).
+// The later seed migration (this commit) completes the rename: the seed itself moved
+// to b"governance_config", since the platform was still pre-mainnet/localnet-only and
+// this was the cheap window to fix the poa_config/GovernanceConfig naming mismatch
+// permanently. Existing poa_config-seeded accounts on any already-running validator are
+// orphaned by this change and must be re-initialized at the new address — that's an
+// accepted one-time cost of doing this before real deployment, not after.
+//
+// This suite locks:
+//   1. Artifact invariants (IDL) -- renamed names present, old names gone (unaffected by
+//      the seed migration -- struct/instruction names didn't change again here).
 //   2. Runtime invariants (litesvm) -- initialize_governance creates a GovernanceConfig
-//      account at the b"poa_config" PDA (NOT a hypothetical b"governance_config" PDA),
-//      and the renamed mutator / stats view operate on it end-to-end.
-//
-// These paths touch only the single ["poa_config"] PDA -- no tokens, no CPI -- so they
-// run fully in-process. Mirrors the harness in governance_authority_guards_litesvm.ts.
+//      account at the b"governance_config" PDA, NOT the old b"poa_config" PDA, and the
+//      renamed mutator / stats view operate on it end-to-end.
 
 import { LiteSVM, FailedTransactionMetadata } from "litesvm";
 import { Program } from "@anchor-lang/core";
@@ -32,16 +37,18 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const governanceIdl = require("../target/idl/governance.json");
 
-// The preserved seed -- the address-stability invariant of the whole rename.
-const CONFIG_SEED = "poa_config";
+// The current seed, post-migration -- the address-stability invariant going forward.
+const CONFIG_SEED = "governance_config";
+// The old seed, pre-migration -- must now be dead (no account lives there).
+const OLD_CONFIG_SEED = "poa_config";
 
-describe("governance PoAConfig -> GovernanceConfig rename (litesvm)", () => {
+describe("governance PoAConfig -> GovernanceConfig rename + seed migration (litesvm)", () => {
   let svm: LiteSVM;
   let governance: Program<Governance>;
   let governanceId: PublicKey;
   let governanceConfig: PublicKey;
 
-  const payer = Keypair.generate(); // PoA authority + fee payer
+  const payer = Keypair.generate(); // governance authority + fee payer
 
   type IxLike = TransactionInstruction | Promise<TransactionInstruction>;
   async function trySend(ixs: IxLike[], extra: Keypair[] = []): Promise<FailedTransactionMetadata | null> {
@@ -86,7 +93,8 @@ describe("governance PoAConfig -> GovernanceConfig rename (litesvm)", () => {
       } as any).instruction()]);
   });
 
-  // ===== 1. Artifact invariants: the rename landed in the IDL =====
+  // ===== 1. Artifact invariants: the type rename landed in the IDL (unaffected by the
+  //          later seed migration -- struct/instruction names didn't change again). =====
 
   it("IDL exposes the renamed instructions, not the old PoA names", () => {
     const ins = governanceIdl.instructions.map((i: any) => i.name);
@@ -115,30 +123,32 @@ describe("governance PoAConfig -> GovernanceConfig rename (litesvm)", () => {
     expect(types.some((t: string) => /^PoA/.test(t)), "no PoA* type names").to.be.false;
   });
 
-  it("the only surviving 'PoA' string is the AggregatorEntry doc comment", () => {
-    // PoA = Proof-of-Authority, the consensus concept -- legitimately documented on the
-    // aggregator allow-list entry. Any OTHER poa/PoA occurrence would be a missed rename.
+  it("no 'poa' string survives anywhere in the IDL (seed migration is complete)", () => {
+    // PoA = Proof-of-Authority, the consensus concept -- previously legitimately
+    // documented on the AggregatorEntry allow-list entry AND load-bearing in the
+    // poa_config seed literal. The seed migration removed the last such use, so this
+    // is now a hard zero rather than a single-survivor allowlist.
     const stripDocs = (obj: any): any =>
       JSON.parse(JSON.stringify(obj, (k, v) => (k === "docs" ? undefined : v)));
     const nameSpace = JSON.stringify(stripDocs(governanceIdl));
     expect(/poa/i.test(nameSpace), "no poa/PoA in any name/seed-name").to.be.false;
   });
 
-  // ===== 2. Runtime invariants: rename works end-to-end on the preserved PDA =====
+  // ===== 2. Runtime invariants: the seed migration moved the account, and nothing is
+  //          left behind at the old address. =====
 
-  it("initialize_governance created the account at the b\"poa_config\" PDA", () => {
+  it("initialize_governance created the account at the NEW b\"governance_config\" PDA", () => {
     const { owner } = readConfig();
     expect(owner.toBase58()).to.equal(governanceId.toBase58());
   });
 
-  it("the account is NOT at a b\"governance_config\" PDA (no address drift / no migration)", () => {
-    const wouldBeNewSeed = PublicKey.findProgramAddressSync(
-      [Buffer.from("governance_config")],
+  it("nothing lives at the OLD b\"poa_config\" PDA (clean migration, no stale account)", () => {
+    const oldSeedPda = PublicKey.findProgramAddressSync(
+      [Buffer.from(OLD_CONFIG_SEED)],
       governanceId,
     )[0];
-    expect(governanceConfig.toBase58()).to.not.equal(wouldBeNewSeed.toBase58());
-    // Nothing lives at the hypothetical renamed-seed address.
-    expect(svm.getAccount(wouldBeNewSeed), "no account at governance_config seed").to.be.null;
+    expect(governanceConfig.toBase58()).to.not.equal(oldSeedPda.toBase58());
+    expect(svm.getAccount(oldSeedPda), "no account at the old poa_config seed").to.be.null;
   });
 
   it("the account decodes as governanceConfig with the initializing authority", () => {

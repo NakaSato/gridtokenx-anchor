@@ -73,11 +73,11 @@ use crate::error::TradingError;
 /// + 1 (name_len) + 128 (contact) + 1 (contact_len) + 1 (version) = 235; maintenance_mode
 /// (bool) sits at byte 235. `is_operational()` == `!maintenance_mode`.
 fn require_governance_operational(info: &AccountInfo) -> Result<()> {
-    // Bind the account to the canonical governance poa_config PDA. This check lives in the
+    // Bind the account to the canonical governance governance_config PDA. This check lives in the
     // handler rather than as a `seeds` account constraint because the settle context is at
     // the BPF stack limit — an extra constraint in `try_accounts` overflows the frame.
     require_keys_eq!(*info.owner, governance::ID, TradingError::InvalidGovernanceAccount);
-    let (expected, _bump) = Pubkey::find_program_address(&[b"poa_config"], &governance::ID);
+    let (expected, _bump) = Pubkey::find_program_address(&[b"governance_config"], &governance::ID);
     require_keys_eq!(*info.key, expected, TradingError::InvalidGovernanceAccount);
     let data = info.try_borrow_data()?;
     require!(data.len() > 235, TradingError::InvalidGovernanceAccount);
@@ -383,7 +383,7 @@ pub struct SettleOffchainMatchContext<'info> {
     #[account(constraint = zone_market.load()?.market == market.key())]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
 
-    // NOTE: the governance poa_config account is passed as the FIRST remaining account, not a
+    // NOTE: the governance governance_config account is passed as the FIRST remaining account, not a
     // named field — the named context is at the BPF stack limit and one more account overflows
     // `try_accounts`. Validated in-handler by `require_governance_operational` (PDA + owner +
     // maintenance byte), so the binding is identical to a typed constraint.
@@ -540,7 +540,7 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     #[account(constraint = zone_market.load()?.market == market.key())]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
 
-    // NOTE: governance poa_config is passed as the LAST remaining account (after the
+    // NOTE: governance governance_config is passed as the LAST remaining account (after the
     // match_count*6 per-pair accounts), not a named field — stack-limit workaround identical
     // to the single-match context. Validated in-handler by `require_governance_operational`.
 
@@ -639,7 +639,7 @@ pub fn settle_offchain_match<'info>(
     // --- 0. GOVERNANCE GATE ---
     // Settlement moves escrowed funds; it must halt under maintenance/emergency like every
     // other state-mutating trading instruction. Previously this fund path had no gate. The
-    // governance poa_config account is the first remaining account (stack-limit workaround).
+    // governance governance_config account is the first remaining account (stack-limit workaround).
     let gov_info = ctx
         .remaining_accounts
         .first()
@@ -686,7 +686,7 @@ pub fn settle_offchain_match<'info>(
         && (seller_payload.zone_id != zone_market.zone_id || buyer_payload.zone_id != zone_market.zone_id);
     if cross_zone {
         // Cross-zone → ZoneCapacity (writable) is MANDATORY as remaining_accounts[2] (index 0
-        // is the governance poa_config, index 1 the trade_nullifier); omitting it cannot bypass
+        // is the governance governance_config, index 1 the trade_nullifier); omitting it cannot bypass
         // the ceiling. committed_flow is the single source of truth.
         let zc_info = ctx.remaining_accounts.get(2).ok_or(TradingError::ZoneCapacityRequired)?;
         let zc_loader = load_zone_capacity(zc_info, &ctx.accounts.zone_market.key(), ctx.program_id)?;
@@ -950,7 +950,7 @@ pub fn batch_settle_offchain_match<'info>(
     let sysvar_info = &ctx.accounts.sysvar_instructions;
     let remaining_accounts = ctx.remaining_accounts;
     // Layout: match_count*7 per-pair accounts (6 settle accounts + 1 TradeNullifier each),
-    // then poa_config (at match_count*7), then an OPTIONAL ZoneCapacity account (at
+    // then governance_config (at match_count*7), then an OPTIONAL ZoneCapacity account (at
     // match_count*7 + 1) for cross-zone batches (Tier-A).
     let base = match_count * 7;
     require!(
@@ -959,7 +959,7 @@ pub fn batch_settle_offchain_match<'info>(
     );
 
     // Governance gate — batch settlement is the primary fund path; halt under maintenance.
-    // poa_config is the trailing remaining account (stack-limit workaround).
+    // governance_config is the trailing remaining account (stack-limit workaround).
     require_governance_operational(&remaining_accounts[base])?;
 
     let clock = Clock::get()?;

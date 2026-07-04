@@ -75,10 +75,10 @@ async function main() {
 
   // 1b. Initialize Governance (PoA) — moved ahead of energy-token's REC-validator
   // registration below: add_rec_validator/remove_rec_validator now require governance's
-  // authority (ERC) to sign, so poa_config must exist first.
+  // authority (ERC) to sign, so governance_config must exist first.
   console.log('\n[1b/5] Initializing Governance PoA...');
   const [governanceConfigPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from('poa_config')],
+    [Buffer.from('governance_config')],
     governanceProgram.programId
   );
   try {

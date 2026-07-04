@@ -83,7 +83,7 @@ re-settle:     PDA exists → filled_amount accumulates; over-fill / full replay
 Adding another **named** account overflows `try_accounts` → stack overflow. So extra accounts come
 through **`remaining_accounts`** positionally, not new named fields:
 
-- governance **`poa_config`** is the **first** remaining account (`:148`, accessed `:392`) — not a
+- governance **`governance_config`** is the **first** remaining account (`:148`, accessed `:392`) — not a
   named field, precisely because the named context is full.
 - treasury CPI accounts (for optional/THBG-mandatory `record_settlement`) likewise ride
   `remaining_accounts`; recording is gated on their presence.
@@ -162,5 +162,5 @@ PDA for anti-replay, transfer tokens, and optionally (mandatory for THBG) CPI tr
 `record_settlement`. Batch caps at **≤4 in code** (`BatchTooLarge`) but per-match Ed25519 data
 can't be ALT-compressed, so the 1232-byte tx limit makes it **~1 match/tx in practice**
 (~80-92k CU/match); the real throughput limiter is the `zone_market` mut lock, not the sharded
-collectors. The settle context sits at the BPF stack ceiling → governance `poa_config` + treasury
+collectors. The settle context sits at the BPF stack ceiling → governance `governance_config` + treasury
 accounts ride `remaining_accounts`.

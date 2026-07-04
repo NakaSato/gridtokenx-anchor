@@ -77,7 +77,7 @@ describe("governance + oracle CU profile (litesvm)", () => {
     svm.addProgramFromFile(governanceId, "target/deploy/governance.so");
     for (const kp of [payer, chainBridge, proposed]) svm.airdrop(kp.publicKey, BigInt(1_000_000_000_000));
     oracleData = PublicKey.findProgramAddressSync([Buffer.from("oracle_data")], oracleId)[0];
-    governanceConfig = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceId)[0];
+    governanceConfig = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceId)[0];
     svm.setClock(new Clock(svm.getClock().slot, 0n, 0n, 0n, BigInt(NOW)));
   });
 

@@ -14,7 +14,7 @@ pub struct InitializeGovernance<'info> {
         init,
         payer = authority,
         space = 8 + GovernanceConfig::LEN,
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump
     )]
     pub governance_config: Account<'info, GovernanceConfig>,
@@ -30,7 +30,7 @@ pub struct InitializeGovernance<'info> {
 pub struct IssueErc<'info> {
     #[account(
         mut,
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]
@@ -105,13 +105,13 @@ pub struct IssueErc<'info> {
 #[derive(Accounts)]
 pub struct InitRecMint<'info> {
     #[account(
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]
     pub governance_config: Account<'info, GovernanceConfig>,
     /// Fungible REC mint: 1 token = 1 MWh, 6 decimals (base unit = 1 Wh; 1 kWh = 1000 units).
-    /// Mint authority = governance_config PDA `[b"poa_config"]`.
+    /// Mint authority = governance_config PDA `[b"governance_config"]`.
     #[account(
         init,
         payer = authority,
@@ -149,7 +149,7 @@ pub struct RetireRec<'info> {
 pub struct ValidateErc<'info> {
     #[account(
         mut,
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]
@@ -167,7 +167,7 @@ pub struct ValidateErc<'info> {
 pub struct RevokeErc<'info> {
     #[account(
         mut,
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]
@@ -184,7 +184,7 @@ pub struct RevokeErc<'info> {
 #[derive(Accounts)]
 pub struct TransferErc<'info> {
     #[account(
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump
     )]
     pub governance_config: Account<'info, GovernanceConfig>,
@@ -208,7 +208,7 @@ pub struct TransferErc<'info> {
 pub struct UpdateGovernanceConfig<'info> {
     #[account(
         mut,
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]
@@ -219,7 +219,7 @@ pub struct UpdateGovernanceConfig<'info> {
 #[derive(Accounts)]
 pub struct GetGovernanceStats<'info> {
     #[account(
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump
     )]
     pub governance_config: Account<'info, GovernanceConfig>,
@@ -231,7 +231,7 @@ pub struct GetGovernanceStats<'info> {
 pub struct ProposeAuthorityChange<'info> {
     #[account(
         mut,
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]
@@ -243,7 +243,7 @@ pub struct ProposeAuthorityChange<'info> {
 pub struct ApproveAuthorityChange<'info> {
     #[account(
         mut,
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump
     )]
     pub governance_config: Account<'info, GovernanceConfig>,
@@ -255,7 +255,7 @@ pub struct ApproveAuthorityChange<'info> {
 pub struct CancelAuthorityChange<'info> {
     #[account(
         mut,
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]
@@ -269,7 +269,7 @@ pub struct CancelAuthorityChange<'info> {
 pub struct SetOracleAuthority<'info> {
     #[account(
         mut,
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]
@@ -283,7 +283,7 @@ pub struct SetOracleAuthority<'info> {
 #[instruction(aggregator: Pubkey)]
 pub struct AdmitAggregator<'info> {
     #[account(
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]
@@ -306,7 +306,7 @@ pub struct AdmitAggregator<'info> {
 #[derive(Accounts)]
 pub struct RevokeAggregator<'info> {
     #[account(
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]
@@ -373,7 +373,7 @@ pub struct CastVote<'info> {
 pub struct ExecuteProposal<'info> {
     /// Governance config - needed for quorum threshold
     #[account(
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump
     )]
     pub governance_config: Account<'info, GovernanceConfig>,
@@ -409,7 +409,7 @@ pub struct InitializeZoneConfig<'info> {
     )]
     pub zone_config: Account<'info, ZoneConfig>,
     #[account(
-        seeds = [b"poa_config"],
+        seeds = [b"governance_config"],
         bump,
         has_one = authority @ GovernanceError::UnauthorizedAuthority
     )]

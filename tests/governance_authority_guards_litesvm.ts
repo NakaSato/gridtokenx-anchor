@@ -1,6 +1,6 @@
 // Litesvm coverage for the governance PoA authority/config/oracle guards, previously
 // only exercised by the validator-backed tests/governance.ts. These paths touch only the
-// single ["poa_config"] PDA — no tokens, no CPI — so they run fully in-process.
+// single ["governance_config"] PDA — no tokens, no CPI — so they run fully in-process.
 //
 // Headline cases:
 //   - 2-step authority transfer (propose_authority_change -> approve_authority_change):
@@ -76,7 +76,7 @@ describe("governance authority/config/oracle guards (litesvm)", () => {
 
   function readAuthority(): string {
     const acct = svm.getAccount(governanceConfig);
-    if (!acct) throw new Error("poa_config missing");
+    if (!acct) throw new Error("governance_config missing");
     const decoded = governance.coder.accounts.decode("governanceConfig", Buffer.from(acct.data));
     return (decoded.authority as PublicKey).toBase58();
   }
@@ -114,7 +114,7 @@ describe("governance authority/config/oracle guards (litesvm)", () => {
     svm.airdrop(payer.publicKey, BigInt(1_000_000_000_000));
     svm.airdrop(attacker.publicKey, BigInt(1_000_000_000_000));
 
-    governanceConfig = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceId)[0];
+    governanceConfig = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceId)[0];
 
     warpClock(NOW);
 

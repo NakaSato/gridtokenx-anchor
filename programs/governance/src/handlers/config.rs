@@ -8,12 +8,12 @@ pub fn update_governance_config(
     erc_validation_enabled: bool,
     allow_certificate_transfers: bool,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.governance_config;
+    let governance_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
-    poa_config.erc_validation_enabled = erc_validation_enabled;
-    poa_config.allow_certificate_transfers = allow_certificate_transfers;
-    poa_config.last_updated = clock.unix_timestamp;
+    governance_config.erc_validation_enabled = erc_validation_enabled;
+    governance_config.allow_certificate_transfers = allow_certificate_transfers;
+    governance_config.last_updated = clock.unix_timestamp;
 
     emit!(GovernanceConfigUpdated {
         authority: ctx.accounts.authority.key(),
@@ -29,11 +29,11 @@ pub fn set_maintenance_mode(
     ctx: Context<UpdateGovernanceConfig>,
     maintenance_enabled: bool,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.governance_config;
+    let governance_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
-    poa_config.maintenance_mode = maintenance_enabled;
-    poa_config.last_updated = clock.unix_timestamp;
+    governance_config.maintenance_mode = maintenance_enabled;
+    governance_config.last_updated = clock.unix_timestamp;
 
     emit!(MaintenanceModeUpdated {
         authority: ctx.accounts.authority.key(),
@@ -50,7 +50,7 @@ pub fn update_erc_limits(
     max_erc_amount: u64,
     erc_validity_period: i64,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.governance_config;
+    let governance_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     require!(min_energy_amount > 0, GovernanceError::InvalidMinimumEnergy);
@@ -63,14 +63,14 @@ pub fn update_erc_limits(
         GovernanceError::InvalidValidityPeriod
     );
 
-    let old_min = poa_config.min_energy_amount;
-    let old_max = poa_config.max_erc_amount;
-    let old_validity = poa_config.erc_validity_period;
+    let old_min = governance_config.min_energy_amount;
+    let old_max = governance_config.max_erc_amount;
+    let old_validity = governance_config.erc_validity_period;
 
-    poa_config.min_energy_amount = min_energy_amount;
-    poa_config.max_erc_amount = max_erc_amount;
-    poa_config.erc_validity_period = erc_validity_period;
-    poa_config.last_updated = clock.unix_timestamp;
+    governance_config.min_energy_amount = min_energy_amount;
+    governance_config.max_erc_amount = max_erc_amount;
+    governance_config.erc_validity_period = erc_validity_period;
+    governance_config.last_updated = clock.unix_timestamp;
 
     emit!(ErcLimitsUpdated {
         authority: ctx.accounts.authority.key(),
@@ -90,7 +90,7 @@ pub fn update_authority_info(
     ctx: Context<UpdateGovernanceConfig>,
     contact_info: String,
 ) -> Result<()> {
-    let poa_config = &mut ctx.accounts.governance_config;
+    let governance_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     require!(
@@ -100,7 +100,7 @@ pub fn update_authority_info(
 
     // Capture old contact for event (convert from bytes)
     let old_contact =
-        String::from_utf8_lossy(&poa_config.contact_info[..poa_config.contact_len as usize])
+        String::from_utf8_lossy(&governance_config.contact_info[..governance_config.contact_len as usize])
             .into_owned();
 
     // Update contact_info bytes and length
@@ -108,9 +108,9 @@ pub fn update_authority_info(
     let contact_slice = contact_info.as_bytes();
     contact_bytes[..contact_slice.len()].copy_from_slice(contact_slice);
 
-    poa_config.contact_info = contact_bytes;
-    poa_config.contact_len = contact_slice.len() as u8;
-    poa_config.last_updated = clock.unix_timestamp;
+    governance_config.contact_info = contact_bytes;
+    governance_config.contact_len = contact_slice.len() as u8;
+    governance_config.last_updated = clock.unix_timestamp;
 
     emit!(AuthorityInfoUpdated {
         authority: ctx.accounts.authority.key(),

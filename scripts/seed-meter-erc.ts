@@ -109,7 +109,7 @@ async function main() {
 
   // Issue an ERC for that meter (owner signs, dev wallet is governance authority).
   const certId = `ERC_${owner.publicKey.toBase58().slice(0, 6)}`;
-  const [poaPda] = PublicKey.findProgramAddressSync([Buffer.from('poa_config')], governance.programId);
+  const [poaPda] = PublicKey.findProgramAddressSync([Buffer.from('governance_config')], governance.programId);
   const [ercPda] = PublicKey.findProgramAddressSync(
     [Buffer.from('erc_certificate'), Buffer.from(certId)],
     governance.programId,

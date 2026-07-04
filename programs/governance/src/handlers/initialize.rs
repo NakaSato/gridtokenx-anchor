@@ -3,67 +3,67 @@ use crate::InitializeGovernance;
 use anchor_lang::prelude::*;
 
 pub fn handler(ctx: Context<InitializeGovernance>) -> Result<()> {
-    let poa_config = &mut ctx.accounts.governance_config;
+    let governance_config = &mut ctx.accounts.governance_config;
     let clock = Clock::get()?;
 
     // Authority Configuration
-    poa_config.authority = ctx.accounts.authority.key();
+    governance_config.authority = ctx.accounts.authority.key();
 
     // Set fixed-size strings
     let mut name_bytes = [0u8; 64];
     let name = "REC".as_bytes();
     name_bytes[..name.len()].copy_from_slice(name);
-    poa_config.authority_name = name_bytes;
-    poa_config.name_len = name.len() as u8;
+    governance_config.authority_name = name_bytes;
+    governance_config.name_len = name.len() as u8;
 
     let mut contact_bytes = [0u8; 128];
     let contact = "engineering_erc@utcc.ac.th".as_bytes();
     contact_bytes[..contact.len()].copy_from_slice(contact);
-    poa_config.contact_info = contact_bytes;
-    poa_config.contact_len = contact.len() as u8;
+    governance_config.contact_info = contact_bytes;
+    governance_config.contact_len = contact.len() as u8;
 
     // Set version
-    poa_config.version = 1;
+    governance_config.version = 1;
 
     // Controls
-    poa_config.maintenance_mode = false;
+    governance_config.maintenance_mode = false;
 
     // ERC Certificate Configuration
-    poa_config.erc_validation_enabled = true;
-    poa_config.min_energy_amount = 100; // 100 kWh minimum
-    poa_config.max_erc_amount = 1_000_000; // 1M kWh max per ERC
-    poa_config.erc_validity_period = 31_536_000; // 1 year in seconds
-    poa_config.require_oracle_validation = false;
+    governance_config.erc_validation_enabled = true;
+    governance_config.min_energy_amount = 100; // 100 kWh minimum
+    governance_config.max_erc_amount = 1_000_000; // 1M kWh max per ERC
+    governance_config.erc_validity_period = 31_536_000; // 1 year in seconds
+    governance_config.require_oracle_validation = false;
 
     // Features
-    poa_config.oracle_authority = Pubkey::default();
-    poa_config.min_oracle_confidence = 80; // 80% confidence threshold
-    poa_config.allow_certificate_transfers = true;
+    governance_config.oracle_authority = Pubkey::default();
+    governance_config.min_oracle_confidence = 80; // 80% confidence threshold
+    governance_config.allow_certificate_transfers = true;
 
     // DAO Governance
-    poa_config.min_quorum_votes = 100; // Minimum 1 meter's base weight
+    governance_config.min_quorum_votes = 100; // Minimum 1 meter's base weight
 
     // Tracking
-    poa_config.total_ercs_issued = 0;
-    poa_config.total_ercs_validated = 0;
-    poa_config.total_ercs_revoked = 0;
-    poa_config.total_energy_certified = 0;
+    governance_config.total_ercs_issued = 0;
+    governance_config.total_ercs_validated = 0;
+    governance_config.total_ercs_revoked = 0;
+    governance_config.total_energy_certified = 0;
 
     // Timestamps
-    poa_config.created_at = clock.unix_timestamp;
-    poa_config.last_updated = clock.unix_timestamp;
-    poa_config.last_erc_issued_at = 0;
+    governance_config.created_at = clock.unix_timestamp;
+    governance_config.last_updated = clock.unix_timestamp;
+    governance_config.last_erc_issued_at = 0;
 
     // Multi-sig Authority Change (initialize as None)
-    poa_config.pending_authority = Pubkey::default();
-    poa_config.pending_authority_proposed_at = 0;
-    poa_config.pending_authority_expires_at = 0;
+    governance_config.pending_authority = Pubkey::default();
+    governance_config.pending_authority_proposed_at = 0;
+    governance_config.pending_authority_expires_at = 0;
 
     // Reserved padding
-    poa_config._reserved = [0u8; 5];
+    governance_config._reserved = [0u8; 5];
 
     // Validate configuration
-    poa_config.validate_config()?;
+    governance_config.validate_config()?;
 
     emit!(GovernanceInitialized {
         authority: ctx.accounts.authority.key(),

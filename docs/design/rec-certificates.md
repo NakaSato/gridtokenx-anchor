@@ -10,7 +10,7 @@ A Renewable Energy Certificate (REC, called ERC in the source) is an on-chain, p
 
 A REC has **two on-chain representations**, issued together:
 
-1. **A fungible Token-2022 REC token** — the tradable balance. **1 token = 1 MWh**, 6 decimals, so the base unit is 1 Wh and **1 kWh = 1_000 base units**. Mint = PDA `[b"rec_mint"]` (governance program), mint authority = the governance `[b"poa_config"]` PDA. Created once via `init_rec_mint`. Standard SPL: held in ATAs, transferable, and **retired** (burned) via `retire_rec` when a holder claims the green attribute.
+1. **A fungible Token-2022 REC token** — the tradable balance. **1 token = 1 MWh**, 6 decimals, so the base unit is 1 Wh and **1 kWh = 1_000 base units**. Mint = PDA `[b"rec_mint"]` (governance program), mint authority = the governance `[b"governance_config"]` PDA. Created once via `init_rec_mint`. Standard SPL: held in ATAs, transferable, and **retired** (burned) via `retire_rec` when a holder claims the green attribute.
 2. **An individual `ErcCertificate`** — the provenance record. Keyed by a string `certificate_id` (≤64 bytes), it is a serial-numbered atomic proof of one admitted generation event with an immutable `energy_amount` (kWh). The certificate is *not* fungible (no per-account balance, ownership moves whole via `transfer`); it anchors the certificate-level lifecycle and anti-double-claim.
 
 `issue_erc` does both at once: it writes the `ErcCertificate` **and** mints `energy_amount × 1_000` REC base units to the producer's REC ATA (1 token per MWh certified). The energy *commodity* token (GRID, 9-dec) is separate again — GRID is the kWh of energy, the REC token is its renewable attribute.
@@ -44,7 +44,7 @@ State machine: `issue` → **Valid** → `validate_for_trading` → **(tradable)
 
 Note the **no-`String`-on-chain** convention: strings are fixed `[u8; N]` + a `*_len`, rehydrated with `from_utf8_lossy`.
 
-`GovernanceConfig` (singleton, `[b"poa_config"]`) holds the issuance policy: `erc_validation_enabled`, `min_energy_amount`/`max_erc_amount`, `erc_validity_period`, `require_oracle_validation`+`oracle_authority`, `allow_certificate_transfers`, and running stats (`total_ercs_issued/validated/revoked`, `total_energy_certified`).
+`GovernanceConfig` (singleton, `[b"governance_config"]`) holds the issuance policy: `erc_validation_enabled`, `min_energy_amount`/`max_erc_amount`, `erc_validity_period`, `require_oracle_validation`+`oracle_authority`, `allow_certificate_transfers`, and running stats (`total_ercs_issued/validated/revoked`, `total_energy_certified`).
 
 ---
 

@@ -59,9 +59,9 @@ describe("escrow-settlement", () => {
   const governanceProgram = anchor.workspace.Governance as Program<Governance>;
   const authority = provider.wallet.publicKey;
   const payer = (provider.wallet as any).payer as Keypair;
-  // Governance poa_config gates settlement (0.3); bootstrap.ts initializes it (operational).
-  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
-  // Settlement passes poa_config as the first remaining account.
+  // Governance governance_config gates settlement (0.3); bootstrap.ts initializes it (operational).
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
+  // Settlement passes governance_config as the first remaining account.
   const govRemaining = [{ pubkey: governanceConfigPda, isSigner: false, isWritable: false }];
 
   let marketPda: PublicKey;
@@ -319,7 +319,7 @@ describe("escrow-settlement", () => {
           treasuryProgram: null,
           treasuryState: null,
         } as any)
-        // gov (poa_config) @0, trade_nullifier @1 — order mirrors the handler reads.
+        // gov (governance_config) @0, trade_nullifier @1 — order mirrors the handler reads.
         .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }])
         .rpc();
     } catch (e: any) {
@@ -421,7 +421,7 @@ describe("escrow-settlement", () => {
         treasuryProgram: null,
         treasuryState: null,
       } as any)
-      // gov (poa_config) @0, trade_nullifier @1 — order mirrors the handler reads.
+      // gov (governance_config) @0, trade_nullifier @1 — order mirrors the handler reads.
       .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }])
       .instruction();
 

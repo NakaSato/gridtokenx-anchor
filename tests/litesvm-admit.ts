@@ -36,7 +36,7 @@ export function admitAggregator(svm: LiteSVM, aggregator: PublicKey): PublicKey 
 }
 
 /**
- * Fabricate a minimal `GovernanceConfig` at the canonical `poa_config` PDA via setAccount,
+ * Fabricate a minimal `GovernanceConfig` at the canonical `governance_config` PDA via setAccount,
  * so energy-token's `add_rec_validator`/`remove_rec_validator` (ERC-is-REC-issuer gate)
  * and trading's `require_governance_operational` maintenance check pass without deploying
  * or driving the governance program. Both readers only check owner + PDA + a few fixed
@@ -52,7 +52,7 @@ export function fabricateGovernanceConfig(
   authority: PublicKey,
   opts: { maintenanceMode?: boolean } = {},
 ): PublicKey {
-  const [pda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], GOVERNANCE_PROGRAM_ID);
+  const [pda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], GOVERNANCE_PROGRAM_ID);
   const data = Buffer.alloc(236);
   authority.toBuffer().copy(data, 8); // authority at [8..40]
   data[235] = opts.maintenanceMode ? 1 : 0;

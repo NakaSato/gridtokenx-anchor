@@ -48,7 +48,7 @@ describe("governance-dao-integration", () => {
   const shardId = 0;
 
   before(async () => {
-    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
     [zoneConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_config"), new BN(zoneId).toArrayLike(Buffer, 'le', 4)], governanceProgram.programId);
     [marketPda] = PublicKey.findProgramAddressSync([Buffer.from("market")], tradingProgram.programId);
     [zoneMarketPda] = PublicKey.findProgramAddressSync(

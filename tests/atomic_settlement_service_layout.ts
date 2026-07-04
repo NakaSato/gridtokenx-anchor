@@ -61,7 +61,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, "le", 4)],
       tradingProgram.programId
     );
-    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
 
     // Fresh mints, mint authority = provider wallet. Currency classic (6 dp),
     // energy Token-2022 (9 dp) — matching the production token programs the

@@ -4,7 +4,7 @@ import { PublicKey } from "@solana/web3.js";
 const GOVERNANCE_PROGRAM_ID = new PublicKey("BRQEyx7DHX1Ljx1eNTHUve52aHHwkWckBXGeL9FZPEgZ");
 
 const [governanceConfigPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from("poa_config")],
+    [Buffer.from("governance_config")],
     GOVERNANCE_PROGRAM_ID
 );
 

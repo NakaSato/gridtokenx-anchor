@@ -48,7 +48,7 @@ the **REC token issuer** (1 REC token = 1 MWh) — separating "who validates tra
 
 | On-chain role        | Corrected holder                                                  | Current code |
 | -------------------- | ----------------------------------------------------------------- | ------------ |
-| Governance authority | **ERC council, k-of-n multisig** (ERC chair + EGAT + MEA + PEA)    | single `Pubkey`, 2-step single→single ([`poa_config.rs:7`](../../programs/governance/src/state/poa_config.rs)) |
+| Governance authority | **ERC council, k-of-n multisig** (ERC chair + EGAT + MEA + PEA)    | single `Pubkey`, 2-step single→single ([`governance_config.rs:7`](../../programs/governance/src/state/governance_config.rs)) |
 | REC issuer gate      | **ERC** key (REC token issuer, 1 token = 1 MWh), **mandatory**    | opt-in `if rec_validators_count > 0` ([`energy-token/src/lib.rs:129`](../../programs/energy-token/src/lib.rs)) |
 | Aggregator admission | **ERC** (or MEA/PEA delegated per territory)                      | `admit_aggregator` exists but **unlinked** to the bond |
 | Validator bond       | **admitted aggregator only**                                      | any 10k GRX holder self-promotes ([`registry/src/lib.rs:743`](../../programs/registry/src/lib.rs)) |

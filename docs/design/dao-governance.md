@@ -26,7 +26,7 @@ This mirrors the platform's institutional-trust model: utilities hold admin auth
 | `execute_proposal()` | After expiry: finalize, check quorum, apply the change to `ZoneConfig` if passed. |
 | `initialize_zone_config(zone_id, incentive_multiplier, wheeling_charge)` | Seed a zone's governable config. |
 
-Flow: **create** (status Active) → **vote** until `expires_at` → **execute** after expiry. Execution checks quorum (`total_votes ≥ poa_config.min_quorum_votes`), passes on simple majority (`votes_for > votes_against`), and on pass writes the new value into `ZoneConfig`. Governable parameters: `IncentiveMultiplier`, `WheelingCharge`, `LossFactor` (must be > 0), `MaintenanceMode`.
+Flow: **create** (status Active) → **vote** until `expires_at` → **execute** after expiry. Execution checks quorum (`total_votes ≥ governance_config.min_quorum_votes`), passes on simple majority (`votes_for > votes_against`), and on pass writes the new value into `ZoneConfig`. Governable parameters: `IncentiveMultiplier`, `WheelingCharge`, `LossFactor` (must be > 0), `MaintenanceMode`.
 
 ---
 
@@ -47,7 +47,7 @@ Flow: **create** (status Active) → **vote** until `expires_at` → **execute**
 | `Proposal` (89 B) | `[b"proposal", target_zone, proposal_id]` | proposer, target_zone, parameter, new_value, votes_for/against, status (Active/Passed/Rejected/Executed/Cancelled), expires_at |
 | `VoteRecord` (90 B) | `[b"vote", proposal, voter]` | proposal, voter, choice, weight, voted_at |
 | `ZoneConfig` (46 B) | `[b"zone_config", zone_id]` | zone_id, incentive_multiplier, wheeling_charge, loss_factor, maintenance_mode, last_updated |
-| `GovernanceConfig` (singleton) | `[b"poa_config"]` | authority, pending_authority, min_quorum_votes, ERC policy + stats |
+| `GovernanceConfig` (singleton) | `[b"governance_config"]` | authority, pending_authority, min_quorum_votes, ERC policy + stats |
 
 The voter's `MeterAccount` is a registry zero-copy account; the DAO reads it via manual `bytemuck` deserialization to avoid the zero-copy loader overhead across the program boundary (`dao.rs:31,95`).
 

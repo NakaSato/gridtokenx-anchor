@@ -4,7 +4,7 @@ import type { Governance } from "../../target/types/governance";
 
 export const getGovernancePda = (programId: PublicKey) => {
     return PublicKey.findProgramAddressSync(
-        [Buffer.from("poa_config")],
+        [Buffer.from("governance_config")],
         programId
     )[0];
 };

@@ -50,7 +50,7 @@ describe("oracle-metering-integration", () => {
     [oracleDataPda] = PublicKey.findProgramAddressSync([Buffer.from("oracle_data")], oracleProgram.programId);
     [energyMintPda] = PublicKey.findProgramAddressSync([Buffer.from("mint_2022")], energyTokenProgram.programId);
     [energyTokenInfoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], energyTokenProgram.programId);
-    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
 
     // Bootstrap localnet if not already done by bootstrap script
     try {

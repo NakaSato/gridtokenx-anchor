@@ -16,7 +16,7 @@ async function main() {
   
   // Derive PoA Config PDA
   const [governanceConfigPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from('poa_config')],
+    [Buffer.from('governance_config')],
     governanceProgram.programId
   );
   

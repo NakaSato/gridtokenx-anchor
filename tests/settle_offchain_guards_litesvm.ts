@@ -216,7 +216,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   const nullifierPda = (user: PublicKey, orderId: Buffer) =>
     tpda([Buffer.from("nullifier"), user.toBuffer(), orderId]);
 
-  // Fabricate the governance GovernanceConfig at the canonical poa_config PDA (owned by the
+  // Fabricate the governance GovernanceConfig at the canonical governance_config PDA (owned by the
   // governance program) so settle_offchain_match's maintenance gate can read it. Plain Borsh
   // #[account] set directly — no need to deploy/drive governance. maintenance=true flips the
   // gate closed (is_operational() == false).
@@ -322,11 +322,11 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
         treasuryProgram: withTreasury ? treasuryId : null,
         treasuryState: withTreasury ? treasuryPda : null,
       } as any)
-      // Governance poa_config is remaining_accounts[0] (maintenance gate); the per-match
+      // Governance governance_config is remaining_accounts[0] (maintenance gate); the per-match
       // TradeNullifier is remaining_accounts[1] (writable — created on first settle, replay
       // guard); ZoneCapacity, when supplied (cross-zone), is remaining_accounts[2] (writable —
       // committed_flow counter).
-      // Governance poa_config is remaining_accounts[0] (maintenance gate); the per-match
+      // Governance governance_config is remaining_accounts[0] (maintenance gate); the per-match
       // TradeNullifier is remaining_accounts[1]; ZoneCapacity, when cross-zone, is [2]. The
       // OPT-IN REC group follows: [rec_base..] = rec_mint, seller_rec_escrow, buyer_rec_escrow,
       // rec_token_program, where rec_base = 3 cross-zone (slot [2] taken) else 2.
@@ -357,7 +357,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     energyId = energy.programId;
     treasuryId = treasury.programId;
     governance = new Program(governanceIdl, { connection: {}, publicKey: PublicKey.default } as any);
-    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], GOVERNANCE_PROGRAM_ID);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], GOVERNANCE_PROGRAM_ID);
     await installGovernanceConfig(false); // operational by default
     svm.addProgramFromFile(tradingId, "target/deploy/trading.so");
     svm.addProgramFromFile(energyId, "target/deploy/energy_token.so");
@@ -759,7 +759,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   });
 
   it("rejects settlement while the system is in maintenance mode (MaintenanceMode)", async () => {
-    // Governance gate (0.3): flip poa_config maintenance on and confirm the fund-moving
+    // Governance gate (0.3): flip governance_config maintenance on and confirm the fund-moving
     // settle path halts. Restore operational afterwards so later tests are unaffected.
     await installGovernanceConfig(true);
     try {

@@ -29,8 +29,8 @@ describe("registry_staking", () => {
 
   // register_validator now requires a governance-admitted aggregator entry (0.1). Admit the
   // validator (governance authority = provider wallet) and return its AggregatorEntry PDA.
-  // bootstrap.ts initializes the governance poa_config.
-  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governance.programId);
+  // bootstrap.ts initializes the governance governance_config.
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governance.programId);
   async function admitValidator(v: PublicKey): Promise<PublicKey> {
     const [entry] = PublicKey.findProgramAddressSync([Buffer.from("aggregator"), v.toBuffer()], governance.programId);
     try {

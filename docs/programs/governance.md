@@ -34,7 +34,7 @@ The `compute_fn!` macro is a no-op outside the `localnet` feature; the program d
 
 ### 2.1 PoA authority model
 
-The program records a single `authority` pubkey — the REC certifying entity — on the `GovernanceConfig` singleton (`programs/governance/src/state/poa_config.rs:8`). On initialization the authority is set to the initializing signer, with a fixed authority name of `"REC"` and a fixed contact string (`programs/governance/src/handlers/initialize.rs:10-23`). Every administrative instruction context that mutates configuration or certificates enforces `has_one = authority` against this field, rejecting non-authority callers with `GovernanceError::UnauthorizedAuthority` (e.g. `programs/governance/src/contexts.rs:31`, `:90`, `:108`, `:149`, `:172`, `:210`, `:224`, `:247`, `:350`).
+The program records a single `authority` pubkey — the REC certifying entity — on the `GovernanceConfig` singleton (`programs/governance/src/state/governance_config.rs:8`). On initialization the authority is set to the initializing signer, with a fixed authority name of `"REC"` and a fixed contact string (`programs/governance/src/handlers/initialize.rs:10-23`). Every administrative instruction context that mutates configuration or certificates enforces `has_one = authority` against this field, rejecting non-authority callers with `GovernanceError::UnauthorizedAuthority` (e.g. `programs/governance/src/contexts.rs:31`, `:90`, `:108`, `:149`, `:172`, `:210`, `:224`, `:247`, `:350`).
 
 ### 2.2 ERC-1155-style Renewable Energy Certificates (RECs)
 
@@ -52,41 +52,41 @@ The PoA authority admits off-chain validator nodes ("aggregators") to an on-chai
 
 All persistent accounts in this program are regular Anchor `#[account]` structures (Borsh-serialized) rather than zero-copy. The one exception is `MeterAccount`, a zero-copy `#[repr(C)]` mirror of the registry program's layout used solely for `bytemuck` reads of registry-owned accounts (`programs/governance/src/state/meter_account.rs:5-19`); the governance program never initializes a `MeterAccount`.
 
-### 3.1 `GovernanceConfig` — `state/poa_config.rs`
+### 3.1 `GovernanceConfig` — `state/governance_config.rs`
 
-The platform singleton. PDA seed `[b"poa_config"]` (`programs/governance/src/contexts.rs:13`). Regular `#[account]` (`programs/governance/src/state/poa_config.rs:4`). Allocated space is `8 + GovernanceConfig::LEN` (`programs/governance/src/contexts.rs:12`), where `LEN = 405` bytes summed field-by-field at `programs/governance/src/state/poa_config.rs:76-116`. A compile-time test asserts `size_of::<GovernanceConfig>() == 405` (`programs/governance/src/size_test.rs:6`).
+The platform singleton. PDA seed `[b"governance_config"]` (`programs/governance/src/contexts.rs:13`). Regular `#[account]` (`programs/governance/src/state/governance_config.rs:4`). Allocated space is `8 + GovernanceConfig::LEN` (`programs/governance/src/contexts.rs:12`), where `LEN = 405` bytes summed field-by-field at `programs/governance/src/state/governance_config.rs:76-116`. A compile-time test asserts `size_of::<GovernanceConfig>() == 405` (`programs/governance/src/size_test.rs:6`).
 
 | Field | Type | Purpose | Citation |
 | --- | --- | --- | --- |
-| `authority` | `Pubkey` | Current PoA authority (REC entity) | `state/poa_config.rs:8` |
-| `authority_name` / `name_len` | `[u8; 64]` / `u8` | Fixed-buffer authority name | `state/poa_config.rs:10-11` |
-| `contact_info` / `contact_len` | `[u8; 128]` / `u8` | Fixed-buffer contact string | `state/poa_config.rs:13-14` |
-| `version` | `u8` | Governance schema version | `state/poa_config.rs:16` |
-| `maintenance_mode` | `bool` | Global pause flag | `state/poa_config.rs:20` |
-| `erc_validation_enabled` | `bool` | Whether ERC issuance is permitted | `state/poa_config.rs:24` |
-| `min_energy_amount` | `u64` | Minimum kWh per ERC | `state/poa_config.rs:26` |
-| `max_erc_amount` | `u64` | Maximum kWh per ERC | `state/poa_config.rs:28` |
-| `erc_validity_period` | `i64` | ERC validity window (seconds) | `state/poa_config.rs:30` |
-| `require_oracle_validation` | `bool` | Whether oracle validation is required for issuance | `state/poa_config.rs:32` |
-| `oracle_authority` | `Pubkey` | Configured oracle authority | `state/poa_config.rs:36` |
-| `min_oracle_confidence` | `u8` | Minimum oracle confidence (0–100) | `state/poa_config.rs:38` |
-| `allow_certificate_transfers` | `bool` | Whether ERC transfers are enabled | `state/poa_config.rs:40` |
-| `min_quorum_votes` | `u64` | Minimum total votes for DAO quorum | `state/poa_config.rs:44` |
-| `total_ercs_issued` | `u64` | Lifetime issuance count | `state/poa_config.rs:48` |
-| `total_ercs_validated` | `u64` | Lifetime validation count | `state/poa_config.rs:50` |
-| `total_ercs_revoked` | `u64` | Lifetime revocation count | `state/poa_config.rs:52` |
-| `total_energy_certified` | `u64` | Lifetime certified kWh | `state/poa_config.rs:54` |
-| `created_at` | `i64` | Initialization timestamp | `state/poa_config.rs:58` |
-| `last_updated` | `i64` | Last mutation timestamp | `state/poa_config.rs:60` |
-| `last_erc_issued_at` | `i64` | Last issuance timestamp | `state/poa_config.rs:62` |
-| `pending_authority` | `Pubkey` | Proposed next authority (`default` = none) | `state/poa_config.rs:66` |
-| `pending_authority_proposed_at` | `i64` | When the change was proposed | `state/poa_config.rs:68` |
-| `pending_authority_expires_at` | `i64` | When the proposal expires | `state/poa_config.rs:70` |
-| `_reserved` | `[u8; 5]` | Reserved padding for future fields | `state/poa_config.rs:72` |
+| `authority` | `Pubkey` | Current PoA authority (REC entity) | `state/governance_config.rs:8` |
+| `authority_name` / `name_len` | `[u8; 64]` / `u8` | Fixed-buffer authority name | `state/governance_config.rs:10-11` |
+| `contact_info` / `contact_len` | `[u8; 128]` / `u8` | Fixed-buffer contact string | `state/governance_config.rs:13-14` |
+| `version` | `u8` | Governance schema version | `state/governance_config.rs:16` |
+| `maintenance_mode` | `bool` | Global pause flag | `state/governance_config.rs:20` |
+| `erc_validation_enabled` | `bool` | Whether ERC issuance is permitted | `state/governance_config.rs:24` |
+| `min_energy_amount` | `u64` | Minimum kWh per ERC | `state/governance_config.rs:26` |
+| `max_erc_amount` | `u64` | Maximum kWh per ERC | `state/governance_config.rs:28` |
+| `erc_validity_period` | `i64` | ERC validity window (seconds) | `state/governance_config.rs:30` |
+| `require_oracle_validation` | `bool` | Whether oracle validation is required for issuance | `state/governance_config.rs:32` |
+| `oracle_authority` | `Pubkey` | Configured oracle authority | `state/governance_config.rs:36` |
+| `min_oracle_confidence` | `u8` | Minimum oracle confidence (0–100) | `state/governance_config.rs:38` |
+| `allow_certificate_transfers` | `bool` | Whether ERC transfers are enabled | `state/governance_config.rs:40` |
+| `min_quorum_votes` | `u64` | Minimum total votes for DAO quorum | `state/governance_config.rs:44` |
+| `total_ercs_issued` | `u64` | Lifetime issuance count | `state/governance_config.rs:48` |
+| `total_ercs_validated` | `u64` | Lifetime validation count | `state/governance_config.rs:50` |
+| `total_ercs_revoked` | `u64` | Lifetime revocation count | `state/governance_config.rs:52` |
+| `total_energy_certified` | `u64` | Lifetime certified kWh | `state/governance_config.rs:54` |
+| `created_at` | `i64` | Initialization timestamp | `state/governance_config.rs:58` |
+| `last_updated` | `i64` | Last mutation timestamp | `state/governance_config.rs:60` |
+| `last_erc_issued_at` | `i64` | Last issuance timestamp | `state/governance_config.rs:62` |
+| `pending_authority` | `Pubkey` | Proposed next authority (`default` = none) | `state/governance_config.rs:66` |
+| `pending_authority_proposed_at` | `i64` | When the change was proposed | `state/governance_config.rs:68` |
+| `pending_authority_expires_at` | `i64` | When the proposal expires | `state/governance_config.rs:70` |
+| `_reserved` | `[u8; 5]` | Reserved padding for future fields | `state/governance_config.rs:72` |
 
-`GovernanceConfig` provides three helper predicates: `validate_config` (range checks on energy limits, validity period, and confidence; `programs/governance/src/state/poa_config.rs:119-137`), `is_operational` (`!maintenance_mode`; `:140-142`), and `can_issue_erc` (operational AND `erc_validation_enabled`; `:145-147`).
+`GovernanceConfig` provides three helper predicates: `validate_config` (range checks on energy limits, validity period, and confidence; `programs/governance/src/state/governance_config.rs:119-137`), `is_operational` (`!maintenance_mode`; `:140-142`), and `can_issue_erc` (operational AND `erc_validation_enabled`; `:145-147`).
 
-`GovernanceStats` (`programs/governance/src/state/poa_config.rs:150-191`) is a Borsh return type, not an account; it is the projection returned by `get_governance_stats`.
+`GovernanceStats` (`programs/governance/src/state/governance_config.rs:150-191`) is a Borsh return type, not an account; it is the projection returned by `get_governance_stats`.
 
 ### 3.2 `ErcCertificate` — `state/erc_certificate.rs`
 
@@ -185,7 +185,7 @@ Instructions are dispatched in `programs/governance/src/lib.rs:41-215` and imple
 #### `initialize_governance`
 
 - **Signers:** `authority` (becomes the PoA authority).
-- **Accounts:** `governance_config` (`init`, seed `[b"poa_config"]`), `authority`, `system_program` (`programs/governance/src/contexts.rs:8-20`).
+- **Accounts:** `governance_config` (`init`, seed `[b"governance_config"]`), `authority`, `system_program` (`programs/governance/src/contexts.rs:8-20`).
 - **Preconditions:** none beyond PDA non-existence; `validate_config` must pass.
 - **Effects:** Sets authority to the signer; fixed name `"REC"` and contact `"engineering_erc@utcc.ac.th"`; defaults `version=1`, `maintenance_mode=false`, `erc_validation_enabled=true`, `min_energy_amount=100`, `max_erc_amount=1_000_000`, `erc_validity_period=31_536_000` (1 year), `require_oracle_validation=false`, `min_oracle_confidence=80`, `allow_certificate_transfers=true`, `min_quorum_votes=100`; zeroes counters and pending-authority state; validates config (`programs/governance/src/handlers/initialize.rs:10-66`).
 - **Event:** `GovernanceInitialized` (`programs/governance/src/handlers/initialize.rs:68-72`).
@@ -309,7 +309,7 @@ A read-only view returning a `GovernanceStats` value projecting `GovernanceConfi
 
 ### 5.1 PoA authority gating
 
-All configuration-mutating, ERC-administrative (issue, validate, revoke), zone-initialization, oracle-configuration, and aggregator instructions enforce `has_one = authority` on the `governance_config` PDA, rejecting non-authority signers with `UnauthorizedAuthority` (`programs/governance/src/contexts.rs:31`, `:90`, `:108`, `:149`, `:172`, `:196`, `:210`, `:224`, `:247`, `:350`). The singleton PDA seed `[b"poa_config"]` guarantees a single canonical config account (`programs/governance/src/contexts.rs:13`).
+All configuration-mutating, ERC-administrative (issue, validate, revoke), zone-initialization, oracle-configuration, and aggregator instructions enforce `has_one = authority` on the `governance_config` PDA, rejecting non-authority signers with `UnauthorizedAuthority` (`programs/governance/src/contexts.rs:31`, `:90`, `:108`, `:149`, `:172`, `:196`, `:210`, `:224`, `:247`, `:350`). The singleton PDA seed `[b"governance_config"]` guarantees a single canonical config account (`programs/governance/src/contexts.rs:13`).
 
 ### 5.2 Two-step transfer safety
 

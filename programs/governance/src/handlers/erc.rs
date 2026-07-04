@@ -34,20 +34,20 @@ pub fn issue(
         (meter_owner, unclaimed)
     };
 
-    let poa_config = &mut ctx.accounts.governance_config;
+    let governance_config = &mut ctx.accounts.governance_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
 
     // Operational and config validation
     require!(
-        poa_config.can_issue_erc(),
+        governance_config.can_issue_erc(),
         GovernanceError::ErcValidationDisabled
     );
     require!(
-        energy_amount >= poa_config.min_energy_amount,
+        energy_amount >= governance_config.min_energy_amount,
         GovernanceError::BelowMinimumEnergy
     );
     require!(
-        energy_amount <= poa_config.max_erc_amount,
+        energy_amount <= governance_config.max_erc_amount,
         GovernanceError::ExceedsMaximumEnergy
     );
     require!(
@@ -70,9 +70,9 @@ pub fn issue(
     );
 
     // Check oracle requirement
-    if poa_config.require_oracle_validation {
+    if governance_config.require_oracle_validation {
         require!(
-            poa_config.oracle_authority!= Pubkey::default(),
+            governance_config.oracle_authority!= Pubkey::default(),
             GovernanceError::OracleValidationRequired
         );
     }
@@ -117,7 +117,7 @@ pub fn issue(
     erc_certificate.issued_at = clock.unix_timestamp;
     erc_certificate.status = ErcStatus::Valid;
     erc_certificate.validated_for_trading = false;
-    erc_certificate.expires_at = Some(clock.unix_timestamp + poa_config.erc_validity_period);
+    erc_certificate.expires_at = Some(clock.unix_timestamp + governance_config.erc_validity_period);
 
     // Initialize revocation / transfer tracking fields
     erc_certificate.revocation_reason = [0u8; 128];
@@ -127,12 +127,12 @@ pub fn issue(
     erc_certificate.last_transferred_at = None;
 
     // Update comprehensive statistics
-    poa_config.total_ercs_issued = poa_config.total_ercs_issued.saturating_add(1);
-    poa_config.total_energy_certified = poa_config
+    governance_config.total_ercs_issued = governance_config.total_ercs_issued.saturating_add(1);
+    governance_config.total_energy_certified = governance_config
         .total_energy_certified
         .saturating_add(energy_amount);
-    poa_config.last_updated = clock.unix_timestamp;
-    poa_config.last_erc_issued_at = clock.unix_timestamp;
+    governance_config.last_updated = clock.unix_timestamp;
+    governance_config.last_erc_issued_at = clock.unix_timestamp;
 
     emit!(ErcIssued {
         certificate_id,
@@ -150,7 +150,7 @@ pub fn issue(
         .checked_mul(1_000)
         .ok_or(GovernanceError::MathOverflow)?;
     let gov_bump = ctx.bumps.governance_config;
-    let seeds: &[&[u8]] = &[b"poa_config", std::slice::from_ref(&gov_bump)];
+    let seeds: &[&[u8]] = &[b"governance_config", std::slice::from_ref(&gov_bump)];
     let signer = &[seeds];
     let cpi_accounts = token_interface::MintTo {
         mint: ctx.accounts.rec_mint.to_account_info(),
@@ -202,13 +202,13 @@ pub fn retire_rec(ctx: Context<RetireRec>, amount: u64) -> Result<()> {
 }
 
 pub fn validate_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
-    let poa_config = &mut ctx.accounts.governance_config;
+    let governance_config = &mut ctx.accounts.governance_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let clock = Clock::get()?;
 
     // Operational checks
     require!(
-        poa_config.is_operational(),
+        governance_config.is_operational(),
         GovernanceError::MaintenanceMode
     );
     require!(
@@ -233,8 +233,8 @@ pub fn validate_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
     erc_certificate.trading_validated_at = Some(clock.unix_timestamp);
 
     // Update statistics
-    poa_config.total_ercs_validated = poa_config.total_ercs_validated.saturating_add(1);
-    poa_config.last_updated = clock.unix_timestamp;
+    governance_config.total_ercs_validated = governance_config.total_ercs_validated.saturating_add(1);
+    governance_config.last_updated = clock.unix_timestamp;
 
     emit!(ErcValidatedForTrading {
         certificate_id: String::from_utf8_lossy(
@@ -250,13 +250,13 @@ pub fn validate_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
 
 /// Revoke an ERC certificate - REC authority only
 pub fn revoke(ctx: Context<crate::RevokeErc>, reason: String) -> Result<()> {
-    let poa_config = &mut ctx.accounts.governance_config;
+    let governance_config = &mut ctx.accounts.governance_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let clock = Clock::get()?;
 
     // Operational checks
     require!(
-        poa_config.is_operational(),
+        governance_config.is_operational(),
         GovernanceError::MaintenanceMode
     );
 
@@ -285,8 +285,8 @@ pub fn revoke(ctx: Context<crate::RevokeErc>, reason: String) -> Result<()> {
     erc_certificate.validated_for_trading = false;
 
     // Update statistics
-    poa_config.total_ercs_revoked = poa_config.total_ercs_revoked.saturating_add(1);
-    poa_config.last_updated = clock.unix_timestamp;
+    governance_config.total_ercs_revoked = governance_config.total_ercs_revoked.saturating_add(1);
+    governance_config.last_updated = clock.unix_timestamp;
 
     // Write reason bytes BEFORE emitting the event so `reason` can be moved
     // into emit! without a heap-allocating .clone().
@@ -313,19 +313,19 @@ pub fn revoke(ctx: Context<crate::RevokeErc>, reason: String) -> Result<()> {
 
 /// Transfer ERC ownership
 pub fn transfer(ctx: Context<crate::TransferErc>) -> Result<()> {
-    let poa_config = &mut ctx.accounts.governance_config;
+    let governance_config = &mut ctx.accounts.governance_config;
     let erc_certificate = &mut ctx.accounts.erc_certificate;
     let clock = Clock::get()?;
 
     // Operational checks
     require!(
-        poa_config.is_operational(),
+        governance_config.is_operational(),
         GovernanceError::MaintenanceMode
     );
 
     // Transfers must be enabled OR sender is authority (Issuance transfer)
     require!(
-        poa_config.allow_certificate_transfers || erc_certificate.owner == poa_config.authority,
+        governance_config.allow_certificate_transfers || erc_certificate.owner == governance_config.authority,
         GovernanceError::TransfersNotAllowed
     );
 

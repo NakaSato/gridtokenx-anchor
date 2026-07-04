@@ -32,7 +32,7 @@ async function main() {
     [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, "le", 4)],
     trading.programId
   );
-  const [govCfgPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governance.programId);
+  const [govCfgPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governance.programId);
   const currencyMint = Keypair.fromSecretKey(
     Uint8Array.from(JSON.parse(fs.readFileSync("currency-mint.json", "utf8")))
   ).publicKey;

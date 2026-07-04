@@ -9,7 +9,7 @@ async function main() {
     const authority = provider.wallet;
 
     const [governanceConfigPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("poa_config")],
+        [Buffer.from("governance_config")],
         program.programId
     );
 

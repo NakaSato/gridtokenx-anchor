@@ -29,7 +29,7 @@ pub use error::EnergyTokenError;
 pub use events::*;
 pub use state::*;
 
-/// Governance program ID — owner of the `poa_config` (GovernanceConfig) PDA, the ERC
+/// Governance program ID — owner of the `governance_config` (GovernanceConfig) PDA, the ERC
 /// governance authority. Hardcoded rather than imported: `registry` already depends on
 /// `energy-token` for CPI, and `governance` depends on `registry` for CPI, so
 /// `energy-token -> governance` as a path dep would cycle
@@ -39,13 +39,13 @@ pub use state::*;
 /// `Anchor.toml [programs.localnet].governance`.
 pub const GOVERNANCE_PROGRAM_ID: Pubkey = pubkey!("FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS");
 
-/// Validate `info` is the canonical governance `poa_config` PDA and return the
+/// Validate `info` is the canonical governance `governance_config` PDA and return the
 /// `GovernanceConfig.authority` pubkey it contains (ERC's governance authority — the only
 /// entity allowed to register/remove REC validators, per role-map.md's "REC issuer = ERC"
 /// binding). Layout: [0..8] disc | [8..40] authority.
 fn governance_authority(info: &AccountInfo) -> Result<Pubkey> {
     require_keys_eq!(*info.owner, GOVERNANCE_PROGRAM_ID, EnergyTokenError::InvalidGovernanceAccount);
-    let (expected, _bump) = Pubkey::find_program_address(&[b"poa_config"], &GOVERNANCE_PROGRAM_ID);
+    let (expected, _bump) = Pubkey::find_program_address(&[b"governance_config"], &GOVERNANCE_PROGRAM_ID);
     require_keys_eq!(*info.key, expected, EnergyTokenError::InvalidGovernanceAccount);
     let data = info.try_borrow_data()?;
     require!(data.len() >= 40, EnergyTokenError::InvalidGovernanceAccount);
@@ -780,7 +780,7 @@ pub struct AddRecValidator<'info> {
     #[account(mut)]
     pub token_info: AccountLoader<'info, TokenInfo>,
 
-    /// The governance `poa_config` PDA — its `authority` (ERC) is the only signer allowed
+    /// The governance `governance_config` PDA — its `authority` (ERC) is the only signer allowed
     /// to register/remove REC validators, checked in the handler body. Not typed as a
     /// `governance::GovernanceConfig` account: importing that crate would create a Cargo
     /// cycle (see `GOVERNANCE_PROGRAM_ID`).

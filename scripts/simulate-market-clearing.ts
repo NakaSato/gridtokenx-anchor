@@ -51,7 +51,7 @@ async function main() {
     [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, "le", 4)],
     tradingProgram.programId
   );
-  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
 
   console.log("📈 Starting Batch Market Clearing Simulator...");
   console.log("Generating randomized order book...");

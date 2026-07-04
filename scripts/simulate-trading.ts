@@ -30,7 +30,7 @@ async function main() {
     [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, 'le', 4)],
     tradingProgram.programId
   );
-  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
 
   console.log(`Using Market: ${marketPda.toBase58()}`);
   console.log(`Using Zone Market (0): ${zoneMarketPda.toBase58()}`);

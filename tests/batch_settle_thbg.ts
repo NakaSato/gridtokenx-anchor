@@ -86,8 +86,8 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
   const treasury = anchor.workspace.Treasury as Program<Treasury>;
   const authority = provider.wallet.publicKey;
   const governance = anchor.workspace.Governance as Program<Governance>;
-  // Governance poa_config gates settlement (0.3); bootstrap.ts inits it (operational).
-  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governance.programId);
+  // Governance governance_config gates settlement (0.3); bootstrap.ts inits it (operational).
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governance.programId);
   const payer = (provider.wallet as any).payer as Keypair;
 
   const zoneId = 0;
@@ -301,7 +301,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
         tradeNullifier,
       );
     }
-    // Pair accounts (match_count*7, incl. per-match trade_nullifier) followed by ONE trailing governance poa_config account (0.3).
+    // Pair accounts (match_count*7, incl. per-match trade_nullifier) followed by ONE trailing governance governance_config account (0.3).
     const remainingMeta = [
       ...remaining.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true })),
       { pubkey: governanceConfigPda, isSigner: false, isWritable: false },

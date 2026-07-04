@@ -143,7 +143,7 @@ Adding `zone_capacity` as a typed `Option<AccountLoader<ZoneCapacity>>` FIELD to
 frame" (the single settle context is already at the ceiling; see [[settle-context-stack-limit]]).
 So `zone_capacity` MUST be passed via `remaining_accounts` with MANUAL validation (PDA derive +
 owner + `zone_market` binding + manual `load_mut`/write of `committed_flow`), exactly like the
-governance `poa_config` workaround already in the batch path. The batch context MAY have room for
+governance `governance_config` workaround already in the batch path. The batch context MAY have room for
 a typed field (fewer named accounts) but for uniformity use remaining_accounts on both. This makes
 step 2 meaningfully more involved than a typed Option field. Step 1 (ZoneCapacity PDA + init) is
 landed on branch `feat/tier-a-zone-capacity` (PR #3) and is unaffected.

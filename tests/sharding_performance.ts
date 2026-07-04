@@ -35,7 +35,7 @@ describe("sharding-performance", () => {
 
   before(async () => {
     [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], registryProgram.programId);
-    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
     [marketPda] = PublicKey.findProgramAddressSync([Buffer.from("market")], tradingProgram.programId);
     [zoneMarketPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, 'le', 4)],

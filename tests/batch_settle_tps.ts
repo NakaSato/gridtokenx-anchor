@@ -85,8 +85,8 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   const treasury = anchor.workspace.Treasury as Program<Treasury>;
   const authority = provider.wallet.publicKey;
   const governance = anchor.workspace.Governance as Program<Governance>;
-  // Governance poa_config gates settlement (0.3); bootstrap.ts inits it (operational).
-  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governance.programId);
+  // Governance governance_config gates settlement (0.3); bootstrap.ts inits it (operational).
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governance.programId);
   const payer = (provider.wallet as any).payer as Keypair;
 
   const zoneId = 0;
@@ -255,7 +255,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       escrowPda(buyer.publicKey, energyMintPda),
       tradeNullifier, // per-match replay guard (7th per-pair account)
     ].map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
-    // Trailing governance poa_config account (0.3 settlement gate).
+    // Trailing governance governance_config account (0.3 settlement gate).
     remaining.push({ pubkey: governanceConfigPda, isSigner: false, isWritable: false });
 
     // §2c Part B: the caller-chosen settle shard. Under SHARD_SPREAD, rotate it per

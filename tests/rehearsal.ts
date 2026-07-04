@@ -26,7 +26,7 @@ describe("Island Cluster Rehearsal", () => {
       );
 
       const [governanceConfigPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("poa_config")],
+        [Buffer.from("governance_config")],
         govProgram.programId
       );
 

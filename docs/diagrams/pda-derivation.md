@@ -145,7 +145,7 @@ From `SKILL.md` invariant #3 + the program map:
 - **Program-controlled vaults** — treasury's **three** GRX vaults (`swap_vault`, `stake_vault`,
   `reward_vault`) + THBG mint authority = `[b"treasury"]` PDA. Registry's `grx_vault`
   (`[b"grx_vault"]`) for validator bonds. All moved via `invoke_signed`, no custodial key.
-- **Config singletons** — e.g. governance `[b"poa_config"]` (PDA seed kept even after the
+- **Config singletons** — e.g. governance `[b"governance_config"]` (PDA seed kept even after the
   `PoAConfig→GovernanceConfig` type rename, per memory). One canonical address per program.
 - **Bump storage** — zero-copy structs store their bump field; hot instructions pass
   `bump = stored` to skip the 255-iteration search (compute-unit discipline, SKILL #4).
@@ -178,5 +178,5 @@ by re-presenting seeds + bump, which the runtime recomputes against the caller's
 once at init, **store the bump**, and re-derive cheaply afterward. This repo uses PDAs for
 deterministic per-entity hot accounts (`MeterState`/`Order`/`*Shard` → Sealevel parallelism),
 keyless program vaults (treasury's three GRX vaults, registry bond vault), and config singletons
-(`poa_config`) — with bump storage and `remaining_accounts` discipline to respect CU and BPF
+(`governance_config`) — with bump storage and `remaining_accounts` discipline to respect CU and BPF
 stack limits.

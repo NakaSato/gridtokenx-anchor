@@ -5,7 +5,7 @@
 // remaining_accounts[0..4] = [rec_mint, seller_rec_escrow, buyer_rec_escrow, rec_token_program].
 //
 // All token state is fabricated with svm.setAccount (the rec_mint authority is the
-// governance poa_config PDA, so it can't be minted to in-test) — no validator, no
+// governance governance_config PDA, so it can't be minted to in-test) — no validator, no
 // issue_erc funding chain. Orders are real (createSellOrder/createBuyOrder).
 
 import { LiteSVM, FailedTransactionMetadata } from "litesvm";
@@ -107,12 +107,12 @@ describe("execute_atomic_settlement REC leg (litesvm)", () => {
     [zoneMarketPda] = PublicKey.findProgramAddressSync(
       [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(ZONE).toArrayLike(Buffer, "le", 4)], tradingId);
     [recMintPda] = PublicKey.findProgramAddressSync([Buffer.from("rec_mint")], governanceId);
-    [cfgPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceId);
+    [cfgPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceId);
 
     await send([await trading.methods.initializeMarket(16).accounts({ market: marketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()]);
     await send([await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000)).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()]);
 
-    // Fabricate the governance poa_config (operational) so the gate + create-order pass.
+    // Fabricate the governance governance_config (operational) so the gate + create-order pass.
     const now = 1_000_000;
     const cfg = {
       authority: payer.publicKey, authorityName: Array(64).fill(0), nameLen: 0,

@@ -29,7 +29,7 @@ async function main() {
   const oracleProgram = anchor.workspace.Oracle as Program<Oracle>;
   const energyTokenProgram = anchor.workspace.EnergyToken as Program<EnergyToken>;
   const governanceProgram = anchor.workspace.Governance as Program<Governance>;
-  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
 
   // Load users
   const prosumerKey = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync("test-wallet-prosumer.json", "utf8"))));

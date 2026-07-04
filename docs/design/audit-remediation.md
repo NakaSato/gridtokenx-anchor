@@ -13,7 +13,7 @@
 |---|-----|-------|----------|
 | 0.1 | Validator bond requires a governance-admitted aggregator entry (no self-promotion) | `registry::register_validator` + `GOVERNANCE_PROGRAM_ID` | litesvm |
 | 0.2 | Slash-escape closed — Active validator can't unstake below MIN to dodge a slash | `registry::unstake_grx` | litesvm |
-| 0.3 | Settlement gated on governance maintenance mode (was ungated fund path) | `trading::settle_offchain_match` / `batch_settle_offchain_match` (gov `poa_config` via `remaining_accounts` — [[settle-context-stack-limit]]) | litesvm (single) |
+| 0.3 | Settlement gated on governance maintenance mode (was ungated fund path) | `trading::settle_offchain_match` / `batch_settle_offchain_match` (gov `governance_config` via `remaining_accounts` — [[settle-context-stack-limit]]) | litesvm (single) |
 | 0.4 | Network charges (wheeling+loss) capped vs trade value (anti seller-siphon) | `trading` `net_seller_after_charges`, `MAX_NETWORK_CHARGE_BPS` | litesvm (single) |
 | 0.5 | REC provenance mandatory — no `rec_validators_count > 0` opt-out | `energy-token::mint_to_wallet` / `mint_generation` | litesvm |
 
@@ -35,7 +35,7 @@ Full in-process suite green: **`npm run test:litesvm` → 142 passing.**
 
 The program changes above changed three instruction shapes; these validator-suite callers were
 updated to match but are **not runnable in-process** (need `anchor test` against a bootstrapped
-validator). Pattern: `bootstrap.ts` inits governance `poa_config` (operational) + energy token but
+validator). Pattern: `bootstrap.ts` inits governance `governance_config` (operational) + energy token but
 registers no REC validator and admits no aggregator, so each test self-provisions idempotently
 (`addRecValidator` / `admitAggregator`).
 

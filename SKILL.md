@@ -118,7 +118,7 @@ The sibling Rust client library hardcodes Anchor's 8-byte SHA256 discriminators 
 | ------------ | -------------------------------------------------------------- | ----------------------------- |
 | energy-token | `[b"mint_2022"]`                                               | SPL-2022 mint                 |
 | energy-token | `[b"token_info_2022"]`                                         | `TokenInfo` config PDA        |
-| governance   | `[b"poa_config"]`                                              | `GovernanceConfig`                   |
+| governance   | `[b"governance_config"]`                                              | `GovernanceConfig`                   |
 | governance   | `[b"erc_certificate", certificate_id.as_bytes()]`             | One per ERC                   |
 | oracle       | `[b"oracle_data"]`                                             | `OracleData` config           |
 | oracle       | `[b"meter", meter_id.as_bytes()]`                             | Per-meter `MeterState`        |

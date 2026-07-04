@@ -1,7 +1,7 @@
 // Litesvm coverage for the FUNGIBLE REC token (1 token = 1 MWh, 6 decimals).
 //
 // REC is now a Token-2022 SPL mint (PDA [b"rec_mint"], mint authority = the governance
-// [b"poa_config"] PDA). `issue_erc` mints REC to the producer alongside the provenance
+// [b"governance_config"] PDA). `issue_erc` mints REC to the producer alongside the provenance
 // certificate; `retire_rec` burns them. Energy is metered in kWh and the mint has 6
 // decimals, so 1 MWh = 1_000_000 base units and 1 kWh = 1_000 base units.
 //
@@ -132,7 +132,7 @@ describe("governance fungible REC token (litesvm)", () => {
     shardId = user.publicKey.toBytes()[0] % 16;
     [shardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([shardId])], regId);
     [meterPda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), user.publicKey.toBuffer(), Buffer.from(METER_ID)], regId);
-    [poaPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], govId);
+    [poaPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], govId);
     [recMint] = PublicKey.findProgramAddressSync([Buffer.from("rec_mint")], govId);
     [ercPda] = PublicKey.findProgramAddressSync([Buffer.from("erc_certificate"), Buffer.from(CERT_ID)], govId);
     userRecAta = getAssociatedTokenAddressSync(recMint, user.publicKey, false, TOKEN_2022_PROGRAM_ID);
