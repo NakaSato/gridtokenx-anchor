@@ -41,7 +41,9 @@ registers no REC validator and admits no aggregator, so each test self-provision
 
 - `tests/staking.ts` (0.1 — admit + `aggregatorEntry`)
 - `tests/escrow_settlement.ts` (0.3 gov remaining acct + 0.5 REC)
-- `tests/batch_settle_thbg.ts`, `tests/batch_settle_tps.ts` (0.3 trailing gov acct + 0.5 REC)
+- `tests/batch_settle_thbg.ts` — **verified live** (self-documented "RUNTIME-VERIFIED on a live
+  validator", 1/1 green), not actually pending despite this table's original framing.
+- `tests/batch_settle_tps.ts` (0.3 trailing gov acct + 0.5 REC)
 - `tests/generation_mint_idempotency.ts` (0.5 REC)
 - `scripts/simulate-token-lifecycle.ts` (0.1 admit + 0.5 REC + zone arg)
 - Zone-binding `register_meter` arg added to: `tests/governance_dao.ts` (meter zone = proposal zone 301), `tests/oracle_integration.ts`, `tests/governance.ts` (zone 0). The litesvm callers (`cu_profile_registry`, `registry_meter_reading_guards`) are already green.
@@ -64,8 +66,14 @@ Verify: `anchor test` (or `./scripts/run-tests.sh`).
 | Oracle globals are gateway-asserted (`aggregate_readings`, quality score) | HIGH | inherent to the gateway-trust model; role-map already recommends moving oracle off-chain → redesign |
 | `aggregate_shards` silent undercount (subset of shards) | MED | correct fix needs an initialized-shard counter → `initialize_shard` ABI change → wide caller blast |
 | Treasury slash-strand (slash last staker → GRX parked unclaimable) | MED | rare edge; correct fix needs deferred-redistribution state + a treasury-staking test harness |
-| Tariff authority + per-zone wheeling/loss rate (0.4b) | — | needs the role-map tariff authority decided; replaces the 0.4 sanity cap with a governance-set rate |
-| `mint_tokens_direct` registry-faucet REC policy (0.5b) | — | decide: register the registry PDA as a validator vs explicit faucet exemption |
+
+**Resolved since (were listed here as open, now done):**
+- Tariff authority + per-zone wheeling/loss rate (0.4b) — **done** (2026-07-04): `trading::TariffConfig`
+  (`wheeling_authority`/`loss_authority`, capped bps), replacing the flat 0.4 sanity cap with a
+  governance-set rate. See [`role-map.md`](./role-map.md) fix #7b.
+- `mint_tokens_direct` registry-faucet REC policy (0.5b) — **decided and hardened**: the count==0
+  REC-skip is registry-caller-only (`programs/energy-token/src/lib.rs:505-512`); a human admin is
+  rejected even at count==0. Litesvm-locked (`mint_tokens_direct_litesvm.ts`).
 
 ---
 
