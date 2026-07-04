@@ -7,7 +7,9 @@
 > change. The companion descriptive doc [`node-validator.md`](./node-validator.md) and the
 > network model [`../proposed/blockchain-node-network.md`](../proposed/blockchain-node-network.md)
 > describe the system as built; this doc states where that scheme is institutionally
-> mis-mapped and what the corrected mapping is.
+> mis-mapped and what the corrected mapping is. For the real-world market backing this
+> mapping (PDP2026, ESB structure, EGAT/MEA/PEA/ERC's actual current roles), see
+> [`thailand-market-context.md`](./thailand-market-context.md).
 
 **Principle:** separate **regulator** (ERC) from **operators** (EGAT/MEA/PEA) from
 **economic actors** (aggregators, prosumers). On-chain authority follows statutory role,

@@ -89,6 +89,7 @@ The article's criticism section maps cleanly to objections an enterprise energy 
    - **EGAT** — wholesale-market validator (consensus) + transmission wheeling-tariff signer.
    - **MEA** (metro) / **PEA** (provincial) — retail-market validators (consensus) + per-territory aggregator admission + distribution loss-tariff signer.
    - This wholesale/retail consensus split is itself a differentiator vs a generic PoA pitch: it mirrors Thailand's actual electricity-market segmentation (Single Buyer wholesale vs metro/provincial retail distribution) instead of flattening all utilities into one undifferentiated validator pool.
+   - *Market-timing hook:* Thailand's own regulator is moving the same direction we are. ERC's Direct PPA/Third-Party-Access pilot (capped 2,000 MW, aimed at data centers; NEPC approved June 2024, draft regs Oct 2025) is the real-world, government-sanctioned analogue to `trading::execute_atomic_settlement`'s off-chain-matched settlement — pitch GridTokenX as infrastructure *for* that liberalization, not competing with the Enhanced Single Buyer model. See `docs/design/thailand-market-context.md` for the full verified brief (PDP2024→PDP2026 transition, NDC 3.0 targets, ESB cost-recovery strain) — this narrative has a shelf life, since PDP2026 is still pending National Energy Policy Committee approval (expected Aug–Sept 2026).
 
 ---
 
