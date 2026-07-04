@@ -39,6 +39,7 @@ async function main() {
   const [swapVault] = PublicKey.findProgramAddressSync([Buffer.from('swap_vault')], treasuryProgram.programId);
   const [stakeVault] = PublicKey.findProgramAddressSync([Buffer.from('stake_vault')], treasuryProgram.programId);
   const [rewardVault] = PublicKey.findProgramAddressSync([Buffer.from('reward_vault')], treasuryProgram.programId);
+  const [rebateVault] = PublicKey.findProgramAddressSync([Buffer.from('rebate_vault')], treasuryProgram.programId);
 
   console.log('  Treasury PDA   :', treasuryPda.toBase58());
   console.log('  THBG mint      :', thbgMint.toBase58());
@@ -77,22 +78,47 @@ async function main() {
     }
   }
 
-  // Bind the registry's slash destination to the treasury reward_vault so slashed
-  // validator bonds are redistributed to honest stakers. slash_validator refuses to
-  // send the bond anywhere else once this is set.
+  // Rebate-pool vault (role-map.md fix #10): a FOURTH GRX vault, distinct from
+  // swap/stake/reward, that slashed validator bonds land in instead of the yield-staker
+  // reward_vault — a regulator / consumer-rebate fund, not a staker payout.
+  try {
+    const rebateTx = await treasuryProgram.methods
+      .initializeRebateVault()
+      .accounts({
+        treasury: treasuryPda,
+        grxMint,
+        rebateVault,
+        authority: authority.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log('✅ Rebate vault initialized:', rebateVault.toBase58(), 'TX:', rebateTx);
+  } catch (e: any) {
+    if (e.message?.includes('already in use')) {
+      console.log('ℹ️  Rebate vault already initialized.');
+    } else {
+      console.error('❌ Rebate vault init error:', e.message);
+      throw e;
+    }
+  }
+
+  // Bind the registry's slash destination to the treasury rebate_vault (regulator /
+  // consumer-rebate pool — role-map.md fix #10, was reward_vault/yield-stakers).
+  // slash_validator refuses to send the bond anywhere else once this is set.
   const [registryPda] = PublicKey.findProgramAddressSync(
     [Buffer.from('registry')],
     registryProgram.programId,
   );
   try {
     const slashTx = await registryProgram.methods
-      .setSlashDestination(rewardVault)
+      .setSlashDestination(rebateVault)
       .accounts({
         registry: registryPda,
         authority: authority.publicKey,
       })
       .rpc();
-    console.log('✅ Registry slash destination → treasury reward_vault. TX:', slashTx);
+    console.log('✅ Registry slash destination → treasury rebate_vault. TX:', slashTx);
   } catch (e: any) {
     console.error('⚠️  set_slash_destination failed (is registry initialized?):', e.message);
   }

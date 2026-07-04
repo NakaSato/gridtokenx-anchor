@@ -57,7 +57,7 @@ the **REC token issuer** (1 REC token = 1 MWh) — separating "who validates tra
 | Wheeling / loss      | **signed tariff** EGAT (transmission) / MEA-PEA (distribution), **capped vs trade value** | on-chain `TariffConfig` — `wheeling_bps` settable only by `wheeling_authority` (EGAT), `loss_bps` only by `loss_authority` (MEA/PEA); computed at settle time, no longer a caller-supplied arg ([`state/tariff_config.rs`](../../programs/trading/src/state/tariff_config.rs), [`instructions/tariff.rs`](../../programs/trading/src/instructions/tariff.rs)) |
 | Settlement gating    | **governance-gated + operator-signed**                            | `payer` on `settle_offchain_match`/`batch_settle_offchain_match` must be a governance-admitted, active aggregator (`require_admitted_aggregator`, [`settle_offchain.rs`](../../programs/trading/src/instructions/settle_offchain.rs)); `execute_atomic_settlement` (custodial trading-service path) intentionally out of scope — its `market_authority` signer already ties to `market.authority` |
 | Reserve attestation  | **independent custodian** key                                     | arbitrary admin scalar ([`treasury/src/lib.rs:447`](../../programs/treasury/src/lib.rs)) |
-| Slash destination    | **regulator / consumer-rebate pool**                              | treasury `reward_vault` → yield-stakers |
+| Slash destination    | **regulator / consumer-rebate pool**                              | treasury `rebate_vault` — a dedicated 4th GRX vault, separate from `reward_vault`/yield-stakers ([`treasury/src/lib.rs`](../../programs/treasury/src/lib.rs) `initialize_rebate_vault`) |
 
 **Fix (per row):**
 1. **Governance authority** — replace the single key with k-of-n (Squads / SPL-governance or native multisig set).
@@ -69,7 +69,7 @@ the **REC token issuer** (1 REC token = 1 MWh) — separating "who validates tra
 7. **Wheeling / loss** — require a tariff-authority signer; bound charge ≤ trade value. *(done — 0.4 cap + 0.4b on-chain `TariffConfig`, key-gated not live-signed — see §2 rationale)*
 8. **Settlement gating** — add `governance_config` + `is_operational()`; require admitted-aggregator signer. *(done — 0.3 gate; 0.4b operator gate on the off-chain-signed settle paths; `execute_atomic_settlement` scoped out, see §2 rationale)*
 9. **Reserve attestation** — separate `attestor` from param admin (already in code); ideally add on-chain proof.
-10. **Slash destination** — repoint to an ERC / consumer-rebate pool (config — 1.2).
+10. **Slash destination** — repoint to an ERC / consumer-rebate pool. *(done — new `treasury::rebate_vault`, `init-treasury.ts` wires `registry::set_slash_destination` to it)*
 
 ---
 

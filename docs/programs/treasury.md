@@ -45,15 +45,16 @@ The treasury program serves three distinct functions within the platform.
 
 ### The three GRX vaults
 
-All three vaults are SPL token accounts holding GRX, owned by the treasury PDA, each derived from a distinct seed (`lib.rs:743-776`):
+All four vaults are SPL token accounts holding GRX, owned by the treasury PDA, each derived from a distinct seed (`lib.rs:743-776` for the original three; `rebate_vault` added separately, see §4.13):
 
 | Vault | Seed | Role |
 | --- | --- | --- |
 | `swap_vault` | `[b"swap_vault"]` | Redemption collateral: receives GRX on swap, pays out GRX on redeem (`lib.rs:743-752`) |
 | `stake_vault` | `[b"stake_vault"]` | Staker custody: holds staked principal; explicitly never backs the peg (`lib.rs:755-764`) |
 | `reward_vault` | `[b"reward_vault"]` | Reward pool: GRX paid out as staking rewards (`lib.rs:767-776`) |
+| `rebate_vault` | `[b"rebate_vault"]` | Regulator / consumer-rebate pool: destination for registry's slashed validator bonds, role-map.md fix #10 (`lib.rs:1360-1391`) |
 
-The segregation is structural: GRX deposited as swap collateral, GRX held in staking custody, and GRX held for rewards reside in separate PDAs that share no account and are never commingled.
+The segregation is structural: GRX deposited as swap collateral, GRX held in staking custody, GRX held for rewards, and GRX received from slashing reside in separate PDAs that share no account and are never commingled.
 
 ---
 
@@ -288,6 +289,16 @@ reward_debt_for(amount, acc)            = amount × acc / ACC_PRECISION
 
 `fund_rewards` and the redistribution branch of `slash_stake` advance the accumulator by `delta = deposited × ACC_PRECISION / total_staked` (`lib.rs:614-617`, `lib.rs:664-667`). A staker's claimable reward is the difference between `amount × acc / ACC_PRECISION` and the `reward_debt` captured at the last position update, plus any settled `pending`. The unit tests verify exactness of the accumulator: a sole staker earns the full funded pot, equal stakers split evenly, and a late joiner earns nothing from a prior pot (`lib.rs:63-97`).
 
+### 4.13 `initialize_rebate_vault`
+
+One-time creation of the fourth GRX vault — the regulator / consumer-rebate pool that registry's `slash_destination` should point at (role-map.md fix #10), added so a slashed validator bond never lands in `reward_vault` and mixes with staker yield (`lib.rs:447-455`).
+
+- **Signers:** `authority`, checked against `treasury.authority` (`UnauthorizedAuthority` on mismatch) (`lib.rs:449-452`).
+- **Accounts:** `treasury` (`[b"treasury"]`, constrains `grx_mint` to match `treasury.grx_mint`), `grx_mint`, `rebate_vault` (init, `[b"rebate_vault"]`, authority = treasury), `authority`, `token_program`, `system_program` (`lib.rs:1360-1389`).
+- **Parameters:** none.
+- **Effects:** creates the `rebate_vault` token account; idempotent in practice (a second call fails with an "already in use" account error, handled by `scripts/init-treasury.ts`). No CPI wiring — registry sends slashed GRX here via a plain token transfer; this program never reads or moves it.
+- **Events / errors:** none emitted; `UnauthorizedAuthority` on failure.
+
 ---
 
 ## 5. Invariants and Security Properties
@@ -332,9 +343,9 @@ The trading program invokes `record_settlement` as a non-custodial CPI after set
 
 The trading program's batch-settlement path drives the analogous `record_settlement_batch` CPI (`lib.rs:210-258`), which records the whole batch with one call: it advances `total_settled_thbg` by the gross batch value and writes a per-`(zone, batch)` `SettlementRecord` audit commitment (`lib.rs:227-243`). Recording is **mandatory for THBG markets** — once the trading-program THBG settlement policy is set on a market, any batch match in that currency that omits the treasury accounts is rejected, so the audit commitment cannot be silently skipped.
 
-### 6.2 Registry slash routing → Treasury reward vault
+### 6.2 Registry slash routing → Treasury rebate vault
 
-The registry program's validator-slashing path routes slashed validator bonds to a configured slash destination, which is pointed at the treasury `reward_vault`. This is a plain SPL token transfer into the reward vault, not a CPI into the treasury program. Once GRX has landed in `reward_vault`, it is redistributed pro-rata to treasury stakers by a subsequent `fund_rewards` call, which advances the accumulator (`lib.rs:591-629`). The treasury program itself takes no part in the registry's slashing decision; it simply receives the tokens. (The treasury program's own `slash_stake` instruction at `lib.rs:639-709` is a separate facility that slashes treasury yield-staking positions, not registry validator bonds.)
+The registry program's validator-slashing path routes slashed validator bonds to a configured slash destination. As of role-map.md fix #10 this is pointed at the treasury `rebate_vault` (`initialize_rebate_vault`, `lib.rs:447-454`, PDA `seeds = [b"rebate_vault"]`, `lib.rs:1360-1391`) — a regulator / consumer-rebate pool — **not** the `reward_vault`. This is a plain SPL token transfer, not a CPI into the treasury program, and the treasury takes no part in the registry's slashing decision. A slashed bond is a penalty for the harmed side, not staker yield, so it deliberately does **not** flow into `fund_rewards`/`reward_vault` (which remains yield-staking-only, funded solely by swap fees). (The treasury program's own `slash_stake` instruction at `lib.rs:639-709` is a separate facility that slashes treasury yield-staking positions, not registry validator bonds, and is unaffected by this change.)
 
 ---
 
@@ -385,5 +396,5 @@ All errors are defined in `error.rs` as `TreasuryError`.
 The treasury program is exercised by an integration suite and an initialisation script.
 
 - **Integration tests:** `tests/treasury.ts`, run with `npm run test:treasury`, which resolves to `anchor test tests/treasury.ts` (`package.json:22`).
-- **Initialisation script:** `scripts/init-treasury.ts` bootstraps the treasury, configures the `settlement_recorder` to the trading `market_authority` PDA, wires the trading-program THBG settlement policy, and points the registry slash destination at the treasury `reward_vault`.
+- **Initialisation script:** `scripts/init-treasury.ts` bootstraps the treasury, configures the `settlement_recorder` to the trading `market_authority` PDA, wires the trading-program THBG settlement policy, creates the `rebate_vault`, and points the registry slash destination at it (not `reward_vault` — see §6.2).
 - **In-source unit tests:** the `#[cfg(test)] mod tests` block validates the reward accumulator and the swap formula in pure arithmetic (`lib.rs:57-112`).

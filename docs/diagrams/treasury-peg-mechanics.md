@@ -58,16 +58,18 @@ holdings → a rate change can **never** over-drain. Peg safety under parameter 
 
 ---
 
-## 3. Three GRX vaults — never mix them
+## 3. Four GRX vaults — never mix them
 
 | Vault | PDA | Purpose |
 |-------|-----|---------|
 | `swap_vault` | redemption collateral | backs THBG→GRX redeem |
 | `stake_vault` | staker custody | holds staked GRX (yield staking) |
 | `reward_vault` | reward pool | pays GRX staking rewards |
+| `rebate_vault` | regulator / consumer-rebate pool | destination for slashed validator bonds (`registry::slash_destination`, role-map.md fix #10) — never staker yield |
 
 Separate PDAs, separate balances. **Staked GRX (stake_vault) never backs the peg** — only
 `swap_vault` is redemption collateral. Mixing them would let staking inflate apparent reserve.
+`rebate_vault` is likewise separate from `reward_vault` — a slashing penalty must not fund stakers.
 
 ---
 
@@ -119,8 +121,9 @@ vault or position; not reconciled.** (See `registry-staking-slash.md`.)
 (Cross-ref `off-chain-settlement.md` / `cpi-flow.md`.) Trading CPIs `record_settlement` to bump
 `total_settled_thbg` by the **gross** settled value — non-custodial accounting, authorized by the
 `settlement_recorder` signer (= trading `market_authority` PDA). Mandatory for THBG markets. The
-slash redistribution path points registry's `slash_destination` at the treasury `reward_vault`
-(redistribute to stakers via `fund_rewards`).
+slash redistribution path points registry's `slash_destination` at the treasury `rebate_vault`
+(regulator / consumer-rebate pool, role-map.md fix #10 — kept separate from `reward_vault` so a
+slashing penalty never funds staker yield).
 
 ---
 
@@ -129,7 +132,7 @@ slash redistribution path points registry's `slash_destination` at the treasury 
 - **Stale attestation** → swap halts; custodian must `update_attestation` within the TTL.
 - **Over-minting THBG** → blocked by `thbg_supply + minted ≤ attested_reserve`.
 - **Rate-change drain** → blocked by `grx_out ≤ swap_vault.amount` (`InsufficientVault`).
-- **Mixing vaults** → staked GRX must not count as peg reserve; three vaults stay separate.
+- **Mixing vaults** → staked GRX must not count as peg reserve; four vaults stay separate.
 - **Merging the two staking systems** → they're different products; never reconcile yield staking
   with validator bonds.
 - **Reward truncation** → keep the `×1e12` accumulator scaling.
@@ -145,4 +148,4 @@ redeem burns THBG for GRX from `swap_vault` with `SupplyUnderflow` / `Insufficie
 a `set_params` rate change can't over-drain. Yield **staking** is a separate MasterChef
 accumulator (`acc_reward_per_share ×1e12`, funded by swap fees, `stake_vault` + `reward_vault`,
 tracked on `StakePosition`) — distinct from registry's slashed validator bond, never merged.
-**Three GRX vaults** (swap/stake/reward) stay separate; only `swap_vault` backs the peg.
+**Four GRX vaults** (swap/stake/reward/rebate) stay separate; only `swap_vault` backs the peg.
