@@ -37,7 +37,7 @@ Current code baseline (verified):
 
 Goal: replace the single-destination slash with severity-scaled, capped-victim-compensation + transparent-fund distribution. Self-contained; no Merkle/challenge needed.
 
-> **Status (code reconciled 2026-06-20):** the core rework is **already implemented** in `registry::slash_validator` (`programs/registry/src/lib.rs:839`). The plan checkboxes were stale — corrected below. Two items remain genuinely open (T1.3 multi-victim, T1.4 distinct fund PDA), both design-gated. On-chain re-verification (`tests/staking.ts`) is pending a live validator (the in-session one died; bring up via the recipe in §2 before re-running).
+> **Status (code reconciled 2026-06-20, T1.3/T1.4 shipped since):** the core rework is **already implemented** in `registry::slash_validator` (`programs/registry/src/lib.rs:839`). T1.3 (multi-victim pro-rata, `slash_validator_multi`) and T1.4 (distinct fund PDA + ledger, `initialize_slash_fund`/`disburse_slash_fund`) are both **DONE** — additive, on-chain verified `tests/staking.ts` 13/13 (see their checkboxes below). All T1.1–T1.8 items are closed.
 
 - [x] T1.1 Severity fraction `σ` — implemented as a **per-call arg** `slash_bps` (1..=10000, `InvalidSlashFraction` guard), `slash_amount = bond * slash_bps / 10_000` capped at bond (`lib.rs:883`). Deviation from "registry config table": severity is **governance-attested per slash**, not a stored per-fault-class table — fits the D3 governance-attested model; revisit only if fault classes need fixed on-chain rates.
 - [x] T1.2 `compensation = min(slash_amount, proven_loss)`, fund remainder `F = slash_amount − compensation`; `proven_loss` is a governance-attested arg (`lib.rs:889`).
@@ -69,7 +69,7 @@ Goal: enrich settlement recording with a tamper-evidence root + VAT audit data. 
 - [x] T2a.3 `SettlementBatchRecorded` event (value/VAT/rate/root/total).
 - [x] Tests (`tests/settlement_commitment_litesvm.ts`, litesvm, 3 passing): commit+total bump; recorder gate; duplicate-`(zone,batch)` rejected.
 
-### §2b — wire trading batch path → treasury commitment — TODO (needs validator/CI)
+### §2b — wire trading batch path → treasury commitment — DONE (on-chain + litesvm)
 
 > **Verification note:** the batch settle path (`SettleOffchainMatchBatchContext`) moves escrow funds and is ~20 accounts + 2 Ed25519 verify ixs per match. It is **not** litesvm-testable cheaply; its test runs under `anchor test` (live validator), like `tests/escrow_settlement.ts`. Do this task only where a validator/CI is available — compile-only is insufficient for a CPI-init account-threading change (PDA-seed / signer / account-order errors surface at runtime, not compile).
 
