@@ -63,6 +63,10 @@ describe("escrow-settlement", () => {
   const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
   // Settlement passes governance_config as the first remaining account.
   const govRemaining = [{ pubkey: governanceConfigPda, isSigner: false, isWritable: false }];
+  // Mandatory tariff_config (role-map.md fix #7b) — wheeling/loss now computed on-chain
+  // from this, not caller args. bootstrap.ts inits it at 10 bps wheeling / 5 bps loss.
+  const [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingProgram.programId);
+  const tariffRemaining = [{ pubkey: tariffConfigPda, isSigner: false, isWritable: false }];
 
   let marketPda: PublicKey;
   let zoneMarketPda: PublicKey;
@@ -293,7 +297,7 @@ describe("escrow-settlement", () => {
     let threw = false;
     try {
       await tradingProgram.methods
-        .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(100), new BN(55), new BN(1), new BN(1), [...tradeId])
+        .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(100), new BN(55), [...tradeId])
         .accounts({
           market: marketPda,
           zoneMarket: zoneMarketPda,
@@ -319,8 +323,9 @@ describe("escrow-settlement", () => {
           treasuryProgram: null,
           treasuryState: null,
         } as any)
-        // gov (governance_config) @0, trade_nullifier @1 — order mirrors the handler reads.
-        .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }])
+        // gov (governance_config) @0, trade_nullifier @1, tariff_config @2 — order mirrors
+        // the handler reads.
+        .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }, ...tariffRemaining])
         .rpc();
     } catch (e: any) {
       threw = true;
@@ -393,7 +398,7 @@ describe("escrow-settlement", () => {
     } catch (e) { /* already initialized */ }
 
     const settleIx = await tradingProgram.methods
-      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), new BN(1), new BN(1), [...tradeId])
+      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), [...tradeId])
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,
@@ -421,8 +426,9 @@ describe("escrow-settlement", () => {
         treasuryProgram: null,
         treasuryState: null,
       } as any)
-      // gov (governance_config) @0, trade_nullifier @1 — order mirrors the handler reads.
-      .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }])
+      // gov (governance_config) @0, trade_nullifier @1, tariff_config @2 — order mirrors
+      // the handler reads.
+      .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }, ...tariffRemaining])
       .instruction();
 
     // The settle path carries ~20 accounts + two Ed25519 verify ixs, which overflows a
@@ -518,11 +524,12 @@ describe("escrow-settlement", () => {
     }
 
     // total = match_amount*price/1e9 = 100e9*50/1e9 = 5000; fee = 5000*25/10000 = 12;
-    // wheeling=1; loss=1; net = 4986. Energy leg = matchAmount (100e9) transferred to buyer.
+    // wheeling = 5000*10/10000 = 5 (bootstrapped TariffConfig, 10 bps); loss = 5000*5/10000
+    // = 2 (5 bps); net = 5000-12-5-2 = 4981. Energy leg = matchAmount (100e9) to buyer.
     // seller/buyer escrows use fresh keys each run (seeded with 1), so absolute checks hold.
     const sellerCurEscrow = escrowPda(seller.kp.publicKey, currencyMint);
     const buyerEngEscrow = escrowPda(buyer.kp.publicKey, energyMintPda);
-    expect(Number((await getAccount(provider.connection, sellerCurEscrow)).amount)).to.equal(1 + 4986);
+    expect(Number((await getAccount(provider.connection, sellerCurEscrow)).amount)).to.equal(1 + 4981);
     expect(Number((await getAccount(provider.connection, buyerEngEscrow, undefined, TOKEN_2022_PROGRAM_ID)).amount)).to.equal(1 + matchAmount);
     const feeAfter = Number((await getAccount(provider.connection, feeCollectorPda)).amount);
     expect(feeAfter - feeBefore, "fee collected this settle").to.equal(12);

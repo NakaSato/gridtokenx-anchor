@@ -12,8 +12,8 @@ pub use crate::error::TradingError;
 pub use crate::instructions::*;
 pub use crate::state::{
     BatchConfig, BatchInfo, Market, MarketShard, Order, OrderNullifier, OrderStatus, OrderType,
-    PriceLevel, PricePoint, TradeNullifier, TradeRecord, ZoneCapacity, ZoneMarket, ZoneMarketShard,
-    ZoneConfig, MAX_DEPTH_LEVELS,
+    PriceLevel, PricePoint, TariffConfig, TradeNullifier, TradeRecord, ZoneCapacity, ZoneMarket,
+    ZoneMarketShard, ZoneConfig, MAX_DEPTH_LEVELS,
 };
 pub use crate::utils::get_governance_config;
 pub use governance::{ErcCertificate, ErcStatus, GovernanceConfig};
@@ -1098,8 +1098,6 @@ pub mod trading {
         ctx: Context<'info, ExecuteAtomicSettlementContext<'info>>,
         amount: u64,
         price: u64,
-        wheeling_charge_val: u64,
-        loss_cost_val: u64,
         // Per-match id (matcher UUID). Consumed by the context's `trade_nullifier`
         // `init` seeds — its existence on replay reverts the tx, so the same match
         // can never double-settle even when the orders still have headroom (F3c).
@@ -1154,6 +1152,16 @@ pub mod trading {
         .map_err(|_| TradingError::Overflow)?;
         let market_fee = total_currency_value
             .checked_mul(market.market_fee_bps as u64)
+            .map(|v| v / 10000)
+            .ok_or(TradingError::Overflow)?;
+        // Wheeling/loss are computed from the on-chain tariff schedule, not caller args —
+        // see role-map.md fix #7b / TariffConfig.
+        let wheeling_charge_val = total_currency_value
+            .checked_mul(ctx.accounts.tariff_config.wheeling_bps as u64)
+            .map(|v| v / 10000)
+            .ok_or(TradingError::Overflow)?;
+        let loss_cost_val = total_currency_value
+            .checked_mul(ctx.accounts.tariff_config.loss_bps as u64)
             .map(|v| v / 10000)
             .ok_or(TradingError::Overflow)?;
         let net_seller_amount = total_currency_value
@@ -1411,8 +1419,6 @@ pub mod trading {
         seller_payload: OffchainOrderPayload,
         match_amount: u64,
         match_price: u64,
-        wheeling_charge_val: u64,
-        loss_cost_val: u64,
         trade_id: [u8; 16],
     ) -> Result<()> {
         instructions::settle_offchain_match(
@@ -1421,10 +1427,37 @@ pub mod trading {
             seller_payload,
             match_amount,
             match_price,
-            wheeling_charge_val,
-            loss_cost_val,
             trade_id,
         )
+    }
+
+    /// One-time init of the on-chain tariff schedule (§role-map.md fix #7b): wheeling/loss
+    /// charges are no longer caller-supplied settlement args, they're computed from this
+    /// config, which only `wheeling_authority` (EGAT) / `loss_authority` (MEA-PEA) can move.
+    pub fn initialize_tariff_config(
+        ctx: Context<InitializeTariffConfigContext>,
+        wheeling_authority: Pubkey,
+        loss_authority: Pubkey,
+        wheeling_bps: u16,
+        loss_bps: u16,
+    ) -> Result<()> {
+        instructions::initialize_tariff_config(ctx, wheeling_authority, loss_authority, wheeling_bps, loss_bps)
+    }
+
+    pub fn set_wheeling_rate(ctx: Context<SetWheelingRateContext>, new_bps: u16) -> Result<()> {
+        instructions::set_wheeling_rate(ctx, new_bps)
+    }
+
+    pub fn set_loss_rate(ctx: Context<SetLossRateContext>, new_bps: u16) -> Result<()> {
+        instructions::set_loss_rate(ctx, new_bps)
+    }
+
+    pub fn set_tariff_authorities(
+        ctx: Context<SetTariffAuthoritiesContext>,
+        new_wheeling_authority: Pubkey,
+        new_loss_authority: Pubkey,
+    ) -> Result<()> {
+        instructions::set_tariff_authorities(ctx, new_wheeling_authority, new_loss_authority)
     }
 
     pub fn initialize_market_shard(
@@ -1633,7 +1666,7 @@ pub mod trading {
     }
 
     #[derive(Accounts)]
-    #[instruction(amount: u64, price: u64, wheeling_charge_val: u64, loss_cost_val: u64, trade_id: [u8; 16])]
+    #[instruction(amount: u64, price: u64, trade_id: [u8; 16])]
     pub struct ExecuteAtomicSettlementContext<'info> {
         #[account(mut)]
         pub market: AccountLoader<'info, Market>,
@@ -1683,6 +1716,8 @@ pub mod trading {
         pub system_program: Program<'info, System>,
         pub secondary_token_program: Interface<'info, anchor_spl::token_interface::TokenInterface>,
         pub governance_config: Account<'info, GovernanceConfig>,
+        #[account(seeds = [b"tariff_config"], bump = tariff_config.bump)]
+        pub tariff_config: Account<'info, TariffConfig>,
     }
 
     #[derive(Accounts)]

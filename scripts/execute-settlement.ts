@@ -73,6 +73,7 @@ async function main() {
     tradingProgram.programId
   );
   const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
+  const [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingProgram.programId);
   const [energyMintPda] = PublicKey.findProgramAddressSync([Buffer.from("mint_2022")], energyTokenProgram.programId);
   const [energyTokenInfoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], energyTokenProgram.programId);
 
@@ -213,8 +214,6 @@ async function main() {
       .executeAtomicSettlement(
         new BN(100), // amount
         new BN(55),  // price
-        new BN(1),   // wheeling
-        new BN(1),   // loss
         Array.from(tradeId) // trade_id: [u8; 16] replay-guard nullifier seed
       )
       .accounts({
@@ -237,6 +236,7 @@ async function main() {
         systemProgram: SystemProgram.programId,
         secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
         governanceConfig: governanceConfigPda,
+        tariffConfig: tariffConfigPda,
       } as any)
       .signers([escrowAuth]);
 

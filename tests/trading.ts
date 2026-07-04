@@ -44,6 +44,7 @@ describe("trading-settlement", () => {
   let marketPda: PublicKey;
   let zoneMarketPda: PublicKey;
   let governanceConfigPda: PublicKey;
+  let tariffConfigPda: PublicKey;
   let energyMintPda: PublicKey;
   let energyTokenInfoPda: PublicKey;
   let currencyMint: PublicKey;
@@ -59,6 +60,7 @@ describe("trading-settlement", () => {
       tradingProgram.programId
     );
     [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
+    [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingProgram.programId);
     [energyMintPda] = PublicKey.findProgramAddressSync([Buffer.from("mint_2022")], energyTokenProgram.programId);
     [energyTokenInfoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], energyTokenProgram.programId);
 
@@ -225,7 +227,7 @@ describe("trading-settlement", () => {
 
     // Execute Settlement with an explicit compute-unit limit
     const settlementBuilder = tradingProgram.methods
-      .executeAtomicSettlement(new BN(ENERGY_ATOMIC), new BN(55), new BN(1), new BN(1), [...settleTradeId])
+      .executeAtomicSettlement(new BN(ENERGY_ATOMIC), new BN(55), [...settleTradeId])
       .accounts({
         market: marketPda,
         buyOrder: buyOrderPda,
@@ -246,6 +248,7 @@ describe("trading-settlement", () => {
         systemProgram: SystemProgram.programId,
         secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
         governanceConfig: governanceConfigPda,
+        tariffConfig: tariffConfigPda,
       } as any)
       .signers([escrowAuth]);
 
@@ -263,12 +266,10 @@ describe("trading-settlement", () => {
     const sellerBalance = await provider.connection.getTokenAccountBalance(sellerCurrencyAccount);
     const buyerBalance = await provider.connection.getTokenAccountBalance(buyerEnergyAccount);
     
-    // Total value = 100 * 55 = 5500
-    // Fee = 5500 * 25 / 10000 = 13.75 -> 13 (integer division in contract?)
-    // Wait, let's check contract math.
-    // wheeling = 1, loss = 1
-    // net_seller = 5500 - 13 - 1 - 1 = 5485
-    
+    // Total value = 100 * 55 = 5500; fee = 5500*25/10000 = 13 (floor).
+    // wheeling/loss now come from the bootstrapped TariffConfig (10 bps / 5 bps):
+    // wheeling = 5500*10/10000 = 5, loss = 5500*5/10000 = 2.
+    // net_seller = 5500 - 13 - 5 - 2 = 5480.
     expect(Number(sellerBalance.value.amount)).to.be.at.least(5480);
     expect(Number(buyerBalance.value.amount)).to.equal(ENERGY_ATOMIC);
   });

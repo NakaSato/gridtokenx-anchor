@@ -45,6 +45,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
   let marketPda: PublicKey;
   let zoneMarketPda: PublicKey;
   let governanceConfigPda: PublicKey;
+  let tariffConfigPda: PublicKey;
   let currencyMint: PublicKey; // classic SPL Token
   let energyMint: PublicKey; // Token-2022
 
@@ -62,6 +63,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       tradingProgram.programId
     );
     [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceProgram.programId);
+    [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingProgram.programId);
 
     // Fresh mints, mint authority = provider wallet. Currency classic (6 dp),
     // energy Token-2022 (9 dp) — matching the production token programs the
@@ -160,9 +162,10 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
     );
 
     // Settlement with the SERVICE's account layout: tokenProgram = classic
-    // (currency), secondaryTokenProgram = Token-2022 (energy).
+    // (currency), secondaryTokenProgram = Token-2022 (energy). wheeling/loss are no
+    // longer caller args — computed from the bootstrapped TariffConfig (0.1%/0.05%).
     await tradingProgram.methods
-      .executeAtomicSettlement(new BN(MATCH_ENERGY), new BN(55), new BN(1), new BN(1), [...tradeId])
+      .executeAtomicSettlement(new BN(MATCH_ENERGY), new BN(55), [...tradeId])
       .accounts({
         market: marketPda,
         buyOrder: buyOrderPda,
@@ -183,12 +186,14 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
         systemProgram: SystemProgram.programId,
         secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
         governanceConfig: governanceConfigPda,
+        tariffConfig: tariffConfigPda,
       } as any)
       .signers([escrowAuth])
       .rpc();
 
     // Buyer received all the energy; seller received currency net of fee+wheeling+loss.
-    // total = MATCH_ENERGY * 55 / 1e9 = 5500; seller nets ~5498 (fee + 1 wheeling + 1 loss).
+    // total = MATCH_ENERGY * 55 / 1e9 = 5500; wheeling=5 (0.1%), loss=2 (0.05%) from the
+    // bootstrapped TariffConfig; seller nets ~5493 minus the market fee.
     const buyerEnergy = await provider.connection.getTokenAccountBalance(buyerEnergyAccount);
     const sellerCurrency = await provider.connection.getTokenAccountBalance(sellerCurrencyAccount);
     expect(Number(buyerEnergy.value.amount), "buyer energy").to.equal(MATCH_ENERGY);

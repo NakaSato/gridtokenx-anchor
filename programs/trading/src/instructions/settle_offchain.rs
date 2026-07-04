@@ -109,14 +109,10 @@ fn load_zone_capacity<'info>(
     Ok(loader)
 }
 
-/// Hard ceiling on combined network charges (wheeling + line loss) as a fraction of trade
-/// value. A settler must not be able to siphon the seller's proceeds to the collectors by
-/// inflating these caller-supplied charges. 20% is a conservative sanity bound; exact
-/// per-zone tariff enforcement via a governance-set rate is a separate follow-up.
-const MAX_NETWORK_CHARGE_BPS: u64 = 2000;
-
 /// Bound the network charges and compute the seller's net proceeds. Replaces the former
 /// `saturating_sub` chain, which silently zeroed the seller when charges exceeded the trade.
+/// The cap is now primarily enforced at tariff-set time (see `TariffConfig` setters); this
+/// stays as defense-in-depth in case a stale config ever has bps summing past the cap.
 fn net_seller_after_charges(total: u64, market_fee: u64, wheeling: u64, loss: u64) -> Result<u64> {
     let network = wheeling.checked_add(loss).ok_or(TradingError::Overflow)?;
     let max_network = total
@@ -127,6 +123,22 @@ fn net_seller_after_charges(total: u64, market_fee: u64, wheeling: u64, loss: u6
     let deductions = market_fee.checked_add(network).ok_or(TradingError::Overflow)?;
     require!(deductions <= total, TradingError::ChargesExceedValue);
     Ok(total - deductions)
+}
+
+/// Read `wheeling_bps`/`loss_bps` directly out of a `TariffConfig` account without a typed
+/// deserialize — both settle contexts are already at the BPF stack ceiling (see
+/// settle-context-stack-limit), so `tariff_config` travels via `remaining_accounts` like
+/// `governance_config` already does. Layout: [0..8) disc | [8..40) wheeling_authority |
+/// [40..72) loss_authority | [72..74) wheeling_bps | [74..76) loss_bps | [76] bump.
+fn tariff_rates(info: &AccountInfo, program_id: &Pubkey) -> Result<(u64, u64)> {
+    require_keys_eq!(*info.owner, *program_id, TradingError::InvalidTariffConfig);
+    let (expected, _bump) = Pubkey::find_program_address(&[b"tariff_config"], program_id);
+    require_keys_eq!(*info.key, expected, TradingError::InvalidTariffConfig);
+    let data = info.try_borrow_data()?;
+    require!(data.len() >= 76, TradingError::InvalidTariffConfig);
+    let wheeling_bps = u16::from_le_bytes([data[72], data[73]]) as u64;
+    let loss_bps = u16::from_le_bytes([data[74], data[75]]) as u64;
+    Ok((wheeling_bps, loss_bps))
 }
 
 /// The fungible REC base units that must move for a settled energy quantity. `match_amount`
@@ -522,8 +534,6 @@ pub struct BatchMatchPair {
     pub seller_payload: OffchainOrderPayload,
     pub match_amount: u64,
     pub match_price: u64,
-    pub wheeling_charge: u64,
-    pub loss_cost: u64,
     /// Unique per-match id (the off-chain matcher's UUID). Keys the per-match TradeNullifier
     /// PDA so a re-sent batch can never double-settle a match that already landed (F3c).
     pub trade_id: [u8; 16],
@@ -540,9 +550,11 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     #[account(constraint = zone_market.load()?.market == market.key())]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
 
-    // NOTE: governance governance_config is passed as the LAST remaining account (after the
-    // match_count*6 per-pair accounts), not a named field — stack-limit workaround identical
-    // to the single-match context. Validated in-handler by `require_governance_operational`.
+    // NOTE: governance governance_config, then the mandatory tariff_config, then an optional
+    // ZoneCapacity are passed as trailing remaining accounts (after the match_count*7
+    // per-pair accounts), not named fields — stack-limit workaround identical to the
+    // single-match context. Validated in-handler by `require_governance_operational` /
+    // `tariff_rates`.
 
     pub currency_mint: Box<InterfaceAccount<'info, Mint>>,
     pub energy_mint: Box<InterfaceAccount<'info, Mint>>,
@@ -631,8 +643,6 @@ pub fn settle_offchain_match<'info>(
     seller_payload: OffchainOrderPayload,
     match_amount: u64,
     match_price: u64,
-    wheeling_charge_val: u64,
-    loss_cost_val: u64,
     trade_id: [u8; 16],
 ) -> Result<()> {
     compute_fn!("settle_offchain_match" => {
@@ -685,10 +695,11 @@ pub fn settle_offchain_match<'info>(
     let cross_zone = zone_market.capacity > 0
         && (seller_payload.zone_id != zone_market.zone_id || buyer_payload.zone_id != zone_market.zone_id);
     if cross_zone {
-        // Cross-zone → ZoneCapacity (writable) is MANDATORY as remaining_accounts[2] (index 0
-        // is the governance governance_config, index 1 the trade_nullifier); omitting it cannot bypass
-        // the ceiling. committed_flow is the single source of truth.
-        let zc_info = ctx.remaining_accounts.get(2).ok_or(TradingError::ZoneCapacityRequired)?;
+        // Cross-zone → ZoneCapacity (writable) is MANDATORY as remaining_accounts[3] (index 0
+        // is the governance governance_config, index 1 the trade_nullifier, index 2 the
+        // mandatory tariff_config); omitting it cannot bypass the ceiling. committed_flow is
+        // the single source of truth.
+        let zc_info = ctx.remaining_accounts.get(3).ok_or(TradingError::ZoneCapacityRequired)?;
         let zc_loader = load_zone_capacity(zc_info, &ctx.accounts.zone_market.key(), ctx.program_id)?;
         let mut zc = zc_loader.load_mut()?;
         let new_total_flow = zc.committed_flow.checked_add(match_amount).ok_or(TradingError::Overflow)?;
@@ -732,6 +743,13 @@ pub fn settle_offchain_match<'info>(
     )
     .map_err(|_| TradingError::Overflow)?;
     let market_fee = total_currency_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
+
+    // --- TARIFF: wheeling/loss computed from the on-chain schedule, not caller args ---
+    // Mandatory remaining_accounts[2] (stack-limit workaround, like governance_config[0]).
+    let tariff_info = ctx.remaining_accounts.get(2).ok_or(TradingError::InvalidTariffConfig)?;
+    let (wheeling_bps, loss_bps) = tariff_rates(tariff_info, ctx.program_id)?;
+    let wheeling_charge_val = total_currency_value.checked_mul(wheeling_bps).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
+    let loss_cost_val = total_currency_value.checked_mul(loss_bps).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
     let net_seller_amount = net_seller_after_charges(total_currency_value, market_fee, wheeling_charge_val, loss_cost_val)?;
 
     let authority_bump = ctx.bumps.market_authority;
@@ -808,9 +826,10 @@ pub fn settle_offchain_match<'info>(
     )?;
 
     // REC (renewable attribute): seller escrow -> buyer escrow. OPT-IN — moves only when the
-    // REC group is passed via remaining_accounts. Base index follows the conditional
-    // ZoneCapacity slot: [3..] cross-zone (slot [2] taken), [2..] intra-zone.
-    let rec_base = if cross_zone { 3 } else { 2 };
+    // REC group is passed via remaining_accounts. Base index follows the mandatory
+    // tariff_config[2] and the conditional ZoneCapacity slot: [4..] cross-zone (slot [3]
+    // taken), [3..] intra-zone.
+    let rec_base = if cross_zone { 4 } else { 3 };
     let rec_amount = rec_base_units_for(match_amount)?;
     transfer_rec_if_present(
         ctx.remaining_accounts,
@@ -950,17 +969,22 @@ pub fn batch_settle_offchain_match<'info>(
     let sysvar_info = &ctx.accounts.sysvar_instructions;
     let remaining_accounts = ctx.remaining_accounts;
     // Layout: match_count*7 per-pair accounts (6 settle accounts + 1 TradeNullifier each),
-    // then governance_config (at match_count*7), then an OPTIONAL ZoneCapacity account (at
-    // match_count*7 + 1) for cross-zone batches (Tier-A).
+    // then governance_config (at match_count*7), then the MANDATORY tariff_config (at
+    // match_count*7 + 1), then an OPTIONAL ZoneCapacity account (at match_count*7 + 2) for
+    // cross-zone batches (Tier-A).
     let base = match_count * 7;
     require!(
-        remaining_accounts.len() == base + 1 || remaining_accounts.len() == base + 2,
+        remaining_accounts.len() == base + 2 || remaining_accounts.len() == base + 3,
         TradingError::InvalidAmount
     );
 
     // Governance gate — batch settlement is the primary fund path; halt under maintenance.
     // governance_config is the trailing remaining account (stack-limit workaround).
     require_governance_operational(&remaining_accounts[base])?;
+
+    // Tariff schedule — same on-chain rates as the single-match path (mandatory, not
+    // per-match caller args). Fetched once; every pair in the batch shares one rate.
+    let (wheeling_bps, loss_bps) = tariff_rates(&remaining_accounts[base + 1], ctx.program_id)?;
 
     let clock = Clock::get()?;
     let market = ctx.accounts.market.load()?;
@@ -971,10 +995,10 @@ pub fn batch_settle_offchain_match<'info>(
 
     // Hoist keys/program ids out of the loop to avoid repeated borrows.
     let program_id = ctx.program_id;
-    // Optional cross-zone capacity counter (remaining_accounts[base + 1]); loaded once,
+    // Optional cross-zone capacity counter (remaining_accounts[base + 2]); loaded once,
     // load_mut per cross-zone match. None when the batch is purely intra-zone.
-    let zone_capacity_loader: Option<AccountLoader<ZoneCapacity>> = if remaining_accounts.len() > base + 1 {
-        Some(load_zone_capacity(&remaining_accounts[base + 1], &ctx.accounts.zone_market.key(), program_id)?)
+    let zone_capacity_loader: Option<AccountLoader<ZoneCapacity>> = if remaining_accounts.len() > base + 2 {
+        Some(load_zone_capacity(&remaining_accounts[base + 2], &ctx.accounts.zone_market.key(), program_id)?)
     } else {
         None
     };
@@ -1096,7 +1120,9 @@ pub fn batch_settle_offchain_match<'info>(
         )
         .map_err(|_| TradingError::Overflow)?;
         let market_fee = total_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
-        let net_seller = net_seller_after_charges(total_value, market_fee, m.wheeling_charge, m.loss_cost)?;
+        let wheeling_charge = total_value.checked_mul(wheeling_bps).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
+        let loss_cost = total_value.checked_mul(loss_bps).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
+        let net_seller = net_seller_after_charges(total_value, market_fee, wheeling_charge, loss_cost)?;
         batch_total_value = batch_total_value.checked_add(total_value).ok_or(TradingError::Overflow)?;
 
         // Zone capacity check and update (cross-zone wheeling flow only — see single path).
@@ -1126,7 +1152,7 @@ pub fn batch_settle_offchain_match<'info>(
             )?;
         }
 
-        if m.wheeling_charge > 0 {
+        if wheeling_charge > 0 {
             anchor_spl::token_interface::transfer_checked(
                 CpiContext::new_with_signer(token_prog_key, anchor_spl::token_interface::TransferChecked {
                     from: remaining_accounts[offset + 2].to_account_info(),
@@ -1134,11 +1160,11 @@ pub fn batch_settle_offchain_match<'info>(
                     to: ctx.accounts.wheeling_collector.to_account_info(),
                     authority: ctx.accounts.market_authority.to_account_info(),
                 }, signer),
-                m.wheeling_charge, ctx.accounts.currency_mint.decimals
+                wheeling_charge, ctx.accounts.currency_mint.decimals
             )?;
         }
 
-        if m.loss_cost > 0 {
+        if loss_cost > 0 {
             anchor_spl::token_interface::transfer_checked(
                 CpiContext::new_with_signer(token_prog_key, anchor_spl::token_interface::TransferChecked {
                     from: remaining_accounts[offset + 2].to_account_info(),
@@ -1146,7 +1172,7 @@ pub fn batch_settle_offchain_match<'info>(
                     to: ctx.accounts.loss_collector.to_account_info(),
                     authority: ctx.accounts.market_authority.to_account_info(),
                 }, signer),
-                m.loss_cost, ctx.accounts.currency_mint.decimals
+                loss_cost, ctx.accounts.currency_mint.decimals
             )?;
         }
 
@@ -1173,7 +1199,7 @@ pub fn batch_settle_offchain_match<'info>(
         )?;
         // NOTE: REC-token movement is NOT wired into the batch path — only the single-match
         // `settle_offchain_match` moves the renewable attribute (opt-in, via remaining_accounts).
-        // The batch layout is a rigid `match_count*7 + 1|2` scheme with strict length asserts;
+        // The batch layout is a rigid `match_count*7 + 2|3` scheme with strict length asserts;
         // a trailing per-pair REC group would need length-disambiguation that adds risk to this
         // security-critical path, and the batch is single-tx-capped at 1 match in practice
         // (Ed25519-per-match data can't ALT-compress), so the single path covers real settlement.

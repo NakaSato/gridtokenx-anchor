@@ -88,6 +88,9 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
   const governance = anchor.workspace.Governance as Program<Governance>;
   // Governance governance_config gates settlement (0.3); bootstrap.ts inits it (operational).
   const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governance.programId);
+  // wheeling/loss are now computed from this on-chain schedule, not per-match caller args
+  // (role-map.md fix #7b) — bootstrap.ts inits it.
+  const [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], trading.programId);
   const payer = (provider.wallet as any).payer as Keypair;
 
   const zoneId = 0;
@@ -286,7 +289,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
       // Per-match trade_id (F3c) — unique per pair; keys the TradeNullifier replay guard.
       const tradeId = Buffer.concat([buyerOrderId.subarray(0, 8), sellerOrderId.subarray(0, 8)]);
       const tradeNullifier = PublicKey.findProgramAddressSync([Buffer.from("trade"), tradeId], trading.programId)[0];
-      matchPairs.push({ buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), wheelingCharge: new BN(1), lossCost: new BN(1), tradeId: [...tradeId] });
+      matchPairs.push({ buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), tradeId: [...tradeId] });
 
       // remaining_accounts per match (order from settle_offchain.rs, now 7/pair):
       // [buyer_nullifier, seller_nullifier, buyer_currency_escrow,
@@ -301,10 +304,12 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
         tradeNullifier,
       );
     }
-    // Pair accounts (match_count*7, incl. per-match trade_nullifier) followed by ONE trailing governance governance_config account (0.3).
+    // Pair accounts (match_count*7, incl. per-match trade_nullifier) followed by the
+    // trailing governance governance_config (0.3) then the mandatory tariff_config.
     const remainingMeta = [
       ...remaining.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true })),
       { pubkey: governanceConfigPda, isSigner: false, isWritable: false },
+      { pubkey: tariffConfigPda, isSigner: false, isWritable: false },
     ];
 
     // Per-payer shards.

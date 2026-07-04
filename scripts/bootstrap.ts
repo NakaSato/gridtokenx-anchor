@@ -273,6 +273,30 @@ async function main() {
     console.log('  ℹ️  Market already exists or failed:', e.message);
   }
 
+  // 4a. Initialize Tariff Config (wheeling/loss rates — role-map.md fix #7b).
+  // wheeling_authority = EGAT (transmission), loss_authority = MEA/PEA (distribution).
+  // Localnet bootstrap has no separate EGAT/MEA-PEA keys yet, so both default to the
+  // deployer; production wiring re-points them via set_tariff_authorities.
+  console.log('\n[4a/5] Initializing Tariff Config...');
+  const [tariffConfigPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('tariff_config')],
+    tradingProgram.programId
+  );
+  try {
+    await tradingProgram.methods
+      .initializeTariffConfig(authority, authority, 10, 5) // 0.1% wheeling, 0.05% loss
+      .accounts({
+        tariffConfig: tariffConfigPda,
+        market: marketPda,
+        authority: authority,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+    console.log('  ✅ Tariff Config initialized:', tariffConfigPda.toBase58());
+  } catch (e: any) {
+    console.log('  ℹ️  Tariff Config already exists or failed:', e.message);
+  }
+
   // 4b. Initialize Zones 0, 1, 2, 3
   for (const zoneId of [0, 1, 2, 3, 7583, 7584, 7585, 7586, 7587, 7588]) {
     console.log(`  Initializing Zone ${zoneId} Market...`);

@@ -88,4 +88,8 @@ pub enum TradingError {
     RecAccountOwnerMismatch,
     #[msg("Seller holds insufficient REC tokens to cover the energy offered")]
     InsufficientRecBalance,
+    #[msg("Tariff config account is not the canonical PDA / not owned by this program")]
+    InvalidTariffConfig,
+    #[msg("Combined wheeling + loss tariff rate exceeds the allowed cap")]
+    TariffRateExceedsCap,
 }

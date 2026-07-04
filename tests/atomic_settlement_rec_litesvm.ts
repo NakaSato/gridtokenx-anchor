@@ -43,7 +43,7 @@ describe("execute_atomic_settlement REC leg (litesvm)", () => {
   const escrowAuth = Keypair.generate(); // escrow authority — signs the transfers
 
   let marketPda: PublicKey, zoneMarketPda: PublicKey, recMintPda: PublicKey;
-  let currencyMint: PublicKey, energyMint: PublicKey, cfgPda: PublicKey;
+  let currencyMint: PublicKey, energyMint: PublicKey, cfgPda: PublicKey, tariffConfigPda: PublicKey;
 
   type IxLike = TransactionInstruction | Promise<TransactionInstruction>;
   async function send(ixs: IxLike[], extra: Keypair[] = []) {
@@ -108,6 +108,7 @@ describe("execute_atomic_settlement REC leg (litesvm)", () => {
       [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(ZONE).toArrayLike(Buffer, "le", 4)], tradingId);
     [recMintPda] = PublicKey.findProgramAddressSync([Buffer.from("rec_mint")], governanceId);
     [cfgPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governanceId);
+    [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingId);
 
     await send([await trading.methods.initializeMarket(16).accounts({ market: marketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()]);
     await send([await trading.methods.initializeZoneMarket(ZONE, 16, new BN(1_000_000)).accounts({ market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()]);
@@ -129,6 +130,18 @@ describe("execute_atomic_settlement REC leg (litesvm)", () => {
     svm.setAccount(cfgPda, {
       lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))),
       data, owner: governanceId, executable: false,
+    });
+
+    // Fabricate the tariff schedule (execute_atomic_settlement now derives wheeling/loss
+    // from this instead of taking them as caller args — role-map.md fix #7b).
+    const [, tariffBump] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingId);
+    const tariffData = await trading.coder.accounts.encode("tariffConfig", {
+      wheelingAuthority: payer.publicKey, lossAuthority: payer.publicKey,
+      wheelingBps: 100, lossBps: 100, bump: tariffBump,
+    } as any);
+    svm.setAccount(tariffConfigPda, {
+      lamports: Number(svm.minimumBalanceForRentExemption(BigInt(tariffData.length))),
+      data: tariffData, owner: tradingId, executable: false,
     });
 
     // Mints: currency (classic, 6-dec), energy (Token-2022, 9-dec), rec (Token-2022, 6-dec @ PDA).
@@ -172,7 +185,7 @@ describe("execute_atomic_settlement REC leg (litesvm)", () => {
     const [tradeNullifier] = PublicKey.findProgramAddressSync([Buffer.from("trade"), tradeId], tradingId);
 
     await send([await trading.methods
-      .executeAtomicSettlement(new BN(MATCH_ENERGY), new BN(55), new BN(1), new BN(1), [...tradeId])
+      .executeAtomicSettlement(new BN(MATCH_ENERGY), new BN(55), [...tradeId])
       .accounts({
         market: marketPda, buyOrder: orderPda(buyer.publicKey, buyId), sellOrder: orderPda(seller.publicKey, sellId),
         tradeNullifier, buyerCurrencyEscrow: buyerCurEscrow, sellerEnergyEscrow: sellerEngEscrow,
@@ -180,7 +193,7 @@ describe("execute_atomic_settlement REC leg (litesvm)", () => {
         feeCollector: feeCol, wheelingCollector: wheelCol, lossCollector: lossCol,
         energyMint, currencyMint, escrowAuthority: escrowAuth.publicKey, marketAuthority: payer.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId, secondaryTokenProgram: TOKEN_2022_PROGRAM_ID,
-        governanceConfig: cfgPda,
+        governanceConfig: cfgPda, tariffConfig: tariffConfigPda,
       } as any)
       .remainingAccounts([
         { pubkey: recMintPda, isSigner: false, isWritable: false },

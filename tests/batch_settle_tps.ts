@@ -87,6 +87,9 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   const governance = anchor.workspace.Governance as Program<Governance>;
   // Governance governance_config gates settlement (0.3); bootstrap.ts inits it (operational).
   const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], governance.programId);
+  // wheeling/loss are now computed from this on-chain schedule, not per-match caller args
+  // (role-map.md fix #7b) — bootstrap.ts inits it.
+  const [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], trading.programId);
   const payer = (provider.wallet as any).payer as Keypair;
 
   const zoneId = 0;
@@ -227,7 +230,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     // Per-match trade_id (F3c) — keys the TradeNullifier replay guard.
     const tradeId = Buffer.concat([buyerOrderId.subarray(0, 8), sellerOrderId.subarray(0, 8)]);
     const tradeNullifier = PublicKey.findProgramAddressSync([Buffer.from("trade"), tradeId], trading.programId)[0];
-    const matchPair = { buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), wheelingCharge: new BN(1), lossCost: new BN(1), tradeId: [...tradeId] };
+    const matchPair = { buyerPayload, sellerPayload, matchAmount: new BN(matchAmount), matchPrice: new BN(matchPrice), tradeId: [...tradeId] };
 
     const marketAcct: any = await trading.account.market.fetch(marketPda);
     const zoneAcct: any = await trading.account.zoneMarket.fetch(zoneMarketPda);
@@ -255,8 +258,9 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       escrowPda(buyer.publicKey, energyMintPda),
       tradeNullifier, // per-match replay guard (7th per-pair account)
     ].map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
-    // Trailing governance governance_config account (0.3 settlement gate).
+    // Trailing governance governance_config (0.3 gate), then the mandatory tariff_config.
     remaining.push({ pubkey: governanceConfigPda, isSigner: false, isWritable: false });
+    remaining.push({ pubkey: tariffConfigPda, isSigner: false, isWritable: false });
 
     // §2c Part B: the caller-chosen settle shard. Under SHARD_SPREAD, rotate it per
     // settle (idx % 16) so concurrent settles hit DISTINCT collector + accumulator

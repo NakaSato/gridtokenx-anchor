@@ -119,6 +119,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   let energyInfoPda: PublicKey;
   let treasuryPda: PublicKey;
   let thbgMint: PublicKey;
+  let tariffConfigPda: PublicKey;
 
   // A separate low-capacity zone (zone 7, capacity 50) for the cross-zone CapacityExceeded case.
   const LOW_ZONE = 7;
@@ -235,6 +236,19 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     svm.setAccount(governanceConfigPda, { lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))), data, owner: GOVERNANCE_PROGRAM_ID, executable: false, rentEpoch: 0 } as any);
   }
 
+  // Fabricate the trading TariffConfig at its canonical PDA (owned by trading itself —
+  // same program, no cross-program pattern needed). wheelingBps=2/lossBps=2 on a 5000
+  // total_currency_value (MATCH_AMOUNT*MATCH_PRICE/1e9) reproduces the old hardcoded
+  // wheeling=1/loss=1 flat args, so every pre-existing guard case keeps its exact math.
+  async function installTariffConfig(wheelingBps: number, lossBps: number): Promise<void> {
+    const bump = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingId)[1];
+    const data = await trading.coder.accounts.encode("tariffConfig", {
+      wheelingAuthority: payer.publicKey, lossAuthority: payer.publicKey,
+      wheelingBps, lossBps, bump,
+    } as any);
+    svm.setAccount(tariffConfigPda, { lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))), data, owner: tradingId, executable: false, rentEpoch: 0 } as any);
+  }
+
   async function depositEscrow(user: Keypair, mint: PublicKey, wallet: PublicKey, amount: number, prog: PublicKey) {
     const ix = await trading.methods
       .depositEscrow(new BN(amount))
@@ -263,7 +277,6 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       buyerZone?: number; sellerZone?: number;
       buyerExpires?: number; sellerExpires?: number;
       energyAmount?: number; matchAmount?: number; matchPrice?: number;
-      wheeling?: number; loss?: number;
       zoneMarket?: PublicKey; zoneShard?: PublicKey; zoneCapacity?: PublicKey | null;
       recMint?: PublicKey | null; recTokenProgram?: PublicKey;
     } = {}
@@ -277,8 +290,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const matchPrice = o.matchPrice ?? MATCH_PRICE;
     const zoneMarket = o.zoneMarket ?? zoneMarketPda;
     const zoneShard = o.zoneShard ?? zoneShardPda;
-    const zoneCapacity = o.zoneCapacity ?? null; // Tier-A: cross-zone passes it via remaining_accounts[1]
-    const wheeling = o.wheeling ?? 1, loss = o.loss ?? 1;
+    const zoneCapacity = o.zoneCapacity ?? null; // Tier-A: cross-zone passes it via remaining_accounts[3]
 
     const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(seedA, 0);
     const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(seedB, 0);
@@ -296,7 +308,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(energyAmount), pricePerKwh: new BN(50), side: sellerSide, zoneId: sellerZone, expiresAt: new BN(sellerExpires) };
 
     const settleIx = await trading.methods
-      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), new BN(wheeling), new BN(loss), [...tradeId])
+      .settleOffchainMatch(buyerPayload as any, sellerPayload as any, new BN(matchAmount), new BN(matchPrice), [...tradeId])
       .accounts({
         market: marketPda,
         zoneMarket,
@@ -323,16 +335,14 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
         treasuryState: withTreasury ? treasuryPda : null,
       } as any)
       // Governance governance_config is remaining_accounts[0] (maintenance gate); the per-match
-      // TradeNullifier is remaining_accounts[1] (writable — created on first settle, replay
-      // guard); ZoneCapacity, when supplied (cross-zone), is remaining_accounts[2] (writable —
-      // committed_flow counter).
-      // Governance governance_config is remaining_accounts[0] (maintenance gate); the per-match
-      // TradeNullifier is remaining_accounts[1]; ZoneCapacity, when cross-zone, is [2]. The
-      // OPT-IN REC group follows: [rec_base..] = rec_mint, seller_rec_escrow, buyer_rec_escrow,
-      // rec_token_program, where rec_base = 3 cross-zone (slot [2] taken) else 2.
+      // TradeNullifier is remaining_accounts[1]; the mandatory TariffConfig (wheeling/loss
+      // schedule) is remaining_accounts[2]; ZoneCapacity, when cross-zone, is [3]. The OPT-IN
+      // REC group follows: [rec_base..] = rec_mint, seller_rec_escrow, buyer_rec_escrow,
+      // rec_token_program, where rec_base = 4 cross-zone (slot [3] taken) else 3.
       .remainingAccounts([
         { pubkey: governanceConfigPda, isSigner: false, isWritable: false },
         { pubkey: tradeNullifier, isSigner: false, isWritable: true },
+        { pubkey: tariffConfigPda, isSigner: false, isWritable: false },
         ...(zoneCapacity ? [{ pubkey: zoneCapacity, isSigner: false, isWritable: true }] : []),
         ...(o.recMint
           ? [
@@ -359,6 +369,8 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     governance = new Program(governanceIdl, { connection: {}, publicKey: PublicKey.default } as any);
     [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], GOVERNANCE_PROGRAM_ID);
     await installGovernanceConfig(false); // operational by default
+    [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingId);
+    await installTariffConfig(2, 2); // -> wheeling=1, loss=1 on a 5000 total (matches the old hardcoded args)
     svm.addProgramFromFile(tradingId, "target/deploy/trading.so");
     svm.addProgramFromFile(energyId, "target/deploy/energy_token.so");
     svm.addProgramFromFile(treasuryId, "target/deploy/treasury.so");
@@ -681,8 +693,9 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const readEnergy = () => Buffer.from(svm.getAccount(sellerEngEscrow)!.data).readBigUInt64LE(64);
     const before = readEnergy();
 
-    // First settle of the partial match — lands (wheeling/loss 0 to keep currency math simple).
-    const partial = { seedA, seedB, energyAmount: 100, matchAmount: 40, matchPrice: 50, wheeling: 0, loss: 0 };
+    // First settle of the partial match — lands (total_currency_value rounds to 0 at this
+    // tiny scale, so wheeling/loss are automatically 0 too — no override needed).
+    const partial = { seedA, seedB, energyAmount: 100, matchAmount: 40, matchPrice: 50 };
     sendV0(await buildSettleIxs(false, partial), false);
     const mid = readEnergy();
     expect((before - mid).toString(), "first partial settle moves 40 energy").to.equal("40");
@@ -751,11 +764,18 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   });
 
   it("rejects network charges above the cap (ChargesExceedCap)", async () => {
-    // total = 100*50 = 5000; cap = 20% = 1000. wheeling+loss = 1200 > 1000 -> rejected,
-    // so a settler can't siphon the seller's proceeds to the collectors. Reverts before any
-    // transfer (no extra funding needed).
-    const blob = sendV0(await buildSettleIxs(false, { seedA: 0x41, seedB: 0x42, wheeling: 600, loss: 600 }), true);
-    expect(blob, blob).to.match(/ChargesExceedCap/);
+    // wheeling_bps/loss_bps are now capped at TariffConfig set-time (TariffRateExceedsCap),
+    // so a legitimately-set config can never produce over-cap charges. This proves the
+    // settle-time `net_seller_after_charges` check still catches it as defense-in-depth if a
+    // config were ever poisoned/stale: 6000+6000 bps (120%) on a 5000 total -> wheeling=loss=3000,
+    // network=6000 > cap(1000). Restore the normal (2,2) config afterwards.
+    await installTariffConfig(6000, 6000);
+    try {
+      const blob = sendV0(await buildSettleIxs(false, { seedA: 0x41, seedB: 0x42 }), true);
+      expect(blob, blob).to.match(/ChargesExceedCap/);
+    } finally {
+      await installTariffConfig(2, 2);
+    }
   });
 
   it("rejects settlement while the system is in maintenance mode (MaintenanceMode)", async () => {
