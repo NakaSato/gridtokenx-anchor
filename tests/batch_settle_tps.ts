@@ -258,10 +258,6 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       escrowPda(buyer.publicKey, energyMintPda),
       tradeNullifier, // per-match replay guard (7th per-pair account)
     ].map((pubkey) => ({ pubkey, isSigner: false, isWritable: true }));
-    // Trailing governance governance_config (0.3 gate), then the mandatory tariff_config.
-    remaining.push({ pubkey: governanceConfigPda, isSigner: false, isWritable: false });
-    remaining.push({ pubkey: tariffConfigPda, isSigner: false, isWritable: false });
-
     // §2c Part B: the caller-chosen settle shard. Under SHARD_SPREAD, rotate it per
     // settle (idx % 16) so concurrent settles hit DISTINCT collector + accumulator
     // shards — the whole point of the rework. Pinned to shard 0 otherwise (baseline
@@ -276,6 +272,21 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
         SystemProgram.transfer({ fromPubkey: authority, toPubkey: txPayer.publicKey, lamports: 0.1 * LAMPORTS_PER_SOL })
       ));
     }
+    // Operator gate (#8b): the settle payer must be a governance-admitted, active aggregator.
+    // `authority` is admitted once by bootstrap.ts; a per-settle MULTIPAYER keypair needs its
+    // own admission here.
+    const txPayerAggregatorEntry = PublicKey.findProgramAddressSync([Buffer.from("aggregator"), txPayer.publicKey.toBuffer()], governance.programId)[0];
+    if (MULTIPAYER) {
+      await governance.methods.admitAggregator(txPayer.publicKey).accounts({
+        aggregatorEntry: txPayerAggregatorEntry, governanceConfig: governanceConfigPda, authority, systemProgram: SystemProgram.programId,
+      } as any).rpc();
+    }
+
+    // Trailing governance governance_config (0.3 gate), then the mandatory tariff_config,
+    // then the mandatory aggregator_entry (0.4b operator gate) for THIS settle's payer.
+    remaining.push({ pubkey: governanceConfigPda, isSigner: false, isWritable: false });
+    remaining.push({ pubkey: tariffConfigPda, isSigner: false, isWritable: false });
+    remaining.push({ pubkey: txPayerAggregatorEntry, isSigner: false, isWritable: false });
 
     const settleIx = await trading.methods
       .batchSettleOffchainMatch([matchPair] as any, merkleRoot, vatAmount, 700, thisBatchId, settleShardByte)

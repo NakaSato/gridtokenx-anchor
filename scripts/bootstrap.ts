@@ -297,6 +297,29 @@ async function main() {
     console.log('  ℹ️  Tariff Config already exists or failed:', e.message);
   }
 
+  // 4c. Admit the deployer as an aggregator (role-map.md fix #8b): settle_offchain_match /
+  // batch_settle_offchain_match now require the settle payer to be a governance-admitted,
+  // active aggregator. Idempotent (init_if_needed re-activates on re-run).
+  console.log('\n[4c/5] Admitting deployer as aggregator (settlement operator gate)...');
+  const [aggregatorEntryPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('aggregator'), authority.toBuffer()],
+    governanceProgram.programId
+  );
+  try {
+    await governanceProgram.methods
+      .admitAggregator(authority)
+      .accounts({
+        aggregatorEntry: aggregatorEntryPda,
+        governanceConfig: PublicKey.findProgramAddressSync([Buffer.from('governance_config')], governanceProgram.programId)[0],
+        authority: authority,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+    console.log('  ✅ Deployer admitted as aggregator:', aggregatorEntryPda.toBase58());
+  } catch (e: any) {
+    console.log('  ℹ️  Aggregator admission already exists or failed:', e.message);
+  }
+
   // 4b. Initialize Zones 0, 1, 2, 3
   for (const zoneId of [0, 1, 2, 3, 7583, 7584, 7585, 7586, 7587, 7588]) {
     console.log(`  Initializing Zone ${zoneId} Market...`);

@@ -92,4 +92,8 @@ pub enum TradingError {
     InvalidTariffConfig,
     #[msg("Combined wheeling + loss tariff rate exceeds the allowed cap")]
     TariffRateExceedsCap,
+    #[msg("Settlement payer is not a governance-admitted, active aggregator")]
+    AggregatorNotAdmitted,
+    #[msg("Aggregator entry account is not the canonical PDA / malformed")]
+    InvalidAggregatorEntry,
 }

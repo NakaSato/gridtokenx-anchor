@@ -55,7 +55,7 @@ the **REC token issuer** (1 REC token = 1 MWh) — separating "who validates tra
 | Slashability         | **Active-at-misbehavior, independent of current stake**           | escapable via unstake→Suspended ([`registry/src/lib.rs:803`](../../programs/registry/src/lib.rs) vs [`:1208`](../../programs/registry/src/lib.rs)) |
 | Consensus set        | **segment-split**: EGAT = wholesale validator, MEA+PEA = retail validators; ERC not a consensus node | named n=3 flat set → one node down can halt (Tower BFT ≥1/3); no wholesale/retail segmentation exists yet |
 | Wheeling / loss      | **signed tariff** EGAT (transmission) / MEA-PEA (distribution), **capped vs trade value** | on-chain `TariffConfig` — `wheeling_bps` settable only by `wheeling_authority` (EGAT), `loss_bps` only by `loss_authority` (MEA/PEA); computed at settle time, no longer a caller-supplied arg ([`state/tariff_config.rs`](../../programs/trading/src/state/tariff_config.rs), [`instructions/tariff.rs`](../../programs/trading/src/instructions/tariff.rs)) |
-| Settlement gating    | **governance-gated + operator-signed**                            | permissionless `payer`, no `is_operational` ([`settle_offchain.rs:219`](../../programs/trading/src/instructions/settle_offchain.rs), [`:100`](../../programs/trading/src/instructions/settle_offchain.rs)) |
+| Settlement gating    | **governance-gated + operator-signed**                            | `payer` on `settle_offchain_match`/`batch_settle_offchain_match` must be a governance-admitted, active aggregator (`require_admitted_aggregator`, [`settle_offchain.rs`](../../programs/trading/src/instructions/settle_offchain.rs)); `execute_atomic_settlement` (custodial trading-service path) intentionally out of scope — its `market_authority` signer already ties to `market.authority` |
 | Reserve attestation  | **independent custodian** key                                     | arbitrary admin scalar ([`treasury/src/lib.rs:447`](../../programs/treasury/src/lib.rs)) |
 | Slash destination    | **regulator / consumer-rebate pool**                              | treasury `reward_vault` → yield-stakers |
 
@@ -67,7 +67,7 @@ the **REC token issuer** (1 REC token = 1 MWh) — separating "who validates tra
 5. **Slashability** — block unstake-below-MIN while Active, or keep slashable regardless of status. *(done — 0.2 + deregister)*
 6. **Consensus set** — split into wholesale (EGAT) / retail (MEA+PEA) segments per §1; document k, n per segment (see §5 open question on shared-vs-independent finality).
 7. **Wheeling / loss** — require a tariff-authority signer; bound charge ≤ trade value. *(done — 0.4 cap + 0.4b on-chain `TariffConfig`, key-gated not live-signed — see §2 rationale)*
-8. **Settlement gating** — add `governance_config` + `is_operational()`; require admitted-aggregator signer. *(gate done — 0.3; operator signer pending)*
+8. **Settlement gating** — add `governance_config` + `is_operational()`; require admitted-aggregator signer. *(done — 0.3 gate; 0.4b operator gate on the off-chain-signed settle paths; `execute_atomic_settlement` scoped out, see §2 rationale)*
 9. **Reserve attestation** — separate `attestor` from param admin (already in code); ideally add on-chain proof.
 10. **Slash destination** — repoint to an ERC / consumer-rebate pool (config — 1.2).
 

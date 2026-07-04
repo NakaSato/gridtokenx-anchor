@@ -67,6 +67,10 @@ describe("escrow-settlement", () => {
   // from this, not caller args. bootstrap.ts inits it at 10 bps wheeling / 5 bps loss.
   const [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingProgram.programId);
   const tariffRemaining = [{ pubkey: tariffConfigPda, isSigner: false, isWritable: false }];
+  // Mandatory aggregator_entry (role-map.md fix #8b) — settle payer (`authority`) must be a
+  // governance-admitted, active aggregator. bootstrap.ts admits it.
+  const [aggregatorEntryPda] = PublicKey.findProgramAddressSync([Buffer.from("aggregator"), authority.toBuffer()], governanceProgram.programId);
+  const aggregatorRemaining = [{ pubkey: aggregatorEntryPda, isSigner: false, isWritable: false }];
 
   let marketPda: PublicKey;
   let zoneMarketPda: PublicKey;
@@ -323,9 +327,9 @@ describe("escrow-settlement", () => {
           treasuryProgram: null,
           treasuryState: null,
         } as any)
-        // gov (governance_config) @0, trade_nullifier @1, tariff_config @2 — order mirrors
+        // gov (governance_config) @0, trade_nullifier @1, tariff_config @2, aggregator_entry @3 — order mirrors
         // the handler reads.
-        .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }, ...tariffRemaining])
+        .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }, ...tariffRemaining, ...aggregatorRemaining])
         .rpc();
     } catch (e: any) {
       threw = true;
@@ -426,9 +430,9 @@ describe("escrow-settlement", () => {
         treasuryProgram: null,
         treasuryState: null,
       } as any)
-      // gov (governance_config) @0, trade_nullifier @1, tariff_config @2 — order mirrors
+      // gov (governance_config) @0, trade_nullifier @1, tariff_config @2, aggregator_entry @3 — order mirrors
       // the handler reads.
-      .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }, ...tariffRemaining])
+      .remainingAccounts([...govRemaining, { pubkey: tradeNullifier, isSigner: false, isWritable: true }, ...tariffRemaining, ...aggregatorRemaining])
       .instruction();
 
     // The settle path carries ~20 accounts + two Ed25519 verify ixs, which overflows a

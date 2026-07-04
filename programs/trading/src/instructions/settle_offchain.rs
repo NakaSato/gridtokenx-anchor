@@ -141,6 +141,24 @@ fn tariff_rates(info: &AccountInfo, program_id: &Pubkey) -> Result<(u64, u64)> {
     Ok((wheeling_bps, loss_bps))
 }
 
+/// Require the settlement `payer` to be an active, governance-admitted aggregator (role-map.md
+/// fix #8b) — the bond cannot be self-promoted; only a licensed, admitted operator may submit
+/// settlements. Mirrors registry's `register_validator` aggregator-bond gate exactly (raw-byte
+/// read of governance's `AggregatorEntry`, no cross-program Cargo cycle since `governance` is
+/// already a real dependency here — the raw read is only to fit the stack ceiling). Layout:
+/// [0..8) disc | [8..40) aggregator | [40..48) admitted_at | [48..56) updated_at | [56] active
+/// | [57] bump.
+fn require_admitted_aggregator(payer: &Pubkey, info: &AccountInfo) -> Result<()> {
+    require_keys_eq!(*info.owner, governance::ID, TradingError::AggregatorNotAdmitted);
+    let (expected, _bump) = Pubkey::find_program_address(&[b"aggregator", payer.as_ref()], &governance::ID);
+    require_keys_eq!(*info.key, expected, TradingError::AggregatorNotAdmitted);
+    let data = info.try_borrow_data()?;
+    require!(data.len() >= 57, TradingError::InvalidAggregatorEntry);
+    require!(&data[8..40] == payer.as_ref(), TradingError::AggregatorNotAdmitted);
+    require!(data[56] == 1, TradingError::AggregatorNotAdmitted);
+    Ok(())
+}
+
 /// The fungible REC base units that must move for a settled energy quantity. `match_amount`
 /// is 9-decimal energy atomic (kWh × 1e9); the REC mint is 6-decimal with 1 kWh = 1_000 base
 /// units (the same factor the order-time gate applies to its kWh `energy_amount`). So REC =
@@ -550,11 +568,11 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     #[account(constraint = zone_market.load()?.market == market.key())]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
 
-    // NOTE: governance governance_config, then the mandatory tariff_config, then an optional
-    // ZoneCapacity are passed as trailing remaining accounts (after the match_count*7
-    // per-pair accounts), not named fields — stack-limit workaround identical to the
-    // single-match context. Validated in-handler by `require_governance_operational` /
-    // `tariff_rates`.
+    // NOTE: governance governance_config, then the mandatory tariff_config, then the
+    // mandatory aggregator_entry (operator gate, #8b), then an optional ZoneCapacity are
+    // passed as trailing remaining accounts (after the match_count*7 per-pair accounts), not
+    // named fields — stack-limit workaround identical to the single-match context. Validated
+    // in-handler by `require_governance_operational` / `tariff_rates` / `require_admitted_aggregator`.
 
     pub currency_mint: Box<InterfaceAccount<'info, Mint>>,
     pub energy_mint: Box<InterfaceAccount<'info, Mint>>,
@@ -656,6 +674,15 @@ pub fn settle_offchain_match<'info>(
         .ok_or(TradingError::InvalidGovernanceAccount)?;
     require_governance_operational(gov_info)?;
 
+    // --- 0b. OPERATOR GATE (role-map.md fix #8b) ---
+    // The settlement payer must be a governance-admitted, active aggregator — settlement
+    // cannot be submitted by an arbitrary funded wallet. Mandatory remaining_accounts[3].
+    let aggregator_entry_info = ctx
+        .remaining_accounts
+        .get(3)
+        .ok_or(TradingError::AggregatorNotAdmitted)?;
+    require_admitted_aggregator(&ctx.accounts.payer.key(), aggregator_entry_info)?;
+
     // --- 1. Ed25519 SIGNATURE VERIFICATION ---
     let sysvar_info = &ctx.accounts.sysvar_instructions;
 
@@ -695,11 +722,11 @@ pub fn settle_offchain_match<'info>(
     let cross_zone = zone_market.capacity > 0
         && (seller_payload.zone_id != zone_market.zone_id || buyer_payload.zone_id != zone_market.zone_id);
     if cross_zone {
-        // Cross-zone → ZoneCapacity (writable) is MANDATORY as remaining_accounts[3] (index 0
+        // Cross-zone → ZoneCapacity (writable) is MANDATORY as remaining_accounts[4] (index 0
         // is the governance governance_config, index 1 the trade_nullifier, index 2 the
-        // mandatory tariff_config); omitting it cannot bypass the ceiling. committed_flow is
-        // the single source of truth.
-        let zc_info = ctx.remaining_accounts.get(3).ok_or(TradingError::ZoneCapacityRequired)?;
+        // mandatory tariff_config, index 3 the mandatory aggregator_entry); omitting it cannot
+        // bypass the ceiling. committed_flow is the single source of truth.
+        let zc_info = ctx.remaining_accounts.get(4).ok_or(TradingError::ZoneCapacityRequired)?;
         let zc_loader = load_zone_capacity(zc_info, &ctx.accounts.zone_market.key(), ctx.program_id)?;
         let mut zc = zc_loader.load_mut()?;
         let new_total_flow = zc.committed_flow.checked_add(match_amount).ok_or(TradingError::Overflow)?;
@@ -827,9 +854,9 @@ pub fn settle_offchain_match<'info>(
 
     // REC (renewable attribute): seller escrow -> buyer escrow. OPT-IN — moves only when the
     // REC group is passed via remaining_accounts. Base index follows the mandatory
-    // tariff_config[2] and the conditional ZoneCapacity slot: [4..] cross-zone (slot [3]
-    // taken), [3..] intra-zone.
-    let rec_base = if cross_zone { 4 } else { 3 };
+    // tariff_config[2] + aggregator_entry[3] and the conditional ZoneCapacity slot: [5..]
+    // cross-zone (slot [4] taken), [4..] intra-zone.
+    let rec_base = if cross_zone { 5 } else { 4 };
     let rec_amount = rec_base_units_for(match_amount)?;
     transfer_rec_if_present(
         ctx.remaining_accounts,
@@ -969,12 +996,12 @@ pub fn batch_settle_offchain_match<'info>(
     let sysvar_info = &ctx.accounts.sysvar_instructions;
     let remaining_accounts = ctx.remaining_accounts;
     // Layout: match_count*7 per-pair accounts (6 settle accounts + 1 TradeNullifier each),
-    // then governance_config (at match_count*7), then the MANDATORY tariff_config (at
-    // match_count*7 + 1), then an OPTIONAL ZoneCapacity account (at match_count*7 + 2) for
-    // cross-zone batches (Tier-A).
+    // then governance_config (at match_count*7), the MANDATORY tariff_config (at
+    // match_count*7 + 1), the MANDATORY aggregator_entry (at match_count*7 + 2), then an
+    // OPTIONAL ZoneCapacity account (at match_count*7 + 3) for cross-zone batches (Tier-A).
     let base = match_count * 7;
     require!(
-        remaining_accounts.len() == base + 2 || remaining_accounts.len() == base + 3,
+        remaining_accounts.len() == base + 3 || remaining_accounts.len() == base + 4,
         TradingError::InvalidAmount
     );
 
@@ -986,6 +1013,10 @@ pub fn batch_settle_offchain_match<'info>(
     // per-match caller args). Fetched once; every pair in the batch shares one rate.
     let (wheeling_bps, loss_bps) = tariff_rates(&remaining_accounts[base + 1], ctx.program_id)?;
 
+    // Operator gate (role-map.md fix #8b) — payer must be a governance-admitted, active
+    // aggregator. Same check as the single-match path.
+    require_admitted_aggregator(&ctx.accounts.payer.key(), &remaining_accounts[base + 2])?;
+
     let clock = Clock::get()?;
     let market = ctx.accounts.market.load()?;
     // Tier-A: zone_market READ-ONLY; committed_flow on the ZoneCapacity PDA (cross-zone only).
@@ -995,10 +1026,10 @@ pub fn batch_settle_offchain_match<'info>(
 
     // Hoist keys/program ids out of the loop to avoid repeated borrows.
     let program_id = ctx.program_id;
-    // Optional cross-zone capacity counter (remaining_accounts[base + 2]); loaded once,
+    // Optional cross-zone capacity counter (remaining_accounts[base + 3]); loaded once,
     // load_mut per cross-zone match. None when the batch is purely intra-zone.
-    let zone_capacity_loader: Option<AccountLoader<ZoneCapacity>> = if remaining_accounts.len() > base + 2 {
-        Some(load_zone_capacity(&remaining_accounts[base + 2], &ctx.accounts.zone_market.key(), program_id)?)
+    let zone_capacity_loader: Option<AccountLoader<ZoneCapacity>> = if remaining_accounts.len() > base + 3 {
+        Some(load_zone_capacity(&remaining_accounts[base + 3], &ctx.accounts.zone_market.key(), program_id)?)
     } else {
         None
     };
@@ -1199,7 +1230,7 @@ pub fn batch_settle_offchain_match<'info>(
         )?;
         // NOTE: REC-token movement is NOT wired into the batch path — only the single-match
         // `settle_offchain_match` moves the renewable attribute (opt-in, via remaining_accounts).
-        // The batch layout is a rigid `match_count*7 + 2|3` scheme with strict length asserts;
+        // The batch layout is a rigid `match_count*7 + 3|4` scheme with strict length asserts;
         // a trailing per-pair REC group would need length-disambiguation that adds risk to this
         // security-critical path, and the batch is single-tx-capped at 1 match in practice
         // (Ed25519-per-match data can't ALT-compress), so the single path covers real settlement.

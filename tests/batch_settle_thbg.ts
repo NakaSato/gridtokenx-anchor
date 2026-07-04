@@ -91,6 +91,9 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
   // wheeling/loss are now computed from this on-chain schedule, not per-match caller args
   // (role-map.md fix #7b) — bootstrap.ts inits it.
   const [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], trading.programId);
+  // Mandatory aggregator_entry (role-map.md fix #8b) — settle payer (`authority`) must be a
+  // governance-admitted, active aggregator. bootstrap.ts admits it.
+  const [aggregatorEntryPda] = PublicKey.findProgramAddressSync([Buffer.from("aggregator"), authority.toBuffer()], governance.programId);
   const payer = (provider.wallet as any).payer as Keypair;
 
   const zoneId = 0;
@@ -305,11 +308,13 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
       );
     }
     // Pair accounts (match_count*7, incl. per-match trade_nullifier) followed by the
-    // trailing governance governance_config (0.3) then the mandatory tariff_config.
+    // trailing governance governance_config (0.3), the mandatory tariff_config, then the
+    // mandatory aggregator_entry (0.4b operator gate).
     const remainingMeta = [
       ...remaining.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true })),
       { pubkey: governanceConfigPda, isSigner: false, isWritable: false },
       { pubkey: tariffConfigPda, isSigner: false, isWritable: false },
+      { pubkey: aggregatorEntryPda, isSigner: false, isWritable: false },
     ];
 
     // Per-payer shards.

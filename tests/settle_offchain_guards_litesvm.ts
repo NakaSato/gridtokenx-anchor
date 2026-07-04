@@ -14,6 +14,7 @@
 //   - InvalidOrderSide: a payload with the wrong side flag.
 //   - InvalidAmount: a zero match amount.
 //   - CapacityExceeded: a cross-zone match overrunning the zone's wheeling capacity.
+//   - AggregatorNotAdmitted: settle payer is not a governance-admitted, active aggregator (#8b).
 //
 // The ~23-account settle is compressed through a hand-built ALT (see sendV0/installAlt):
 // a v0 message can't serialize >1232 bytes even in litesvm (web3.js caps the buffer).
@@ -25,7 +26,7 @@ import { Trading } from "../target/types/trading";
 import { EnergyToken } from "../target/types/energy_token";
 import { Treasury } from "../target/types/treasury";
 import { Governance } from "../target/types/governance";
-import { GOVERNANCE_PROGRAM_ID } from "./litesvm-admit";
+import { GOVERNANCE_PROGRAM_ID, admitAggregator } from "./litesvm-admit";
 import { expect } from "chai";
 import {
   PublicKey,
@@ -120,6 +121,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   let treasuryPda: PublicKey;
   let thbgMint: PublicKey;
   let tariffConfigPda: PublicKey;
+  let aggregatorEntryPda: PublicKey;
 
   // A separate low-capacity zone (zone 7, capacity 50) for the cross-zone CapacityExceeded case.
   const LOW_ZONE = 7;
@@ -290,7 +292,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     const matchPrice = o.matchPrice ?? MATCH_PRICE;
     const zoneMarket = o.zoneMarket ?? zoneMarketPda;
     const zoneShard = o.zoneShard ?? zoneShardPda;
-    const zoneCapacity = o.zoneCapacity ?? null; // Tier-A: cross-zone passes it via remaining_accounts[3]
+    const zoneCapacity = o.zoneCapacity ?? null; // Tier-A: cross-zone passes it via remaining_accounts[4]
 
     const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(seedA, 0);
     const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(seedB, 0);
@@ -336,13 +338,15 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       } as any)
       // Governance governance_config is remaining_accounts[0] (maintenance gate); the per-match
       // TradeNullifier is remaining_accounts[1]; the mandatory TariffConfig (wheeling/loss
-      // schedule) is remaining_accounts[2]; ZoneCapacity, when cross-zone, is [3]. The OPT-IN
-      // REC group follows: [rec_base..] = rec_mint, seller_rec_escrow, buyer_rec_escrow,
-      // rec_token_program, where rec_base = 4 cross-zone (slot [3] taken) else 3.
+      // schedule) is remaining_accounts[2]; the mandatory aggregator_entry (operator gate,
+      // #8b) is [3]; ZoneCapacity, when cross-zone, is [4]. The OPT-IN REC group follows:
+      // [rec_base..] = rec_mint, seller_rec_escrow, buyer_rec_escrow, rec_token_program,
+      // where rec_base = 5 cross-zone (slot [4] taken) else 4.
       .remainingAccounts([
         { pubkey: governanceConfigPda, isSigner: false, isWritable: false },
         { pubkey: tradeNullifier, isSigner: false, isWritable: true },
         { pubkey: tariffConfigPda, isSigner: false, isWritable: false },
+        { pubkey: aggregatorEntryPda, isSigner: false, isWritable: false },
         ...(zoneCapacity ? [{ pubkey: zoneCapacity, isSigner: false, isWritable: true }] : []),
         ...(o.recMint
           ? [
@@ -371,6 +375,8 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     await installGovernanceConfig(false); // operational by default
     [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingId);
     await installTariffConfig(2, 2); // -> wheeling=1, loss=1 on a 5000 total (matches the old hardcoded args)
+    // Operator gate (#8b): the settle payer must be a governance-admitted, active aggregator.
+    aggregatorEntryPda = admitAggregator(svm, payer.publicKey);
     svm.addProgramFromFile(tradingId, "target/deploy/trading.so");
     svm.addProgramFromFile(energyId, "target/deploy/energy_token.so");
     svm.addProgramFromFile(treasuryId, "target/deploy/treasury.so");
@@ -775,6 +781,21 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
       expect(blob, blob).to.match(/ChargesExceedCap/);
     } finally {
       await installTariffConfig(2, 2);
+    }
+  });
+
+  it("rejects settlement from a revoked (non-admitted) aggregator payer (AggregatorNotAdmitted)", async () => {
+    // Operator gate (#8b): flip the payer's AggregatorEntry.active byte off (revoke) and
+    // confirm the settle path halts. Restore afterwards so later tests are unaffected.
+    const entryAcct = svm.getAccount(aggregatorEntryPda)!;
+    const revoked = Buffer.from(entryAcct.data);
+    revoked[56] = 0;
+    svm.setAccount(aggregatorEntryPda, { lamports: entryAcct.lamports, data: revoked, owner: entryAcct.owner, executable: false });
+    try {
+      const blob = sendV0(await buildSettleIxs(false, { seedA: 0x71, seedB: 0x72 }), true);
+      expect(blob, blob).to.match(/AggregatorNotAdmitted/);
+    } finally {
+      svm.setAccount(aggregatorEntryPda, { lamports: entryAcct.lamports, data: Buffer.from(entryAcct.data), owner: entryAcct.owner, executable: false });
     }
   });
 
