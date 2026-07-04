@@ -187,10 +187,17 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   }
 
   // Energy 9-dec atomic (100 kWh = 100 * 1e9). Currency leg divides by 1e9
-  // (settle_offchain.rs:1081): total_value = amount*price/1e9 = 5000. A raw
+  // (settle_offchain.rs:1081): total_value = amount*price/1e9. A raw
   // matchAmount=100 rounds total_value to 0 — a degenerate (no-currency) swap.
-  const matchAmount = 100 * 1_000_000_000, matchPrice = 50;
-  const currencyValue = (matchAmount * matchPrice) / 1_000_000_000; // = 5000
+  //
+  // Price must clear net_seller_after_charges' 20% network-charge cap against the
+  // flat wheeling rate from bootstrap.ts (100_000 minor-units/kWh = 0.10 THB/kWh):
+  // wheeling_charge_val = matchAmount * wheeling_rate / 1e9 = 100 * 100_000 =
+  // 10_000_000, a fixed absolute cost independent of price. The old toy price (50)
+  // made total_value = 5000 — wheeling alone was ~2000x that, tripping
+  // ChargesExceedCap. See tests/batch_settle_thbg.ts for the same fix.
+  const matchAmount = 100 * 1_000_000_000, matchPrice = 2_000_000;
+  const currencyValue = (matchAmount * matchPrice) / 1_000_000_000; // = 200_000_000
   // Per-run salt written into order-id bytes [4..8) so trade_id (= buyerId[0..8] +
   // sellerId[0..8]) and the per-order/per-match nullifier PDAs are unique each run —
   // otherwise a re-run on a persistent validator reverts MatchAlreadySettled.
@@ -199,11 +206,11 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   async function seedPair(): Promise<{ buyer: Keypair; seller: Keypair }> {
     const buyer = await freshUser();
     const seller = await freshUser();
-    const buyerThbgAta = await fundThbg(buyer, 10_000);
+    const buyerThbgAta = await fundThbg(buyer, currencyValue);
     const sellerEnergyAta = await createAtaFor(energyMintPda, seller.publicKey);
     // Energy leg transfers the full atomic amount (now 100e9) — fund the escrow to match.
     await mintEnergyTo(sellerEnergyAta, seller.publicKey, matchAmount);
-    await deposit(buyer, buyerThbgAta, thbgMint, 10_000);
+    await deposit(buyer, buyerThbgAta, thbgMint, currencyValue);
     await deposit(seller, sellerEnergyAta, energyMintPda, matchAmount);
     // Receiving escrows (seller currency, buyer energy) must exist before settle.
     const sellerThbgAta = await fundThbg(seller, 10);
@@ -219,14 +226,14 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     const oid = (n: number) => { const x = Buffer.alloc(16); x.writeUInt32LE(n, 0); x.writeUInt32LE(RUN_SALT, 4); return x; };
     const buyerOrderId = oid(0x1000 + idx * 2);
     const sellerOrderId = oid(0x1001 + idx * 2);
-    const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount: matchAmount, pricePerKwh: 60, side: 0, zoneId, expiresAt: 0 });
-    const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount: matchAmount, pricePerKwh: 50, side: 1, zoneId, expiresAt: 0 });
+    const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount: matchAmount, pricePerKwh: 2_100_000, side: 0, zoneId, expiresAt: 0 });
+    const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount: matchAmount, pricePerKwh: 2_000_000, side: 1, zoneId, expiresAt: 0 });
     const edIxs = [
       Ed25519Program.createInstructionWithPrivateKey({ privateKey: buyer.secretKey, message: buyerMsg }),
       Ed25519Program.createInstructionWithPrivateKey({ privateKey: seller.secretKey, message: sellerMsg }),
     ];
-    const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(60), side: 0, zoneId, expiresAt: new BN(0) };
-    const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(50), side: 1, zoneId, expiresAt: new BN(0) };
+    const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(2_100_000), side: 0, zoneId, expiresAt: new BN(0) };
+    const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(2_000_000), side: 1, zoneId, expiresAt: new BN(0) };
     // Per-match trade_id (F3c) — keys the TradeNullifier replay guard.
     const tradeId = Buffer.concat([buyerOrderId.subarray(0, 8), sellerOrderId.subarray(0, 8)]);
     const tradeNullifier = PublicKey.findProgramAddressSync([Buffer.from("trade"), tradeId], trading.programId)[0];
