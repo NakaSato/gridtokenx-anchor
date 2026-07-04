@@ -10,6 +10,7 @@
 import { LiteSVM, FailedTransactionMetadata } from "litesvm";
 import { Program } from "@anchor-lang/core";
 import { Registry } from "../target/types/registry";
+import { Oracle } from "../target/types/oracle";
 import { expect } from "chai";
 import {
   PublicKey,
@@ -23,6 +24,7 @@ import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/registry.json");
+const oracleIdl = require("../target/idl/oracle.json");
 
 const METER_ID = "METER001";
 const MAX_DELTA = new BN("1000000000000"); // 1e12, the ReadingTooHigh ceiling
@@ -30,6 +32,7 @@ const MAX_DELTA = new BN("1000000000000"); // 1e12, the ReadingTooHigh ceiling
 describe("registry meter-reading validation guards (litesvm)", () => {
   let svm: LiteSVM;
   let program: Program<Registry>;
+  let oracleProgram: Program<Oracle>;
   let programId: PublicKey;
 
   const payer = Keypair.generate(); // registry authority + funder
@@ -42,6 +45,8 @@ describe("registry meter-reading validation guards (litesvm)", () => {
   let shardPda: PublicKey;
   let meterPda: PublicKey;
   let shardId: number;
+  let oracleDataPda: PublicKey;
+  let oracleMeterStatePda: PublicKey;
 
   function trySend(ixs: TransactionInstruction[], signers: Keypair[]): FailedTransactionMetadata | null {
     const tx = new Transaction();
@@ -66,15 +71,22 @@ describe("registry meter-reading validation guards (litesvm)", () => {
   function readingIx(gen: number | BN, con: number, ts: number, oracleAuth: PublicKey) {
     return program.methods
       .updateMeterReading(new BN(gen), new BN(con), new BN(ts))
-      .accounts({ registry: registryPda, meterAccount: meterPda, oracleAuthority: oracleAuth })
+      .accounts({
+        registry: registryPda,
+        meterAccount: meterPda,
+        oracleMeterState: oracleMeterStatePda,
+        oracleAuthority: oracleAuth,
+      } as any)
       .instruction();
   }
 
   before(async () => {
     svm = new LiteSVM().withDefaultPrograms();
     program = new Program(idl, { connection: {}, publicKey: PublicKey.default } as any);
+    oracleProgram = new Program(oracleIdl, { connection: {}, publicKey: PublicKey.default } as any);
     programId = program.programId;
     svm.addProgramFromFile(programId, "target/deploy/registry.so");
+    svm.addProgramFromFile(oracleProgram.programId, "target/deploy/oracle.so");
     svm.airdrop(payer.publicKey, BigInt(1_000_000_000_000));
 
     [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], programId);
@@ -82,6 +94,8 @@ describe("registry meter-reading validation guards (litesvm)", () => {
     shardId = user.publicKey.toBytes()[0] % 16;
     [shardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([shardId])], programId);
     [meterPda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), user.publicKey.toBuffer(), Buffer.from(METER_ID)], programId);
+    [oracleDataPda] = PublicKey.findProgramAddressSync([Buffer.from("oracle_data")], oracleProgram.programId);
+    [oracleMeterStatePda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), Buffer.from(METER_ID)], oracleProgram.programId);
 
     send([
       await program.methods.initialize().accounts({ registry: registryPda, authority: payer.publicKey, systemProgram: SystemProgram.programId }).instruction(),
@@ -95,6 +109,23 @@ describe("registry meter-reading validation guards (litesvm)", () => {
       owner: user.publicKey, payer: payer.publicKey, systemProgram: SystemProgram.programId,
     }).instruction()]);
     // NOTE: oracle authority intentionally NOT set yet — exercised by the first test.
+
+    // Seed the oracle's own record for this meter with the SAME (100, 50) values the
+    // "accepts a valid reading (control)" test below feeds into registry — the
+    // double-bookkeeping cross-check requires registry's totals to never exceed
+    // oracle's. Every other test in this suite fails registry's EARLIER guards
+    // (OracleNotConfigured/UnauthorizedOracle/etc.) before that check is ever reached,
+    // so this single submission is sufficient for the whole file.
+    send([
+      await oracleProgram.methods.initialize(payer.publicKey).accounts({
+        oracleData: oracleDataPda, authority: payer.publicKey, systemProgram: SystemProgram.programId,
+      } as any).instruction(),
+    ]);
+    send([
+      await oracleProgram.methods.submitMeterReading(METER_ID, new BN(100), new BN(50), new BN(0), 0).accounts({
+        oracleData: oracleDataPda, meterState: oracleMeterStatePda, authority: payer.publicKey, systemProgram: SystemProgram.programId,
+      } as any).instruction(),
+    ]);
   });
 
   it("rejects a reading before an oracle authority is configured (OracleNotConfigured)", async () => {

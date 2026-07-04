@@ -129,6 +129,7 @@ async function main() {
       .accounts({
         registry: registryPda,
         meterAccount: registryMeterPda,
+        oracleMeterState: oracleMeterStatePda,
         oracleAuthority: provider.wallet.publicKey,
       } as any)
       .rpc();

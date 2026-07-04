@@ -17,6 +17,7 @@
 import { LiteSVM, FailedTransactionMetadata } from "litesvm";
 import { Program } from "@anchor-lang/core";
 import { Registry } from "../target/types/registry";
+import { Oracle } from "../target/types/oracle";
 import { expect } from "chai";
 import {
   PublicKey,
@@ -30,6 +31,7 @@ import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/registry.json");
+const oracleIdl = require("../target/idl/oracle.json");
 
 const METER_ID = "METER001";
 const NET_GEN = 800; // gen 1000 - con 200
@@ -37,6 +39,7 @@ const NET_GEN = 800; // gen 1000 - con 200
 describe("registry settle_meter_balance + mark_erc_claimed (litesvm)", () => {
   let svm: LiteSVM;
   let program: Program<Registry>;
+  let oracleProgram: Program<Oracle>;
   let programId: PublicKey;
 
   const payer = Keypair.generate();   // registry authority + funder
@@ -49,6 +52,8 @@ describe("registry settle_meter_balance + mark_erc_claimed (litesvm)", () => {
   let shardPda: PublicKey;
   let meterPda: PublicKey;
   let shardId: number;
+  let oracleDataPda: PublicKey;
+  let oracleMeterStatePda: PublicKey;
 
   function trySend(ixs: TransactionInstruction[], signers: Keypair[]): FailedTransactionMetadata | null {
     const tx = new Transaction();
@@ -102,8 +107,10 @@ describe("registry settle_meter_balance + mark_erc_claimed (litesvm)", () => {
   before(async () => {
     svm = new LiteSVM().withDefaultPrograms();
     program = new Program(idl, { connection: {}, publicKey: PublicKey.default } as any);
+    oracleProgram = new Program(oracleIdl, { connection: {}, publicKey: PublicKey.default } as any);
     programId = program.programId;
     svm.addProgramFromFile(programId, "target/deploy/registry.so");
+    svm.addProgramFromFile(oracleProgram.programId, "target/deploy/oracle.so");
     svm.airdrop(payer.publicKey, BigInt(1_000_000_000_000));
     svm.airdrop(attacker.publicKey, BigInt(1_000_000_000));
 
@@ -112,6 +119,8 @@ describe("registry settle_meter_balance + mark_erc_claimed (litesvm)", () => {
     shardId = user.publicKey.toBytes()[0] % 16;
     [shardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([shardId])], programId);
     [meterPda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), user.publicKey.toBuffer(), Buffer.from(METER_ID)], programId);
+    [oracleDataPda] = PublicKey.findProgramAddressSync([Buffer.from("oracle_data")], oracleProgram.programId);
+    [oracleMeterStatePda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), Buffer.from(METER_ID)], oracleProgram.programId);
 
     send([
       await program.methods.initialize().accounts({ registry: registryPda, authority: payer.publicKey, systemProgram: SystemProgram.programId }).instruction(),
@@ -126,8 +135,20 @@ describe("registry settle_meter_balance + mark_erc_claimed (litesvm)", () => {
     }).instruction()]);
     // Configure oracle + push one reading → net generation = 800.
     send([await program.methods.setOracleAuthority(oracle.publicKey).accounts({ registry: registryPda, authority: payer.publicKey }).instruction()]);
+    send([
+      await oracleProgram.methods.initialize(payer.publicKey).accounts({
+        oracleData: oracleDataPda, authority: payer.publicKey, systemProgram: SystemProgram.programId,
+      } as any).instruction(),
+    ]);
+    // Matches the (1000, 200) fed into registry.update_meter_reading below — the
+    // double-bookkeeping cross-check requires registry's totals to never exceed oracle's.
+    send([
+      await oracleProgram.methods.submitMeterReading(METER_ID, new BN(1000), new BN(200), new BN(0), 0).accounts({
+        oracleData: oracleDataPda, meterState: oracleMeterStatePda, authority: payer.publicKey, systemProgram: SystemProgram.programId,
+      } as any).instruction(),
+    ]);
     send([await program.methods.updateMeterReading(new BN(1000), new BN(200), new BN(1000)).accounts({
-      registry: registryPda, meterAccount: meterPda, oracleAuthority: oracle.publicKey,
+      registry: registryPda, meterAccount: meterPda, oracleMeterState: oracleMeterStatePda, oracleAuthority: oracle.publicKey,
     } as any).instruction()], [oracle]);
   });
 

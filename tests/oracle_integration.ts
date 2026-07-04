@@ -168,6 +168,7 @@ describe("oracle-metering-integration", () => {
       .accounts({
         registry: registryPda,
         meterAccount: meterAccountPda,
+        oracleMeterState: meterStatePda,
         oracleAuthority: authority,
       } as any)
       .rpc();

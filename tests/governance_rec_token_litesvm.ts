@@ -19,6 +19,7 @@ import { LiteSVM, FailedTransactionMetadata, TransactionMetadata } from "litesvm
 import { Program } from "@anchor-lang/core";
 import { Governance } from "../target/types/governance";
 import { Registry } from "../target/types/registry";
+import { Oracle } from "../target/types/oracle";
 import { expect } from "chai";
 import {
   PublicKey,
@@ -39,6 +40,7 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const governanceIdl = require("../target/idl/governance.json");
 const registryIdl = require("../target/idl/registry.json");
+const oracleIdl = require("../target/idl/oracle.json");
 
 const METER_ID = "MTR-REC-001";
 const CERT_ID = "REC-CERT-0001";
@@ -47,6 +49,7 @@ describe("governance fungible REC token (litesvm)", () => {
   let svm: LiteSVM;
   let gov: Program<Governance>;
   let reg: Program<Registry>;
+  let oracleProgram: Program<Oracle>;
   let govId: PublicKey;
   let regId: PublicKey;
 
@@ -63,6 +66,8 @@ describe("governance fungible REC token (litesvm)", () => {
   let ercPda: PublicKey;
   let userRecAta: PublicKey;
   let shardId: number;
+  let oracleDataPda: PublicKey;
+  let oracleMeterStatePda: PublicKey;
 
   type IxLike = TransactionInstruction | Promise<TransactionInstruction>;
   async function trySend(ixs: IxLike[], extra: Keypair[] = []): Promise<FailedTransactionMetadata | null> {
@@ -113,10 +118,12 @@ describe("governance fungible REC token (litesvm)", () => {
 
     reg = new Program(registryIdl, { connection: {}, publicKey: PublicKey.default } as any);
     gov = new Program(governanceIdl, { connection: {}, publicKey: PublicKey.default } as any);
+    oracleProgram = new Program(oracleIdl, { connection: {}, publicKey: PublicKey.default } as any);
     regId = reg.programId;
     govId = gov.programId;
     svm.addProgramFromFile(regId, "target/deploy/registry.so");
     svm.addProgramFromFile(govId, "target/deploy/governance.so");
+    svm.addProgramFromFile(oracleProgram.programId, "target/deploy/oracle.so");
 
     svm.airdrop(payer.publicKey, BigInt(1_000_000_000_000));
 
@@ -129,6 +136,8 @@ describe("governance fungible REC token (litesvm)", () => {
     [recMint] = PublicKey.findProgramAddressSync([Buffer.from("rec_mint")], govId);
     [ercPda] = PublicKey.findProgramAddressSync([Buffer.from("erc_certificate"), Buffer.from(CERT_ID)], govId);
     userRecAta = getAssociatedTokenAddressSync(recMint, user.publicKey, false, TOKEN_2022_PROGRAM_ID);
+    [oracleDataPda] = PublicKey.findProgramAddressSync([Buffer.from("oracle_data")], oracleProgram.programId);
+    [oracleMeterStatePda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), Buffer.from(METER_ID)], oracleProgram.programId);
 
     // --- registry: arm a meter with net generation = 800 ---
     await send([
@@ -143,8 +152,20 @@ describe("governance fungible REC token (litesvm)", () => {
       owner: user.publicKey, payer: payer.publicKey, systemProgram: SystemProgram.programId,
     }).instruction()]);
     await send([await reg.methods.setOracleAuthority(oracle.publicKey).accounts({ registry: registryPda, authority: payer.publicKey }).instruction()]);
+    await send([
+      await oracleProgram.methods.initialize(payer.publicKey).accounts({
+        oracleData: oracleDataPda, authority: payer.publicKey, systemProgram: SystemProgram.programId,
+      } as any).instruction(),
+    ]);
+    // Matches the (1000, 200) fed into registry.update_meter_reading below — the
+    // double-bookkeeping cross-check requires registry's totals to never exceed oracle's.
+    await send([
+      await oracleProgram.methods.submitMeterReading(METER_ID, new BN(1000), new BN(200), new BN(0), 0).accounts({
+        oracleData: oracleDataPda, meterState: oracleMeterStatePda, authority: payer.publicKey, systemProgram: SystemProgram.programId,
+      } as any).instruction(),
+    ]);
     await send([await reg.methods.updateMeterReading(new BN(1000), new BN(200), new BN(1000)).accounts({
-      registry: registryPda, meterAccount: meterPda, oracleAuthority: oracle.publicKey,
+      registry: registryPda, meterAccount: meterPda, oracleMeterState: oracleMeterStatePda, oracleAuthority: oracle.publicKey,
     } as any).instruction()], [oracle]);
 
     // --- governance: init config + REC mint ---

@@ -6,6 +6,7 @@ import * as anchor from '@anchor-lang/core';
 import { Program } from '@anchor-lang/core';
 import { Registry } from '../target/types/registry';
 import { Governance } from '../target/types/governance';
+import { Oracle } from '../target/types/oracle';
 import { PublicKey, Keypair, SystemProgram } from '@solana/web3.js';
 import {
   TOKEN_2022_PROGRAM_ID,
@@ -20,7 +21,8 @@ async function main() {
   anchor.setProvider(provider);
   const registry = anchor.workspace.Registry as Program<Registry>;
   const governance = anchor.workspace.Governance as Program<Governance>;
-  const authority = provider.wallet.publicKey; // dev wallet = registry + governance authority
+  const oracle = anchor.workspace.Oracle as Program<Oracle>;
+  const authority = provider.wallet.publicKey; // dev wallet = registry + governance authority + oracle chain_bridge
 
   // Owner must be a registered Active user AND must sign issue_erc.
   const owner = Keypair.fromSecretKey(
@@ -43,6 +45,11 @@ async function main() {
     [Buffer.from('meter'), owner.publicKey.toBuffer(), Buffer.from(meterId)],
     registry.programId,
   );
+  const [oracleDataPda] = PublicKey.findProgramAddressSync([Buffer.from('oracle_data')], oracle.programId);
+  const [oracleMeterStatePda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('meter'), Buffer.from(meterId)],
+    oracle.programId,
+  );
 
   console.log('Registering meter', meterId, 'for', owner.publicKey.toBase58());
   try {
@@ -64,14 +71,34 @@ async function main() {
   }
 
   // Record generation on the meter so it has unclaimed kWh for the ERC.
+  // registry::update_meter_reading now cross-checks against oracle's own MeterState
+  // totals (double-bookkeeping guard) — submit the matching oracle reading first.
+  const readingTs = Math.floor(Date.now() / 1000);
+  console.log('Submitting oracle reading...');
+  try {
+    await oracle.methods
+      .submitMeterReading(meterId, new BN(10000), new BN(0), new BN(readingTs), zoneId)
+      .accounts({
+        oracleData: oracleDataPda,
+        meterState: oracleMeterStatePda,
+        authority,
+        systemProgram: SystemProgram.programId,
+      } as any)
+      .rpc();
+    console.log('  ✅ oracle reading submitted (10000 kWh)');
+  } catch (e: any) {
+    console.log('  ⚠️ submit_meter_reading:', e.message);
+  }
+
   // oracle_authority (the registry-configured oracle) must sign — that's the dev wallet.
   console.log('Recording meter generation...');
   try {
     await registry.methods
-      .updateMeterReading(new BN(10000), new BN(0), new BN(Math.floor(Date.now() / 1000)))
+      .updateMeterReading(new BN(10000), new BN(0), new BN(readingTs))
       .accounts({
         registry: registryPda,
         meterAccount: meterPda,
+        oracleMeterState: oracleMeterStatePda,
         oracleAuthority: authority,
       } as any)
       .rpc();

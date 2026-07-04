@@ -68,4 +68,6 @@ pub enum RegistryError {
     InvalidMeterStatusTransition,
     #[msg("Zone id must be non-negative")]
     InvalidZone,
+    #[msg("Registry energy total exceeds the oracle's own recorded total for this meter")]
+    OracleTotalMismatch,
 }

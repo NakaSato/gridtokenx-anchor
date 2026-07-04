@@ -19,6 +19,7 @@ import {
 import { assert } from "chai";
 import type { Governance } from "../target/types/governance";
 import type { Registry } from "../target/types/registry";
+import type { Oracle } from "../target/types/oracle";
 import { initializeGovernance, getGovernancePda } from "./utils/governance";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ describe("Governance Program", () => {
 
   const govProgram = anchor.workspace.Governance as Program<Governance>;
   const regProgram = anchor.workspace.Registry as Program<Registry>;
+  const oracleProgram = anchor.workspace.Oracle as Program<Oracle>;
   const authority = provider.wallet as anchor.Wallet;
 
   const governanceConfigPda = getGovernancePda(govProgram.programId);
@@ -92,6 +94,10 @@ describe("Governance Program", () => {
   const CERT_ID = `ERC-${RUN_TAG}`;
   const CERT2_ID = `ERC2-${RUN_TAG}`;
   const METER_ID = `METER-GOV-${RUN_TAG}`;
+  const oracleMeterStatePda = PublicKey.findProgramAddressSync(
+    [Buffer.from("meter"), Buffer.from(METER_ID)],
+    oracleProgram.programId,
+  )[0];
 
   let meterAccountPda: PublicKey;
   let ercPda: PublicKey;
@@ -102,6 +108,10 @@ describe("Governance Program", () => {
 
   // Lifted to suite scope so issueErc tests can reference it
   const registryPda = findRegistryPda(regProgram.programId);
+  const oracleDataPda = PublicKey.findProgramAddressSync(
+    [Buffer.from("oracle_data")],
+    oracleProgram.programId,
+  )[0];
 
   // ── DAO governance state ───────────────────────────────────────────────────
   const ZONE_ID = 301; // Ko Tao microgrid zone
@@ -268,19 +278,62 @@ describe("Governance Program", () => {
       /* oracle authority may already be set to this key */
     }
 
+    // 5b. Oracle: initialize (idempotent) so registry's double-bookkeeping cross-check
+    // against oracle_meter_state has a real, matching record to validate against.
+    try {
+      await oracleProgram.methods
+        .initialize(authority.publicKey)
+        .accounts({
+          oracleData: oracleDataPda,
+          authority: authority.publicKey,
+          systemProgram: SystemProgram.programId,
+        } as any)
+        .rpc();
+    } catch (_) {
+      /* already initialized */
+    }
+    try {
+      await oracleProgram.methods
+        .updateApiGateway(authority.publicKey)
+        .accounts({ oracleData: oracleDataPda, authority: authority.publicKey } as any)
+        .rpc();
+    } catch (_) {
+      /* gateway may already be this key */
+    }
+
     // 6. Seed meter reading so total_generation > 0 for ERC issuance
+    // On-chain-relative (not Date.now()): oracle's submit_meter_reading rejects a
+    // timestamp too far ahead of the validator's own Clock sysvar, which can drift
+    // behind wall-clock on a long-running local validator.
+    const slot = await provider.connection.getSlot();
+    const onChainNow = (await provider.connection.getBlockTime(slot)) ?? Math.floor(Date.now() / 1000);
+    const readingTs = onChainNow - 30;
+    try {
+      await oracleProgram.methods
+        .submitMeterReading(METER_ID, new BN(5000), new BN(500), new BN(readingTs), ZONE_ID)
+        .accounts({
+          oracleData: oracleDataPda,
+          meterState: oracleMeterStatePda,
+          authority: authority.publicKey,
+          systemProgram: SystemProgram.programId,
+        } as any)
+        .rpc();
+    } catch (e: any) {
+      console.log(`  ⚠ submitMeterReading skipped: ${e.message}`);
+    }
     try {
       await regProgram.methods
         .updateMeterReading(
           new BN(5000), // energyGenerated (kWh)
           new BN(500), // energyConsumed  (kWh)
-          new BN(Math.floor(Date.now() / 1000)), // readingTimestamp
+          new BN(readingTs), // readingTimestamp
         )
         .accounts({
           registry: registryPda,
           meterAccount: meterAccountPda,
+          oracleMeterState: oracleMeterStatePda,
           oracleAuthority: authority.publicKey,
-        })
+        } as any)
         .rpc();
       meterSeeded = true;
     } catch (e: any) {

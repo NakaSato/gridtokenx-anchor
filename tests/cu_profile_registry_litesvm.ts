@@ -11,6 +11,7 @@
 import { LiteSVM, FailedTransactionMetadata, TransactionMetadata } from "litesvm";
 import { Program } from "@anchor-lang/core";
 import { Registry } from "../target/types/registry";
+import { Oracle } from "../target/types/oracle";
 import { expect } from "chai";
 import { PublicKey, Keypair, Transaction, SystemProgram, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
@@ -19,6 +20,7 @@ import { assertBaseline, fixedKeypair } from "./cu-baseline";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/registry.json");
+const oracleIdl = require("../target/idl/oracle.json");
 
 const METER_ID = "METER001";
 const BUDGET = 200_000;
@@ -26,6 +28,7 @@ const BUDGET = 200_000;
 describe("registry CU profile (litesvm)", () => {
   let svm: LiteSVM;
   let program: Program<Registry>;
+  let oracleProgram: Program<Oracle>;
   let programId: PublicKey;
 
   const payer = fixedKeypair(1);
@@ -33,6 +36,7 @@ describe("registry CU profile (litesvm)", () => {
   const oracle = fixedKeypair(3);
 
   let registryPda: PublicKey, userPda: PublicKey, shardPda: PublicKey, meterPda: PublicKey;
+  let oracleDataPda: PublicKey, oracleMeterStatePda: PublicKey;
   let shardId: number;
 
   const profile: Array<{ ix: string; cu: number }> = [];
@@ -63,8 +67,10 @@ describe("registry CU profile (litesvm)", () => {
   before(async () => {
     svm = new LiteSVM().withDefaultPrograms();
     program = new Program(idl, { connection: {}, publicKey: PublicKey.default } as any);
+    oracleProgram = new Program(oracleIdl, { connection: {}, publicKey: PublicKey.default } as any);
     programId = program.programId;
     svm.addProgramFromFile(programId, "target/deploy/registry.so");
+    svm.addProgramFromFile(oracleProgram.programId, "target/deploy/oracle.so");
     svm.airdrop(payer.publicKey, BigInt(1_000_000_000_000));
 
     [registryPda] = PublicKey.findProgramAddressSync([Buffer.from("registry")], programId);
@@ -72,6 +78,21 @@ describe("registry CU profile (litesvm)", () => {
     shardId = user.publicKey.toBytes()[0] % 16;
     [shardPda] = PublicKey.findProgramAddressSync([Buffer.from("registry_shard"), Buffer.from([shardId])], programId);
     [meterPda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), user.publicKey.toBuffer(), Buffer.from(METER_ID)], programId);
+    [oracleDataPda] = PublicKey.findProgramAddressSync([Buffer.from("oracle_data")], oracleProgram.programId);
+    [oracleMeterStatePda] = PublicKey.findProgramAddressSync([Buffer.from("meter"), Buffer.from(METER_ID)], oracleProgram.programId);
+
+    send([
+      await oracleProgram.methods.initialize(payer.publicKey).accounts({
+        oracleData: oracleDataPda, authority: payer.publicKey, systemProgram: SystemProgram.programId,
+      } as any).instruction(),
+    ]);
+    // Matches the (100, 50) fed into registry.update_meter_reading below — the
+    // double-bookkeeping cross-check requires registry's totals to never exceed oracle's.
+    send([
+      await oracleProgram.methods.submitMeterReading(METER_ID, new BN(100), new BN(50), new BN(0), 0).accounts({
+        oracleData: oracleDataPda, meterState: oracleMeterStatePda, authority: payer.publicKey, systemProgram: SystemProgram.programId,
+      } as any).instruction(),
+    ]);
   });
 
   after(() => {
@@ -112,7 +133,12 @@ describe("registry CU profile (litesvm)", () => {
 
   it("registry.update_meter_reading", async () => {
     const ix = await program.methods.updateMeterReading(new BN(100), new BN(50), new BN(1000))
-      .accounts({ registry: registryPda, meterAccount: meterPda, oracleAuthority: oracle.publicKey }).instruction();
+      .accounts({
+        registry: registryPda,
+        meterAccount: meterPda,
+        oracleMeterState: oracleMeterStatePda,
+        oracleAuthority: oracle.publicKey,
+      } as any).instruction();
     expect(cu("registry.update_meter_reading", ix, [oracle])).to.be.below(BUDGET);
   });
 
