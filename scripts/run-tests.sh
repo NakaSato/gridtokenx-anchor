@@ -134,6 +134,8 @@ echo ""
 
 # ── Step 1: Build ─────────────────────────────────────────────────────────────
 if [[ "$SKIP_BUILD" == "false" ]]; then
+  log "Pinning program keypairs..."
+  ./scripts/pin-program-keys.sh
   log "Building programs..."
   START_BUILD=$SECONDS
   if anchor build 2>&1 | tee /tmp/anchor-build.log | grep -E "^error"; then

@@ -95,6 +95,8 @@ src/client/
 # Local keypairs (ephemeral, never commit private keys)
 currency-mint.json
 test-wallet-*.json
+*-wallet.json
+*-keypair.json
 
 # Scratch / one-off debug files
 scratch.ts
@@ -103,3 +105,9 @@ check.cjs
 
 # Local benchmark validator ledger
 .bench-ledger/
+
+# EXCEPTION to the no-committed-keypairs rule above: pinned LOCALNET program
+# deploy keypairs. They carry no value (dev-only program addresses) and exist
+# so program IDs survive `anchor clean` / fresh clones — see
+# scripts/pin-program-keys.sh.
+!keys/localnet/*-keypair.json
