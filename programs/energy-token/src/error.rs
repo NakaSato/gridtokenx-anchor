@@ -26,4 +26,6 @@ pub enum EnergyTokenError {
     RemoveValidatorNotFound,
     #[msg("Window start must be a positive 15-minute (900_000 ms) boundary")]
     MisalignedWindow,
+    #[msg("Invalid governance account — must be the canonical poa_config PDA")]
+    InvalidGovernanceAccount,
 }

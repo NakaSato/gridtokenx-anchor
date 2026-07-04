@@ -21,6 +21,7 @@ import {
 import BN from "bn.js";
 import { createRequire } from "module";
 import { assertBaseline, fixedKeypair } from "./cu-baseline";
+import { fabricateGovernanceConfig } from "./litesvm-admit";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/energy_token.json");
@@ -37,6 +38,7 @@ describe("energy-token CU profile (litesvm)", () => {
   const v1 = fixedKeypair(3); // registered REC validator
 
   let mintPda: PublicKey, infoPda: PublicKey, destAta: PublicKey, payerAta: PublicKey;
+  let governanceConfigPda: PublicKey;
 
   const profile: Array<{ ix: string; cu: number }> = [];
 
@@ -63,7 +65,7 @@ describe("energy-token CU profile (litesvm)", () => {
   }
 
   const addValidatorIx = (v: PublicKey) =>
-    program.methods.addRecValidator(v, "rec").accounts({ tokenInfo: infoPda, authority: payer.publicKey } as any).instruction();
+    program.methods.addRecValidator(v, "rec").accounts({ tokenInfo: infoPda, governanceConfig: governanceConfigPda, authority: payer.publicKey } as any).instruction();
   const mintIx = (recValidator: PublicKey) =>
     program.methods.mintToWallet(new BN(100)).accounts({
       mint: mintPda, tokenInfo: infoPda, destination: destAta, destinationOwner: destOwner.publicKey,
@@ -83,6 +85,7 @@ describe("energy-token CU profile (litesvm)", () => {
     [infoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], programId);
     destAta = getAssociatedTokenAddressSync(mintPda, destOwner.publicKey, false, TOKEN_2022_PROGRAM_ID);
     payerAta = getAssociatedTokenAddressSync(mintPda, payer.publicKey, false, TOKEN_2022_PROGRAM_ID);
+    governanceConfigPda = fabricateGovernanceConfig(svm, payer.publicKey);
   });
 
   after(() => {
@@ -128,7 +131,7 @@ describe("energy-token CU profile (litesvm)", () => {
   });
 
   it("energy_token.remove_rec_validator", async () => {
-    const ix = await program.methods.removeRecValidator(v1.publicKey).accounts({ tokenInfo: infoPda, authority: payer.publicKey } as any).instruction();
+    const ix = await program.methods.removeRecValidator(v1.publicKey).accounts({ tokenInfo: infoPda, governanceConfig: governanceConfigPda, authority: payer.publicKey } as any).instruction();
     expect(cu("energy_token.remove_rec_validator", ix)).to.be.below(BUDGET);
   });
 });

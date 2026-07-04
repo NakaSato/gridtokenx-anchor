@@ -29,6 +29,7 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import { createRequire } from "module";
+import { fabricateGovernanceConfig } from "./litesvm-admit";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/energy_token.json");
@@ -46,6 +47,7 @@ describe("energy-token REC-validator gating guards (litesvm)", () => {
   let mintPda: PublicKey;
   let infoPda: PublicKey;
   let destAta: PublicKey;
+  let governanceConfigPda: PublicKey;
 
   function trySend(ixs: TransactionInstruction[], signers: Keypair[]): FailedTransactionMetadata | null {
     const tx = new Transaction();
@@ -68,9 +70,9 @@ describe("energy-token REC-validator gating guards (litesvm)", () => {
   }
 
   const addValidatorIx = (v: PublicKey) =>
-    program.methods.addRecValidator(v, "rec").accounts({ tokenInfo: infoPda, authority: payer.publicKey } as any).instruction();
+    program.methods.addRecValidator(v, "rec").accounts({ tokenInfo: infoPda, governanceConfig: governanceConfigPda, authority: payer.publicKey } as any).instruction();
   const removeValidatorIx = (v: PublicKey) =>
-    program.methods.removeRecValidator(v).accounts({ tokenInfo: infoPda, authority: payer.publicKey } as any).instruction();
+    program.methods.removeRecValidator(v).accounts({ tokenInfo: infoPda, governanceConfig: governanceConfigPda, authority: payer.publicKey } as any).instruction();
   const mintIx = (recValidator: PublicKey | null) =>
     program.methods.mintToWallet(new BN(100)).accounts({
       mint: mintPda, tokenInfo: infoPda, destination: destAta, destinationOwner: destOwner.publicKey,
@@ -87,6 +89,9 @@ describe("energy-token REC-validator gating guards (litesvm)", () => {
 
     [mintPda] = PublicKey.findProgramAddressSync([Buffer.from("mint_2022")], programId);
     [infoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], programId);
+    // ERC-is-REC-issuer gate: add/removeRecValidator now require the caller to match
+    // governance's authority. Fabricate a poa_config with payer as that authority.
+    governanceConfigPda = fabricateGovernanceConfig(svm, payer.publicKey);
 
     send([await program.methods.initializeToken(PublicKey.default, payer.publicKey).accounts({
       tokenInfo: infoPda, mint: mintPda, authority: payer.publicKey,

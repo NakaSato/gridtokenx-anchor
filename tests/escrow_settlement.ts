@@ -157,7 +157,7 @@ describe("escrow-settlement", () => {
     try {
       await energyTokenProgram.methods
         .addRecValidator(authority, "rec")
-        .accounts({ tokenInfo: energyTokenInfoPda, authority } as any)
+        .accounts({ tokenInfo: energyTokenInfoPda, governanceConfig: governanceConfigPda, authority } as any)
         .rpc();
     } catch (e) { /* already registered */ }
   });

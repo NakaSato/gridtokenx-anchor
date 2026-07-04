@@ -196,7 +196,7 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     // REC provenance is mandatory (0.5): register authority as a REC validator (idempotent).
     try {
       await energy.methods.addRecValidator(authority, "rec")
-        .accounts({ tokenInfo: energyInfoPda, authority } as any).rpc();
+        .accounts({ tokenInfo: energyInfoPda, governanceConfig: governanceConfigPda, authority } as any).rpc();
     } catch { /* already registered */ }
 
     // THBG collectors for the trading market (currency = THBG). The main (unsharded)

@@ -376,7 +376,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     // REC provenance is mandatory (0.5): register authority as a REC validator (idempotent).
     try {
       await energy.methods.addRecValidator(authority, "rec")
-        .accounts({ tokenInfo: energyInfoPda, authority } as any).rpc();
+        .accounts({ tokenInfo: energyInfoPda, governanceConfig: governanceConfigPda, authority } as any).rpc();
     } catch { /* already registered */ }
     try {
       await trading.methods.initializeCollectors().accounts({

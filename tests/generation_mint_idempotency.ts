@@ -1,6 +1,7 @@
 import * as anchor from "@anchor-lang/core";
 import { Program } from "@anchor-lang/core";
 import { EnergyToken } from "../target/types/energy_token";
+import { Governance } from "../target/types/governance";
 import {
   PublicKey,
   Keypair,
@@ -33,10 +34,12 @@ describe("generation-mint idempotency", () => {
   anchor.setProvider(provider);
 
   const energyTokenProgram = anchor.workspace.EnergyToken as Program<EnergyToken>;
+  const governanceProgram = anchor.workspace.Governance as Program<Governance>;
   const authority = provider.wallet.publicKey;
 
   let energyMintPda: PublicKey;
   let energyTokenInfoPda: PublicKey;
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
 
   // gen_mint record PDA: seeds = [b"gen_mint", meter_id(16), window_start_ms.to_le_bytes()(8)].
   const genMintPda = (meterId: Buffer, windowStartMs: BN) =>
@@ -60,7 +63,7 @@ describe("generation-mint idempotency", () => {
     try {
       await energyTokenProgram.methods
         .addRecValidator(authority, "rec")
-        .accounts({ tokenInfo: energyTokenInfoPda, authority } as any)
+        .accounts({ tokenInfo: energyTokenInfoPda, governanceConfig: governanceConfigPda, authority } as any)
         .rpc();
     } catch (_) { /* already registered */ }
   });

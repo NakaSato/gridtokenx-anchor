@@ -29,7 +29,8 @@ async function main() {
   const oracleProgram = anchor.workspace.Oracle as Program<Oracle>;
   const energyTokenProgram = anchor.workspace.EnergyToken as Program<EnergyToken>;
   const governanceProgram = anchor.workspace.Governance as Program<Governance>;
-  
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
+
   // Load users
   const prosumerKey = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync("test-wallet-prosumer.json", "utf8"))));
   const apiGateway = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync("test-api-gateway.json", "utf8"))));
@@ -186,7 +187,7 @@ async function main() {
     // REC provenance is mandatory (0.5): register the admin wallet as a REC validator first.
     try {
       await energyTokenProgram.methods.addRecValidator(provider.wallet.publicKey, "rec")
-        .accounts({ tokenInfo: tokenInfoPda, authority: provider.wallet.publicKey } as any).rpc();
+        .accounts({ tokenInfo: tokenInfoPda, governanceConfig: governanceConfigPda, authority: provider.wallet.publicKey } as any).rpc();
     } catch { /* already registered */ }
     const tx = await energyTokenProgram.methods.mintToWallet(mintAmount)
       .accounts({
@@ -230,7 +231,6 @@ async function main() {
 
     // register_validator now requires a governance-admitted aggregator entry (0.1). Admit the
     // prosumer (governance authority = provider wallet), then pass its AggregatorEntry PDA.
-    const [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
     const [aggregatorEntry] = PublicKey.findProgramAddressSync([Buffer.from("aggregator"), prosumerKey.publicKey.toBuffer()], governanceProgram.programId);
     try {
       await governanceProgram.methods.admitAggregator(prosumerKey.publicKey)

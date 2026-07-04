@@ -1,9 +1,9 @@
 {
-  "energy_token.add_rec_validator": 1575,
+  "energy_token.add_rec_validator": 10996,
   "energy_token.burn_tokens": 6537,
   "energy_token.initialize_token": 18424,
-  "energy_token.mint_to_wallet": 13700,
-  "energy_token.remove_rec_validator": 1366,
+  "energy_token.mint_to_wallet": 13722,
+  "energy_token.remove_rec_validator": 10791,
   "energy_token.transfer_tokens": 8035,
   "governance.approve_authority_change": 13278,
   "governance.initialize_governance": 16417,

@@ -29,6 +29,29 @@ pub use error::EnergyTokenError;
 pub use events::*;
 pub use state::*;
 
+/// Governance program ID — owner of the `poa_config` (GovernanceConfig) PDA, the ERC
+/// governance authority. Hardcoded rather than imported: `registry` already depends on
+/// `energy-token` for CPI, and `governance` depends on `registry` for CPI, so
+/// `energy-token -> governance` as a path dep would cycle
+/// (energy-token -> governance -> registry -> energy-token). Validate the governance
+/// authority by raw account checks (owner + PDA seeds + bytes) instead — same pattern as
+/// registry's `GOVERNANCE_PROGRAM_ID`/`ORACLE_PROGRAM_ID`. Must match
+/// `Anchor.toml [programs.localnet].governance`.
+pub const GOVERNANCE_PROGRAM_ID: Pubkey = pubkey!("FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS");
+
+/// Validate `info` is the canonical governance `poa_config` PDA and return the
+/// `GovernanceConfig.authority` pubkey it contains (ERC's governance authority — the only
+/// entity allowed to register/remove REC validators, per role-map.md's "REC issuer = ERC"
+/// binding). Layout: [0..8] disc | [8..40] authority.
+fn governance_authority(info: &AccountInfo) -> Result<Pubkey> {
+    require_keys_eq!(*info.owner, GOVERNANCE_PROGRAM_ID, EnergyTokenError::InvalidGovernanceAccount);
+    let (expected, _bump) = Pubkey::find_program_address(&[b"poa_config"], &GOVERNANCE_PROGRAM_ID);
+    require_keys_eq!(*info.key, expected, EnergyTokenError::InvalidGovernanceAccount);
+    let data = info.try_borrow_data()?;
+    require!(data.len() >= 40, EnergyTokenError::InvalidGovernanceAccount);
+    Ok(Pubkey::new_from_array(data[8..40].try_into().unwrap()))
+}
+
 // Import compute_fn! macro when localnet feature is enabled
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
@@ -352,6 +375,13 @@ pub mod energy_token {
         _authority_name: String,
     ) -> Result<()> {
         compute_fn!("add_rec_validator" => {
+            // REC-issuer binding: only ERC's governance authority may register validators
+            // (role-map.md's "REC issuer gate ... bind issuer = ERC").
+            require_keys_eq!(
+                ctx.accounts.authority.key(),
+                governance_authority(&ctx.accounts.governance_config.to_account_info())?,
+                EnergyTokenError::UnauthorizedAuthority
+            );
             let mut token_info = ctx.accounts.token_info.load_mut()?;
 
             // Check that it does not exceed the specified number
@@ -384,6 +414,11 @@ pub mod energy_token {
         validator_pubkey: Pubkey,
     ) -> Result<()> {
         compute_fn!("remove_rec_validator" => {
+            require_keys_eq!(
+                ctx.accounts.authority.key(),
+                governance_authority(&ctx.accounts.governance_config.to_account_info())?,
+                EnergyTokenError::UnauthorizedAuthority
+            );
             let mut token_info = ctx.accounts.token_info.load_mut()?;
 
             let count = token_info.rec_validators_count as usize;
@@ -742,8 +777,15 @@ pub struct InitializeToken<'info> {
 
 #[derive(Accounts)]
 pub struct AddRecValidator<'info> {
-    #[account(mut, has_one = authority @ EnergyTokenError::UnauthorizedAuthority)]
+    #[account(mut)]
     pub token_info: AccountLoader<'info, TokenInfo>,
+
+    /// The governance `poa_config` PDA — its `authority` (ERC) is the only signer allowed
+    /// to register/remove REC validators, checked in the handler body. Not typed as a
+    /// `governance::GovernanceConfig` account: importing that crate would create a Cargo
+    /// cycle (see `GOVERNANCE_PROGRAM_ID`).
+    /// CHECK: validated in the handler via `governance_authority()`.
+    pub governance_config: UncheckedAccount<'info>,
 
     pub authority: Signer<'info>,
 }

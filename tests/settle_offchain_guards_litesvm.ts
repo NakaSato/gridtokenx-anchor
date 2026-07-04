@@ -222,7 +222,9 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   // gate closed (is_operational() == false).
   async function installGovernanceConfig(maintenance: boolean): Promise<void> {
     const c = {
-      authority: PublicKey.default, authorityName: Array(64).fill(0), nameLen: 0, contactInfo: Array(128).fill(0), contactLen: 0,
+      // authority = payer: energy-token's add_rec_validator below now requires the caller
+      // to match this governance authority (ERC-is-REC-issuer gate).
+      authority: payer.publicKey, authorityName: Array(64).fill(0), nameLen: 0, contactInfo: Array(128).fill(0), contactLen: 0,
       version: 1, maintenanceMode: maintenance, ercValidationEnabled: true, minEnergyAmount: new BN(0), maxErcAmount: new BN(0),
       ercValidityPeriod: new BN(0), requireOracleValidation: false, oracleAuthority: PublicKey.default, minOracleConfidence: 0,
       allowCertificateTransfers: true, minQuorumVotes: new BN(0), totalErcsIssued: new BN(0), totalErcsValidated: new BN(0),
@@ -462,7 +464,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     // REC provenance is now mandatory (0.5): register the payer as a REC validator so the
     // setup mints below carry a valid co-signer.
     send([await energy.methods.addRecValidator(payer.publicKey, "rec")
-      .accounts({ tokenInfo: energyInfoPda, authority: payer.publicKey } as any).instruction()], []);
+      .accounts({ tokenInfo: energyInfoPda, governanceConfig: governanceConfigPda, authority: payer.publicKey } as any).instruction()], []);
 
     // Energy wallets via the energy program's mint_to_wallet (seller gets 200, buyer 1 to seed escrow).
     const mintEnergy = async (dest: PublicKey, owner: PublicKey, amount: number) => {

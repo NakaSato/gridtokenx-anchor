@@ -73,6 +73,28 @@ async function main() {
     console.log('  ❌ Failed to set Registry Oracle Authority:', e.message);
   }
 
+  // 1b. Initialize Governance (PoA) — moved ahead of energy-token's REC-validator
+  // registration below: add_rec_validator/remove_rec_validator now require governance's
+  // authority (ERC) to sign, so poa_config must exist first.
+  console.log('\n[1b/5] Initializing Governance PoA...');
+  const [governanceConfigPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('poa_config')],
+    governanceProgram.programId
+  );
+  try {
+    const tx = await governanceProgram.methods
+      .initializeGovernance()
+      .accounts({
+        governanceConfig: governanceConfigPda,
+        authority: authority,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+    console.log('  ✅ PoA Config initialized:', governanceConfigPda.toBase58());
+  } catch (e: any) {
+    console.log('  ℹ️  PoA Config already exists or failed:', e.message);
+  }
+
   // 2. Initialize Energy Token
   console.log('\n[2/5] Initializing Energy Token Mint...');
   const [tokenInfoPda] = PublicKey.findProgramAddressSync(
@@ -136,14 +158,15 @@ async function main() {
   // 2-rec. Register the platform REC validator on the energy-token TokenInfo.
   // Without at least one registered validator, `rec_validators_count == 0` and every
   // surplus-mint (mint_generation) fails RecValidatorNotFound (6024). The dev wallet is
-  // token_info.authority AND the chain-bridge Vault platform_admin signer, so the one
-  // key satisfies both the `authority` and `rec_validator` signer slots in the bridge-
-  // signed mint. Idempotent: a re-run hits ValidatorAlreadyExists and is swallowed.
+  // the ERC governance authority AND the chain-bridge Vault platform_admin signer, so the
+  // one key satisfies both the `authority` (must == governance authority, per role-map.md's
+  // "REC issuer = ERC" binding) and `rec_validator` signer slots. Idempotent: a re-run hits
+  // ValidatorAlreadyExists and is swallowed.
   console.log('\n[2-rec/5] Registering REC validator (energy token)...');
   try {
     await energyTokenProgram.methods
       .addRecValidator(authority, 'rec')
-      .accounts({ tokenInfo: tokenInfoPda, authority: authority } as any)
+      .accounts({ tokenInfo: tokenInfoPda, governanceConfig: governanceConfigPda, authority: authority } as any)
       .rpc();
     console.log('  ✅ REC validator registered:', authority.toBase58());
   } catch (e: any) {
@@ -227,26 +250,6 @@ async function main() {
     }
   } catch (e: any) {
     console.log('  ❌ Currency Token initialization failed:', e.message);
-  }
-
-  // 3. Initialize Governance (PoA)
-  console.log('\n[3/5] Initializing Governance PoA...');
-  const [governanceConfigPda] = PublicKey.findProgramAddressSync(
-    [Buffer.from('poa_config')],
-    governanceProgram.programId
-  );
-  try {
-    const tx = await governanceProgram.methods
-      .initializeGovernance()
-      .accounts({
-        governanceConfig: governanceConfigPda,
-        authority: authority,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
-      .rpc();
-    console.log('  ✅ PoA Config initialized:', governanceConfigPda.toBase58());
-  } catch (e: any) {
-    console.log('  ℹ️  PoA Config already exists or failed:', e.message);
   }
 
   // 4. Initialize Trading Market

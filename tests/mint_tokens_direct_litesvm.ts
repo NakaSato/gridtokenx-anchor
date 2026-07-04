@@ -36,6 +36,7 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import { createRequire } from "module";
+import { fabricateGovernanceConfig } from "./litesvm-admit";
 
 const require = createRequire(import.meta.url);
 const idl = require("../target/idl/energy_token.json");
@@ -55,6 +56,7 @@ describe("energy-token mint_tokens_direct guards (litesvm)", () => {
   let mintPda: PublicKey;
   let infoPda: PublicKey;
   let destAta: PublicKey;
+  let governanceConfigPda: PublicKey;
 
   function trySend(ixs: TransactionInstruction[], signers: Keypair[]): FailedTransactionMetadata | null {
     const tx = new Transaction();
@@ -77,7 +79,7 @@ describe("energy-token mint_tokens_direct guards (litesvm)", () => {
   }
 
   const addValidatorIx = (v: PublicKey) =>
-    program.methods.addRecValidator(v, "rec").accounts({ tokenInfo: infoPda, authority: payer.publicKey } as any).instruction();
+    program.methods.addRecValidator(v, "rec").accounts({ tokenInfo: infoPda, governanceConfig: governanceConfigPda, authority: payer.publicKey } as any).instruction();
 
   const directIx = (authority: PublicKey, recValidator: PublicKey, amount: number) =>
     program.methods.mintTokensDirect(new BN(amount)).accounts({
@@ -104,6 +106,7 @@ describe("energy-token mint_tokens_direct guards (litesvm)", () => {
 
     [mintPda] = PublicKey.findProgramAddressSync([Buffer.from("mint_2022")], programId);
     [infoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], programId);
+    governanceConfigPda = fabricateGovernanceConfig(svm, payer.publicKey);
 
     // admin authority = payer; registry_authority = a DISTINCT key so the admin vs registry
     // distinction is testable (count==0 REC-skip is registry-only after the hardening).

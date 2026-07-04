@@ -3,6 +3,7 @@ import { Program } from "@anchor-lang/core";
 import { Registry } from "../target/types/registry";
 import { Oracle } from "../target/types/oracle";
 import { EnergyToken } from "../target/types/energy_token";
+import { Governance } from "../target/types/governance";
 import { 
   PublicKey, 
   Keypair, 
@@ -28,6 +29,7 @@ describe("oracle-metering-integration", () => {
   const registryProgram = anchor.workspace.Registry as Program<Registry>;
   const oracleProgram = anchor.workspace.Oracle as Program<Oracle>;
   const energyTokenProgram = anchor.workspace.EnergyToken as Program<EnergyToken>;
+  const governanceProgram = anchor.workspace.Governance as Program<Governance>;
   
   const authority = provider.wallet.publicKey;
   const payer = (provider.wallet as any).payer as Keypair;
@@ -37,7 +39,8 @@ describe("oracle-metering-integration", () => {
   let oracleDataPda: PublicKey;
   let energyMintPda: PublicKey;
   let energyTokenInfoPda: PublicKey;
-  
+  let governanceConfigPda: PublicKey;
+
   const shardId = 0;
   const meterId = "METER-001";
 
@@ -47,6 +50,7 @@ describe("oracle-metering-integration", () => {
     [oracleDataPda] = PublicKey.findProgramAddressSync([Buffer.from("oracle_data")], oracleProgram.programId);
     [energyMintPda] = PublicKey.findProgramAddressSync([Buffer.from("mint_2022")], energyTokenProgram.programId);
     [energyTokenInfoPda] = PublicKey.findProgramAddressSync([Buffer.from("token_info_2022")], energyTokenProgram.programId);
+    [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("poa_config")], governanceProgram.programId);
 
     // Bootstrap localnet if not already done by bootstrap script
     try {
@@ -54,6 +58,13 @@ describe("oracle-metering-integration", () => {
       await registryProgram.methods.initializeShard(shardId).accounts({ shard: registryShardPda, authority, systemProgram: SystemProgram.programId } as any).rpc();
       await registryProgram.methods.setOracleAuthority(authority).accounts({ registry: registryPda, authority } as any).rpc();
       await oracleProgram.methods.initialize(authority).accounts({ oracleData: oracleDataPda, authority, systemProgram: SystemProgram.programId } as any).rpc();
+    } catch (e) {}
+
+    // Governance must exist before add_rec_validator below (its authority now gates that call).
+    try {
+      await governanceProgram.methods.initializeGovernance().accounts({
+        governanceConfig: governanceConfigPda, authority, systemProgram: SystemProgram.programId,
+      } as any).rpc();
     } catch (e) {}
 
     // Force update API Gateway to current authority to avoid 6001
@@ -71,7 +82,7 @@ describe("oracle-metering-integration", () => {
     try {
       await energyTokenProgram.methods
         .addRecValidator(authority, "rec")
-        .accounts({ tokenInfo: energyTokenInfoPda, authority } as any)
+        .accounts({ tokenInfo: energyTokenInfoPda, governanceConfig: governanceConfigPda, authority } as any)
         .rpc();
     } catch (e) {}
   });
