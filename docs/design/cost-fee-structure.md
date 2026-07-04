@@ -1,5 +1,13 @@
 # GridTokenX — Full Cost and Fee Structure (Wheeling, VAT, Transaction Fees)
 
+> **⚠️ STALE (2026-07-04): this doc's two-layer wheeling model (EGAT transmission +
+> MEA/PEA distribution, always combined) conflicts with `role-map.md`'s 2nd-pass
+> revision, which reassigns wheeling entirely to MEA/PEA for this platform's retail P2P
+> trades (they never leave the local distribution grid to reach EGAT's transmission
+> network). Not reconciled yet — treat this doc's wheeling figures/framing (§ below,
+> and any two-layer cost breakdown) as unverified against the current on-chain model
+> until a dedicated revision pass.
+
 > **⚠️ STATUS: RESEARCH FRAMEWORK — economic figures external; on-chain hooks now mostly implemented (updated 2026-06-21).** Tariff, wheeling, Ft, and VAT figures are external regulatory facts (illustrative, not yet final). On the code side: the swap fee (`grx_per_thbg_rate`, fee in bps) is implemented; and **on-chain VAT recording** (§4.3) + **per-batch Merkle-committed settlement** (§5) are now implemented too: `treasury::record_settlement_batch` (`programs/treasury/src/lib.rs:210`) writes a per-`(zone, batch)` `SettlementRecord` PDA carrying `merkle_root[32]`, `vat_amount`, `vat_rate_bps`, `total_value`, and bumps `total_settled_thbg`; the trading batch path (`trading::batch_settle_offchain_match`) records it via CPI, mandatory for THBG markets. On-chain verified in `tests/batch_settle_thbg.ts`. **Caveats vs the §5 spec:** the commitment is **per-batch, commit-only** (matching the continuous CDA, not a single per-epoch root) and the root is **not verified on-chain** (off-chain audit/fraud-proof consumes it — see the §3 feasibility spike); **VAT is data-only** (recorded for e-Tax/audit, no on-chain VAT arithmetic enforcement — decision D4). The single-match `settle_offchain_match` path still uses the value-only `record_settlement`.
 
 This document specifies the complete economic cost structure of a GridTokenX transaction: every charge, fee, and tax that flows through a peer-to-peer energy trade, and how they compose into the final settlement. It covers the wheeling charge, value-added tax (VAT), the fuel adjustment charge (Ft), blockchain transaction fees, the swap fee, the aggregator margin, and the TPA administrative fees. It is organized into eleven sections.

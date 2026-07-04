@@ -125,20 +125,21 @@ fn net_seller_after_charges(total: u64, market_fee: u64, wheeling: u64, loss: u6
     Ok(total - deductions)
 }
 
-/// Read `wheeling_bps`/`loss_bps` directly out of a `TariffConfig` account without a typed
-/// deserialize — both settle contexts are already at the BPF stack ceiling (see
+/// Read `wheeling_rate_per_kwh`/`loss_bps` directly out of a `TariffConfig` account without
+/// a typed deserialize — both settle contexts are already at the BPF stack ceiling (see
 /// settle-context-stack-limit), so `tariff_config` travels via `remaining_accounts` like
 /// `governance_config` already does. Layout: [0..8) disc | [8..40) wheeling_authority |
-/// [40..72) loss_authority | [72..74) wheeling_bps | [74..76) loss_bps | [76] bump.
+/// [40..72) loss_authority | [72..80) wheeling_rate_per_kwh (u64) | [80..82) loss_bps |
+/// [82] bump.
 fn tariff_rates(info: &AccountInfo, program_id: &Pubkey) -> Result<(u64, u64)> {
     require_keys_eq!(*info.owner, *program_id, TradingError::InvalidTariffConfig);
     let (expected, _bump) = Pubkey::find_program_address(&[b"tariff_config"], program_id);
     require_keys_eq!(*info.key, expected, TradingError::InvalidTariffConfig);
     let data = info.try_borrow_data()?;
-    require!(data.len() >= 76, TradingError::InvalidTariffConfig);
-    let wheeling_bps = u16::from_le_bytes([data[72], data[73]]) as u64;
-    let loss_bps = u16::from_le_bytes([data[74], data[75]]) as u64;
-    Ok((wheeling_bps, loss_bps))
+    require!(data.len() >= 82, TradingError::InvalidTariffConfig);
+    let wheeling_rate_per_kwh = u64::from_le_bytes(data[72..80].try_into().unwrap());
+    let loss_bps = u16::from_le_bytes([data[80], data[81]]) as u64;
+    Ok((wheeling_rate_per_kwh, loss_bps))
 }
 
 /// Require the settlement `payer` to be an active, governance-admitted aggregator (role-map.md
@@ -789,8 +790,16 @@ pub fn settle_offchain_match<'info>(
     // --- TARIFF: wheeling/loss computed from the on-chain schedule, not caller args ---
     // Mandatory remaining_accounts[2] (stack-limit workaround, like governance_config[0]).
     let tariff_info = ctx.remaining_accounts.get(2).ok_or(TradingError::InvalidTariffConfig)?;
-    let (wheeling_bps, loss_bps) = tariff_rates(tariff_info, ctx.program_id)?;
-    let wheeling_charge_val = total_currency_value.checked_mul(wheeling_bps).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
+    let (wheeling_rate_per_kwh, loss_bps) = tariff_rates(tariff_info, ctx.program_id)?;
+    // Wheeling: flat per-kWh rate, same 9-dec-energy * 6-dec-rate / 1e9 scaling as
+    // total_currency_value above (not bps-of-value — see TariffConfig doc comment).
+    let wheeling_charge_val = u64::try_from(
+        (match_amount as u128)
+            .checked_mul(wheeling_rate_per_kwh as u128)
+            .ok_or(TradingError::Overflow)?
+            / crate::ENERGY_AMOUNT_DECIMALS_DIVISOR,
+    )
+    .map_err(|_| TradingError::Overflow)?;
     let loss_cost_val = total_currency_value.checked_mul(loss_bps).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
     let net_seller_amount = net_seller_after_charges(total_currency_value, market_fee, wheeling_charge_val, loss_cost_val)?;
 
@@ -1026,7 +1035,7 @@ pub fn batch_settle_offchain_match<'info>(
 
     // Tariff schedule — same on-chain rates as the single-match path (mandatory, not
     // per-match caller args). Fetched once; every pair in the batch shares one rate.
-    let (wheeling_bps, loss_bps) = tariff_rates(&remaining_accounts[base + 1], ctx.program_id)?;
+    let (wheeling_rate_per_kwh, loss_bps) = tariff_rates(&remaining_accounts[base + 1], ctx.program_id)?;
 
     let clock = Clock::get()?;
     let market = ctx.accounts.market.load()?;
@@ -1169,7 +1178,14 @@ pub fn batch_settle_offchain_match<'info>(
         )
         .map_err(|_| TradingError::Overflow)?;
         let market_fee = total_value.checked_mul(market.market_fee_bps as u64).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
-        let wheeling_charge = total_value.checked_mul(wheeling_bps).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
+        // Wheeling: flat per-kWh rate (see single-match path / TariffConfig doc comment).
+        let wheeling_charge = u64::try_from(
+            (m.match_amount as u128)
+                .checked_mul(wheeling_rate_per_kwh as u128)
+                .ok_or(TradingError::Overflow)?
+                / crate::ENERGY_AMOUNT_DECIMALS_DIVISOR,
+        )
+        .map_err(|_| TradingError::Overflow)?;
         let loss_cost = total_value.checked_mul(loss_bps).map(|v| v / 10000).ok_or(TradingError::Overflow)?;
         let net_seller = net_seller_after_charges(total_value, market_fee, wheeling_charge, loss_cost)?;
         batch_total_value = batch_total_value.checked_add(total_value).ok_or(TradingError::Overflow)?;

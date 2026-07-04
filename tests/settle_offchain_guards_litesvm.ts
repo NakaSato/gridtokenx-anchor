@@ -245,14 +245,16 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   }
 
   // Fabricate the trading TariffConfig at its canonical PDA (owned by trading itself —
-  // same program, no cross-program pattern needed). wheelingBps=2/lossBps=2 on a 5000
-  // total_currency_value (MATCH_AMOUNT*MATCH_PRICE/1e9) reproduces the old hardcoded
-  // wheeling=1/loss=1 flat args, so every pre-existing guard case keeps its exact math.
-  async function installTariffConfig(wheelingBps: number, lossBps: number): Promise<void> {
+  // same program, no cross-program pattern needed). wheelingRatePerKwh is now a flat
+  // per-kWh rate (6-dec currency units), not bps — see role-map.md 2026-07-04 2nd-pass /
+  // TariffConfig doc comment. Tests only assert status/error patterns, not exact net_seller
+  // amounts, so exact-value parity with the old bps fixture isn't required — just wheeling>0
+  // to exercise the transfer CPI branch in happy-path tests.
+  async function installTariffConfig(wheelingRatePerKwh: number, lossBps: number): Promise<void> {
     const bump = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingId)[1];
     const data = await trading.coder.accounts.encode("tariffConfig", {
       wheelingAuthority: payer.publicKey, lossAuthority: payer.publicKey,
-      wheelingBps, lossBps, bump,
+      wheelingRatePerKwh: new BN(wheelingRatePerKwh), lossBps, bump,
     } as any);
     svm.setAccount(tariffConfigPda, { lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))), data, owner: tradingId, executable: false, rentEpoch: 0 } as any);
   }
@@ -380,7 +382,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     [governanceConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("governance_config")], GOVERNANCE_PROGRAM_ID);
     await installGovernanceConfig(false); // operational by default
     [tariffConfigPda] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingId);
-    await installTariffConfig(2, 2); // -> wheeling=1, loss=1 on a 5000 total (matches the old hardcoded args)
+    await installTariffConfig(1, 2); // wheeling=1/kWh (flat) * 100 kWh = 100; loss=2bps of 5000 = 1
     // Operator gate (#8b): the settle payer must be a governance-admitted, active aggregator.
     aggregatorEntryPda = admitAggregator(svm, payer.publicKey);
     svm.addProgramFromFile(tradingId, "target/deploy/trading.so");
@@ -542,10 +544,11 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
 
     const sellerCurEscrow = escrowPda(seller.publicKey, currencyMint);
     const buyerEngEscrow = escrowPda(buyer.publicKey, energyMintPda);
-    // total = MATCH_AMOUNT*50/1e9 = 100*50 = 5000; fee=12, wheeling=1, loss=1 → seller nets 4986 (+1 seed).
+    // total = MATCH_AMOUNT*50/1e9 = 100*50 = 5000; fee=12, wheeling=1/kWh*100kWh=100, loss=1
+    // → seller nets 4887 (+1 seed).
     const sc = svm.getAccount(sellerCurEscrow)!;
     const sellerCurAmt = Buffer.from(sc.data).readBigUInt64LE(64); // SPL token amount @ offset 64
-    expect(sellerCurAmt.toString()).to.equal((1n + 4986n).toString());
+    expect(sellerCurAmt.toString()).to.equal((1n + 4887n).toString());
     const be = svm.getAccount(buyerEngEscrow)!;
     const buyerEngAmt = Buffer.from(be.data).readBigUInt64LE(64);
     expect(buyerEngAmt.toString()).to.equal((1n + BigInt(MATCH_AMOUNT)).toString());
@@ -781,17 +784,18 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
   });
 
   it("rejects network charges above the cap (ChargesExceedCap)", async () => {
-    // wheeling_bps/loss_bps are now capped at TariffConfig set-time (TariffRateExceedsCap),
-    // so a legitimately-set config can never produce over-cap charges. This proves the
-    // settle-time `net_seller_after_charges` check still catches it as defense-in-depth if a
-    // config were ever poisoned/stale: 6000+6000 bps (120%) on a 5000 total -> wheeling=loss=3000,
-    // network=6000 > cap(1000). Restore the normal (2,2) config afterwards.
-    await installTariffConfig(6000, 6000);
+    // wheeling_rate_per_kwh/loss_bps are now capped independently at TariffConfig set-time
+    // (TariffRateExceedsCap), so a legitimately-set config can never produce over-cap
+    // charges. This proves the settle-time `net_seller_after_charges` check still catches
+    // it as defense-in-depth if a config were ever poisoned/stale: loss alone at 6000bps on
+    // a 5000 total -> loss=3000, network=3000 > cap(1000) (wheeling=0 here — the loss side
+    // alone already exceeds the cap). Restore the normal (1, 2) config afterwards.
+    await installTariffConfig(0, 6000);
     try {
       const blob = sendV0(await buildSettleIxs(false, { seedA: 0x41, seedB: 0x42 }), true);
       expect(blob, blob).to.match(/ChargesExceedCap/);
     } finally {
-      await installTariffConfig(2, 2);
+      await installTariffConfig(1, 2);
     }
   });
 

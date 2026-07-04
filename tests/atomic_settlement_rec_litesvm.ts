@@ -137,7 +137,7 @@ describe("execute_atomic_settlement REC leg (litesvm)", () => {
     const [, tariffBump] = PublicKey.findProgramAddressSync([Buffer.from("tariff_config")], tradingId);
     const tariffData = await trading.coder.accounts.encode("tariffConfig", {
       wheelingAuthority: payer.publicKey, lossAuthority: payer.publicKey,
-      wheelingBps: 100, lossBps: 100, bump: tariffBump,
+      wheelingRatePerKwh: new BN(100), lossBps: 100, bump: tariffBump,
     } as any);
     svm.setAccount(tariffConfigPda, {
       lamports: Number(svm.minimumBalanceForRentExemption(BigInt(tariffData.length))),

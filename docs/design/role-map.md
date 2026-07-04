@@ -21,11 +21,24 @@ not infrastructure ownership.
 
 **Market-segment split (2026-07-04 revision):** the consensus/validator set is split by
 market segment, not treated as one undifferentiated pool — **EGAT validates the wholesale
-market** (bulk generation/transmission-level settlement, matching its Single-Buyer role),
-while **MEA/PEA validate the retail market** (metro/provincial distribution-level
-settlement, matching their territory). **ERC moves off consensus entirely** and becomes
-the **REC token issuer** (1 REC token = 1 MWh) — separating "who validates trades" from
-"who certifies the renewable attribute," on top of its existing regulator/governance role.
+market** (bulk generation/transmission-level settlement, matching its Single-Buyer role) and
+runs the **wholesale generation auction** for bulk sellers clearing at that level, while
+**MEA/PEA validate the retail market** (metro/provincial distribution-level settlement,
+matching their territory) and hold **both** tariff-signer roles for retail P2P trades —
+this platform's trades move energy only across the local distribution grid, never the
+national transmission grid, so both wheeling (network usage) and loss (line-loss cost) are
+MEA/PEA-signed. **ERC moves off consensus entirely** and becomes the **REC token issuer**
+(1 REC token = 1 MWh) — separating "who validates trades" from "who certifies the
+renewable attribute," on top of its existing regulator/governance role.
+
+> **Revised 2026-07-04 (2nd pass):** wheeling was originally mapped to EGAT (transmission
+> monopoly) on the generic utility-industry convention that the transmission owner charges
+> wheeling. That doesn't hold for *this* platform: P2P trades here settle prosumer↔consumer
+> within one distribution territory (MEA or PEA), never crossing onto EGAT's national
+> transmission grid — so the wheeling fee this platform actually charges is a distribution
+> network-usage fee, MEA/PEA's domain, same as loss. EGAT's on-chain role is the wholesale
+> generation auction (bulk sellers, a separate, not-yet-built market segment) — it has no
+> tariff-signer role in the retail trading flow at all.
 
 ---
 
@@ -34,8 +47,8 @@ the **REC token issuer** (1 REC token = 1 MWh) — separating "who validates tra
 | Real institution | Statutory role | On-chain role | Program / field |
 |---|---|---|---|
 | **ERC / กกพ** (Energy Regulatory Commission) | Independent regulator: licenses, tariffs, REC oversight, enforcement | **Governance authority** (admit/revoke/slash aggregators, set params, maintenance mode) **+ REC token issuer** — mints/co-signs the fungible REC (1 token = 1 MWh); NOT a consensus node | `governance::GovernanceConfig.authority`; `governance` `rec_mint` / `issue_erc` |
-| **EGAT / กฟผ** | Transmission monopoly, Single Buyer | **Wholesale-market validator** (consensus node, bulk generation/transmission-level settlement) + transmission **wheeling**-tariff signer | Solana cluster (wholesale segment); `trading` wheeling charge |
-| **MEA / กฟน**, **PEA / กฟภ** | Distribution utilities (metro / provinces) | **Retail-market validators** (consensus nodes, metro/provincial distribution-level settlement) + **per-territory aggregator admission & collateral custody** + distribution **loss**-tariff signer | Solana cluster (retail segment); delegated `admit_aggregator`; `trading` loss cost |
+| **EGAT / กฟผ** | Transmission monopoly, Single Buyer | **Wholesale-market validator** (consensus node, bulk generation/transmission-level settlement) + **wholesale generation-auction operator** (bulk sellers clear here — separate, not-yet-built segment; no tariff-signer role in retail trading) | Solana cluster (wholesale segment); no `trading` tariff field |
+| **MEA / กฟน**, **PEA / กฟภ** | Distribution utilities (metro / provinces) | **Retail-market validators** (consensus nodes, metro/provincial distribution-level settlement) + **per-territory aggregator admission & collateral custody** + distribution **wheeling and loss**-tariff signer (retail trades never leave the local distribution grid) | Solana cluster (retail segment); delegated `admit_aggregator`; `trading` wheeling + loss cost |
 | **Licensed aggregator** (private, per zone) | Off-chain market-clearing operator | **Bonded validator** — staked, slashable; must be admitted *and* bonded | `registry::register_validator`/`stake_grx` ↔ `governance::AdmittedAggregator` |
 | **Prosumer / consumer** | Market participant | **Client** — no stake; swap/redeem only | `treasury` swap/redeem; `trading` orders |
 | **Independent reserve custodian / auditor** (bank under BoT alignment) | THBG fiat-reserve attestation | **Attestor** — distinct from param admin | `treasury::update_attestation` |
@@ -58,7 +71,7 @@ the **REC token issuer** (1 REC token = 1 MWh) — separating "who validates tra
 | Validator bond       | **admitted aggregator only**                                      | any 10k GRX holder self-promotes ([`registry/src/lib.rs:743`](../../programs/registry/src/lib.rs)) |
 | Slashability         | **Active-at-misbehavior, independent of current stake**           | escapable via unstake→Suspended ([`registry/src/lib.rs:803`](../../programs/registry/src/lib.rs) vs [`:1208`](../../programs/registry/src/lib.rs)) |
 | Consensus set        | **segment-split**: EGAT = wholesale validator, MEA+PEA = retail validators; ERC not a consensus node | resolved as an **application-layer** split (see §5): `ZoneMarket.segment` (0=Retail,1=Wholesale) + `AggregatorEntry.segment` gate which operators may settle in which zones. Actual Solana Tower BFT consensus stays one shared cluster — this program layer cannot split *that* (infra decision, out of scope) |
-| Wheeling / loss      | **signed tariff** EGAT (transmission) / MEA-PEA (distribution), **capped vs trade value** | on-chain `TariffConfig` — `wheeling_bps` settable only by `wheeling_authority` (EGAT), `loss_bps` only by `loss_authority` (MEA/PEA); computed at settle time, no longer a caller-supplied arg ([`state/tariff_config.rs`](../../programs/trading/src/state/tariff_config.rs), [`instructions/tariff.rs`](../../programs/trading/src/instructions/tariff.rs)) |
+| Wheeling / loss      | **signed tariff, both MEA-PEA** (distribution — retail trades never reach EGAT's transmission grid), **capped vs trade value** | on-chain `TariffConfig` — `wheeling_bps` settable only by `wheeling_authority` (MEA/PEA), `loss_bps` only by `loss_authority` (MEA/PEA); computed at settle time, no longer a caller-supplied arg ([`state/tariff_config.rs`](../../programs/trading/src/state/tariff_config.rs), [`instructions/tariff.rs`](../../programs/trading/src/instructions/tariff.rs)) |
 | Settlement gating    | **governance-gated + operator-signed**                            | `payer` on `settle_offchain_match`/`batch_settle_offchain_match` must be a governance-admitted, active aggregator (`require_admitted_aggregator`, [`settle_offchain.rs`](../../programs/trading/src/instructions/settle_offchain.rs)); `execute_atomic_settlement` (custodial trading-service path) intentionally out of scope — its `market_authority` signer already ties to `market.authority` |
 | Reserve attestation  | **independent custodian** key                                     | arbitrary admin scalar ([`treasury/src/lib.rs:447`](../../programs/treasury/src/lib.rs)) |
 | Slash destination    | **regulator / consumer-rebate pool**                              | treasury `rebate_vault` — a dedicated 4th GRX vault, separate from `reward_vault`/yield-stakers ([`treasury/src/lib.rs`](../../programs/treasury/src/lib.rs) `initialize_rebate_vault`) |
@@ -70,7 +83,7 @@ the **REC token issuer** (1 REC token = 1 MWh) — separating "who validates tra
 4. **Validator bond** — `register_validator` must verify an active admitted-aggregator entry (CPI / seed check to governance). *(done — 0.1)*
 5. **Slashability** — block unstake-below-MIN while Active, or keep slashable regardless of status. *(done — 0.2 + deregister)*
 6. **Consensus set** — split into wholesale (EGAT) / retail (MEA+PEA) segments per §1. *(done, application-layer — §5's "shared cluster + segment tag" branch: `ZoneMarket.segment` + `AggregatorEntry.segment`, gated in `require_admitted_aggregator`, `settle_offchain.rs`. §5's other branch — independently-finalized Tower BFT clusters — is genuinely out of this repo's scope: Solana consensus membership is pure cluster/genesis config, no Anchor program touches it.)*
-7. **Wheeling / loss** — require a tariff-authority signer; bound charge ≤ trade value. *(done — 0.4 cap + 0.4b on-chain `TariffConfig`, key-gated not live-signed — see §2 rationale)*
+7. **Wheeling / loss** — require a tariff-authority signer; bound charge ≤ trade value. Both rates MEA/PEA-signed (retail P2P trades stay on the distribution grid; wheeling was reassigned from EGAT to MEA/PEA on 2nd-pass revision, 2026-07-04). *(done — 0.4 cap + 0.4b on-chain `TariffConfig`, key-gated not live-signed — see §2 rationale)*
 8. **Settlement gating** — add `governance_config` + `is_operational()`; require admitted-aggregator signer. *(done — 0.3 gate; 0.4b operator gate on the off-chain-signed settle paths; `execute_atomic_settlement` scoped out, see §2 rationale)*
 9. **Reserve attestation** — separate `attestor` from param admin (already in code); ideally add on-chain proof.
 10. **Slash destination** — repoint to an ERC / consumer-rebate pool. *(done — new `treasury::rebate_vault`, `init-treasury.ts` wires `registry::set_slash_destination` to it)*
@@ -80,9 +93,10 @@ the **REC token issuer** (1 REC token = 1 MWh) — separating "who validates tra
 ## 3. The three separations that fix the mismatches
 
 1. **Regulator ≠ operator** — ERC holds governance authority **and** REC issuance, but not
-   consensus; EGAT/MEA/PEA hold consensus (wholesale/retail split) + tariff signing, but
-   **not** admit/slash/param/REC issuance. (fixes: regulator absent; EGAT Single-Buyer
-   conflict)
+   consensus; EGAT/MEA/PEA hold consensus (wholesale/retail split), and MEA/PEA additionally
+   hold both retail tariff-signer roles (wheeling + loss — EGAT's role is the separate
+   wholesale generation auction, no tariff signing), but neither holds
+   admit/slash/param/REC issuance. (fixes: regulator absent; EGAT Single-Buyer conflict)
 2. **Authority = council, not key** — k-of-n multisig among the named bodies, matching the
    network doc's "k-of-n authority finality." (structurally already possible — the field
    stores a `Pubkey` checked only via `Signer<'info>`, which is satisfied identically by a
@@ -104,9 +118,10 @@ ERC (กกพ) ── governance authority (k-of-n council) ──────�
   ├── delegates per-territory admission ─▶ MEA (metro) / PEA (prov)│
   ▼                                                                ▼
 EGAT (กฟผ) ── wholesale-market validator (consensus)        licensed aggregator
-  └─ transmission wheeling tariff (signed) ─▶ trading        (admitted + bonded,
-                                                              slashable, off-chain node)
+  └─ wholesale generation auction (bulk sellers,             (admitted + bonded,
+     separate segment, not yet built)                        slashable, off-chain node)
 MEA (กฟน) / PEA (กฟภ) ── retail-market validators (consensus)     │
+  ├─ distribution wheeling tariff (signed) ─▶ trading             │
   └─ distribution loss tariff (signed) ─▶ trading                 │
                                                                    │
 prosumer/consumer ── clients (no stake) ── swap/redeem ── orders ──┘

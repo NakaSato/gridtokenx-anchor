@@ -1157,11 +1157,16 @@ pub mod trading {
             .map(|v| v / 10000)
             .ok_or(TradingError::Overflow)?;
         // Wheeling/loss are computed from the on-chain tariff schedule, not caller args —
-        // see role-map.md fix #7b / TariffConfig.
-        let wheeling_charge_val = total_currency_value
-            .checked_mul(ctx.accounts.tariff_config.wheeling_bps as u64)
-            .map(|v| v / 10000)
-            .ok_or(TradingError::Overflow)?;
+        // see role-map.md fix #7b / TariffConfig. Wheeling is a flat per-kWh rate (same
+        // 9-dec-energy * 6-dec-rate / 1e9 scaling as total_currency_value above), not
+        // bps-of-value — the physical delivery cost doesn't scale with agreed price.
+        let wheeling_charge_val = u64::try_from(
+            (amount as u128)
+                .checked_mul(ctx.accounts.tariff_config.wheeling_rate_per_kwh as u128)
+                .ok_or(TradingError::Overflow)?
+                / crate::ENERGY_AMOUNT_DECIMALS_DIVISOR,
+        )
+        .map_err(|_| TradingError::Overflow)?;
         let loss_cost_val = total_currency_value
             .checked_mul(ctx.accounts.tariff_config.loss_bps as u64)
             .map(|v| v / 10000)
@@ -1435,23 +1440,27 @@ pub mod trading {
 
     /// One-time init of the on-chain tariff schedule (§role-map.md fix #7b): wheeling/loss
     /// charges are no longer caller-supplied settlement args, they're computed from this
-    /// config, which only `wheeling_authority` (EGAT) / `loss_authority` (MEA-PEA) can move.
+    /// config, which only `wheeling_authority` / `loss_authority` (both MEA-PEA) can move.
     pub fn initialize_tariff_config(
         ctx: Context<InitializeTariffConfigContext>,
         wheeling_authority: Pubkey,
         loss_authority: Pubkey,
-        wheeling_bps: u16,
+        wheeling_rate_per_kwh: u64,
         loss_bps: u16,
     ) -> Result<()> {
-        instructions::initialize_tariff_config(ctx, wheeling_authority, loss_authority, wheeling_bps, loss_bps)
+        instructions::initialize_tariff_config(ctx, wheeling_authority, loss_authority, wheeling_rate_per_kwh, loss_bps)
     }
 
-    pub fn set_wheeling_rate(ctx: Context<SetWheelingRateContext>, new_bps: u16) -> Result<()> {
-        instructions::set_wheeling_rate(ctx, new_bps)
+    pub fn set_wheeling_rate(ctx: Context<SetWheelingRateContext>, new_rate_per_kwh: u64) -> Result<()> {
+        instructions::set_wheeling_rate(ctx, new_rate_per_kwh)
     }
 
     pub fn set_loss_rate(ctx: Context<SetLossRateContext>, new_bps: u16) -> Result<()> {
         instructions::set_loss_rate(ctx, new_bps)
+    }
+
+    pub fn close_tariff_config(ctx: Context<CloseTariffConfigContext>) -> Result<()> {
+        instructions::close_tariff_config(ctx)
     }
 
     pub fn set_tariff_authorities(
