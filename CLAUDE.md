@@ -111,6 +111,7 @@ Crate versions: `anchor-lang` / `anchor-spl` = **1.0.0** (not the 0.30.x the SKI
 5. **Hoist `Clock::get()` before `emit!`** — `let now = Clock::get()?.unix_timestamp;` then emit. Avoids a sysvar syscall inside macro expansion.
 6. Changing a program ID requires `anchor keys sync` **and** updating `declare_id!` in that program's `lib.rs`.
 7. **Every program's `Cargo.toml` sets `[profile.release] overflow-checks = true`** (cargo build-sbf defaults to off → silent wrapping). New programs must include the same block; still prefer `checked_*`/`saturating_*` explicitly.
+8. **Renaming an account TYPE never renames its PDA seed bytes.** The seed literal (e.g. `b"poa_config"`) IS the on-chain address — changing it orphans every already-initialized account and breaks every cached/hardcoded derivation (clients, CPI binds, scripts, tests), requiring a full migration for zero functional gain. Precedent: `PoAConfig` → `GovernanceConfig` (`ae35805`) renamed the Rust type/IDL everywhere but deliberately kept `seeds = [b"poa_config"]`. Only change seed bytes when the account is genuinely new (e.g. energy-token's `mint` → `mint_2022` was a real SPL→Token-2022 mint swap, not a cosmetic rename) or a live migration is explicitly planned.
 
 ## Search Tooling
 
