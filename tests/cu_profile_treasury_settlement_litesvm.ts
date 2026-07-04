@@ -119,7 +119,7 @@ describe("treasury settlement (sharded + batch) CU profile (litesvm)", () => {
   it("treasury.record_settlement_batch", async () => {
     const zoneId = 0, batchId = 1;
     const settlementRecord = PublicKey.findProgramAddressSync(
-      [Buffer.from("settlement"), Buffer.from(new Uint32Array([zoneId]).buffer), new BN(batchId).toArrayLike(Buffer, "le", 8)], programId)[0];
+      [Buffer.from("settlement_batch"), Buffer.from(new Uint32Array([zoneId]).buffer), new BN(batchId).toArrayLike(Buffer, "le", 8)], programId)[0];
     const ix = await program.methods
       .recordSettlementBatch(new BN(1_000_000), Array(32).fill(0), new BN(70_000), 700, zoneId, new BN(batchId))
       .accounts({ treasury: treasuryPda, settlementRecord, recorder: payer.publicKey, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction();

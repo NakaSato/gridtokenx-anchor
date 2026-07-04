@@ -38,4 +38,8 @@ pub enum TreasuryError {
     DuplicateShard,
     #[msg("Settlement shard must be writable to be drained during aggregation")]
     ShardNotWritable,
+    #[msg("swap_fee_bps must not exceed 10_000 (100%)")]
+    InvalidFeeBps,
+    #[msg("Settlement shard account is malformed or too small")]
+    InvalidShardAccount,
 }

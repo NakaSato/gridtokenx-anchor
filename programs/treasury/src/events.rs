@@ -96,6 +96,37 @@ pub struct SettlementBatchRecorded {
     pub timestamp: i64,
 }
 
+/// A settlement batch was recorded against a per-shard accumulator with a full
+/// audit commitment (Merkle root + VAT) — the sharded counterpart of
+/// `SettlementBatchRecorded`. `shard_total` is this shard's running total, not
+/// the global figure (reconciled via `aggregate_settlement_shards`).
+#[event]
+pub struct SettlementBatchShardRecorded {
+    pub recorder: Pubkey,
+    pub shard_id: u8,
+    pub zone_id: u32,
+    pub batch_id: u64,
+    pub value: u64,
+    pub shard_total: u64,
+    pub vat_amount: u64,
+    pub vat_rate_bps: u16,
+    pub merkle_root: [u8; 32],
+    pub timestamp: i64,
+}
+
+/// Admin updated treasury params (rate, fee, attestation TTL, pause flag, or
+/// the authorized settlement recorder).
+#[event]
+pub struct ParamsUpdated {
+    pub authority: Pubkey,
+    pub grx_per_thbg_rate: u64,
+    pub swap_fee_bps: u16,
+    pub attestation_ttl: i64,
+    pub paused: bool,
+    pub settlement_recorder: Pubkey,
+    pub timestamp: i64,
+}
+
 /// A staker's principal was slashed and redistributed to the remaining stakers.
 #[event]
 pub struct StakeSlashed {

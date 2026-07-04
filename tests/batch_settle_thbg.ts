@@ -237,23 +237,35 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
 
   // Energy is 9-dec atomic (100 kWh = 100 * 1e9). The currency leg divides by 1e9
   // (ENERGY_AMOUNT_DECIMALS_DIVISOR, settle_offchain.rs:1081): total_value =
-  // match_amount * price / 1e9 = 100e9 * 50 / 1e9 = 5000. A raw matchAmount=100
-  // would round total_value to 0 (degenerate swap), so it must be atomic.
-  const matchAmount = 100 * 1_000_000_000, matchPrice = 50;
+  // match_amount * price / 1e9 = 100e9 * 2_000_000 / 1e9 = 200_000_000 (200 THBG at
+  // a realistic 2.00 THB/kWh). A raw matchAmount=100 would round total_value to 0
+  // (degenerate swap), so it must be atomic.
+  //
+  // Price must clear net_seller_after_charges' 20% network-charge cap
+  // (MAX_NETWORK_CHARGE_BPS) against the flat wheeling rate from bootstrap.ts'
+  // initializeTariffConfig (100_000 minor-units/kWh = 0.10 THB/kWh): wheeling_charge_val
+  // = matchAmount * wheeling_rate / 1e9 = 100 * 100_000 = 10_000_000, a FIXED absolute
+  // cost independent of price. The old toy price (50 = 0.00005 THB/kWh) made
+  // total_value = 5000, so wheeling alone (10_000_000) was ~2000x the trade value and
+  // tripped ChargesExceedCap before ever reaching treasury recording. At 2.00 THB/kWh,
+  // total_value = 200_000_000 keeps wheeling+loss well under the 20% cap.
+  const matchAmount = 100 * 1_000_000_000, matchPrice = 2_000_000;
   // 6-dec currency value actually settled on-chain (post-divisor).
-  const currencyValue = (matchAmount * matchPrice) / 1_000_000_000; // = 5000
+  const currencyValue = (matchAmount * matchPrice) / 1_000_000_000; // = 200_000_000
 
   // Seed buyer (THBG) + seller (energy), pre-create both receiving escrows so a
   // settle has somewhere to deliver. Returns the funded keypairs.
   async function seedUsers(): Promise<{ buyer: Keypair; seller: Keypair }> {
     const buyer = await freshUser();
     const seller = await freshUser();
-    const buyerThbgAta = await fundThbg(buyer, 10_000);
+    // Buyer must escrow >= currencyValue to pay for the trade (fundThbg's 300x GRX
+    // overfund gives ~20% headroom above the requested target).
+    const buyerThbgAta = await fundThbg(buyer, currencyValue);
     const sellerEnergyAta = await createAtaFor(energyMintPda, seller.publicKey);
     // Seller's energy escrow must hold >= matchAmount (the energy leg transfers the
     // full atomic amount, now 100e9). 200 was only enough for the old raw amount.
     await mintEnergyTo(sellerEnergyAta, seller.publicKey, matchAmount);
-    await deposit(buyer, buyerThbgAta, thbgMint, 10_000);
+    await deposit(buyer, buyerThbgAta, thbgMint, currencyValue);
     await deposit(seller, sellerEnergyAta, energyMintPda, matchAmount);
 
     // Receiving escrows (seller currency, buyer energy) must exist before settle.
@@ -282,13 +294,15 @@ describe("batch_settle THBG (§2b, runtime-verified)", () => {
     const matchPairs: any[] = [];
     const remaining: any[] = [];
     for (const { buyer, seller, buyerOrderId, sellerOrderId } of matches) {
-      const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount: matchAmount, pricePerKwh: 60, side: 0, zoneId, expiresAt: 0 });
-      const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount: matchAmount, pricePerKwh: 50, side: 1, zoneId, expiresAt: 0 });
+      // Buyer's signed limit must be >= matchPrice, seller's <= matchPrice (matched at
+      // the seller's ask) — same 60/50 ratio as before, scaled to the new price level.
+      const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.publicKey, energyAmount: matchAmount, pricePerKwh: 2_100_000, side: 0, zoneId, expiresAt: 0 });
+      const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.publicKey, energyAmount: matchAmount, pricePerKwh: 2_000_000, side: 1, zoneId, expiresAt: 0 });
       edIxs.push(Ed25519Program.createInstructionWithPrivateKey({ privateKey: buyer.secretKey, message: buyerMsg }));
       edIxs.push(Ed25519Program.createInstructionWithPrivateKey({ privateKey: seller.secretKey, message: sellerMsg }));
 
-      const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(60), side: 0, zoneId, expiresAt: new BN(0) };
-      const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(50), side: 1, zoneId, expiresAt: new BN(0) };
+      const buyerPayload = { orderId: [...buyerOrderId], user: buyer.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(2_100_000), side: 0, zoneId, expiresAt: new BN(0) };
+      const sellerPayload = { orderId: [...sellerOrderId], user: seller.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(2_000_000), side: 1, zoneId, expiresAt: new BN(0) };
       // Per-match trade_id (F3c) — unique per pair; keys the TradeNullifier replay guard.
       const tradeId = Buffer.concat([buyerOrderId.subarray(0, 8), sellerOrderId.subarray(0, 8)]);
       const tradeNullifier = PublicKey.findProgramAddressSync([Buffer.from("trade"), tradeId], trading.programId)[0];

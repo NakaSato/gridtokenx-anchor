@@ -17,12 +17,6 @@ pub const THBG_DECIMALS: u8 = 6;
 /// and shard count as the registry's 16-shard counter.
 pub const NUM_SETTLE_SHARDS: u8 = 16;
 
-/// Shard selector — maps a key (the settlement buyer) to its accumulator shard by
-/// the first key byte, matching the registry's `authority.to_bytes()[0] % num_shards`.
-pub fn settle_shard_for(key: &Pubkey) -> u8 {
-    key.to_bytes()[0] % NUM_SETTLE_SHARDS
-}
-
 /// Global treasury configuration + accounting (zero-copy, single PDA `[b"treasury"]`).
 ///
 /// Layout is hand-padded for `bytemuck` Pod (no implicit padding). `u128` forces
@@ -62,7 +56,9 @@ pub struct Treasury {
     pub swap_vault_bump: u8,   // 1
     pub stake_vault_bump: u8,  // 1
     pub reward_vault_bump: u8, // 1
-    // size = 16 + 32*5 + 8*9 + 2 + 6 = 256 (multiple of 16, u128-aligned); no tail padding needed.
+    pub rebate_vault_bump: u8, // 1 — canonical bump for the `rebate_vault` PDA (created by `initialize_rebate_vault`)
+    pub _padding: [u8; 15],    // 15 — pad to 272 (16-aligned; base 257 rounds up to next multiple of 16)
+    // size = 16 + 32*5 + 8*9 + 2 + 7 + 15 = 272 (multiple of 16, u128-aligned).
 }
 
 /// Per-user staking position (regular Borsh account — staking is not a hot path).
@@ -98,10 +94,6 @@ pub struct SettlementShard {
 }
 
 impl SettlementShard {
-    pub fn load_from_bytes(data: &[u8]) -> Result<&Self> {
-        Ok(bytemuck::from_bytes(data))
-    }
-
     /// Mutable view for the drain-and-fold reconcile in `aggregate_settlement_shards`,
     /// which zeroes each shard's `settled_thbg` after folding it into the global total.
     pub fn load_mut_from_bytes(data: &mut [u8]) -> Result<&mut Self> {
@@ -115,8 +107,13 @@ impl SettlementShard {
 /// stores the root; off-chain verifiers recompute and check it. The VAT rate is
 /// recorded per batch (a parameter, not a constant: the reduced 7% expires).
 ///
-/// Hand-padded for `bytemuck` Pod (no implicit padding). PDA seeds:
-/// `[b"settlement", zone_id.to_le_bytes(), batch_id.to_le_bytes()]`.
+/// Hand-padded for `bytemuck` Pod (no implicit padding). Two distinct PDA seed
+/// namespaces write this account type, deliberately kept separate so the two
+/// instructions can never collide on the same address:
+///   - `record_settlement_batch_sharded` (the live trading CPI path):
+///     `[b"settlement", zone_id.to_le_bytes(), batch_id.to_le_bytes()]`
+///   - `record_settlement_batch` (standalone, non-sharded, not on the trading
+///     CPI path today): `[b"settlement_batch", zone_id.to_le_bytes(), batch_id.to_le_bytes()]`
 #[account(zero_copy)]
 #[repr(C)]
 pub struct SettlementRecord {

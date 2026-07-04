@@ -2,15 +2,19 @@
 //
 // Derives the treasury `SettlementRecord` PDA that
 // `trading::batch_settle_offchain_match` creates (via CPI) and that
-// `treasury::record_settlement_batch` writes. The batch caller MUST pass this
-// account whenever treasury recording fires for a THBG market, otherwise the
-// settlement is rejected (`TreasurySettlementRequired`).
+// `treasury::record_settlement_batch_sharded` writes (the live trading CPI
+// path — NOT the standalone, non-sharded `record_settlement_batch`, which uses
+// a distinct `b"settlement_batch"` seed namespace; see the doc comment on
+// `SettlementRecord` in programs/treasury/src/state.rs). The batch caller MUST
+// pass this account whenever treasury recording fires for a THBG market,
+// otherwise the settlement is rejected (`TreasurySettlementRequired`).
 //
 // Seeds (must match treasury on-chain exactly):
 //   [ b"settlement", zone_id as u32 LE (4 bytes), batch_id as u64 LE (8 bytes) ]
-// owned by the TREASURY program. This encoding is the one exercised by the
-// passing litesvm test `tests/settlement_commitment_litesvm.ts`, whose on-chain
-// `init` matched it — so it is verified against the program, not guessed.
+// owned by the TREASURY program. This encoding is the one exercised by
+// `tests/batch_settle_thbg.ts`, which imports this helper directly against the
+// live `record_settlement_batch_sharded` CPI path — so it is verified against
+// the program, not guessed.
 //
 // CLI:  npx tsx scripts/settlement-pda.ts <zoneId> <batchId>
 //   e.g. npx tsx scripts/settlement-pda.ts 301 42
@@ -59,8 +63,8 @@ export function settlementRecordPda(
 
 // --- CLI ---------------------------------------------------------------------
 // Run directly: print the derived PDA for the given (zoneId, batchId).
-// Compare against `tests/settlement_commitment_litesvm.ts` (zone 301, batch 42)
-// to confirm the encoding matches the program.
+// Compare against `tests/batch_settle_thbg.ts` to confirm the encoding matches
+// the program's `record_settlement_batch_sharded` seed.
 if (import.meta.url === `file://${process.argv[1]}`) {
   const zone = Number(process.argv[2] ?? 301);
   const batch = process.argv[3] ?? "42";

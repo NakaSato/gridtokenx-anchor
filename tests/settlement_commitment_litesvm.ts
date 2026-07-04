@@ -72,7 +72,10 @@ describe("treasury record_settlement_batch (litesvm)", () => {
     zoneBuf.writeUInt32LE(zone, 0);
     const batchBuf = batch.toArrayLike(Buffer, "le", 8);
     return PublicKey.findProgramAddressSync(
-      [Buffer.from("settlement"), zoneBuf, batchBuf],
+      // `record_settlement_batch` (non-sharded) uses its own seed namespace,
+      // distinct from `record_settlement_batch_sharded`'s `b"settlement"` —
+      // see programs/treasury/src/state.rs SettlementRecord doc comment.
+      [Buffer.from("settlement_batch"), zoneBuf, batchBuf],
       programId
     )[0];
   }

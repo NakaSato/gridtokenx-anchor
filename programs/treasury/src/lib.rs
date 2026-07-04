@@ -284,6 +284,7 @@ pub mod treasury {
         attestation_ttl: i64,
     ) -> Result<()> {
         compute_fn!("initialize" => {
+            require!(swap_fee_bps <= 10_000, TreasuryError::InvalidFeeBps);
             let now = Clock::get()?.unix_timestamp;
             let mut t = ctx.accounts.treasury.load_init()?;
             t.acc_reward_per_share = 0;
@@ -322,13 +323,27 @@ pub mod treasury {
         paused: bool,
         settlement_recorder: Pubkey,
     ) -> Result<()> {
-        let mut t = ctx.accounts.treasury.load_mut()?;
-        require!(t.authority == ctx.accounts.authority.key(), TreasuryError::UnauthorizedAuthority);
-        t.grx_per_thbg_rate = grx_per_thbg_rate;
-        t.swap_fee_bps = swap_fee_bps;
-        t.attestation_ttl = attestation_ttl;
-        t.paused = if paused { 1 } else { 0 };
-        t.settlement_recorder = settlement_recorder;
+        compute_fn!("set_params" => {
+            require!(swap_fee_bps <= 10_000, TreasuryError::InvalidFeeBps);
+            let now = Clock::get()?.unix_timestamp;
+            let mut t = ctx.accounts.treasury.load_mut()?;
+            require!(t.authority == ctx.accounts.authority.key(), TreasuryError::UnauthorizedAuthority);
+            t.grx_per_thbg_rate = grx_per_thbg_rate;
+            t.swap_fee_bps = swap_fee_bps;
+            t.attestation_ttl = attestation_ttl;
+            t.paused = if paused { 1 } else { 0 };
+            t.settlement_recorder = settlement_recorder;
+
+            emit!(ParamsUpdated {
+                authority: ctx.accounts.authority.key(),
+                grx_per_thbg_rate,
+                swap_fee_bps,
+                attestation_ttl,
+                paused,
+                settlement_recorder,
+                timestamp: now,
+            });
+        });
         Ok(())
     }
 
@@ -337,8 +352,14 @@ pub mod treasury {
     /// Non-custodial — moves no funds. Authorized by the `settlement_recorder`
     /// signer (the trading market_authority PDA), so only genuine trading
     /// settlements can advance the counter.
+    ///
+    /// Not independently replay-safe: this instruction has no per-call nullifier
+    /// of its own and relies on the caller (trading's per-match `TradeNullifier`,
+    /// see `settle_offchain.rs`) to guarantee it's never invoked twice for the
+    /// same match.
     pub fn record_settlement(ctx: Context<RecordSettlement>, value: u64) -> Result<()> {
         compute_fn!("record_settlement" => {
+            require!(value > 0, TreasuryError::ZeroAmount);
             let now = Clock::get()?.unix_timestamp;
             let mut t = ctx.accounts.treasury.load_mut()?;
             require!(
@@ -375,6 +396,7 @@ pub mod treasury {
         batch_id: u64,
     ) -> Result<()> {
         compute_fn!("record_settlement_batch" => {
+            require!(value > 0, TreasuryError::ZeroAmount);
             let now = Clock::get()?.unix_timestamp;
             let total = {
                 let mut t = ctx.accounts.treasury.load_mut()?;
@@ -446,10 +468,9 @@ pub mod treasury {
     /// separate, explicit task.
     pub fn initialize_rebate_vault(ctx: Context<InitializeRebateVault>) -> Result<()> {
         compute_fn!("initialize_rebate_vault" => {
-            require!(
-                ctx.accounts.treasury.load()?.authority == ctx.accounts.authority.key(),
-                TreasuryError::UnauthorizedAuthority
-            );
+            let mut t = ctx.accounts.treasury.load_mut()?;
+            require!(t.authority == ctx.accounts.authority.key(), TreasuryError::UnauthorizedAuthority);
+            t.rebate_vault_bump = ctx.bumps.rebate_vault;
         });
         Ok(())
     }
@@ -461,12 +482,16 @@ pub mod treasury {
     /// across parallel txs, so it does not serialize. The shard account is bound to
     /// `shard_id` by its PDA seeds, so a recorder cannot scatter onto an arbitrary
     /// account. Reconcile the global total via `aggregate_settlement_shards`.
+    ///
+    /// Not independently replay-safe (same caveat as `record_settlement`): relies
+    /// on trading's per-match `TradeNullifier` to prevent duplicate calls.
     pub fn record_settlement_sharded(
         ctx: Context<RecordSettlementSharded>,
         value: u64,
         shard_id: u8,
     ) -> Result<()> {
         compute_fn!("record_settlement_sharded" => {
+            require!(value > 0, TreasuryError::ZeroAmount);
             require!(shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
             let now = Clock::get()?.unix_timestamp;
             require!(
@@ -522,29 +547,28 @@ pub mod treasury {
             for account_info in ctx.remaining_accounts.iter() {
                 require_keys_eq!(*account_info.owner, crate::ID, TreasuryError::UnauthorizedAuthority);
                 let mut data = account_info.try_borrow_mut_data()?;
-                if data.len() >= 8 + SHARD_LEN {
-                    let shard = SettlementShard::load_mut_from_bytes(&mut data[8..8 + SHARD_LEN])?;
-                    require!(shard.shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
+                require!(data.len() >= 8 + SHARD_LEN, TreasuryError::InvalidShardAccount);
+                let shard = SettlementShard::load_mut_from_bytes(&mut data[8..8 + SHARD_LEN])?;
+                require!(shard.shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
 
-                    // Validate via the stored canonical bump (create_program_address)
-                    // instead of re-deriving with find_program_address.
-                    let expected_pda = Pubkey::create_program_address(
-                        &[b"settle_shard", &[shard.shard_id], &[shard.bump]], &crate::ID
-                    ).map_err(|_| TreasuryError::InvalidShardId)?;
-                    require_keys_eq!(account_info.key(), expected_pda, TreasuryError::InvalidShardId);
+                // Validate via the stored canonical bump (create_program_address)
+                // instead of re-deriving with find_program_address.
+                let expected_pda = Pubkey::create_program_address(
+                    &[b"settle_shard", &[shard.shard_id], &[shard.bump]], &crate::ID
+                ).map_err(|_| TreasuryError::InvalidShardId)?;
+                require_keys_eq!(account_info.key(), expected_pda, TreasuryError::InvalidShardId);
 
-                    let bit = 1u16 << shard.shard_id;
-                    require!(seen & bit == 0, TreasuryError::DuplicateShard);
-                    seen |= bit;
+                let bit = 1u16 << shard.shard_id;
+                require!(seen & bit == 0, TreasuryError::DuplicateShard);
+                seen |= bit;
 
-                    // Must be writable: the drain below mutates the shard's data.
-                    require!(account_info.is_writable, TreasuryError::ShardNotWritable);
+                // Must be writable: the drain below mutates the shard's data.
+                require!(account_info.is_writable, TreasuryError::ShardNotWritable);
 
-                    running = running
-                        .checked_add(shard.settled_thbg)
-                        .ok_or(TreasuryError::MathOverflow)?;
-                    shard.settled_thbg = 0; // drain — shard now holds the next delta window
-                }
+                running = running
+                    .checked_add(shard.settled_thbg)
+                    .ok_or(TreasuryError::MathOverflow)?;
+                shard.settled_thbg = 0; // drain — shard now holds the next delta window
             }
 
             t.total_settled_thbg = running;
@@ -570,6 +594,7 @@ pub mod treasury {
         shard_id: u8,
     ) -> Result<()> {
         compute_fn!("record_settlement_batch_sharded" => {
+            require!(value > 0, TreasuryError::ZeroAmount);
             require!(shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
             let now = Clock::get()?.unix_timestamp;
             require!(
@@ -601,11 +626,16 @@ pub mod treasury {
             rec.vat_rate_bps = vat_rate_bps;
             rec.bump = ctx.bumps.settlement_record;
 
-            emit!(SettlementShardRecorded {
+            emit!(SettlementBatchShardRecorded {
                 recorder: ctx.accounts.recorder.key(),
                 shard_id,
+                zone_id,
+                batch_id,
                 value,
                 shard_total,
+                vat_amount,
+                vat_rate_bps,
+                merkle_root,
                 timestamp: now,
             });
         });
@@ -1067,7 +1097,7 @@ pub struct Initialize<'info> {
         payer = authority,
         seeds = [b"thbg_mint"],
         bump,
-        mint::decimals = 6,
+        mint::decimals = THBG_DECIMALS,
         mint::authority = treasury,
         mint::token_program = token_program,
     )]
@@ -1233,13 +1263,8 @@ pub struct UnstakeGrx<'info> {
         mut,
         seeds = [b"stake", user.key().as_ref()],
         bump = position.bump,
-        has_one = owner @ TreasuryError::UnauthorizedAuthority,
     )]
     pub position: Account<'info, StakePosition>,
-
-    /// CHECK: bound by `has_one = owner` on `position` against the signer below.
-    #[account(address = user.key())]
-    pub owner: UncheckedAccount<'info>,
 
     pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
     #[account(mut, seeds = [b"stake_vault"], bump = treasury.load()?.stake_vault_bump)]
@@ -1318,11 +1343,14 @@ pub struct RecordSettlementBatch<'info> {
     pub treasury: AccountLoader<'info, Treasury>,
 
     /// Per-`(zone, batch)` audit commitment, created on first record for the batch.
+    /// Distinct seed namespace (`b"settlement_batch"`) from the sharded variant's
+    /// `b"settlement"` — this instruction is not on the live trading CPI path, so
+    /// the two must never `init` the same PDA for the same (zone, batch).
     #[account(
         init,
         payer = payer,
         space = 8 + std::mem::size_of::<SettlementRecord>(),
-        seeds = [b"settlement", zone_id.to_le_bytes().as_ref(), batch_id.to_le_bytes().as_ref()],
+        seeds = [b"settlement_batch", zone_id.to_le_bytes().as_ref(), batch_id.to_le_bytes().as_ref()],
         bump
     )]
     pub settlement_record: AccountLoader<'info, SettlementRecord>,
@@ -1360,6 +1388,7 @@ pub struct InitializeSettlementShard<'info> {
 #[derive(Accounts)]
 pub struct InitializeRebateVault<'info> {
     #[account(
+        mut,
         seeds = [b"treasury"],
         bump,
         constraint = grx_mint.key() == treasury.load()?.grx_mint @ TreasuryError::UnauthorizedAuthority,
