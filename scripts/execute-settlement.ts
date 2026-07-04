@@ -21,6 +21,7 @@ import {
 } from "@solana/spl-token";
 import BN from "bn.js";
 import * as fs from "fs";
+import * as crypto from "crypto";
 import { sizedComputeBudgetPreIxs } from "../tests/utils/compute-budget";
 
 async function ensureAta(
@@ -203,17 +204,24 @@ async function main() {
   // 7. Execute Atomic Settlement
   console.log(`\n⚡ Executing Atomic Settlement...`);
   try {
+    const tradeId = crypto.randomBytes(16);
+    const [tradeNullifierPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("trade"), tradeId],
+      tradingProgram.programId
+    );
     const settlementBuilder = tradingProgram.methods
       .executeAtomicSettlement(
         new BN(100), // amount
         new BN(55),  // price
         new BN(1),   // wheeling
-        new BN(1)    // loss
+        new BN(1),   // loss
+        Array.from(tradeId) // trade_id: [u8; 16] replay-guard nullifier seed
       )
       .accounts({
         market: marketPda,
         buyOrder: buyOrderPda,
         sellOrder: sellOrderPda,
+        tradeNullifier: tradeNullifierPda,
         buyerCurrencyEscrow: buyerCurrencyEscrow,
         sellerEnergyEscrow: sellerEnergyEscrow,
         sellerCurrencyAccount: sellerCurrencyAccount,
