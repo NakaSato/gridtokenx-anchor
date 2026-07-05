@@ -53,8 +53,11 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
   // Energy is 9-decimal atomic (kWh * 1e9). execute_atomic_settlement normalizes the
   // currency leg by 1e9: total = amount * price / 1e9 (commit 6c4118b). So a 100 kWh match
   // must be wired as 100 * 1e9 atomic units, else total rounds to 0 and the seller receives
-  // nothing. price stays 6-dec currency (55 → total = 100e9 * 55 / 1e9 = 5500).
+  // nothing. Price must share wheeling_rate_per_kwh's 6-dec THB/kWh scale (settle_offchain.rs:794)
+  // — a toy unscaled price makes the flat wheeling charge dwarf the trade and trip
+  // ChargesExceedCap. 4.00 THB/kWh (4_000_000) → total = 100e9 * 4_000_000 / 1e9 = 400_000_000.
   const MATCH_ENERGY = 100 * 1_000_000_000; // 100 kWh atomic
+  const MATCH_PRICE = 4_000_000; // 4.00 THB/kWh, 6-dec
 
   before(async () => {
     [marketPda] = PublicKey.findProgramAddressSync([Buffer.from("market")], tradingProgram.programId);
@@ -109,8 +112,8 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
     const sellerEnergyEscrow = await ensureAta(energyMint, escrowAuth.publicKey, TOKEN_2022_PROGRAM_ID);
     const buyerEnergyAccount = await ensureAta(energyMint, consumer.publicKey, TOKEN_2022_PROGRAM_ID);
 
-    // Fund escrows: 1,000,000 currency to buyer, 100 energy to seller.
-    await mintTo(provider.connection, payer, currencyMint, buyerCurrencyEscrow, payer, 1_000_000, [], undefined, TOKEN_PROGRAM_ID);
+    // Fund escrows: buyer must cover the full trade total (400_000_000), 100 energy to seller.
+    await mintTo(provider.connection, payer, currencyMint, buyerCurrencyEscrow, payer, 500_000_000, [], undefined, TOKEN_PROGRAM_ID);
     await mintTo(provider.connection, payer, energyMint, sellerEnergyEscrow, payer, MATCH_ENERGY, [], undefined, TOKEN_2022_PROGRAM_ID);
 
     // On-chain orders.
@@ -120,7 +123,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       tradingProgram.programId
     );
     await tradingProgram.methods
-      .createSellOrder(sellOrderId, new BN(MATCH_ENERGY), new BN(50))
+      .createSellOrder(sellOrderId, new BN(MATCH_ENERGY), new BN(3_900_000))
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,
@@ -139,7 +142,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       tradingProgram.programId
     );
     await tradingProgram.methods
-      .createBuyOrder(buyOrderId, new BN(MATCH_ENERGY), new BN(60))
+      .createBuyOrder(buyOrderId, new BN(MATCH_ENERGY), new BN(4_500_000))
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,
@@ -165,7 +168,7 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
     // (currency), secondaryTokenProgram = Token-2022 (energy). wheeling/loss are no
     // longer caller args — computed from the bootstrapped TariffConfig (0.1%/0.05%).
     await tradingProgram.methods
-      .executeAtomicSettlement(new BN(MATCH_ENERGY), new BN(55), [...tradeId])
+      .executeAtomicSettlement(new BN(MATCH_ENERGY), new BN(MATCH_PRICE), [...tradeId])
       .accounts({
         market: marketPda,
         buyOrder: buyOrderPda,
@@ -192,12 +195,14 @@ describe("atomic-settlement (service layout: currency=classic, energy=Token-2022
       .rpc();
 
     // Buyer received all the energy; seller received currency net of fee+wheeling+loss.
-    // total = MATCH_ENERGY * 55 / 1e9 = 5500; wheeling=5 (0.1%), loss=2 (0.05%) from the
-    // bootstrapped TariffConfig; seller nets ~5493 minus the market fee.
+    // total = MATCH_ENERGY * 4_000_000 / 1e9 = 400_000_000; wheeling = MATCH_ENERGY *
+    // wheeling_rate_per_kwh / 1e9 = 10_000_000 (flat per-kWh, bootstrapped TariffConfig
+    // 0.10 THB/kWh — not bps-of-value); loss = total*5/10000 = 200_000 (5 bps); seller nets
+    // ~388_800_000 minus the market fee.
     const buyerEnergy = await provider.connection.getTokenAccountBalance(buyerEnergyAccount);
     const sellerCurrency = await provider.connection.getTokenAccountBalance(sellerCurrencyAccount);
     expect(Number(buyerEnergy.value.amount), "buyer energy").to.equal(MATCH_ENERGY);
-    expect(Number(sellerCurrency.value.amount), "seller currency").to.be.at.least(5480);
+    expect(Number(sellerCurrency.value.amount), "seller currency").to.be.at.least(388_000_000);
 
     const fee = await provider.connection.getTokenAccountBalance(feeCollector);
     expect(Number(fee.value.amount), "fee collected").to.be.greaterThan(0);

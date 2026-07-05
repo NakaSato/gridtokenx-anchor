@@ -347,15 +347,16 @@ describe("escrow-settlement", () => {
 
   it("settles a signed off-chain match between two escrows", async () => {
     // Buyer holds currency, seller holds energy; both pre-create their receiving escrows.
-    const buyer = await freshUserWith(currencyMint, 10_000);
+    // Buyer must cover the full trade total (400_000_000 at the 4.00 THB/kWh scale below).
+    const buyer = await freshUserWith(currencyMint, 500_000_000);
     // Energy is 9-dec atomic; the match is 100 kWh = 100*1e9 atomic (divisor 6c4118b:
-    // total = match_amount*price/1e9, so 100e9*50/1e9 = 5000 — currency asserts unchanged).
+    // total = match_amount*price/1e9).
     const seller = await freshUserWith(energyMintPda, 100 * 1_000_000_000);
     // Receiving-side escrows must exist (settle does not init them).
     const sellerCur = await freshUserWith(currencyMint, 10); // seller currency wallet to seed escrow
     const buyerEng = await freshUserWith(energyMintPda, 10); // buyer energy wallet to seed escrow
 
-    await deposit(buyer.kp, buyer.ata, currencyMint, 10_000);
+    await deposit(buyer.kp, buyer.ata, currencyMint, 500_000_000);
     await deposit(seller.kp, seller.ata, energyMintPda, 100 * 1_000_000_000);
     // Seed the receiving escrows under the SAME buyer/seller keys.
     // (re-fund the buyer/seller wallets with the opposite asset, then deposit)
@@ -371,16 +372,19 @@ describe("escrow-settlement", () => {
 
     const buyerOrderId = Buffer.alloc(16); buyerOrderId.writeUInt32LE(0xa1, 0);
     const sellerOrderId = Buffer.alloc(16); sellerOrderId.writeUInt32LE(0xb2, 0);
-    const matchAmount = 100 * 1_000_000_000, matchPrice = 50; // 100 kWh atomic; total = 5000
+    // Price must share wheeling_rate_per_kwh's 6-dec THB/kWh scale (see settle_offchain.rs:794) —
+    // a toy unscaled price (e.g. 50) makes the flat wheeling charge dwarf the trade total and
+    // trip ChargesExceedCap. 4.00 THB/kWh clears the bootstrapped 0.10 THB/kWh rate comfortably.
+    const matchAmount = 100 * 1_000_000_000, matchPrice = 4_000_000; // 100 kWh atomic; total = 400,000,000
 
-    const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.kp.publicKey, energyAmount: matchAmount, pricePerKwh: 60, side: 0, zoneId, expiresAt: 0 });
-    const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.kp.publicKey, energyAmount: matchAmount, pricePerKwh: 50, side: 1, zoneId, expiresAt: 0 });
+    const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.kp.publicKey, energyAmount: matchAmount, pricePerKwh: 4_500_000, side: 0, zoneId, expiresAt: 0 });
+    const sellerMsg = orderMessage({ orderId: sellerOrderId, user: seller.kp.publicKey, energyAmount: matchAmount, pricePerKwh: 3_900_000, side: 1, zoneId, expiresAt: 0 });
 
     const buyerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: buyer.kp.secretKey, message: buyerMsg });
     const sellerEd = Ed25519Program.createInstructionWithPrivateKey({ privateKey: seller.kp.secretKey, message: sellerMsg });
 
-    const buyerPayload = { orderId: [...buyerOrderId], user: buyer.kp.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(60), side: 0, zoneId, expiresAt: new BN(0) };
-    const sellerPayload = { orderId: [...sellerOrderId], user: seller.kp.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(50), side: 1, zoneId, expiresAt: new BN(0) };
+    const buyerPayload = { orderId: [...buyerOrderId], user: buyer.kp.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(4_500_000), side: 0, zoneId, expiresAt: new BN(0) };
+    const sellerPayload = { orderId: [...sellerOrderId], user: seller.kp.publicKey, energyAmount: new BN(matchAmount), pricePerKwh: new BN(3_900_000), side: 1, zoneId, expiresAt: new BN(0) };
 
     // Per-match TradeNullifier (F3c): claimed on first settle, reverts a replay.
     const tradeId = Buffer.alloc(16); tradeId.writeUInt32LE(0xa1, 0); tradeId.writeUInt32LE(0xb2, 4);
@@ -485,6 +489,7 @@ describe("escrow-settlement", () => {
     // retry with a freshly-fetched blockhash each attempt.
     let sig: string | null = null;
     let lastErr: any = null;
+    let confirmed = false;
     for (let attempt = 0; attempt < 5; attempt++) {
       const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash("confirmed");
       const v0msg = new TransactionMessage({
@@ -498,13 +503,17 @@ describe("escrow-settlement", () => {
         sig = await provider.connection.sendTransaction(vtx, { skipPreflight: true });
         const conf = await provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
         if (conf.value.err) throw new Error("settle tx failed: " + JSON.stringify(conf.value.err));
+        confirmed = true;
         break;
       } catch (e: any) {
         lastErr = e;
         await new Promise((res) => setTimeout(res, 400));
       }
     }
-    if (!sig) throw lastErr;
+    // A reverted-but-landed tx still sets `sig` — check confirmed, not just !sig, or a real
+    // on-chain rejection (e.g. ChargesExceedCap) silently falls through to a confusing
+    // balance-mismatch assertion instead of surfacing the actual program error.
+    if (!confirmed) throw lastErr;
 
     // BENCH (paper review #3): record the real compute-units the settle_offchain_match
     // settlement tx consumes. This is the meaningful on-chain cost metric — deterministic
@@ -527,15 +536,18 @@ describe("escrow-settlement", () => {
       );
     }
 
-    // total = match_amount*price/1e9 = 100e9*50/1e9 = 5000; fee = 5000*25/10000 = 12;
-    // wheeling = 5000*10/10000 = 5 (bootstrapped TariffConfig, 10 bps); loss = 5000*5/10000
-    // = 2 (5 bps); net = 5000-12-5-2 = 4981. Energy leg = matchAmount (100e9) to buyer.
-    // seller/buyer escrows use fresh keys each run (seeded with 1), so absolute checks hold.
+    // total = match_amount*price/1e9 = 100e9*4_000_000/1e9 = 400_000_000; fee = total*25/10000
+    // = 1_000_000; wheeling = match_amount*wheeling_rate_per_kwh/1e9 = 100e9*100_000/1e9 =
+    // 10_000_000 (flat per-kWh rate, bootstrapped TariffConfig 0.10 THB/kWh — NOT bps-of-value,
+    // see settle_offchain.rs:794); loss = total*5/10000 = 200_000 (5 bps); net = total - fee -
+    // wheeling - loss = 400_000_000 - 1_000_000 - 10_000_000 - 200_000 = 388_800_000.
+    // Energy leg = matchAmount (100e9) to buyer. seller/buyer escrows use fresh keys each run
+    // (seeded with 1), so absolute checks hold.
     const sellerCurEscrow = escrowPda(seller.kp.publicKey, currencyMint);
     const buyerEngEscrow = escrowPda(buyer.kp.publicKey, energyMintPda);
-    expect(Number((await getAccount(provider.connection, sellerCurEscrow)).amount)).to.equal(1 + 4981);
+    expect(Number((await getAccount(provider.connection, sellerCurEscrow)).amount)).to.equal(1 + 388_800_000);
     expect(Number((await getAccount(provider.connection, buyerEngEscrow, undefined, TOKEN_2022_PROGRAM_ID)).amount)).to.equal(1 + matchAmount);
     const feeAfter = Number((await getAccount(provider.connection, feeCollectorPda)).amount);
-    expect(feeAfter - feeBefore, "fee collected this settle").to.equal(12);
+    expect(feeAfter - feeBefore, "fee collected this settle").to.equal(1_000_000);
   });
 });
