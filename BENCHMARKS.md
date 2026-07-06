@@ -168,7 +168,7 @@ write path (`submit_meter_reading`) is now the ceiling here: ~16k on first touch
 authority/ERC control ixs 13.3k → ~5.8k) — a shared reduction in the common
 governance path (fewer account loads / one less syscall on that code), a real
 efficiency win, not measurement drift. Contrast §1's `settle_offchain_match` at
-103k: these are config/telemetry instructions, not signature-verifying
+122k: these are config/telemetry instructions, not signature-verifying
 settlement. The CI assertion turns an accidental extra syscall or a serialized
 hot-path account into a test failure.
 
@@ -307,8 +307,8 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 
 **Reading:** the **on-chain CDA match** (`match_orders`) is **11.7k CU** — cheap,
 because it only touches the two `Order` PDAs + the `zone_market` and writes a trade
-record; no token movement. Contrast §1's `settle_offchain_match` at **103k**: the
-~9× gap is the Ed25519 signature-verify precompile + dual-mint escrow transfers on
+record; no token movement. Contrast §1's `settle_offchain_match` at **122k**: the
+~10× gap is the Ed25519 signature-verify precompile + dual-mint escrow transfers on
 the *settlement* path, which `match_orders` does not perform. The escrow
 deposit/withdraw (SPL transfer + PDA init/close accounting) dominate this path at
 18-28k. Order create/cancel are ~4.5-11.5k.
@@ -368,19 +368,21 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   order nullifier + signature verify + trade record), not just BlockBench /
   SmallBank / TPC-C proxies — so TPS/CU describe this system, not a generic
   workload. **Single-match CU is now measured on-chain:** `settle_offchain_match`
-  = **103 363 CU** (match_amount 100, price 50), captured via the `BENCH_SETTLE_CU`
-  probe in `tests/escrow_settlement.ts` against a live validator (Solana 3.1.10,
-  current `trading` build). That is **~5× the ~21k CU/tx TPC-C proxy above** — the
+  = **121 813 CU** (match_amount 100·1e9 atomic kWh, price 4e6), captured via the
+  `BENCH_SETTLE_CU` probe in `tests/escrow_settlement.ts` against a live validator
+  (Solana 3.1.10, build `3cb3388`, re-run 2026-07-06; was 103 363 on `58cfc79`).
+  That is **~5.3× the ~23k CU/tx TPC-C proxy above** — the
   Ed25519 signature verify + dual-mint (classic currency / Token-2022 energy)
   transfers + escrow/nullifier writes dominate, so the generic-OLTP figure
   materially *understates* per-trade compute. The §2b **batch** path
   (`batch_settle_offchain_match` → treasury `record_settlement_batch`) is also
-  on-chain verified now (`tests/batch_settle_thbg.ts`). **Batch CU, 1 match ≈
-  80–92k CU** (`BENCH_BATCH_SETTLE_CU` probe, both mints Token-2022, +
+  on-chain verified now (`tests/batch_settle_thbg.ts`). **Batch CU, 1 match =
+  101 470 CU** (`BENCH_BATCH_SETTLE_CU` probe, both mints Token-2022, +
   `record_settlement_batch` CPI + 2 in-loop nullifier creates), captured against
-  the same validator. Lower than the 103 363 single-match figure above because
-  that run paid a classic-SPL→Token-2022 cross-program currency leg; here both
-  legs are Token-2022. The ~12k run-to-run spread is **bump-seek noise, not
+  the same validator (was ~80–92k on `58cfc79`). Lower than the 121 813
+  single-match figure above because that run paid a classic-SPL→Token-2022
+  cross-program currency leg; here both legs are Token-2022. The run-to-run
+  spread is **bump-seek noise, not
   ledger drift**: the in-loop binding derives ~10 PDAs via `find_program_address`
   (settle_offchain.rs:606–634), and each run's fresh keypairs land on different
   bump-search iteration counts.
@@ -397,10 +399,11 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   **Batch-settle TPS (single authority, `tests/batch_settle_tps.ts`):** an
   open-loop submission sweep (pre-seed + pre-build all settle txs, then fire with
   `conc` in flight and poll to confirmed; goodput-style — dropped txs re-fired) on
-  the same validator gives **~0.5 TPS, flat across concurrency** (conc 5 → 0.51,
-  conc 10 → 0.58 TPS; N=10/level, 100% goodput, 0 on-chain reverts, CU ≈ 86–89k).
-  Throughput does **not** scale with concurrency and every level needs a second
-  re-fire round. **The bottleneck is NOT the shard.** Spreading the settles across
+  the same validator gives **~0.6 TPS, flat across concurrency** (conc 5 → 0.61,
+  conc 10 → 0.56 TPS; N=10/level, 100% goodput, 0 dropped, 0 on-chain reverts,
+  CU ≈ 115k; re-run 2026-07-06 on `3cb3388`, was ~0.5 TPS / CU ≈ 86–89k on
+  `58cfc79`). Throughput does **not** scale with concurrency and every level
+  needs a second re-fire round. **The bottleneck is NOT the shard.** Spreading the settles across
   all 16 shards (`BENCH_TPS_SHARD_SPREAD=1`; `market_shard`/`zone_shard` carry no
   seeds constraint — `settle_offchain.rs:260` — so the client picks the shard)
   gave the *same* numbers (0.59 / 0.57 TPS, still 2 rounds). The serialization is
@@ -424,7 +427,7 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   low-leaf hash + the range check). Both forge classes revert on-chain (tampered
   sibling → root mismatch; claim-present-absent → range check). A challenge's
   Ed25519 meter-sig verify is the existing SigVerify precompile (already inside the
-  103k single / ~85k batch settle CU). **Per-challenge verify is ≪ the 200k default
+  122k single / ~101k batch settle CU). **Per-challenge verify is ≪ the 200k default
   budget (~2%), ~0.3% of the 1.4M max** — CU does NOT block a trustless Tier-2; the
   open gate is the immediate-settlement → challenge-window redesign (see
   `docs/proposed/implementation-plan.md` §3 T3.3). NOTE: these `blockbench`
