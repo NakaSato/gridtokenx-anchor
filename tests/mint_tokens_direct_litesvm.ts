@@ -1,8 +1,8 @@
 // Litesvm coverage for energy-token `mint_tokens_direct` — the production REC-mint
-// instruction the REGISTRY CPIs into (registry::settle_and_mint_tokens lib.rs:678 and
-// claim_airdrop lib.rs:354). Previously untested at the instruction level.
+// instruction the REGISTRY CPIs into (registry::settle_and_mint_tokens lib.rs:688 and
+// claim_airdrop lib.rs:321). Previously untested at the instruction level.
 //
-// Guards exercised (lib.rs:452):
+// Guards exercised (lib.rs:487):
 //   UnauthorizedAuthority  — caller is neither token_info.authority (admin) nor registry_authority
 //   RecValidatorNotFound   — REC validators registered (count > 0) but co-signer not in the set
 //   count==0 skip (HARDENED) — when NO validator is registered the REC gate cannot be satisfied.

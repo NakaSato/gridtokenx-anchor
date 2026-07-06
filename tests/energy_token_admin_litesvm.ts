@@ -1,5 +1,5 @@
 // Litesvm coverage for two previously-untested energy-token admin instructions:
-// set_registry_authority (lib.rs:536) and create_token_mint (lib.rs:132).
+// set_registry_authority (lib.rs:580) and create_token_mint (lib.rs:155).
 //
 // set_registry_authority: admin-only setter for token_info.registry_authority (the key
 // the registry CPI must match in mint_tokens_direct — see mint_tokens_direct_litesvm.ts).

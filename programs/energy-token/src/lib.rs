@@ -590,8 +590,9 @@ pub mod energy_token {
 
     /// Rotate the admin authority (current authority only).
     ///
-    /// `token_info.authority` gates every privileged path (mint_to_wallet,
-    /// mint_generation, add/remove_rec_validator, sync_total_supply, set_*). It was
+    /// `token_info.authority` gates the privileged mint/admin paths (mint_to_wallet,
+    /// mint_generation, sync_total_supply, set_*; REC validator-set management is
+    /// instead gated by the governance authority via governance_config). It was
     /// previously fixed at `initialize_token` with no rotation path, so a deployment
     /// whose authority must become a different signer (e.g. an off-chain bridge's
     /// signing key) had to be re-initialized. This transfers authority in place. The

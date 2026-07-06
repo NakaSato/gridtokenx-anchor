@@ -2,7 +2,7 @@
 // management guards, all previously untested. The REC (Renewable Energy Certificate)
 // co-sign requirement is the provenance boundary on mint_to_wallet: once any REC
 // validator is registered, every mint must be co-signed by a validator in the set —
-// so the admin mint path can't bypass the certificate proof (lib.rs:117-135).
+// so the admin mint path can't bypass the certificate proof (lib.rs:208-223).
 //
 //   RecValidatorNotFound   — mint with no / a non-registered REC co-signer
 //   ValidatorAlreadyExists — add the same validator twice

@@ -17,7 +17,7 @@
 | `declare_id!` | `lib.rs:38` |
 | Module name | `pub mod blockbench` (`lib.rs:86`) |
 
-The crate is built both as a deployable program (`cdylib`) and as a library (`Cargo.toml:8`). The `init-if-needed` Anchor feature is enabled (`Cargo.toml:24`), which the IOHeavy write path relies on (`io_heavy.rs:160`). The `localnet` feature wires in the `compute-debug` profiling macros; when it is absent, `compute_fn!` and `compute_checkpoint!` degrade to no-ops (`lib.rs:40-53`, `Cargo.toml:13,25`). The crate forces `overflow-checks = true` for release builds, countering the Solana default of silent wrapping arithmetic (`Cargo.toml:27-30`).
+The crate is built both as a deployable program (`cdylib`) and as a library (`Cargo.toml:8`). The `init-if-needed` Anchor feature is enabled (`Cargo.toml:24`), which the IOHeavy write path relies on (`io_heavy.rs:160`). The `localnet` feature wires in the `compute-debug` profiling macros; when it is absent, `compute_fn!` and `compute_checkpoint!` degrade to no-ops (`lib.rs:40-53`, `Cargo.toml:13,25`). The crate forces `overflow-checks = true` for release builds, countering the Solana default of silent wrapping arithmetic (`Cargo.toml:30-33`). Beyond `anchor-lang` and the optional `compute-debug` crate, the only dependency is `solana-sha256-hasher`, pulled in for the throwaway Merkle-verify spike instructions (`Cargo.toml:26-28`; see §4.9).
 
 ---
 
@@ -36,7 +36,7 @@ The program organises its instructions as **layer-isolation tests**: each worklo
 | `ycsb` | Key-value store | YCSB insert/read/update/delete over PDA-keyed records (`ycsb.rs:1-4`) |
 | `smallbank` | OLTP application | SmallBank banking transactions (`smallbank.rs:1`) |
 
-A `metrics` module aggregates per-operation measurements on-chain into a `BlockbenchState` account and computes a summary (`metrics.rs:1-3`). The relationship to `BENCHMARKS.md` is direct: the TypeScript suites drive these instructions, capture wall-clock latency and `computeUnitsConsumed`, and transcribe the results into the report's BlockBench and SmallBank tables (`BENCHMARKS.md:52,73`). The report notes that latency is dominated by single-node block time and the sequential submit loop, so the **compute-unit columns are the load-independent figure of merit** for program cost (`BENCHMARKS.md:44-48`).
+A `metrics` module aggregates per-operation measurements on-chain into a `BlockbenchState` account and computes a summary (`metrics.rs:1-3`). One further module, `merkle_verify`, is **not** part of the BlockBench suite: it holds two throwaway spike instructions measuring the compute cost of indexed-Merkle fraud-proof verification (`merkle_verify.rs:1-7`; §4.9). The relationship to `BENCHMARKS.md` is direct: the TypeScript suites drive these instructions, capture wall-clock latency and `computeUnitsConsumed`, and transcribe the results into the report's BlockBench and SmallBank tables (`BENCHMARKS.md:52,73`). The report notes that latency is dominated by single-node block time and the sequential submit loop, so the **compute-unit columns are the load-independent figure of merit** for program cost (`BENCHMARKS.md:44-48`).
 
 ---
 
@@ -77,7 +77,7 @@ The YCSB workload mixes are declared as constants in `blockbench_constants` (`li
 
 ## 4. Instruction Set
 
-The program exposes 27 instructions (`lib.rs:86-313`). Every handler body is wrapped in `compute_fn!("label" => { ... })` so that, under the `localnet` feature, its compute consumption is logged. Several compute-bound handlers return a checksum or hash so the validator cannot elide the work and so the client can verify execution.
+The program exposes 29 instructions (`lib.rs:86-344`) — 27 benchmark-workload instructions plus two throwaway Merkle-verify spike instructions (§4.9). Every handler body is wrapped in `compute_fn!("label" => { ... })` so that, under the `localnet` feature, its compute consumption is logged. Several compute-bound handlers return a checksum or hash so the validator cannot elide the work and so the client can verify execution.
 
 ### 4.1 Initialization
 
@@ -151,6 +151,16 @@ The five canonical SmallBank read-write transactions plus an account-creation he
 
 **`finalize_benchmark()`** (`lib.rs:255-260`, `metrics.rs:85-144`). Stamps `end_time`, computes a `BenchmarkSummary` — TPS, average latency, success-rate basis points, average compute units — and returns it. Percentiles are approximations derived from the average and max latency because no on-chain histogram is populated (`metrics.rs:126-130`).
 
+### 4.9 Merkle-verify spike (experimental, throwaway)
+
+Two instructions added by the §3 fraud-proof feasibility spike (T3.2). They are **explicitly throwaway benchmark instructions** — not part of the BlockBench suite and unused by any production path (`merkle_verify.rs:1-7`) — kept only to measure the on-chain compute cost of the trustless fraud-proof primitive (indexed-Merkle inclusion/exclusion verification). Both reuse the argument-only `CpuHeavy` context and hash with the sha256 syscall via `solana-sha256-hasher` (`merkle_verify.rs:23-26`), matching the off-chain prototype in `tests/spike_merkle_exclusion.ts` so a TS-built proof verifies directly (`merkle_verify.rs:9-14`). Leaf scheme: `leaf = sha256(value32 ‖ nextValue32 ‖ nextIndex32)`, `node = sha256(left ‖ right)`, values compared as big-endian byte strings (`merkle_verify.rs:19-21`).
+
+**`merkle_verify_inclusion(leaf, index, proof, root)`** (`lib.rs:318-328`, `merkle_verify.rs:49-58`). Climbs the sibling ladder from `leaf` at `index` and requires the reconstructed root to equal `root`, raising `InvalidMerkleProof` otherwise — proves a match WAS in a committed batch.
+
+**`merkle_verify_exclusion(low_value, low_next, low_next_index, query, index, proof, root)`** (`lib.rs:330-343`, `merkle_verify.rs:63-81`). The fraud proof: recomputes the bounding low leaf from `{low_value, low_next, low_next_index}`, verifies its inclusion, then requires `low_value < query < low_next` (or `low_next == 0` for the maximum leaf), raising `ExclusionRangeInvalid` otherwise — proves a match was DROPPED from the committed set.
+
+Both instructions **require** proof validity so that a valid proof's `computeUnitsConsumed` is read on success and a forged proof reverts on-chain (`merkle_verify.rs:15-17`). They are driven by `tests/spike_merkle_cu.ts`, which hand-builds the instructions (Anchor discriminator + borsh) so it does not depend on an IDL regeneration — only a rebuilt/redeployed `.so`. Measured results (Solana 3.1.10): inclusion 3,250 CU at depth 10 / 4,114 at depth 14; exclusion 3,629 / 4,493 — about 216 CU per tree level (`BENCHMARKS.md:387-401`).
+
 ---
 
 ## 5. Methodology and Measurement
@@ -166,7 +176,7 @@ The five canonical SmallBank read-write transactions plus an account-creation he
 
 ### 5.2 Compute-unit profiling
 
-Each handler is wrapped in the `compute-debug` macro `compute_fn!` (`lib.rs:97-312`). Under the `localnet` feature this records the compute units consumed by the labelled block; in release builds it expands to the bare block with zero overhead (`lib.rs:43-53`). This makes on-chain compute cost the primary, machine-independent metric, consistent with the report's guidance that compute-unit figures — not wall-clock latency — are the citable measure of program efficiency (`BENCHMARKS.md:44-48`).
+Each handler is wrapped in the `compute-debug` macro `compute_fn!` (`lib.rs:97-343`). Under the `localnet` feature this records the compute units consumed by the labelled block; in release builds it expands to the bare block with zero overhead (`lib.rs:43-53`). This makes on-chain compute cost the primary, machine-independent metric, consistent with the report's guidance that compute-unit figures — not wall-clock latency — are the citable measure of program efficiency (`BENCHMARKS.md:44-48`).
 
 ### 5.3 How metrics are recorded
 
@@ -178,7 +188,7 @@ The harness deliberately varies inputs to defeat validator caching: `cpu_heavy_s
 
 ## 6. Error Codes
 
-Defined in `error.rs:5-66` as `BlockbenchError`.
+Defined in `error.rs:5-72` as `BlockbenchError`.
 
 | Variant | Message | Raised by |
 |---------|---------|-----------|
@@ -202,6 +212,8 @@ Defined in `error.rs:5-66` as `BlockbenchError`.
 | `MathOverflow` | Math check failed | SmallBank checked arithmetic (`smallbank.rs:152,161,181,191,203`) |
 | `InvalidAmount` | Invalid amount | `smallbank_send_payment` (`smallbank.rs:170`) |
 | `InsufficientFunds` | Insufficient funds | `smallbank_send_payment` (`smallbank.rs:177`) |
+| `InvalidMerkleProof` | Merkle proof does not reconstruct the committed root | `merkle_verify_inclusion`/`exclusion` ladder check (`merkle_verify.rs:56,74`) |
+| `ExclusionRangeInvalid` | Exclusion range check failed: low leaf does not bound the query | `merkle_verify_exclusion` range check (`merkle_verify.rs:79`) |
 
 Variants marked *reserved* are declared but not raised by any handler in the current instruction set.
 
@@ -209,7 +221,7 @@ Variants marked *reserved* are declared but not raised by any handler in the cur
 
 ## 7. Testing and Running
 
-Two Mocha/TypeScript suites drive the program, both importing the generated `Blockbench` type and the shared `measureOp` / `BenchReport` harness (`tests/blockbench.ts:1-7`, `tests/smallbank.ts:1-7`).
+Two Mocha/TypeScript benchmark suites drive the program, both importing the generated `Blockbench` type and the shared `measureOp` / `BenchReport` harness (`tests/blockbench.ts:1-7`, `tests/smallbank.ts:1-7`). A third suite, the Merkle-verify spike, targets only the §4.9 instructions (below).
 
 **BlockBench suite** — `tests/blockbench.ts`. Initialises a `BlockbenchState` and a `YcsbStore` (tolerating "already in use" on a live ledger), then measures `do_nothing` (latency floor), `cpu_heavy_sort` (compute-bound), `ycsb_insert` (write), and `ycsb_read` (point read via `.view()`) (`tests/blockbench.ts:82-171`). Run with:
 
@@ -221,6 +233,13 @@ npm run test:blockbench          # anchor test tests/blockbench.ts (package.json
 
 ```bash
 npm run test:smallbank           # anchor test tests/smallbank.ts (package.json:20)
+```
+
+**Merkle-verify spike** — `tests/spike_merkle_cu.ts`. Not wired into any npm recipe or `scripts/run-tests.sh`; run manually against an already-running validator with the current `blockbench.so` deployed (`tests/spike_merkle_cu.ts:10-12`):
+
+```bash
+ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=$HOME/.config/solana/id.json \
+  npx mocha -r tsx tests/spike_merkle_cu.ts --timeout 600000
 ```
 
 Both suites accept `BENCH_ITERS` and `BENCH_WARMUP` environment variables (defaults 100 / 10), which the report raises to `150` / `10` for paper-grade runs (`tests/blockbench.ts:28-29`, `BENCHMARKS.md:36-43`). They are also reachable via the aggregate `npm run test:all` recipe and `./scripts/run-tests.sh`. Per the repository build gotcha, Anchor 1.0 may spawn `surfpool` as the test validator; where it is unavailable, `./scripts/run-tests.sh` uses `solana-test-validator` instead.
