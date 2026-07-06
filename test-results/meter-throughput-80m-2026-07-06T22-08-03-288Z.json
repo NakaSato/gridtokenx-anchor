@@ -1,0 +1,120 @@
+{
+  "generatedAt": "2026-07-06T22:08:03.283Z",
+  "config": {
+    "meters": 80,
+    "epochs": 5,
+    "intervalSec": 61
+  },
+  "rpc": "http://127.0.0.1:8899",
+  "programId": "64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU",
+  "totals": {
+    "tx": 400,
+    "ok": 400,
+    "fail": 0,
+    "lossRatePct": 0
+  },
+  "firstEpochInit": {
+    "cuMed": 16088,
+    "cuMax": 23588,
+    "tps": 32.32,
+    "latP50": 2470,
+    "latP95": 2472
+  },
+  "steadyState": {
+    "epochs": [
+      2,
+      3,
+      4,
+      5
+    ],
+    "cuMed": 13468,
+    "cuMax": 20968,
+    "tpsMean": 135.14,
+    "tpsMax": 181.41,
+    "latP50Med": 659,
+    "latP95Max": 859,
+    "latMax": 861
+  },
+  "perEpoch": [
+    {
+      "epoch": 1,
+      "ts": 1783375433,
+      "meters": 80,
+      "ok": 80,
+      "fail": 0,
+      "wallMs": 2475,
+      "tps": 32.32,
+      "latP50": 2470,
+      "latP95": 2472,
+      "latMax": 2473,
+      "cuMin": 16088,
+      "cuMed": 16088,
+      "cuMax": 23588,
+      "cuSamples": 80
+    },
+    {
+      "epoch": 2,
+      "ts": 1783375497,
+      "meters": 80,
+      "ok": 80,
+      "fail": 0,
+      "wallMs": 551,
+      "tps": 145.19,
+      "latP50": 528,
+      "latP95": 549,
+      "latMax": 550,
+      "cuMin": 13468,
+      "cuMed": 13468,
+      "cuMax": 20968,
+      "cuSamples": 80
+    },
+    {
+      "epoch": 3,
+      "ts": 1783375559,
+      "meters": 80,
+      "ok": 80,
+      "fail": 0,
+      "wallMs": 441,
+      "tps": 181.41,
+      "latP50": 440,
+      "latP95": 440,
+      "latMax": 441,
+      "cuMin": 13468,
+      "cuMed": 13468,
+      "cuMax": 20968,
+      "cuSamples": 80
+    },
+    {
+      "epoch": 4,
+      "ts": 1783375620,
+      "meters": 80,
+      "ok": 80,
+      "fail": 0,
+      "wallMs": 861,
+      "tps": 92.92,
+      "latP50": 858,
+      "latP95": 859,
+      "latMax": 861,
+      "cuMin": 13468,
+      "cuMed": 13468,
+      "cuMax": 20968,
+      "cuSamples": 80
+    },
+    {
+      "epoch": 5,
+      "ts": 1783375682,
+      "meters": 80,
+      "ok": 80,
+      "fail": 0,
+      "wallMs": 661,
+      "tps": 121.03,
+      "latP50": 659,
+      "latP95": 660,
+      "latMax": 660,
+      "cuMin": 13468,
+      "cuMed": 13468,
+      "cuMax": 20968,
+      "cuSamples": 80
+    }
+  ]
+}

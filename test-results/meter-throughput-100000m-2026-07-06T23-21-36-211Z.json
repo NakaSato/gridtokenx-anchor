@@ -1,0 +1,74 @@
+{
+  "generatedAt": "2026-07-06T23:21:36.209Z",
+  "config": {
+    "meters": 100000,
+    "epochs": 2,
+    "intervalSec": 61,
+    "maxInflight": 3000,
+    "cuSample": 200,
+    "statusPollMs": 1500,
+    "sendWorkers": 64
+  },
+  "rpc": "http://127.0.0.1:8899",
+  "programId": "64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU",
+  "totals": {
+    "tx": 200000,
+    "ok": 198383,
+    "fail": 1617,
+    "lossRatePct": 0.808
+  },
+  "firstEpochInit": {
+    "cuMed": 17754,
+    "cuMax": 26754,
+    "tps": 328.44,
+    "latP50": 1951,
+    "latP95": 2954
+  },
+  "steadyState": {
+    "epochs": [
+      2
+    ],
+    "cuMed": 15134,
+    "cuMax": 24134,
+    "tpsMean": 328.94,
+    "tpsMax": 328.94,
+    "latP50Med": 1944,
+    "latP95Max": 2869,
+    "latMax": 4196
+  },
+  "perEpoch": [
+    {
+      "epoch": 1,
+      "ts": 1783379309,
+      "meters": 100000,
+      "ok": 99171,
+      "fail": 829,
+      "wallMs": 301947,
+      "tps": 328.44,
+      "latP50": 1951,
+      "latP95": 2954,
+      "latMax": 3774,
+      "cuMin": 16254,
+      "cuMed": 17754,
+      "cuMax": 26754,
+      "cuSamples": 150
+    },
+    {
+      "epoch": 2,
+      "ts": 1783379700,
+      "meters": 100000,
+      "ok": 99212,
+      "fail": 788,
+      "wallMs": 301610,
+      "tps": 328.94,
+      "latP50": 1944,
+      "latP95": 2869,
+      "latMax": 4196,
+      "cuMin": 13634,
+      "cuMed": 15134,
+      "cuMax": 24134,
+      "cuSamples": 150
+    }
+  ],
+  "cuNote": "In-run CU sampling starved (rotating ledger pruned history under 200k tx); CU re-probed immediately post-run on the same validator via 150 fresh meters x 2 epochs (PREFIX=CUPROBE_M) - values match the 50000-meter run exactly (deterministic path)."
+}
