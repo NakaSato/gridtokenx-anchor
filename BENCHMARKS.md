@@ -15,14 +15,14 @@ Three standard OLTP workloads ported to the account model: **BlockBench**
 
 | Field | Value |
 |-------|-------|
-| Git commit | `58cfc79` (clean) |
+| Git commit | `3cb3388` (dirty — docs WIP) |
 | Solana/agave cluster | 3.1.10 |
 | Anchor | `anchor-lang` 1.0.x / `anchor-cli` 1.0.0 |
 | Node | v24.16.0 |
 | OS / arch | Darwin 25.5.0 / arm64 |
 | CPU | Apple M2, 8 cores |
 | Validator | local `solana-test-validator` (single node, PoA-style permissioned) |
-| Run date | 2026-06-07 |
+| Run date | 2026-07-06 |
 
 **Statistical method.** Each operation runs `WARMUP` discarded iterations
 followed by `ITERS` measured iterations. Latency is wall-clock
@@ -53,20 +53,23 @@ TPC_TX_COUNT=500 TPC_CONCURRENCY=20 npm run test:tpc-stress
 
 | Operation | n | mean ms | stddev | p50 | p95 | p99 | ci95 | TPS | CU/tx | fail |
 |-----------|---|---------|--------|-----|-----|-----|------|-----|-------|------|
-| do_nothing | 150 | 719.95 | 159.49 | 671.15 | 991.46 | 1455 | ±25.52 | 1.39 | 648 | 0 |
-| cpu_heavy_sort | 150 | 590.83 | 119.18 | 544.27 | 811.55 | 1025 | ±19.07 | 1.69 | 9 645 | 0 |
-| ycsb_insert | 130 | 654.08 | 118.56 | 639.21 | 863.56 | 1051 | ±20.38 | 1.53 | 12 904 | 20¹ |
-| ycsb_read | 150 | 4.29 | 3.92 | 3.46 | 8.67 | 16.85 | ±0.628 | 233.18 | n/a² | 0 |
+| do_nothing | 150 | 485.12 | 4.39 | 484.36 | 491.94 | 498.32 | ±0.702 | 2.06 | 769 | 0 |
+| cpu_heavy_sort | 150 | 485.39 | 4.34 | 485.15 | 491.81 | 496.76 | ±0.694 | 2.06 | 10 154 | 0 |
+| ycsb_insert | 150 | 485.20 | 3.97 | 484.71 | 490.67 | 495.80 | ±0.635 | 2.06 | 13 773 | 0 |
+| ycsb_read | 150 | 0.687 | 0.115 | 0.672 | 0.784 | 0.883 | ±0.018 | 1454 | n/a¹ | 0 |
 
-¹ `ycsb_insert` records to a unique PDA per key; 20 duplicate-key collisions
-on the live ledger across the run are counted as `fail`, leaving n=130 valid
-samples. Not program errors.
-² `ycsb_read` is an RPC account fetch (no consensus round-trip) → ~233 TPS,
-two orders of magnitude faster than write paths, and consumes no on-chain CU.
+¹ `ycsb_read` is an RPC account fetch (no consensus round-trip) → ~1454 TPS,
+three orders of magnitude faster than write paths, and consumes no on-chain CU.
+(On a fresh-reset ledger this run saw 0 `ycsb_insert` duplicate-key collisions,
+so all four ops have the full n=150; a prior warm-ledger run lost 20 inserts to
+collisions — not program errors.)
 
-**Reading:** `do_nothing` (648 CU) is the Anchor dispatch + signature-verify
-floor. `cpu_heavy_sort` (64-element sort) is ~9.6k CU. A single keyed insert
-of a value record is ~12.9k CU — well inside the 200k default CU budget.
+**Reading:** `do_nothing` (769 CU) is the Anchor dispatch + signature-verify
+floor. `cpu_heavy_sort` (64-element sort) is ~10.2k CU. A single keyed insert
+of a value record is ~13.8k CU — well inside the 200k default CU budget. On a
+fresh-reset single-node validator the write paths pin to one block per op
+(~485 ms, σ ≈ 4 ms) → the flat ~2.06 TPS is block-time-bound, not a program
+limit; the tight stddev (vs a warm ledger's 120–160 ms) is the load-free floor.
 
 ---
 
@@ -74,16 +77,19 @@ of a value record is ~12.9k CU — well inside the 200k default CU budget.
 
 | Transaction | n | mean ms | stddev | p50 | p95 | p99 | ci95 | TPS | CU/tx | fail |
 |-------------|---|---------|--------|-----|-----|-----|------|-----|-------|------|
-| TransactSavings | 150 | 599.09 | 90.79 | 572.13 | 767.99 | 941.92 | ±14.53 | 1.67 | 3 355 | 0 |
-| DepositChecking | 150 | 570.99 | 118.00 | 531.20 | 779.56 | 1122 | ±18.88 | 1.75 | 3 358 | 0 |
-| SendPayment | 150 | 604.63 | 99.04 | 578.67 | 781.12 | 1006 | ±15.85 | 1.65 | 5 963 | 0 |
-| WriteCheck | 150 | 589.01 | 78.02 | 565.13 | 753.79 | 812.31 | ±12.49 | 1.70 | 3 362 | 0 |
-| Amalgamate | 150 | 631.62 | 105.86 | 604.21 | 827.51 | 935.96 | ±16.94 | 1.58 | 5 936 | 0 |
+| TransactSavings | 150 | 493.82 | 19.77 | 486.14 | 543.77 | 549.92 | ±3.16 | 2.03 | 3 598 | 0 |
+| DepositChecking | 150 | 549.99 | 132.72 | 539.52 | 553.40 | 565.60 | ±21.24 | 1.82 | 3 601 | 0 |
+| SendPayment | 150 | 549.97 | 133.15 | 538.82 | 554.28 | 558.21 | ±21.31 | 1.82 | 6 328 | 0 |
+| WriteCheck | 150 | 539.00 | 7.77 | 538.47 | 550.27 | 558.72 | ±1.24 | 1.86 | 3 605 | 0 |
+| Amalgamate | 150 | 550.19 | 131.17 | 540.02 | 555.42 | 561.31 | ±20.99 | 1.82 | 6 301 | 0 |
 
 **Reading:** All 750 transactions succeeded. Compute cost is value-independent
 and scales with the **number of account writes**: single-account txns
-(TransactSavings / DepositChecking / WriteCheck) ~3.4k CU; two-account txns
-(SendPayment / Amalgamate) ~5.9k CU. No contention in the sequential schedule.
+(TransactSavings / DepositChecking / WriteCheck) ~3.6k CU; two-account txns
+(SendPayment / Amalgamate) ~6.3k CU. No contention in the sequential schedule.
+CU is ~7% higher than the `58cfc79` baseline across the board (e.g.
+SendPayment 5 963 → 6 328) — a build-level shift on `3cb3388`, not a workload
+change; both legs still land at one block per op (~490–550 ms).
 
 ---
 
@@ -94,25 +100,32 @@ submission; latency is per-transaction client→confirmed.
 
 | Concurrency | TPS | mean ms | stddev | p50 | p95 | p99 | ci95 | CU/tx mean | CU/tx p95 | CU/tx max |
 |-------------|-----|---------|--------|-----|-----|-----|------|------------|-----------|-----------|
-| 5 | 8.67 | 575.00 | 88.35 | 554 | 726.10 | 880.08 | ±7.74 | 21 263 | 30 035 | 37 286 |
-| 10 | 14.50 | 679.34 | 108.53 | 658.5 | 879.95 | 1052 | ±9.51 | 20 633 | 28 544 | 39 035 |
-| 20 | 21.87 | 856.74 | 301.95 | 755 | 1656.15 | 1677 | ±26.47 | 21 269 | 30 035 | 39 044 |
-| 40 | 29.90 | 1057.79 | 411.89 | 900 | 1707 | 2071 | ±36.10 | 21 508 | 30 044 | 37 535 |
+| 5 | 7.87 | 571.85 | 393.48 | 539 | 556 | 563 | ±34.49 | 23 714 | 32 873 | 40 373 |
+| 10 | 18.74 | 532.19 | 42.40 | 538 | 552 | 557 | ±3.72 | 23 317 | 32 864 | 38 873 |
+| 20 | 33.68 | 533.18 | 103.97 | 530 | 547 | 552 | ±9.11 | 23 234 | 32 873 | 40 364 |
+| 40 | 74.25 | 512.33 | 9.58 | 510 | 529 | 533 | ±0.84 | 22 590 | 31 373 | 38 864 |
 
 **Reading:**
 
-- **Sublinear scaling.** 5→40 concurrency (8×) yields 8.67→29.90 TPS (3.45×).
-  Diminishing returns — the single validator's block production is the ceiling.
-- **Saturation knee between c=10 and c=20.** Latency stddev jumps 108→302 ms
-  and p95 nearly doubles (880→1656 ms): in-flight transactions begin queueing.
-- **CU/tx flat (~21k) across all loads.** On-chain compute cost is independent
-  of concurrency → the bottleneck is *consensus/block-time + write
-  serialization on `District.next_o_id`*, not execution. This is the expected
-  signature of a write-contended OLTP workload on a single-node ledger.
+- **Super-linear scaling, no saturation knee through c=40.** 5→40 concurrency
+  (8×) yields 7.87→74.25 TPS (**9.4×**), climbing monotonically with no plateau
+  — the doubling c=20→c=40 alone gives 33.68→74.25 TPS (2.2×). On this
+  fresh-reset validator/build the single node does **not** saturate by c=40.
+  *This overturns the prior `58cfc79` run's headline* (that run was sublinear,
+  ~3.45× over the same range with a knee at c=10–20). Do not cite a c≤40
+  saturation knee — it is not reproduced here.
+- **Latency flat and tightening under load.** Mean holds ~510–570 ms across all
+  levels and stddev *falls* to 9.6 ms at c=40. The c=5 point is noisy (σ ≈ 393 ms
+  — a cold-start/JIT + validator-warmup artifact on the first level of the sweep);
+  treat its 7.87 TPS as a soft floor, not a clean datapoint.
+- **CU/tx flat (~22–24k) across all loads.** On-chain compute cost is independent
+  of concurrency → any ceiling is *consensus/block-time + write serialization on
+  `District.next_o_id`*, not execution. The mean CU is ~10% above the `58cfc79`
+  run (~21k → ~23k) — same build-level shift seen in §1/§2.
 
-A prior `TX=200 @ c=10` reference run gave 14.79 TPS / 21 118 CU mean,
-consistent with the `TX=500 @ c=10` point above (14.50 TPS), confirming
-run-to-run stability.
+**Roadmap consequence:** since no knee appears by c=40, the real saturation
+point is above this sweep — push concurrency past 40 (and add open-loop λ-ramp)
+to locate peak/collapse before quoting a max sustainable TPS.
 
 ---
 
@@ -135,25 +148,29 @@ Reproduce: `npm run test:cu-profile` (asserts each instruction < 200k default bu
 
 | Instruction | CU |
 | ----------- | --: |
-| `governance.initialize_governance` | 16 417 |
-| `governance.propose_authority_change` | 13 328 |
-| `governance.approve_authority_change` | 13 278 |
-| `governance.set_oracle_authority` | 13 324 |
-| `governance.update_erc_limits` | 13 283 |
+| `governance.initialize_governance` | 8 917 |
+| `governance.propose_authority_change` | 5 834 |
+| `governance.approve_authority_change` | 5 784 |
+| `governance.set_oracle_authority` | 5 830 |
+| `governance.update_erc_limits` | 5 789 |
 | `oracle.initialize` | 11 098 |
 | `oracle.submit_meter_reading` (first — inits meter PDA) | 16 050 |
 | `oracle.submit_meter_reading` (subsequent) | 13 376 |
 | `oracle.trigger_market_clearing` | 8 390 |
 | `oracle.aggregate_readings` | 8 362 |
-| `oracle.update_validation_config` | 7 811 |
+| `oracle.update_validation_config` | 7 819 |
 
-**Reading:** all governance/oracle instructions sit at **≤16.4k CU (≤8.2% of the
+**Reading:** all governance/oracle instructions sit at **≤16.1k CU (≤8.1% of the
 200k budget)** — cheap config/control paths with ample headroom. The hot oracle
-write path (`submit_meter_reading`) costs ~16k on first touch (meter PDA init)
-and ~13.4k steady-state. Contrast §1's `settle_offchain_match` at 103k: these are
-config/telemetry instructions, not signature-verifying settlement. The CI
-assertion turns an accidental extra syscall or a serialized hot-path account into
-a test failure.
+write path (`submit_meter_reading`) is now the ceiling here: ~16k on first touch
+(meter PDA init) and ~13.4k steady-state. The **governance config paths dropped
+~7.5k each vs the `58cfc79` baseline** (initialize 16.4k → 8.9k; the four
+authority/ERC control ixs 13.3k → ~5.8k) — a shared reduction in the common
+governance path (fewer account loads / one less syscall on that code), a real
+efficiency win, not measurement drift. Contrast §1's `settle_offchain_match` at
+103k: these are config/telemetry instructions, not signature-verifying
+settlement. The CI assertion turns an accidental extra syscall or a serialized
+hot-path account into a test failure.
 
 **Fungible REC token (1 token = 1 MWh) — approximate.** The REC mint path is profiled
 in `tests/governance_rec_token_litesvm.ts` (full registry→governance→Token-2022 flow),
@@ -182,21 +199,21 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 
 | Instruction | CU |
 | ----------- | --: |
-| `treasury.initialize` | 42 278 |
-| `treasury.swap_grx_for_thbg` | 21 488 |
-| `treasury.redeem_thbg_for_grx` | 21 323 |
-| `treasury.stake_grx` (first — inits position) | 19 535 |
-| `treasury.update_attestation` | 3 300 |
-| `treasury.record_settlement` | 3 300 |
-| `treasury.set_params` | 2 863 |
+| `treasury.initialize` | 42 277 |
+| `treasury.swap_grx_for_thbg` | 21 509 |
+| `treasury.redeem_thbg_for_grx` | 21 328 |
+| `treasury.stake_grx` (first — inits position) | 19 538 |
+| `treasury.set_params` | 3 404 |
+| `treasury.update_attestation` | 3 303 |
+| `treasury.record_settlement` | 3 301 |
 
 **Reading:** the swap/redeem/stake hot paths cluster at **~19.5–21.5k CU**, driven
 by the Token-2022 transfer + mint/burn CPIs (one-time `stake` adds a position-PDA
 init). `initialize` is the heaviest at 42k — a one-off that creates the THBG mint
 plus the three GRX vaults (swap/stake/reward). Pure-state admin instructions
-(`update_attestation`, `record_settlement`, `set_params`) are ~3k. All sit well
-inside the 200k budget — the baht-settlement primitive (swap) costs ~1/5 of the
-§1 `settle_offchain_match` figure.
+(`update_attestation`, `record_settlement`, `set_params`) are ~3.3–3.4k. All sit
+well inside the 200k budget — the baht-settlement primitive (swap) costs ~1/5 of
+the §1 `settle_offchain_match` figure.
 
 ---
 
@@ -211,16 +228,17 @@ per-`(zone,batch)` audit commitment. Same method as §4-8; wiring mirrors
 
 | Instruction | CU |
 | ----------- | --: |
+| `treasury.record_settlement_batch` | 12 367 |
 | `treasury.initialize_settlement_shard` | 9 905 |
-| `treasury.record_settlement_batch` | 9 332 |
-| `treasury.aggregate_settlement_shards` (2 shards) | 6 740 |
-| `treasury.record_settlement_sharded` | 5 370 |
+| `treasury.aggregate_settlement_shards` (2 shards) | 6 734 |
+| `treasury.record_settlement_sharded` | 5 374 |
 
 **Reading:** the recurring sharded record (`record_settlement_sharded`) is **5.4k CU**
 — cheaper than the global `record_settlement` (§5, 3.3k is the no-shard single bump;
 the sharded path adds the per-shard PDA write). `aggregate_settlement_shards` scales
-with the number of shards passed (6.7k for two). Both shard-init and batch-commitment
-are one-time-ish PDA creations at ~9-10k. The point of this layout is contention, not
+with the number of shards passed (6.7k for two). Shard-init is a one-time PDA
+creation at ~9.9k; the per-`(zone,batch)` audit commitment `record_settlement_batch`
+rose to **12.4k** (was 9.3k on `58cfc79`). The point of this layout is contention, not
 raw CU: distinct shards never write-lock one account, so settle throughput is not
 serialized on the global total (see the settlement-TPS note in §1's roadmap).
 
@@ -236,21 +254,34 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 
 | Instruction | CU |
 | ----------- | --: |
-| `registry.register_meter` | 20 104 |
+| `registry.register_meter` | 20 125 |
 | `registry.register_user` | 15 910 |
-| `registry.deactivate_meter` | 10 935 |
+| `registry.deactivate_meter` | 12 495 |
 | `registry.initialize_shard` | 10 904 |
+| `registry.update_meter_reading` | 7 568 |
 | `registry.initialize` | 6 666 |
-| `registry.update_meter_reading` | 3 899 |
 | `registry.set_oracle_authority` | 1 569 |
 
-**Reading:** the recurring telemetry write `update_meter_reading` is **3.9k CU** —
-cheap, as intended for the per-meter PDA hot path (no global-config write lock,
-zero-copy meter state). The one-time registrations are heavier (`register_meter`
-20k inits the meter PDA + bumps its shard; `register_user` 15.9k), but still a
-fraction of the budget. The token-bearing registry instructions (`stake_grx`
-validator bond, `settle_and_mint_tokens`, `claim_airdrop`) are out of scope here;
-the bond plumbing mirrors the §5 treasury stake (~19.5k CU).
+**Reading:** the recurring telemetry write `update_meter_reading` is now **7.6k CU**
+(3.8% of budget) — **up from 3.9k on the `58cfc79` baseline**. The +3.7k is a
+deliberate security fix, commit **`1b12b4c`** ("close oracle/registry
+double-bookkeeping gap"): the handler now cross-checks its own cumulative meter
+totals against oracle's independently rate-limited `MeterState` before those
+numbers can back a mint, closing an inflation path where a corrupt
+`oracle_authority` could report generation to registry that oracle never
+recorded. The added cost is a `find_program_address` bump-seek for the oracle
+meter PDA (the dominant share) plus an owner check, a `bytes32_to_string`, a
+raw borrow of oracle's `MeterState` bytes, and two `≤` invariants
+(`lib.rs:513–539`). It is **no longer a pure per-meter-PDA write** — it reads a
+second, cross-program account — but 7.6k CU is still cheap for the guarantee.
+(The bump-seek is the optimizable half: passing/storing the oracle-meter bump
+→ `create_program_address` would recover ~1.5–2k CU; tracked separately.)
+`deactivate_meter` rose 10.9k → 12.5k (commit `0b470fa` binds `user_account`).
+The one-time registrations are heavier (`register_meter` 20k inits the meter PDA
++ bumps its shard; `register_user` 15.9k), but still a fraction of the budget.
+The token-bearing registry instructions (`stake_grx` validator bond,
+`settle_and_mint_tokens`, `claim_airdrop`) are out of scope here; the bond
+plumbing mirrors the §5 treasury stake (~19.5k CU).
 
 ---
 
@@ -265,14 +296,14 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 
 | Instruction | CU |
 | ----------- | --: |
-| `trading.deposit_escrow` | 27 658 |
-| `trading.withdraw_escrow` | 18 094 |
-| `trading.match_orders` (CDA) | 11 746 |
-| `trading.create_sell_order` | 11 508 |
-| `trading.create_buy_order` | 10 461 |
+| `trading.deposit_escrow` | 27 670 |
+| `trading.withdraw_escrow` | 18 106 |
+| `trading.match_orders` (CDA) | 11 752 |
+| `trading.create_sell_order` | 11 518 |
+| `trading.create_buy_order` | 10 464 |
 | `trading.initialize_market` | 8 392 |
-| `trading.initialize_zone_market` | 6 867 |
-| `trading.cancel_order` | 4 463 |
+| `trading.initialize_zone_market` | 6 877 |
+| `trading.cancel_order` | 4 469 |
 
 **Reading:** the **on-chain CDA match** (`match_orders`) is **11.7k CU** — cheap,
 because it only touches the two `Order` PDAs + the `zone_market` and writes a trade
@@ -296,17 +327,17 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 | Instruction | CU |
 | ----------- | --: |
 | `energy_token.initialize_token` | 18 424 |
-| `energy_token.mint_to_wallet` (REC-gated) | 13 700 |
+| `energy_token.mint_to_wallet` (REC-gated) | 13 722 |
 | `energy_token.transfer_tokens` | 8 035 |
 | `energy_token.burn_tokens` | 6 537 |
-| `energy_token.add_rec_validator` | 1 575 |
-| `energy_token.remove_rec_validator` | 1 366 |
+| `energy_token.add_rec_validator` | 3 496 |
+| `energy_token.remove_rec_validator` | 3 291 |
 
 **Reading:** the REC-gated `mint_to_wallet` — the provenance boundary that requires
 a registered REC validator co-sign before any GRID is minted — costs **13.7k CU**
 (REC-set scan + Token-2022 mint CPI). `initialize_token` (18.4k) is the one-off
 mint-PDA creation. Transfer/burn are plain Token-2022 CPIs at 6.5-8k. Validator-set
-edits are pure-state at ~1.5k. All well inside budget.
+edits are pure-state at ~3.3–3.5k (up from ~1.5k on `58cfc79`). All well inside budget.
 
 ---
 
