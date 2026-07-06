@@ -1645,9 +1645,10 @@ pub mod trading {
     #[derive(Accounts)]
     #[instruction(match_amount: u64, shard_id: u8)]
     pub struct ShardedMatchOrdersContext<'info> {
-        #[account(mut)]
+        // Read-only: handler never writes market/zone_market (only zone_shard).
+        // `mut` here would take write-locks on the shared zone accounts and
+        // serialize every "sharded" match, defeating the shard's purpose.
         pub market: AccountLoader<'info, Market>,
-        #[account(mut)]
         pub zone_market: AccountLoader<'info, ZoneMarket>,
         #[account(mut, seeds = [b"zone_shard", zone_market.key().as_ref(), &[shard_id]], bump)]
         pub zone_shard: AccountLoader<'info, ZoneMarketShard>,
