@@ -341,13 +341,97 @@ edits are pure-state at ~3.3–3.5k (up from ~1.5k on `58cfc79`). All well insid
 
 ---
 
+## 9. Oracle Meter-Telemetry Scaling (80 → 100,000 meters, live validator)
+
+End-to-end AMI ingest under fleet load: `oracle.submit_meter_reading` fired from
+N distinct meters against a **live** `solana-test-validator` (not litesvm), over 2
+epochs 61 s apart (on-chain `min_reading_interval` = 60 s). Epoch 1 initialises each
+`MeterState` PDA; epoch ≥2 is the steady-state write. Every meter targets its own
+`[b"meter", meter_id]` PDA — writes are Sealevel-disjoint by design.
+
+Submits are authorised by the single gateway (`oracle_data.chain_bridge` = the
+provider wallet), which is the `mut` fee-payer and therefore **write-locked on every
+transaction**. That shared payer + single-node banking — *not* per-meter contention —
+is the throughput ceiling here.
+
+**Two client harnesses** (same on-chain path — transport changes TPS, never CU):
+the ≤10k rows used per-tx `.rpc()` websocket confirms through a 300-in-flight pool;
+that transport collapses beyond ~10k pending confirms, so the ≥50k rows use locally
+pre-signed raw sends (cached blockhash, 10 s refresh) + bulk `getSignatureStatuses`
+polling (1.5 s sweep, 3 000-tx in-flight window). Large-N latency is therefore
+poll-quantised (±1.5 s) and the TPS step-up at 50k reflects the better transport.
+CU is sampled (≤200 confirmed tx/epoch) from `getTransaction(sig).meta`.
+
+Reproduce (validator up, oracle deployed + `scripts/init-oracle.ts` run):
+
+```bash
+NODE_OPTIONS=--max-old-space-size=16384 \
+METERS=100000 EPOCHS=2 MAX_INFLIGHT=3000 CU_SAMPLE=200 PREFIX=RUN_M \
+  npx tsx scripts/bench-meter-throughput.ts
+```
+
+**Success / loss**
+
+| N meters | total tx | confirmed | loss % | harness |
+|---------:|---------:|----------:|-------:|:--------|
+| 80 | 400 | 400 | 0 | rpc-pool |
+| 1 000 | 2 000 | 1 992 | 0.40 | rpc-pool |
+| 5 000 | 10 000 | 9 952 | 0.48 | rpc-pool |
+| 10 000 | 20 000 | 19 908 | 0.46 | rpc-pool |
+| 50 000 | 100 000 | 99 261 | 0.74 | raw-send |
+| 100 000 | 200 000 | 198 383 | 0.81 | raw-send |
+
+**Compute units per `submit_meter_reading` (scale-invariant)**
+
+| N meters | init CU min | init CU med | steady CU min | steady CU med | steady CU max |
+|---------:|------------:|------------:|--------------:|--------------:|--------------:|
+| 80 | 16 088 | 16 088 | 13 468 | 13 468 | 20 968 |
+| 1 000 | 16 145 | 17 645 | 13 525 | 15 025 | 28 525 |
+| 5 000 | 16 145 | 17 645 | 13 525 | 15 025 | 22 525 |
+| 10 000 | 16 180 | 17 680 | 13 560 | 15 060 | 22 560 |
+| 50 000 | 16 254 | 17 754 | 13 634 | 15 134 | 22 634 |
+| 100 000 | 16 254 | 17 754 | 13 634 | 15 134 | 24 134 |
+
+**Throughput & latency (steady-state, single-node localnet)**
+
+| N meters | TPS mean | lat p50 (ms) | lat p95 (ms) | lat max (ms) |
+|---------:|---------:|-------------:|-------------:|-------------:|
+| 80 | 135 | 659 | 859 | 861 |
+| 1 000 | 120 | 1 334 | 1 440 | 4 809 |
+| 5 000 | 188 | 1 356 | 1 781 | 5 058 |
+| 10 000 | 217 | 1 214 | 1 548 | 14 971 |
+| 50 000 | 359 | 1 749 | 2 565 | 2 886 |
+| 100 000 | 329 | 1 944 | 2 869 | 4 196 |
+
+**Reading.** The steady-state **base write path (`CU min`) holds 13.5–13.6k CU across
+a 1 250× meter-count range** (13 468 at N=80 → 13 634 at N=50k/100k) — per-meter cost
+is O(1), independent of fleet size, and cross-validates §4's litesvm
+`submit_meter_reading` subsequent = 13 376. The small upward drift tracks meter-id
+byte length (longer ids = more seed/copy bytes), not N; the `CU med/max` spread tracks
+the reading *values* (the anomaly production/consumption-ratio branch). **TPS does not
+grow with N**: ~120–220 on the rpc-pool harness, ~330–360 on the raw-send harness —
+flat within each harness even as N doubles 50k→100k, because every tx is signed by the
+single write-locked gateway payer on one validator. This is a serialization ceiling,
+not a per-meter one — the disjoint PDAs need multi-gateway fee-payer pooling plus a
+multi-node deployment to convert into proportional throughput, and the flat CU shows
+the per-write cost is already scale-free. Loss stays **< 0.9% at 100 000 concurrent
+meters** (0.74% @50k, 0.81% @100k); p95 latency ~2.6–2.9 s under the 3 000-tx window.
+100k CU values re-probed post-run — the rotating ledger pruned in-run tx history under
+the 200k-tx load; probe values match the 50k run exactly (deterministic path; see that
+run's `.md`). (Solana 3.1.10, Apple M2, 2026-07-06; harness
+`scripts/bench-meter-throughput.ts`.)
+
+---
+
 ## Artifacts
 
 ```
 test-results/
 ├── blockbench/   blockbench-<ISO8601>.{json,csv}
 ├── smallbank/    smallbank-<ISO8601>.{json,csv}
-└── tpc/          tpc-c-<ISO8601>.{json,csv}   (one file per concurrency level)
+├── tpc/          tpc-c-<ISO8601>.{json,csv}   (one file per concurrency level)
+├── meter-throughput-<N>m-<ISO8601>.{json,md}  (§9 per-size: per-epoch + per-meter)
+└── meter-scaling-summary.md                   (§9 combined 80→100k scaling tables)
 ```
 
 Each JSON carries full per-sample distributions and host metadata; each CSV is
