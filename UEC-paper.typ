@@ -479,7 +479,7 @@ report #link("BENCHMARKS.md")[`BENCHMARKS.md`]. The compute-unit (CU) values are
 machine-independent and are reproduced from the in-process LiteSVM profiles,
 whereas the throughput figures are qualified by the single-node caveat of §2.3.
 
-Table 0 summarises the headline findings; each is developed and cited in the
+Table 1 summarises the headline findings; each is developed and cited in the
 subsections that follow. Two throughput limits are reported separately and must
 not be conflated: the matching/OLTP path scales super-linearly to the swept
 ceiling, whereas any path that funnels through one write-locked account (mint
@@ -508,7 +508,7 @@ that serialisation, not by execution.
 
 == 9.1 Compute-unit cost of on-chain operations
 
-Table 1 summarises the measured CU cost of representative instructions and their
+Table 2 summarises the measured CU cost of representative instructions and their
 share of the 200,000-CU default per-instruction budget. Two facts stand out.
 First, every control, telemetry, and settlement-recording path costs no more than
 approximately sixteen thousand CU — at most about eight per cent of the budget —
@@ -580,6 +580,40 @@ approximately 7.5 mint·s⁻¹. We therefore identify multi-signer fee-payer poo
 together with per-shard collector accounts, as the primary lever for
 settlement-side throughput.
 
+Table 3 consolidates every throughput figure measured in this evaluation. All
+values are *client-observed confirmed goodput* — successfully confirmed
+transactions per wall-clock second, measured from burst start to last observed
+confirmation at `confirmed` commitment, so each figure includes the full pipeline
+(client signing, RPC ingest, banking-stage execution, block production, and
+confirmation visibility). None is a consensus- or network-throughput result
+(§2.3, §8.3), and figures measured through different client transports are not
+directly comparable with one another.
+
+#figure(
+  caption: [Consolidated measured throughput. All values are client-observed
+    confirmed goodput on the single-node validator; transports differ per row and
+    are not mutually comparable. Source: #link("BENCHMARKS.md")[`BENCHMARKS.md`]
+    §3, §9 and the settlement sweeps of §9.2.],
+  table(
+    columns: (auto, auto, auto),
+    align: (left, right, left),
+    table.header([*Path*], [*TPS*], [*Bottleneck / regime*]),
+    [RPC read (no consensus round-trip)], [≈1,454], [none — RPC node local],
+    [Meter ingest, steady, raw-send (50k / 100k meters)], [359 / 329], [single gateway fee-payer write-lock],
+    [Meter ingest, steady, per-tx confirm (80 → 10k meters)], [120–217], [client confirm transport + gateway payer],
+    [TPC-C OLTP proxy (concurrency 5 → 40)], [7.87 → 74.25], [block time + shared-account locks],
+    [Sequential single-operation write], [≈2.0], [~400–600 ms block time per round-trip],
+    [Settlement mint, Tier-A prototype (sharded + pooled payers)], [≈7.5], [per-slot packing],
+    [Settlement mint, single fee-payer], [≈0.6], [global collector/accumulator write-lock],
+  ),
+) <tab-tps-list>
+
+The spread spans three orders of magnitude and sorts cleanly by how much shared,
+write-locked state each path touches: reads lock nothing; meter ingest locks only
+the gateway payer; the OLTP proxy locks a few market accounts; and naive settlement
+locks global accumulators. Throughput on this platform is a function of lock
+footprint, not of instruction compute cost.
+
 == 9.3 Meter-telemetry ingest scaling to 100,000 meters
 
 The concurrency sweep above uses a generic-OLTP proxy. To characterise the *actual*
@@ -594,7 +628,7 @@ this transport collapses under the pending-confirmation backlog, so the 50,000- 
 100,000-meter runs pre-sign transactions locally against a cached blockhash, submit
 them raw, and confirm by bulk signature-status polling under a 3,000-transaction
 in-flight window. The transport changes measured throughput and latency granularity
-(±1.5 s poll quantisation), never the on-chain cost. Table 2 reports the result.
+(±1.5 s poll quantisation), never the on-chain cost. Table 4 reports the result.
 
 #figure(
   caption: [Oracle meter-telemetry ingest scaled from 80 to 100,000 meters on a live
