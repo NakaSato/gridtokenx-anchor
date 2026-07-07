@@ -467,6 +467,70 @@ errors). (Solana 3.1.10, Apple M2, 2026-07-07; harness
 
 ---
 
+## 11. 1-Month Community Simulation (80 real meters, full token lifecycle)
+
+End-to-end month of a real community, replayed against a live validator: an
+80-meter fleet from the **smart-meter simulator** (`gridtokenx-smartmeter-simulator`,
+seeded solar/load models, 12 solar prosumers + 68 consumers), 30 days × 96
+15-minute ticks = **230,400 readings**, with a **10 kWh/day sell cap** per
+prosumer. Month energy: 15,868.5 kWh generated / 144,879.8 kWh consumed /
+10,386.7 kWh tick-surplus. Three phases (harness
+`scripts/bench-community-month.ts`; dataset exported via the simulator's Python
+API — `MeterGenerator` + `SmartMeter.generate_reading`, seed 42):
+
+1. **Telemetry replay** — historical timestamps (the oracle only rejects future
+   stamps), so the month compresses to minutes. The strictly-increasing
+   per-meter timestamp guard forbids two in-flight readings of one meter, so
+   readings ship as **per-meter batched txs** (≤10 `submit_meter_reading`
+   ix/tx; in-tx sequential execution preserves order) across 80 parallel meter
+   chains; readings that would trip the 10× anomaly gate go as singletons so
+   the on-chain rejection is still measured.
+2. **Daily CDA order entry** — 12 sellers offer min(day surplus, 10 kWh), 68
+   buyers bid their actual daily consumption.
+3. **Token lifecycle** — daily per prosumer: registry sync + `settle_and_mint_tokens`
+   (GRID, Token-2022) → escrow deposit → Ed25519-signed `settle_offchain_match`
+   against a rotating consumer (v0 tx + ALT) → buyer withdraw + `burn_tokens`.
+   Month-end: cap-withheld surplus certified as RECs via governance `issue_erc`
+   (CPIs `mark_erc_claimed` → GRID + REC ≤ metered generation, on-chain).
+
+Reproduce (fresh validator; deploy oracle/trading/registry/governance/energy_token,
+then `bootstrap.ts` + `init-shards.ts`):
+
+```bash
+DATA_DIR=<exported-dataset> caffeinate -is npx tsx scripts/bench-community-month.ts
+```
+
+**Canonical run (2026-07-07, Solana 3.1.10, Apple M2):**
+
+| Phase | Result |
+|:------|:-------|
+| Telemetry | 229,481/230,400 readings confirmed; 919 = anomaly-gate rejections (fee-paid, on-ledger), **0 delivery loss**; 212.9 readings/s at 21.3 tx/s (batch amortization); CU 13,386/reading |
+| Orders | 2,396/2,396 confirmed, 53.4 TPS session bursts, CU med 11,384 |
+| Lifecycle | all stages 0 fail — mint 433 (CU med 29,410), deposit 433 (14,905), settle 353 (107,141), burn 353 (21,963), REC 12 (71,369) |
+| Month | absorbed in **1,394.7 s → 1,858× real-time compression** |
+
+**Energy conservation closes exactly (oracle-accepted surplus only):** GRID
+minted 3,290.7 kWh = trade-settled = burned; cap-withheld surplus certified as
+RECs 4,962.8 kWh; minted + REC = 8,253.5 kWh = the gate-passing tick-surplus.
+The 10 kWh/day cap binds on 305/360 prosumer-days and withholds 68% of raw
+tick-surplus from the market. Settlement currency volume 13,137 units across
+353 Ed25519-verified matches. The telemetry outcome (229,481 confirmed / 919
+rejected) reproduced **bit-identically across four runs**; throughput varied
+213–232 readings/s with host load.
+
+**Reproducibility postmortem worth keeping:** the first lifecycle run lost
+112/353 settles to *silent transaction dedupe* — consecutive cap-bound days
+produced byte-identical deposit txs (same ix, accounts, fee payer, and cached
+blockhash within its 10 s refresh window) → identical signature → the validator
+deduped the second send while the client saw the (old) signature "confirmed"
+and reported success, leaving the seller escrow empty at settle time. Any replay
+harness reusing a cached blockhash must salt each tx (the harness now prepends a
+day-varying `ComputeBudget` ix). `AddressLookupTable` creation also races
+preflight ("not a recent slot") — send it raw with `skipPreflight` and retry
+with a fresh slot.
+
+---
+
 ## Artifacts
 
 ```
@@ -476,7 +540,8 @@ test-results/
 ├── tpc/          tpc-c-<ISO8601>.{json,csv}   (one file per concurrency level)
 ├── meter-throughput-<N>m-<ISO8601>.{json,md}  (§9 per-size: per-epoch + per-meter)
 ├── meter-scaling-summary.md                   (§9 combined 80→100k scaling tables)
-└── trading-order-entry-<N>o-<ISO8601>.{json,md}  (§10 order-entry run)
+├── trading-order-entry-<N>o-<ISO8601>.{json,md}  (§10 order-entry run)
+└── community-month-<N>m-<P>p-<ISO8601>.{json,md} (§11 month sim; canonical = 2026-07-07T16-45-40)
 ```
 
 Each JSON carries full per-sample distributions and host metadata; each CSV is
