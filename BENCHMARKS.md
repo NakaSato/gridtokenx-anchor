@@ -518,6 +518,18 @@ tick-surplus from the market. Settlement currency volume 13,137 units across
 rejected) reproduced **bit-identically across four runs**; throughput varied
 213–232 readings/s with host load.
 
+**On-chain audit.** `scripts/audit-community-month.ts` re-derives every headline
+number from live chain state (RPC reads only, run right after the bench):
+Σ per-meter `total_readings` = 229,481; Order/TradeNullifier/OrderNullifier PDA
+counts = 2,396/353/706; registry Σ `settled_net_generation` = 3,290,724 Wh and
+Σ `claimed_erc_generation` = 4,962,778 Wh (= the 12 ErcCertificates); GRID
+supply after burns = the 68 escrow-seed Wh (every traded Wh burned); REC supply
+= claimed × 1,000 base units; currency conserves exactly (buyer outflow 13,137 =
+seller proceeds 12,832 + wheeling 305). **15/15 checks passed** on the
+2026-07-07T17-18-23 run. (Note: `oracle_data.total_readings` stays 0 by design —
+the hot path writes only per-meter PDAs; global totals reconcile via
+`aggregate_readings`.)
+
 **Reproducibility postmortem worth keeping:** the first lifecycle run lost
 112/353 settles to *silent transaction dedupe* — consecutive cap-bound days
 produced byte-identical deposit txs (same ix, accounts, fee payer, and cached
