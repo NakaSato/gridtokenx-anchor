@@ -1,0 +1,95 @@
+{
+  "generatedAt": "2026-07-07T05:57:26.459Z",
+  "config": {
+    "meters": 1000,
+    "epochs": 2,
+    "intervalSec": 61,
+    "maxInflight": 3000,
+    "cuSample": 200,
+    "statusPollMs": 1500,
+    "sendWorkers": 64
+  },
+  "rpc": "http://127.0.0.1:8899",
+  "programId": "64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU",
+  "totals": {
+    "tx": 2000,
+    "ok": 1988,
+    "fail": 12,
+    "lossRatePct": 0.6,
+    "failBreakdown": {
+      "sendError": 0,
+      "statusErr": 8,
+      "expired": 4
+    }
+  },
+  "firstEpochInit": {
+    "cuMed": 17754,
+    "cuMax": 28254,
+    "tps": 270.07,
+    "latP50": 1395,
+    "latP95": 1923
+  },
+  "steadyState": {
+    "epochs": [
+      2
+    ],
+    "cuMed": 15134,
+    "cuMax": 25634,
+    "tpsMean": 266.6,
+    "tpsMax": 266.6,
+    "latP50Med": 1464,
+    "latP95Max": 1947,
+    "latMax": 2003
+  },
+  "perEpoch": [
+    {
+      "epoch": 1,
+      "ts": 1783403686,
+      "meters": 1000,
+      "ok": 996,
+      "fail": 4,
+      "failBreakdown": {
+        "sendError": 0,
+        "statusErr": 4,
+        "expired": 0
+      },
+      "errSamples": [
+        "statusErr: {\"InstructionError\":[0,{\"Custom\":6004}]}"
+      ],
+      "wallMs": 3688,
+      "tps": 270.07,
+      "latP50": 1395,
+      "latP95": 1923,
+      "latMax": 2005,
+      "cuMin": 16254,
+      "cuMed": 17754,
+      "cuMax": 28254,
+      "cuSamples": 200
+    },
+    {
+      "epoch": 2,
+      "ts": 1783403747,
+      "meters": 1000,
+      "ok": 992,
+      "fail": 8,
+      "failBreakdown": {
+        "sendError": 0,
+        "statusErr": 4,
+        "expired": 4
+      },
+      "errSamples": [
+        "statusErr: {\"InstructionError\":[0,{\"Custom\":6004}]}",
+        "expired: 4 sigs unconfirmed after 90s"
+      ],
+      "wallMs": 3721,
+      "tps": 266.6,
+      "latP50": 1464,
+      "latP95": 1947,
+      "latMax": 2003,
+      "cuMin": 13634,
+      "cuMed": 15134,
+      "cuMax": 25634,
+      "cuSamples": 200
+    }
+  ]
+}

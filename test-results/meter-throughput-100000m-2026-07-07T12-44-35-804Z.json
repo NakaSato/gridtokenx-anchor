@@ -1,0 +1,96 @@
+{
+  "generatedAt": "2026-07-07T12:44:35.799Z",
+  "config": {
+    "meters": 100000,
+    "epochs": 2,
+    "intervalSec": 61,
+    "maxInflight": 3000,
+    "cuSample": 200,
+    "statusPollMs": 1500,
+    "sendWorkers": 64
+  },
+  "rpc": "http://127.0.0.1:8899",
+  "programId": "64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU",
+  "totals": {
+    "tx": 200000,
+    "ok": 198347,
+    "fail": 1653,
+    "lossRatePct": 0.827,
+    "failBreakdown": {
+      "sendError": 0,
+      "statusErr": 950,
+      "expired": 703
+    }
+  },
+  "firstEpochInit": {
+    "cuMed": 17754,
+    "cuMax": 29754,
+    "tps": 437.46,
+    "latP50": 1746,
+    "latP95": 2600
+  },
+  "steadyState": {
+    "epochs": [
+      2
+    ],
+    "cuMed": 15134,
+    "cuMax": 27134,
+    "tpsMean": 322.44,
+    "tpsMax": 322.44,
+    "latP50Med": 2016,
+    "latP95Max": 3120,
+    "latMax": 4393
+  },
+  "perEpoch": [
+    {
+      "epoch": 1,
+      "ts": 1783408963,
+      "meters": 100000,
+      "ok": 99227,
+      "fail": 773,
+      "failBreakdown": {
+        "sendError": 0,
+        "statusErr": 476,
+        "expired": 297
+      },
+      "errSamples": [
+        "statusErr: {\"InstructionError\":[0,{\"Custom\":6004}]}",
+        "expired: 297 sigs unconfirmed after 90s"
+      ],
+      "wallMs": 226825,
+      "tps": 437.46,
+      "latP50": 1746,
+      "latP95": 2600,
+      "latMax": 3205,
+      "cuMin": 16254,
+      "cuMed": 17754,
+      "cuMax": 29754,
+      "cuSamples": 200
+    },
+    {
+      "epoch": 2,
+      "ts": 1783409627,
+      "meters": 100000,
+      "ok": 99120,
+      "fail": 880,
+      "failBreakdown": {
+        "sendError": 0,
+        "statusErr": 474,
+        "expired": 406
+      },
+      "errSamples": [
+        "statusErr: {\"InstructionError\":[0,{\"Custom\":6004}]}",
+        "expired: 406 sigs unconfirmed after 90s"
+      ],
+      "wallMs": 307408,
+      "tps": 322.44,
+      "latP50": 2016,
+      "latP95": 3120,
+      "latMax": 4393,
+      "cuMin": 13634,
+      "cuMed": 15134,
+      "cuMax": 27134,
+      "cuSamples": 200
+    }
+  ]
+}

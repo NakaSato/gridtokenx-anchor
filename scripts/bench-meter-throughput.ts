@@ -64,8 +64,14 @@ function median(a: number[]): number {
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+interface FailBreakdown {
+  sendError: number;  // sendRawTransaction rejected (RPC/ingest-queue refusal)
+  statusErr: number;  // landed on-chain but execution failed (program/tx error)
+  expired: number;    // never seen confirmed within CONFIRM_TIMEOUT_SEC (queue drop / blockhash expiry)
+}
 interface EpochResult {
   epoch: number; ts: number; meters: number; ok: number; fail: number;
+  failBreakdown: FailBreakdown; errSamples: string[];
   wallMs: number; tps: number; latP50: number; latP95: number; latMax: number;
   cuMin: number; cuMed: number; cuMax: number; cuSamples: number;
 }
@@ -110,15 +116,28 @@ async function main() {
 
   for (let e = 1; e <= EPOCHS; e++) {
     // Respect on-chain min_reading_interval relative to the previous epoch's
-    // reading_timestamp — only sleep the remainder if the burst was faster.
+    // reading_timestamp — wait on the ON-CHAIN clock (see ts note below).
     if (prevTsMs > 0) {
-      const wait = prevTsMs + INTERVAL_SEC * 1000 - Date.now();
-      if (wait > 0) {
-        console.log(`   … waiting ${(wait / 1000).toFixed(0)}s (min_reading_interval=60) before next epoch`);
-        await sleep(wait);
+      while (true) {
+        let chain = Math.floor(Date.now() / 1000);
+        try {
+          const bt = await conn.getBlockTime(await conn.getSlot("confirmed"));
+          if (typeof bt === "number") chain = bt;
+        } catch { /* fall back */ }
+        const wait = prevTsMs / 1000 + INTERVAL_SEC - chain;
+        if (wait <= 0) break;
+        console.log(`   … waiting ${wait.toFixed(0)}s (min_reading_interval=60, on-chain clock) before next epoch`);
+        await sleep(Math.min(wait, 15) * 1000);
       }
     }
-    const ts = Math.floor(Date.now() / 1000);
+    // Reading timestamp from the ON-CHAIN clock, not Date.now(): a laptop
+    // sleep/wake leaves the test validator's Bank clock hours behind wall time,
+    // and the oracle rejects wall-clock stamps as FutureReading (clock + 60s).
+    let ts = Math.floor(Date.now() / 1000);
+    try {
+      const bt = await conn.getBlockTime(await conn.getSlot("confirmed"));
+      if (typeof bt === "number") ts = bt;
+    } catch { /* fall back to wall clock */ }
     prevTsMs = ts * 1000;
 
     console.log(`\n🕒 Epoch ${e}/${EPOCHS}  (ts=${ts})  draining ${METERS} submits (window ${MAX_INFLIGHT})...`);
@@ -128,6 +147,12 @@ async function main() {
     const unresolved = new Map<string, number>();
     const latencies: number[] = [];
     const okSigs: string[] = [];
+    const failBreakdown: FailBreakdown = { sendError: 0, statusErr: 0, expired: 0 };
+    const errSamples: string[] = [];
+    const sampleErr = (cat: string, msg: string) => {
+      if (errSamples.length < 9 && !errSamples.some((s) => s.startsWith(cat) && s.includes(msg.slice(0, 40))))
+        errSamples.push(`${cat}: ${msg.slice(0, 160)}`);
+    };
     let fail = 0;
     let sent = 0;
     let sendingDone = false;
@@ -155,6 +180,8 @@ async function main() {
               if (st.err) {
                 unresolved.delete(sig);
                 fail++;
+                failBreakdown.statusErr++;
+                sampleErr("statusErr", JSON.stringify(st.err));
               } else if (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized") {
                 const t0 = unresolved.get(sig)!;
                 unresolved.delete(sig);
@@ -168,6 +195,8 @@ async function main() {
         // Expire anything still unresolved long after the last send
         if (sendingDone && Date.now() - lastSendTime > CONFIRM_TIMEOUT_SEC * 1000) {
           fail += unresolved.size;
+          failBreakdown.expired += unresolved.size;
+          if (unresolved.size > 0) sampleErr("expired", `${unresolved.size} sigs unconfirmed after ${CONFIRM_TIMEOUT_SEC}s`);
           unresolved.clear();
           break;
         }
@@ -204,8 +233,10 @@ async function main() {
           unresolved.set(sig, t0);
           sent++;
           lastSendTime = t0;
-        } catch {
+        } catch (err: any) {
           fail++;
+          failBreakdown.sendError++;
+          sampleErr("sendError", (err?.message || String(err)).split("\n")[0]);
         }
         if (sent % 10000 === 0 && sent > 0) {
           console.log(`   … sent ${sent}/${METERS}  confirmed=${latencies.length}  inflight=${unresolved.size}`);
@@ -220,9 +251,10 @@ async function main() {
     const lat = [...latencies].sort((a, b) => a - b);
     const ok = latencies.length;
 
-    // CU: sample up to CU_SAMPLE confirmed tx (evenly strided)
-    const stride = Math.max(1, Math.floor(okSigs.length / CU_SAMPLE));
-    const cuSigs = okSigs.filter((_, k) => k % stride === 0).slice(0, CU_SAMPLE);
+    // CU: sample the most-recent CU_SAMPLE confirmed tx (tail of the burst) —
+    // the rotating ledger prunes old history under 100k+ tx loads, so strided
+    // sampling starves; the tail is always retained and CU is deterministic.
+    const cuSigs = okSigs.slice(-CU_SAMPLE);
     const cus: number[] = [];
     for (let i = 0; i < cuSigs.length; i += 16) {
       await Promise.all(cuSigs.slice(i, i + 16).map(async (sig) => {
@@ -236,7 +268,7 @@ async function main() {
     const cuSorted = [...cus].sort((a, b) => a - b);
 
     const res: EpochResult = {
-      epoch: e, ts, meters: METERS, ok, fail, wallMs,
+      epoch: e, ts, meters: METERS, ok, fail, failBreakdown, errSamples, wallMs,
       tps: +(ok / (wallMs / 1000)).toFixed(2),
       latP50: pct(lat, 50), latP95: pct(lat, 95), latMax: lat.length ? lat[lat.length - 1] : 0,
       cuMin: cuSorted[0] || 0, cuMed: median(cus), cuMax: cuSorted[cuSorted.length - 1] || 0, cuSamples: cus.length,
@@ -244,6 +276,8 @@ async function main() {
     epochResults.push(res);
 
     console.log(`   ✅ ok=${res.ok}/${METERS}  fail=${res.fail}  wall=${res.wallMs}ms  TPS=${res.tps}`);
+    console.log(`   💥 fail: send=${failBreakdown.sendError}  onchain=${failBreakdown.statusErr}  expired=${failBreakdown.expired}`);
+    for (const s of errSamples) console.log(`      · ${s}`);
     console.log(`   ⏱  latency ms  p50=${res.latP50}  p95=${res.latP95}  max=${res.latMax}  (±${STATUS_POLL_MS}ms poll quantisation)`);
     console.log(`   ⚙  CU (n=${res.cuSamples})  min=${res.cuMin}  med=${res.cuMed}  max=${res.cuMax}`);
   }
@@ -265,7 +299,14 @@ async function main() {
     },
     rpc: (conn as any)._rpcEndpoint,
     programId: program.programId.toBase58(),
-    totals: { tx: totalTx, ok: totalOk, fail: totalFail, lossRatePct: +((totalFail / totalTx) * 100).toFixed(3) },
+    totals: {
+      tx: totalTx, ok: totalOk, fail: totalFail, lossRatePct: +((totalFail / totalTx) * 100).toFixed(3),
+      failBreakdown: {
+        sendError: epochResults.reduce((a, r) => a + r.failBreakdown.sendError, 0),
+        statusErr: epochResults.reduce((a, r) => a + r.failBreakdown.statusErr, 0),
+        expired: epochResults.reduce((a, r) => a + r.failBreakdown.expired, 0),
+      },
+    },
     firstEpochInit: { cuMed: epoch1.cuMed, cuMax: epoch1.cuMax, tps: epoch1.tps, latP50: epoch1.latP50, latP95: epoch1.latP95 },
     steadyState: steady.length ? {
       epochs: steady.map((r) => r.epoch),
@@ -292,11 +333,16 @@ async function main() {
     `- Config: ${METERS} meters × ${EPOCHS} epochs, ≥${INTERVAL_SEC}s apart, ${MAX_INFLIGHT} in-flight window, raw-send + ${STATUS_POLL_MS}ms bulk status polling`,
     `- Serialization: single gateway fee-payer write-locked per tx (per-meter PDAs disjoint)`, ``,
     `## Per-epoch`, ``,
-    `| Epoch | ok/N | fail | wall (ms) | TPS | lat p50 | lat p95 | lat max | CU med | CU max |`,
-    `|------:|-----:|-----:|----------:|----:|--------:|--------:|--------:|-------:|-------:|`,
-    ...epochResults.map((r) => `| ${r.epoch}${r.epoch === 1 ? " (init)" : ""} | ${r.ok}/${r.meters} | ${r.fail} | ${r.wallMs} | ${r.tps} | ${r.latP50} | ${r.latP95} | ${r.latMax} | ${r.cuMed} | ${r.cuMax} |`),
-    ``, `## Aggregate`, ``,
+    `| Epoch | ok/N | fail (send/onchain/expired) | wall (ms) | TPS | lat p50 | lat p95 | lat max | CU med | CU max |`,
+    `|------:|-----:|:----------------------------|----------:|----:|--------:|--------:|--------:|-------:|-------:|`,
+    ...epochResults.map((r) => `| ${r.epoch}${r.epoch === 1 ? " (init)" : ""} | ${r.ok}/${r.meters} | ${r.fail} (${r.failBreakdown.sendError}/${r.failBreakdown.statusErr}/${r.failBreakdown.expired}) | ${r.wallMs} | ${r.tps} | ${r.latP50} | ${r.latP95} | ${r.latMax} | ${r.cuMed} | ${r.cuMax} |`),
+    ``,
+    ...(epochResults.some((r) => r.errSamples.length)
+      ? [`### Failure samples`, ``, ...epochResults.flatMap((r) => r.errSamples.map((s) => `- epoch ${r.epoch} — ${s}`)), ``]
+      : []),
+    `## Aggregate`, ``,
     `- Total tx: ${totalTx}  ok: ${totalOk}  fail: ${totalFail}  loss: ${summary.totals.lossRatePct}%`,
+    `- Fail breakdown: send-rejected ${summary.totals.failBreakdown.sendError}, on-chain error ${summary.totals.failBreakdown.statusErr}, expired/unconfirmed ${summary.totals.failBreakdown.expired}`,
     `- First-epoch (PDA init): CU med ${summary.firstEpochInit.cuMed}, max ${summary.firstEpochInit.cuMax}`,
     summary.steadyState ? `- Steady-state (epoch ≥2): CU med ${summary.steadyState.cuMed}, TPS mean ${summary.steadyState.tpsMean} / max ${summary.steadyState.tpsMax}, lat p95 ≤ ${summary.steadyState.latP95Max}ms` : `- Steady-state: n/a`,
     ``,

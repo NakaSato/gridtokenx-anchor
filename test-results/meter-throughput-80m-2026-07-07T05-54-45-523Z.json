@@ -1,0 +1,90 @@
+{
+  "generatedAt": "2026-07-07T05:54:45.521Z",
+  "config": {
+    "meters": 80,
+    "epochs": 2,
+    "intervalSec": 61,
+    "maxInflight": 3000,
+    "cuSample": 200,
+    "statusPollMs": 1500,
+    "sendWorkers": 64
+  },
+  "rpc": "http://127.0.0.1:8899",
+  "programId": "64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU",
+  "totals": {
+    "tx": 160,
+    "ok": 160,
+    "fail": 0,
+    "lossRatePct": 0,
+    "failBreakdown": {
+      "sendError": 0,
+      "statusErr": 0,
+      "expired": 0
+    }
+  },
+  "firstEpochInit": {
+    "cuMed": 16180,
+    "cuMax": 28180,
+    "tps": 46.62,
+    "latP50": 1610,
+    "latP95": 1692
+  },
+  "steadyState": {
+    "epochs": [
+      2
+    ],
+    "cuMed": 13560,
+    "cuMax": 25560,
+    "tpsMean": 46.84,
+    "tpsMax": 46.84,
+    "latP50Med": 1602,
+    "latP95Max": 1687,
+    "latMax": 1703
+  },
+  "perEpoch": [
+    {
+      "epoch": 1,
+      "ts": 1783403615,
+      "meters": 80,
+      "ok": 80,
+      "fail": 0,
+      "failBreakdown": {
+        "sendError": 0,
+        "statusErr": 0,
+        "expired": 0
+      },
+      "errSamples": [],
+      "wallMs": 1716,
+      "tps": 46.62,
+      "latP50": 1610,
+      "latP95": 1692,
+      "latMax": 1702,
+      "cuMin": 16180,
+      "cuMed": 16180,
+      "cuMax": 28180,
+      "cuSamples": 80
+    },
+    {
+      "epoch": 2,
+      "ts": 1783403676,
+      "meters": 80,
+      "ok": 80,
+      "fail": 0,
+      "failBreakdown": {
+        "sendError": 0,
+        "statusErr": 0,
+        "expired": 0
+      },
+      "errSamples": [],
+      "wallMs": 1708,
+      "tps": 46.84,
+      "latP50": 1602,
+      "latP95": 1687,
+      "latMax": 1703,
+      "cuMin": 13560,
+      "cuMed": 13560,
+      "cuMax": 25560,
+      "cuSamples": 80
+    }
+  ]
+}
