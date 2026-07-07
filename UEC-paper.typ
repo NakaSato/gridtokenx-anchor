@@ -573,7 +573,7 @@ or the device population — the direct-mint path, by contrast, packs many mints
 into a single slot from one signer, confirming that raw issuance is limited by the
 confirmation round-trip rather than by on-chain contention. Two complementary
 remedies restore parallelism: sharding the collector and accumulator accounts so
-that concurrent settlements touch disjoint writable state (§9.4), and pooling
+that concurrent settlements touch disjoint writable state (§9.5), and pooling
 multiple fee-payers so that submission is not funnelled through a single account.
 In a Tier-A prototype combining both, per-slot settlement packing rises to
 approximately 7.5 mint·s⁻¹. We therefore identify multi-signer fee-payer pooling,
@@ -619,7 +619,8 @@ cheapest hot-path write measured (≈9.9 k CU, below the ≈13.5 k CU meter writ
 delivers 2.6× lower throughput than meter ingest at the same fleet size, because
 its account contexts still declare the shared zone-market account writable although
 the handler mutates only the per-shard account. Throughput on this platform is a
-function of lock footprint, not of instruction compute cost.
+function of lock footprint, not of instruction compute cost. The formal workload
+definition and the full order-entry measurement are given in §11.11.
 
 == 9.3 Meter-telemetry ingest scaling to 100,000 meters
 
@@ -662,14 +663,14 @@ confirmed by bulk signature-status polling (1.5 s sweep) under a 3,000-transacti
 in-flight window, so latency is poll-quantised (±1.5 s). Reading timestamps are
 taken from the on-chain clock rather than the client's wall clock, matching the
 clock against which the oracle's freshness guard is evaluated. The formal metric
-definitions and the full harness parameterisation are given in §11.9. Table 4
+definitions and the full harness parameterisation are given in §11.10. Table 4
 reports the result.
 
 #figure(
   caption: [Oracle meter-telemetry ingest scaled from 80 to 100,000 meters on a live
     single-node validator, with every non-confirmed transaction attributed.
     Validation-rejected = the oracle's anomaly gate firing on the synthetic value
-    pattern (§11.9); delivery loss = send-rejected + expired, with no client retry.
+    pattern (§11.10); delivery loss = send-rejected + expired, with no client retry.
     Steady-state CU is the recurring per-meter write; the base path (`CU min`) is
     the value to cite. Source: #link("BENCHMARKS.md")[`BENCHMARKS.md`] §9.],
   table(
@@ -712,7 +713,96 @@ disjoint per-meter PDAs into proportional throughput requires the same remedy
 identified for settlement, namely pooling multiple gateway fee-payers so ingress
 is not funnelled through one signer.
 
-== 9.4 Discussion
+== 9.4 One-month community simulation: closing the token lifecycle
+
+The preceding sections measure each hot path in isolation. To demonstrate that
+the paths compose — and that the token accounting closes — we replayed one full
+month of a physically modelled community against a live validator and drove
+every stage of the token lifecycle from the resulting data
+(`scripts/bench-community-month.ts`). The input is not synthetic in the sense
+of §9.3: it is produced by the platform's smart-meter simulator
+(`gridtokenx-smartmeter-simulator`, seeded solar-irradiance and load models),
+which generates an 80-meter fleet containing 12 solar prosumers and 68
+consumers, sampled at the production cadence of 96 fifteen-minute intervals per
+day for 30 days — 230,400 readings totalling 15,868.5 kWh generated, 144,879.8
+kWh consumed, and 10,386.7 kWh of interval surplus. A market-policy constraint
+caps each prosumer at 10 kWh of sales per day; the cap binds on 305 of 360
+prosumer-days.
+
+*Phase design.* The oracle rejects only future-dated readings, so a month of
+historical timestamps replays back-to-back. Because the per-meter
+strictly-increasing-timestamp guard forbids two in-flight submissions for one
+meter, readings ship as per-meter *batched* transactions — up to ten
+`submit_meter_reading` instructions per transaction, whose in-transaction
+sequential execution preserves order — across 80 concurrently progressing meter
+chains; readings that would trip the anomaly gate (@eq-anomaly) are isolated
+into single-instruction transactions so the on-chain rejection is still
+exercised rather than aborting a batch. Each simulated day then runs a trading
+session (12 sell offers of min(day surplus, 10 kWh), 68 bids at actual daily
+consumption) and the full lifecycle per prosumer: a registry synchronisation
+plus `settle_and_mint_tokens` CPI mints the capped, *oracle-accepted* surplus
+as GRID (Token-2022); the seller deposits it into escrow; an Ed25519-signed
+off-chain match settles against a rotating consumer through
+`settle_offchain_match` (§6.3) in a v0 transaction with an address-lookup
+table; the buyer withdraws delivery and burns it (energy consumed = tokens
+retired). At month end the cap-withheld surplus is certified as renewable-energy
+certificates through governance `issue_erc`, whose `mark_erc_claimed` CPI
+enforces on-chain that GRID plus REC claims never exceed metered generation
+(§11.7). Table 5 reports the lifecycle stages of the canonical run.
+
+#figure(
+  caption: [Token-lifecycle stages over the simulated month (canonical run,
+    2026-07-07): 353 prosumer-days cleared the 0.1 kWh dust floor and completed
+    the full mint→deposit→settle→burn chain; 12 month-end REC issuances. No
+    stage recorded a failure. Latency is send→confirmed, poll-quantised
+    (±1.5 s). Source: #link("BENCHMARKS.md")[`BENCHMARKS.md`] §11.],
+  table(
+    columns: 5,
+    align: (left, right, right, right, right),
+    table.header([*Stage*], [*ok*], [*fail*], [*CU median*], [*latency p50 (ms)*]),
+    [registry sync + GRID mint (CPI)], [433], [0], [29,410], [1,468],
+    [escrow deposit], [433], [0], [14,905], [1,480],
+    [off-chain-signed settlement (Ed25519 ×2, v0+ALT)], [353], [0], [107,141], [1,465],
+    [withdraw + burn], [353], [0], [21,963], [1,475],
+    [REC issuance (`issue_erc`)], [12], [0], [71,369], [1,471],
+  ),
+) <tab-lifecycle>
+
+*Results.* The month was absorbed in 1,394.7 s of wall time — a 1,858-fold
+real-time compression — with zero delivery loss on the telemetry phase: the 919
+missing readings are exactly the anomaly-gate rejections, fee-paid and recorded
+on the ledger, and this outcome reproduced *bit-identically across seven
+replays* (throughput varied 194–232 readings/s with host load; the batched
+transport carries ≈213 readings/s at only ≈21 tx/s). The token accounting
+closes exactly: 3,290.724 kWh of GRID was minted, all of it trade-settled and
+subsequently burned, and 4,962.778 kWh was certified as RECs — the two sums
+together equal the oracle-accepted interval surplus of 8,253.502 kWh to the
+watt-hour. The sell cap withholds 68% of raw surplus from the market, and total
+demand (126,983.8 kWh) exceeds capped supply (3,290.8 kWh) thirty-nine-fold,
+quantifying the cap's economic bite in this community.
+
+*On-chain verification.* Every headline figure was re-derived from live chain
+state through RPC reads alone (`scripts/audit-community-month.ts`, 15/15
+assertions): the per-meter reading counters sum to 229,481; the order,
+trade-nullifier, and order-nullifier account counts are 2,396, 353, and 706;
+the registry's `settled_net_generation` and `claimed_erc_generation` sums equal
+the minted and certified totals; the GRID supply after burns collapses to the
+68 escrow-seed watt-hours, proving every traded token was retired; the REC
+supply equals the claimed energy at the mint's 1,000-base-units-per-kWh scale;
+and the settlement currency conserves exactly (buyer escrow outflow 13,137
+minor units = seller proceeds 12,832 + wheeling charges 305).
+
+*A reproducibility caution.* An early lifecycle run silently lost 112 of 353
+settlements to transaction *deduplication*: consecutive cap-bound days produced
+byte-identical escrow-deposit transactions (same instruction, accounts, fee
+payer, and cached blockhash within its 10 s refresh window), so the validator
+deduplicated the resend while the client observed the earlier signature as
+confirmed and proceeded — leaving the escrow unfunded at settlement. Replay
+harnesses that reuse cached blockhashes must salt every transaction (ours now
+prepends a day-varying compute-budget instruction); we record this because the
+failure mode is invisible to the sender and surfaces only downstream.
+
+== 9.5 Discussion
 
 The measurements support the central design claim of §2.1: partitioning
 high-frequency state into per-entity PDAs removes execution-side contention, so
@@ -916,7 +1006,45 @@ $ Q = min(100, floor(frac(100 dot n_"valid", n_"valid" + n_"reject"))) $ <eq-qua
 
 Range admission: $E_"min" <= E <= E_"max"$.
 
-== 11.7 Registry sharding & slashing
+== 11.7 Surplus tokenisation (generation mint)
+
+Surplus energy that survives the validation of §11.6 is tokenised by the
+energy-token program's `mint_generation` instruction (§6.4): the off-chain
+pipeline aggregates a meter's net surplus over a 15-minute window and the
+bridge submits one mint per (meter, window). The kWh-to-atoms conversion is a
+single function shared by the producer and the bridge verifier, so both sides
+agree on the exact bound and scaling
+(`gridtokenx-blockchain-core/src/rpc/nats_schema.rs:127`). A window surplus of
+$E$ kWh (an IEEE-754 double on the wire) mints
+
+$ A = floor(E dot 10^9), quad "admitted iff" E "is finite" and 0 < E <= E_max and A >= 1 $ <eq-mint-scale>
+
+with $E_max = 10^6$ kWh per meter-window (`nats_schema.rs:117`). The cap is
+load-bearing rather than cosmetic: it bounds $A lt.approx 10^15 << 2^64$
+*before* the float-to-integer cast, which for an adversarially large `f64`
+would otherwise saturate to $2^64 - 1$ (Rust float casts saturate, not wrap)
+and request an astronomical mint. Non-finite, non-positive, over-cap, and
+rounds-to-zero values are rejected on both sides of the trust boundary.
+
+On-chain, the mint executes only if three predicates hold
+(`programs/energy-token/src/lib.rs:278`, `lib.rs:287`, `lib.rs:308`):
+
+$ w equiv 0 space (mod 900 dot 10^3) and w > 0, quad
+  M(m, w) = 0, quad
+  k_"rec" in cal(V) $ <eq-mint-guards>
+
+The window start $w$ (milliseconds) must sit on the same 900-second epoch grid
+the oracle's clearing trigger enforces in seconds (§11.6); $M(m, w)$ is a
+per-(meter, window) idempotency record — a replayed mint intent is a no-op
+success, and the record is stamped only *after* a successful mint CPI, so a
+failed mint leaves the window retryable while a completed one can never
+double-mint; and the co-signing key $k_"rec"$ must be a member of the
+registered REC-validator set $cal(V)$, with no opt-out — an empty set rejects
+every generation mint (§6.4). The token supply then advances by exactly the
+attested amount, $S arrow.l S + A$, tying issuance one-to-one to metered
+surplus at $1 "kWh" = 10^9$ atoms.
+
+== 11.8 Registry sharding & slashing
 
 Deterministic shard from the first byte of the authority key $k$
 (`registry/src/lib.rs:71`):
@@ -928,7 +1056,7 @@ Validator-active predicate, $beta_"min" = 10^13$ atoms $= 10{,}000$ GRX
 
 $ "active" <==> s_"grx" >= beta_"min" $ <eq-active>
 
-== 11.8 Parameters (data)
+== 11.9 Parameters (data)
 
 #table(
   columns: (auto, auto, auto),
@@ -940,12 +1068,13 @@ $ "active" <==> s_"grx" >= beta_"min" $ <eq-active>
   [$beta_"min"$], [$10^13$ atoms],[min validator stake (10k GRX)],
   [shards],       [$16$],         [registry counter shards],
   [epoch],        [$900$ s],      [oracle market-clearing window],
+  [$E_max$],      [$10^6$ kWh],   [max single generation mint (@eq-mint-scale)],
   [GRID/GRX dec], [$9$],          [$1 "kWh" = 10^9$ atoms],
   [THBG dec],     [$6$],          [$1 "THB" = 10^6$ minor],
   [REC dec],      [$6$],          [$1$ token $= 1 "MWh"$],
 )
 
-== 11.9 Fleet-ingest benchmark: metric definitions and test data
+== 11.10 Fleet-ingest benchmark: metric definitions and test data
 
 The meter-scaling benchmark of §9.3 is defined formally as follows. A run at
 fleet size $N$ submits one transaction per meter per epoch over $E = 2$ epochs.
@@ -1007,3 +1136,130 @@ Harness parameterisation (data):
 Harness: `scripts/bench-meter-throughput.ts`; per-run artifacts under
 `test-results/meter-throughput-<N>m-<timestamp>.{json,md}` with the combined
 tables in `test-results/meter-scaling-summary.md`.
+
+== 11.11 Order-entry benchmark: metric definitions and test data
+
+The order-entry benchmark of §9.2 (Table 3, "CDA order entry") reuses the
+metric definitions of §11.10 unchanged — outcome conservation (@eq-conserve),
+confirmed goodput (@eq-goodput), and the loss split (@eq-loss-split) — applied
+to a single burst of $N = 10^4$ `submit_limit_order_sharded` transactions
+rather than per-meter epochs. The synthetic workload assigns order
+$i in {0, dots, N-1}$ deterministically
+(`scripts/bench-trading-throughput.ts:166`–`169`):
+
+$ s(i) = i mod 2, quad
+  q(i) = (1 + (i mod 50)) dot 10^9, quad
+  p(i) = 3 dot 10^6 + (i mod 100) dot 10^4 $ <eq-order-workload>
+
+alternating buy/sell side $s$, energy amount $q$ sweeping 1–50 kWh in
+9-decimal atoms, and limit price $p$ sweeping 3.00–3.99 THBG/kWh in 6-decimal
+minor units. Every price lies inside the admission band of @eq-band, so —
+unlike the meter workload, which deliberately trips the anomaly gate — no order
+is validation-rejected by design and the expected on-chain error rate is
+$nu = 0$. Each order initialises its own PDA
+(`[b"order", authority, order_id]` with `order_id` = base $+ i$) and lands on
+zone shard
+
+$ sigma_"ord" (i) = i mod 16 $ <eq-order-shard>
+
+(round-robin, in contrast to the key-derived registry shard of @eq-shard). The
+write set of order $i$ is thus its own order PDA plus shard
+$sigma_"ord" (i)$ — 16-way disjoint by construction — plus two *shared*
+writable accounts that serialise the path: the single fee-payer/authority, and
+the zone-market account, which the account context declares writable
+(`programs/trading/src/lib.rs:1755`) although the handler mutates only the
+per-shard account. Transport and parameterisation are identical to §11.10
+($W = 3{,}000$, $tau_"poll" = 1.5$ s, $tau_"conf" = 90$ s, 64 send workers, no
+retry, `confirmed` commitment); zone 701, 16 pre-initialised shards.
+
+Measured outcome (data, single run, 2026-07-07):
+
+#table(
+  columns: (auto, auto, auto),
+  align: (left, right, left),
+  table.header([*Quantity*], [*Value*], [*Definition*]),
+  [$N$],            [10,000],        [orders submitted (one tx each)],
+  [$N_"ok"$],       [9,977],         [confirmed (@eq-conserve)],
+  [$N_"send"$ / $N_"val"$ / $N_"exp"$], [0 / 0 / 23], [send-rejected / on-chain error / expired],
+  [$nu$],           [0%],            [validation-rejection rate (@eq-loss-split) — as designed],
+  [$delta$],        [0.23%],         [delivery loss (@eq-loss-split); $delta^2 approx 5 times 10^(-6)$ after one retry],
+  [$t_"last" - t_0$], [55.5 s],      [burst wall time],
+  [TPS],            [179.65],        [confirmed goodput (@eq-goodput)],
+  [$L$ p50 / p95 / max], [2,173 / 3,565 / 4,563 ms], [send→confirmed latency ($plus.minus tau_"poll"$)],
+  [CU min / med / max], [9,884 / 12,886 / 23,384], [per-tx compute, $n = 200$ tail sample],
+)
+
+The base order-entry write (CU min 9,884) is the cheapest hot-path write
+measured — below the 13.3–13.6 k CU steady-state meter write of §11.10 — yet
+its confirmed goodput (180 TPS) is 2.6× lower than meter ingest at the same
+transaction count on the same harness (462 TPS at $N = 10^4$, Table 4). Since
+the transport, in-flight window, and fee-payer topology are identical, the gap
+isolates the one structural difference: every order additionally write-locks
+the shared zone-market account, so the 16 shards serialise behind it. The
+entire measured loss is transport ($N_"val" = 0$, $N_"exp" = 23$), recoverable
+by the idempotent-retry argument of §11.10.
+
+Harness: `scripts/bench-trading-throughput.ts`; run artifact
+`test-results/trading-order-entry-10000o-2026-07-07T12-58-45-123Z.{json,md}`,
+summarised in #link("BENCHMARKS.md")[`BENCHMARKS.md`] §10.
+
+== 11.12 Community-month benchmark: conservation identities and test data
+
+The month simulation of §9.4 adds a *conservation* layer on top of the
+delivery metrics of §11.10. Let $S_a (i, d)$ denote prosumer $i$'s
+oracle-accepted surplus on day $d$ — the sum of per-interval surpluses over the
+readings that passed the anomaly gate — and $C = 10$ kWh the daily sell cap.
+The lifecycle mints
+
+$ M(i, d) = min(S_a (i, d), thin C) $ <eq-cap-mint>
+
+as GRID for each prosumer-day above the 0.1 kWh dust floor, and certifies the
+remainder as RECs at month end:
+
+$ R(i) = sum_d S_a (i, d) - sum_d M(i, d) $ <eq-rec-claim>
+
+Because `issue_erc` claims through the registry's `mark_erc_claimed` CPI, the
+identity GRID + REC ≤ metered generation is enforced *on-chain* per meter, not
+merely by harness arithmetic (§11.7). The run must therefore satisfy three
+closure identities, each checkable from chain state:
+
+$ sum_(i,d) M(i,d) = E_"settle" = E_"burn", quad
+  sum_i R(i) = "REC supply" / 10^3, quad
+  sum_m T_m = P_"sell" + W $ <eq-closure>
+
+where $E_"settle"$ and $E_"burn"$ are the energy moved by settlement and
+retired by burns, the REC mint carries 1,000 base units per kWh, and for each
+match $m$ the buyer-escrow debit $T_m = floor(q_m p^* slash 10^9)$ splits into
+seller proceeds $P_"sell"$ and the flat wheeling charge $W$ of @eq-wheel.
+
+Measured outcome (canonical run, 2026-07-07; all values re-derived from live
+chain state by `scripts/audit-community-month.ts`, 15/15 assertions passing):
+
+#table(
+  columns: (auto, auto, auto),
+  align: (left, right, left),
+  table.header([*Quantity*], [*Value*], [*On-chain source*]),
+  [confirmed readings],  [229,481],  [$Sigma$ per-meter `total_readings` (80 `MeterState` PDAs)],
+  [anomaly rejections],  [919],      [deterministic across 7 replays; fee-paid, on-ledger],
+  [orders],              [2,396],    [`Order` PDA count],
+  [settled matches],     [353],      [`TradeNullifier` count (order nullifiers = 706 = 2×)],
+  [GRID minted (Wh)],    [3,290,724],[$Sigma$ `settled_net_generation` over 12 registry meters],
+  [GRID supply after burns], [68 Wh], [`getTokenSupply` — only escrow-seed dust remains],
+  [REC certified (Wh)],  [4,962,778],[$Sigma$ `claimed_erc_generation` = 12 certificates = supply $slash 10^3$],
+  [closure @eq-closure], [3,290,724 + 4,962,778 = 8,253,502], [= oracle-accepted surplus, exact],
+  [currency conservation], [13,137 = 12,832 + 305], [buyer outflow = seller proceeds + wheeling],
+  [month wall time],     [1,394.7 s], [$1858 times$ real-time compression],
+)
+
+Transport and loss taxonomy are those of §11.10 with one addition: the
+telemetry phase packs up to $B = 10$ readings per transaction along each
+per-meter chain (ordering inside a transaction is free), which raises the
+carried reading rate to ≈10× the transaction rate and eliminated delivery loss
+entirely in the canonical run ($delta = 0$; the only non-confirmed submissions
+are the 919 deliberate anomaly rejections, $nu = 0.40%$).
+
+Harness: `scripts/bench-community-month.ts` (dataset exporter runs against the
+smart-meter simulator's Python API); canonical artifact
+`test-results/community-month-80m-12p-2026-07-07T16-45-40-924Z.{json,md}`,
+audited run `…T17-18-23-134Z`, summarised in
+#link("BENCHMARKS.md")[`BENCHMARKS.md`] §11.
