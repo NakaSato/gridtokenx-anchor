@@ -354,72 +354,116 @@ provider wallet), which is the `mut` fee-payer and therefore **write-locked on e
 transaction**. That shared payer + single-node banking — *not* per-meter contention —
 is the throughput ceiling here.
 
-**Two client harnesses** (same on-chain path — transport changes TPS, never CU):
-the ≤10k rows used per-tx `.rpc()` websocket confirms through a 300-in-flight pool;
-that transport collapses beyond ~10k pending confirms, so the ≥50k rows use locally
-pre-signed raw sends (cached blockhash, 10 s refresh) + bulk `getSignatureStatuses`
-polling (1.5 s sweep, 3 000-tx in-flight window). Large-N latency is therefore
-poll-quantised (±1.5 s) and the TPS step-up at 50k reflects the better transport.
-CU is sampled (≤200 confirmed tx/epoch) from `getTransaction(sig).meta`.
+**Transport** (same on-chain path at every size — transport shapes TPS/latency, never
+CU): transactions are pre-signed locally against a cached blockhash (10 s refresh) and
+raw-sent (`skipPreflight`, no retry), confirmed by bulk `getSignatureStatuses` polling
+(1.5 s sweep) under a 3 000-tx in-flight window. Latency is send→first-seen-confirmed,
+poll-quantised (±1.5 s). CU is sampled from the *tail* of each epoch's confirmed set
+(≤200 tx via `getTransaction(sig).meta` — the rotating ledger prunes older history
+under 100k+ tx loads, so strided sampling starves). Reading timestamps and the
+inter-epoch wait use the **on-chain clock**, not wall time — a laptop sleep/wake
+leaves the test validator's Bank clock hours behind, and wall-clock stamps are then
+rejected as `FutureReading`. An earlier two-transport run (per-tx `.rpc()` websocket
+confirms ≤10k) produced the same CU values with lower TPS (~120–220): transport-bound,
+retained in git history (`46fc183`).
 
 Reproduce (validator up, oracle deployed + `scripts/init-oracle.ts` run):
 
 ```bash
 NODE_OPTIONS=--max-old-space-size=16384 \
 METERS=100000 EPOCHS=2 MAX_INFLIGHT=3000 CU_SAMPLE=200 PREFIX=RUN_M \
-  npx tsx scripts/bench-meter-throughput.ts
+  caffeinate -is npx tsx scripts/bench-meter-throughput.ts
 ```
 
-**Success / loss**
+**Outcome decomposition.** Every non-confirmed transaction is attributed to one of
+three classes: **send-rejected** (RPC refused — never entered the validator, no fee),
+**validation-rejected** (executed and failed an oracle guard — fee paid, recorded
+on-chain), and **expired** (accepted but never confirmed in 90 s — queue drop or
+blockhash aging; no fee, no trace). In these runs every validation rejection is
+`AnomalousReading` (6004): the synthetic value pattern deliberately drives ~0.47% of
+meters past the 10× production/consumption anomaly gate, so that bucket demonstrates
+the oracle's input validation firing correctly at 100k-meter scale — it is not
+delivery failure. **True delivery loss = send-rejected + expired.**
 
-| N meters | total tx | confirmed | loss % | harness |
-|---------:|---------:|----------:|-------:|:--------|
-| 80 | 400 | 400 | 0 | rpc-pool |
-| 1 000 | 2 000 | 1 992 | 0.40 | rpc-pool |
-| 5 000 | 10 000 | 9 952 | 0.48 | rpc-pool |
-| 10 000 | 20 000 | 19 908 | 0.46 | rpc-pool |
-| 50 000 | 100 000 | 99 261 | 0.74 | raw-send |
-| 100 000 | 200 000 | 198 383 | 0.81 | raw-send |
+| N meters | total tx | confirmed | validation-rejected | delivery loss | loss total |
+|---------:|---------:|----------:|--------------------:|--------------:|-----------:|
+| 80 | 160 | 160 | 0 (0%) | 0 (0%) | 0% |
+| 1 000 | 2 000 | 1 988 | 8 (0.40%) | 4 (0.20%) | 0.60% |
+| 5 000 | 10 000 | 9 906 | 48 (0.48%) | 46 (0.46%) | 0.94% |
+| 10 000 | 20 000 | 19 862 | 92 (0.46%) | 46 (0.23%) | 0.69% |
+| 50 000 | 100 000 | 99 247 | 474 (0.47%) | 279 (0.28%) | 0.75% |
+| 100 000 | 200 000 | 198 347 | 950 (0.48%) | 703 (0.35%) | 0.83% |
 
 **Compute units per `submit_meter_reading` (scale-invariant)**
 
 | N meters | init CU min | init CU med | steady CU min | steady CU med | steady CU max |
 |---------:|------------:|------------:|--------------:|--------------:|--------------:|
-| 80 | 16 088 | 16 088 | 13 468 | 13 468 | 20 968 |
-| 1 000 | 16 145 | 17 645 | 13 525 | 15 025 | 28 525 |
-| 5 000 | 16 145 | 17 645 | 13 525 | 15 025 | 22 525 |
-| 10 000 | 16 180 | 17 680 | 13 560 | 15 060 | 22 560 |
-| 50 000 | 16 254 | 17 754 | 13 634 | 15 134 | 22 634 |
-| 100 000 | 16 254 | 17 754 | 13 634 | 15 134 | 24 134 |
+| 80 | 16 180 | 16 180 | 13 560 | 13 560 | 25 560 |
+| 1 000 | 16 254 | 17 754 | 13 634 | 15 134 | 25 634 |
+| 5 000 | 16 254 | 17 754 | 13 634 | 15 134 | 31 634 |
+| 10 000 | 15 957 | 17 457 | 13 337 | 14 837 | 22 337 |
+| 50 000 | 15 957 | 17 457 | 13 337 | 14 837 | 26 837 |
+| 100 000 | 16 254 | 17 754 | 13 634 | 15 134 | 27 134 |
 
-**Throughput & latency (steady-state, single-node localnet)**
+**Throughput & latency (steady-state epoch, single-node localnet)**
 
 | N meters | TPS mean | lat p50 (ms) | lat p95 (ms) | lat max (ms) |
 |---------:|---------:|-------------:|-------------:|-------------:|
-| 80 | 135 | 659 | 859 | 861 |
-| 1 000 | 120 | 1 334 | 1 440 | 4 809 |
-| 5 000 | 188 | 1 356 | 1 781 | 5 058 |
-| 10 000 | 217 | 1 214 | 1 548 | 14 971 |
-| 50 000 | 359 | 1 749 | 2 565 | 2 886 |
-| 100 000 | 329 | 1 944 | 2 869 | 4 196 |
+| 80 | 47 | 1 602 | 1 687 | 1 703 |
+| 1 000 | 267 | 1 464 | 1 947 | 2 003 |
+| 5 000 | 393 | 1 554 | 2 301 | 2 476 |
+| 10 000 | 462 | 1 544 | 2 347 | 2 582 |
+| 50 000 | 490 | 1 611 | 2 415 | 3 033 |
+| 100 000 | 322 | 2 016 | 3 120 | 4 393 |
 
-**Reading.** The steady-state **base write path (`CU min`) holds 13.5–13.6k CU across
-a 1 250× meter-count range** (13 468 at N=80 → 13 634 at N=50k/100k) — per-meter cost
-is O(1), independent of fleet size, and cross-validates §4's litesvm
-`submit_meter_reading` subsequent = 13 376. The small upward drift tracks meter-id
-byte length (longer ids = more seed/copy bytes), not N; the `CU med/max` spread tracks
-the reading *values* (the anomaly production/consumption-ratio branch). **TPS does not
-grow with N**: ~120–220 on the rpc-pool harness, ~330–360 on the raw-send harness —
-flat within each harness even as N doubles 50k→100k, because every tx is signed by the
-single write-locked gateway payer on one validator. This is a serialization ceiling,
-not a per-meter one — the disjoint PDAs need multi-gateway fee-payer pooling plus a
+**Reading.** The steady-state **base write path (`CU min`) holds 13.3–13.6k CU across
+a 1 250× meter-count range** — per-meter cost is O(1), independent of fleet size, and
+cross-validates §4's litesvm `submit_meter_reading` subsequent = 13 376. The ±150-CU
+drift tracks meter-id byte length (longer ids = more seed/copy bytes), not N; the
+`CU med/max` spread tracks the reading *values* (the anomaly-ratio branch). **TPS is
+transport/ramp-bound at small N** (an 80-tx burst never fills the pipeline) and
+**payer-bound at large N**: sustained rates reach ~390–490 TPS at 5k–50k and ~322 TPS
+at 100k, flat-to-declining as N grows because every tx is signed by the single
+write-locked gateway payer on one validator. This is a serialization ceiling, not a
+per-meter one — the disjoint PDAs need multi-gateway fee-payer pooling plus a
 multi-node deployment to convert into proportional throughput, and the flat CU shows
-the per-write cost is already scale-free. Loss stays **< 0.9% at 100 000 concurrent
-meters** (0.74% @50k, 0.81% @100k); p95 latency ~2.6–2.9 s under the 3 000-tx window.
-100k CU values re-probed post-run — the rotating ledger pruned in-run tx history under
-the 200k-tx load; probe values match the 50k run exactly (deterministic path; see that
-run's `.md`). (Solana 3.1.10, Apple M2, 2026-07-06; harness
-`scripts/bench-meter-throughput.ts`.)
+the per-write cost is already scale-free. **True delivery loss stays ≤ 0.46% at every
+fleet size** (0.35% at 100 000 meters / 200 000 tx, no client retry — one retry round
+would push effective loss to ~10⁻⁵); p95 latency ≤ 3.1 s under the 3 000-tx window.
+(Solana 3.1.10, Apple M2, 2026-07-07; harness `scripts/bench-meter-throughput.ts`.)
+
+---
+
+## 10. Trading Order-Entry Throughput (live validator)
+
+The trading-side counterpart of §9: 10 000 `submit_limit_order_sharded`
+instructions (alternating buy/sell, 16 zone shards round-robin, one per-order PDA
+each) fired at a live validator through the same raw-send + bulk-status transport
+and outcome attribution as §9.
+
+Reproduce (validator up, trading deployed; self-bootstraps market/zone/shards):
+
+```bash
+ORDERS=10000 ZONE_ID=701 caffeinate -is npx tsx scripts/bench-trading-throughput.ts
+```
+
+| ok/N | delivery loss | on-chain err | TPS | lat p50 | lat p95 | CU min | CU med | CU max |
+|-----:|--------------:|-------------:|----:|--------:|--------:|-------:|-------:|-------:|
+| 9 977 / 10 000 | 23 (0.23%) | 0 | 180 | 2 173 ms | 3 565 ms | 9 884 | 12 886 | 23 384 |
+
+**Reading.** Order entry is the *cheapest* hot-path write measured (9.9k CU min —
+below the 13.3–13.6k meter write) yet delivers **~2.6× lower TPS than meter ingest
+at the same fleet size on the same setup** (180 vs 462 at N=10k, §9): direct
+evidence that the path is lock-bound, not compute-bound. The cause is its write-lock
+footprint: besides the shared fee-payer, `SubmitLimitOrderShardedContext` still
+declares `zone_market` as `mut` (`programs/trading/src/lib.rs:1755`) although the
+handler writes only the per-shard `zone_shard` — so every "sharded" order
+write-locks the one shared `ZoneMarket` account and the 16 shards serialize behind
+it. This is the same defect class fixed for `ShardedMatchOrdersContext` in
+`95e7cdd` (measured there: writable → 1 match/slot, read-only → 3/slot) and is the
+identified next fix; delivery loss is pure transport (23 expired, zero on-chain
+errors). (Solana 3.1.10, Apple M2, 2026-07-07; harness
+`scripts/bench-trading-throughput.ts`.)
 
 ---
 
@@ -431,7 +475,8 @@ test-results/
 ├── smallbank/    smallbank-<ISO8601>.{json,csv}
 ├── tpc/          tpc-c-<ISO8601>.{json,csv}   (one file per concurrency level)
 ├── meter-throughput-<N>m-<ISO8601>.{json,md}  (§9 per-size: per-epoch + per-meter)
-└── meter-scaling-summary.md                   (§9 combined 80→100k scaling tables)
+├── meter-scaling-summary.md                   (§9 combined 80→100k scaling tables)
+└── trading-order-entry-<N>o-<ISO8601>.{json,md}  (§10 order-entry run)
 ```
 
 Each JSON carries full per-sample distributions and host metadata; each CSV is

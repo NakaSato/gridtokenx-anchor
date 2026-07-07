@@ -27,7 +27,7 @@
     presents an on-chain settlement layer for P2P energy trading in which
     transaction settlement executes on a Solana cluster. The system features a
     consortium governance structure mapped to Thailand's grid operators (EGAT, MEA,
-    PEA), an application layer built via an Anchor smart-contract program, and
+    PEA), an application layer implemented as a set of Anchor smart-contract programs, and
     consensus and finality driven by Solana's PoH/Tower-BFT engine. The market
     design incorporates a hybrid continuous double auction (CDA) that matches the
     on-chain order book in real time for immediate trades, such as BESS reserve
@@ -58,14 +58,14 @@
 
 = 1. Introduction
 
-Peer-to-peer (P2P) energy trading lets prosumers — households and firms that both
-produce and consume electricity — settle surplus generation directly with one
+Peer-to-peer (P2P) energy trading enables prosumers — households and firms that both
+produce and consume electricity — to settle surplus generation directly with one
 another rather than solely through a utility. In Thailand this exchange is
 currently foreclosed: under the Enhanced Single Buyer (ESB) model all wholesale
 electricity is procured through a single national off-taker, leaving prosumers
 with surplus generation no direct route to trade with one another. Realising such
 an exchange on a public ledger raises three requirements that a general-purpose
-blockchain does not satisfy out of the box: (i) *throughput*, because metering
+blockchain does not satisfy by default: (i) *throughput*, because metering
 telemetry and order flow arrive continuously from many independent devices; (ii)
 *settlement integrity*, because a trade must be provably authorised by both
 counterparties yet cannot be allowed to replay; and (iii) *physical backing*,
@@ -114,8 +114,8 @@ The contributions of this work are:
   energy (§6.4), together with a two-step authority-transfer mechanism for
   application-layer PoA governance (§6.2).
 + A treasury design with formally stated peg and collateral invariants and a
-  precise, integer-only economic model for settlement, fees, wheeling charges,
-  and staking rewards (§11).
+  precise, integer-only economic model for price formation, settlement, fees,
+  wheeling charges, and staking rewards (§11).
 
 The remainder of the paper is organised as follows. Section 2 states the
 methodology — the design principles, the implementation stack, and the evaluation
@@ -126,8 +126,8 @@ describes cross-program invocation between the programs. Section 6 sets out the
 security and trust model. Section 7 traces an end-to-end market cycle, and
 Section 8 covers the consensus and validator topology. Section 9 reports the key
 empirical results and discusses their implications. Section 10 is a reading map to
-the wider documentation, and Section 11 gives the formal settlement and economic
-equations, each cited to its implementing source line.
+the wider documentation, and Section 11 gives the formal price-formation, settlement, and
+economic equations, each cited to its implementing source line.
 
 = 2. Methodology
 
@@ -236,7 +236,7 @@ A Solana transaction lists every account it will touch and whether each is
 read-only or writable. The runtime uses this to take *per-account read/write
 locks* before execution. Two transactions that touch disjoint writable account
 sets execute *in parallel* on different cores (Sealevel). Two transactions that
-both write the same account serialize.
+both write the same account serialise.
 
 This is the most fundamental constraint on the repository's design. Every
 hot-path write goes to a *per-entity PDA* so that unrelated users/meters/orders
@@ -276,7 +276,7 @@ long handlers use `compute_checkpoint!` (`shared/compute-debug/src/lib.rs:143`)
 
 State structs are `#[account(zero_copy)] #[repr(C)]` and accessed through
 `AccountLoader` (`load()` / `load_mut()` / `load_init()`). Instead of
-deserializing the whole account into heap objects (Borsh), the program casts the
+deserialising the whole account into heap objects (Borsh), the program casts the
 account's byte buffer in place — large accounts (sharded order books, meter
 state) incur low compute-unit cost. The cost is manual layout discipline:
 explicit padding
@@ -305,7 +305,7 @@ seeds derive to that address.
 Trading depends on governance with `features = ["cpi"]` and re-exports its types
 directly: `pub use governance::{ErcCertificate, ErcStatus, GovernanceConfig}`
 (`programs/trading/src/lib.rs:18`). Settlement validates governance-owned
-accounts (deserialize + owner check) rather than invoking governance
+accounts (deserialise + owner check) rather than invoking governance
 instructions — a read-side coupling, cheaper than a full CPI call.
 
 Both edges are path dependencies in `Cargo.toml`, so Anchor builds callee CPI
@@ -356,7 +356,7 @@ Instead:
 - The off-chain engine collects *Ed25519 signatures from buyer and seller over
   the order payload* and places them in the transaction as instructions to
   Solana's native Ed25519 verification program (which the validator executes —
-  and rejects the tx if invalid — before the trading instruction runs).
+  and rejects the transaction if invalid — before the trading instruction runs).
 - The trading handler then *introspects the transaction* via the instructions
   sysvar: `verify_ed25519_signature` (`.../settle_offchain.rs:651`) calls
   `load_instruction_at_checked` (`settle_offchain.rs:657`), asserts the
@@ -395,7 +395,7 @@ the same gate on the generation-mint path (`lib.rs:203`).
   table.header([*Boundary*], [*Enforced by*]),
   [Who may mutate an account], [Runtime ownership rule (program-owned accounts)],
   [Who may invoke privileged instructions], [Anchor `Signer` + `has_one` against `GovernanceConfig` / stored authorities],
-  [Whether a trade was authorized], [Ed25519 native-program verification + sysvar introspection],
+  [Whether a trade was authorised], [Ed25519 native-program verification + sysvar introspection],
   [Whether a trade can be replayed], [`OrderNullifier` PDA per (user, order)],
   [Whether energy backing is real], [REC validator set in energy-token],
   [Who may even reach the RPC port], [Off-chain: Chain Bridge mTLS + RBAC (superproject concern)],
@@ -500,7 +500,7 @@ that serialisation, not by execution.
     [Per-tx compute (all loads)], [flat ≈22–24 k CU], [load-independent (not execution-bound)],
     [Single-signer mint issuance], [≈5.33 mint·s#super[−1]], [shared `mint` write-lock (device-count independent)],
     [Batch-settle (single fee-payer)], [≈0.6 tx·s#super[−1]], [global collectors + `treasury_state` accumulator write-lock],
-    [Meter ingest, 100,000 meters], [0.81% loss, ≈13.5 k CU flat], [single gateway payer write-lock (not per-meter)],
+    [Meter ingest, 100,000 meters], [0.35% delivery loss, ≈13.5 k CU flat], [single gateway payer write-lock (not per-meter)],
     [Transaction failure rate (TPC-C sweep)], [0% at all concurrency levels], [—],
     [Settlement compute cost], [121,813 CU·match#super[−1] (≈61% budget)], [Ed25519 verify + dual-mint escrow],
   ),
@@ -586,21 +586,23 @@ transactions per wall-clock second, measured from burst start to last observed
 confirmation at `confirmed` commitment, so each figure includes the full pipeline
 (client signing, RPC ingest, banking-stage execution, block production, and
 confirmation visibility). None is a consensus- or network-throughput result
-(§2.3, §8.3), and figures measured through different client transports are not
+(§2.3, §8.3); rows measured through different client harnesses (the OLTP proxy's
+per-transaction confirmation versus the ingest benchmark's raw submission) are not
 directly comparable with one another.
 
 #figure(
   caption: [Consolidated measured throughput. All values are client-observed
-    confirmed goodput on the single-node validator; transports differ per row and
-    are not mutually comparable. Source: #link("BENCHMARKS.md")[`BENCHMARKS.md`]
+    confirmed goodput on the single-node validator; harnesses differ per row and
+    rows are not mutually comparable. Source: #link("BENCHMARKS.md")[`BENCHMARKS.md`]
     §3, §9 and the settlement sweeps of §9.2.],
   table(
     columns: (auto, auto, auto),
     align: (left, right, left),
     table.header([*Path*], [*TPS*], [*Bottleneck / regime*]),
     [RPC read (no consensus round-trip)], [≈1,454], [none — RPC node local],
-    [Meter ingest, steady, raw-send (50k / 100k meters)], [359 / 329], [single gateway fee-payer write-lock],
-    [Meter ingest, steady, per-tx confirm (80 → 10k meters)], [120–217], [client confirm transport + gateway payer],
+    [Meter ingest, steady (5k–50k meters, sustained)], [393–490], [single gateway fee-payer write-lock],
+    [Meter ingest, steady (100k meters)], [322], [single gateway fee-payer write-lock],
+    [CDA order entry, sharded (10k orders)], [180], [shared `zone_market` write-lock + fee-payer],
     [TPC-C OLTP proxy (concurrency 5 → 40)], [7.87 → 74.25], [block time + shared-account locks],
     [Sequential single-operation write], [≈2.0], [~400–600 ms block time per round-trip],
     [Settlement mint, Tier-A prototype (sharded + pooled payers)], [≈7.5], [per-slot packing],
@@ -610,63 +612,105 @@ directly comparable with one another.
 
 The spread spans three orders of magnitude and sorts cleanly by how much shared,
 write-locked state each path touches: reads lock nothing; meter ingest locks only
-the gateway payer; the OLTP proxy locks a few market accounts; and naive settlement
-locks global accumulators. Throughput on this platform is a function of lock
-footprint, not of instruction compute cost.
+the gateway payer; order entry additionally write-locks the shared zone-market
+account; the OLTP proxy locks a few market accounts; and naive settlement locks
+global accumulators. Order entry makes the ordering principle explicit: it is the
+cheapest hot-path write measured (≈9.9 k CU, below the ≈13.5 k CU meter write) yet
+delivers 2.6× lower throughput than meter ingest at the same fleet size, because
+its account contexts still declare the shared zone-market account writable although
+the handler mutates only the per-shard account. Throughput on this platform is a
+function of lock footprint, not of instruction compute cost.
 
 == 9.3 Meter-telemetry ingest scaling to 100,000 meters
 
 The concurrency sweep above uses a generic-OLTP proxy. To characterise the *actual*
-telemetry hot path at fleet scale, we drove `oracle.submit_meter_reading` from 80 up
-to 100,000 distinct meters against a live single-node validator, each meter writing
-its own `MeterState` PDA (Sealevel-disjoint). Each run submits two epochs at least
-61 seconds apart — the first initialises every meter PDA, the second is the
-recurring steady-state write — with compute units sampled post-hoc from transaction
-metadata. Two client transports were required: up to 10,000 meters, each transaction
-is confirmed individually over a websocket subscription (300 in flight); beyond that
-this transport collapses under the pending-confirmation backlog, so the 50,000- and
-100,000-meter runs pre-sign transactions locally against a cached blockhash, submit
-them raw, and confirm by bulk signature-status polling under a 3,000-transaction
-in-flight window. The transport changes measured throughput and latency granularity
-(±1.5 s poll quantisation), never the on-chain cost. Table 4 reports the result.
+telemetry hot path at fleet scale, we constructed a fleet-ingest benchmark
+(`scripts/bench-meter-throughput.ts`) that emulates an AMI gateway submitting one
+reading per meter for fleets of 80 up to 100,000 distinct meters against a live
+single-node validator.
+
+*Test design.* Each simulated meter has a unique identifier, so each submission
+targets its own `MeterState` PDA (`[b"meter", meter_id]`) and the write set of any
+two submissions is disjoint (Sealevel-parallelisable, §4.2). All submissions are
+signed by one gateway key — the registered `chain_bridge` authority that the oracle
+program requires (§7 step 2) — which mirrors the production topology in which a
+single Aggregator Bridge fronts the meter fleet, and which deliberately preserves
+the shared-fee-payer serialisation the paper identifies as the ingest ceiling. Every
+run submits *two epochs* of readings: the on-chain rate-limit guard
+(`min_reading_interval` = 60 s) and the strictly-increasing-timestamp guard force
+epochs at least 61 s apart, and the split separates the one-off account-creation
+cost (epoch 1 initialises every meter PDA and pays its rent) from the recurring
+steady-state write (epoch 2), which is the figure that matters for a fleet in
+operation. Reading values follow a fixed synthetic pattern; each transaction
+carries exactly one `submit_meter_reading` instruction.
+
+*Measurement.* Throughput is client-observed confirmed goodput as in Table 3;
+latency is send-to-confirmed per transaction; compute units are read post-hoc from
+transaction metadata of a sample of confirmed transactions. Every non-confirmed
+transaction is attributed to one of three failure classes: *send-rejected* (the RPC
+node refused the submission — never entered the validator, no fee), *on-chain
+error* (executed and failed a program guard — fee paid, failure recorded on the
+ledger), and *expired* (accepted but never confirmed within 90 s — dropped from
+the ingest queue or its blockhash aged out; no fee, no trace). The classes have
+different operational meaning: on-chain errors are the oracle's input validation
+doing its job, while send-rejected and expired transactions are pure delivery
+loss, invisible on-chain and recoverable by client retry — the rate-limit and
+monotonic-timestamp guards make resubmission idempotent: no reading can be
+double-counted. All fleet sizes use one transport: transactions are pre-signed
+locally against a cached blockhash, submitted raw without preflight or retry, and
+confirmed by bulk signature-status polling (1.5 s sweep) under a 3,000-transaction
+in-flight window, so latency is poll-quantised (±1.5 s). Reading timestamps are
+taken from the on-chain clock rather than the client's wall clock, matching the
+clock against which the oracle's freshness guard is evaluated. The formal metric
+definitions and the full harness parameterisation are given in §11.9. Table 4
+reports the result.
 
 #figure(
   caption: [Oracle meter-telemetry ingest scaled from 80 to 100,000 meters on a live
-    single-node validator. Steady-state CU is the recurring per-meter write; the base
-    path (`CU min`) is the value to cite. Runs at ≥50,000 meters use the raw-send +
-    bulk-status transport. Source: #link("BENCHMARKS.md")[`BENCHMARKS.md`] §9.],
+    single-node validator, with every non-confirmed transaction attributed.
+    Validation-rejected = the oracle's anomaly gate firing on the synthetic value
+    pattern (§11.9); delivery loss = send-rejected + expired, with no client retry.
+    Steady-state CU is the recurring per-meter write; the base path (`CU min`) is
+    the value to cite. Source: #link("BENCHMARKS.md")[`BENCHMARKS.md`] §9.],
   table(
-    columns: 5,
-    align: (right, right, right, right, right),
+    columns: 6,
+    align: (right, right, right, right, right, right),
     table.header(
-      [*Meters*], [*Confirmed / total*], [*Loss %*], [*Steady CU min*], [*TPS (steady)*],
+      [*Meters*], [*Confirmed / total*], [*Validation- rejected*], [*Delivery loss*], [*Steady CU min*], [*TPS (steady)*],
     ),
-    [80], [400 / 400], [0.00], [13,468], [135],
-    [1,000], [1,992 / 2,000], [0.40], [13,525], [120],
-    [5,000], [9,952 / 10,000], [0.48], [13,525], [188],
-    [10,000], [19,908 / 20,000], [0.46], [13,560], [217],
-    [50,000], [99,261 / 100,000], [0.74], [13,634], [359],
-    [100,000], [198,383 / 200,000], [0.81], [13,634], [329],
+    [80], [160 / 160], [0%], [0%], [13,560], [47],
+    [1,000], [1,988 / 2,000], [0.40%], [0.20%], [13,634], [267],
+    [5,000], [9,906 / 10,000], [0.48%], [0.46%], [13,634], [393],
+    [10,000], [19,862 / 20,000], [0.46%], [0.23%], [13,337], [462],
+    [50,000], [99,247 / 100,000], [0.47%], [0.28%], [13,337], [490],
+    [100,000], [198,347 / 200,000], [0.48%], [0.35%], [13,634], [322],
   ),
 ) <tab-meter-scaling>
 
-Two results stand out. First, the steady-state base write cost holds at
-13.5–13.6 thousand CU across a 1,250-fold increase in meter count (13,468 CU at 80
-meters to 13,634 CU at 50,000 and 100,000), matching the 13,376 CU litesvm figure of
-§9.1: the per-meter write is $O(1)$ in fleet size, exactly as the per-entity-PDA
-partitioning predicts, with the residual drift attributable to meter-identifier byte
-length rather than fleet size. Second, delivery remains near-lossless — 0.81% dropped
-transactions at 100,000 concurrently submitting meters (200,000 transactions), with
-95th-percentile confirmation latency below three seconds. Throughput, by contrast,
-does not grow with meter count: it is flat within each transport (120–220 TPS on
-per-transaction confirmation, 330–360 TPS on raw submission, and essentially
-unchanged as the fleet doubles from 50,000 to 100,000), because every submission is
-signed by the single gateway fee-payer, which is write-locked on each transaction —
-as with settlement in §9.2, the ceiling is a shared-account serialisation limit, not
-per-meter contention. The flat CU confirms the on-chain write itself is already
-scale-free; converting the disjoint per-meter PDAs into proportional throughput
-requires the same remedy identified for settlement, namely pooling multiple gateway
-fee-payers so ingress is not funnelled through one signer.
+Three results stand out. First, the steady-state base write cost holds at
+13.3–13.6 thousand CU across a 1,250-fold increase in meter count, matching the
+13,376 CU litesvm figure of §9.1: the per-meter write is $O(1)$ in fleet size,
+exactly as the per-entity-PDA partitioning predicts, with the residual ±150 CU
+attributable to meter-identifier byte length rather than fleet size. Second, the
+loss decomposition separates two very different phenomena. The validation-rejected
+column is constant at ≈0.47% because the synthetic value pattern deterministically
+drives that fraction of meters past the anomaly gate (@eq-anomaly) — the same
+meters are rejected in every epoch, each rejection is fee-paid and recorded, and
+the bucket demonstrates the oracle's input validation firing correctly under
+100,000-meter load. True delivery loss — submissions that vanished in transit —
+stays at or below 0.46% at every fleet size (0.35% at 200,000 transactions) with
+no client retry; because resubmission is idempotent, a single retry round would
+reduce the effective rate to the order of $10^(-5)$. Third, throughput does not
+grow with meter count: small fleets are ramp-limited (an 80-transaction burst
+never fills the pipeline), sustained rates reach roughly 390–490 TPS between
+5,000 and 50,000 meters, and the fleet doubling from 50,000 to 100,000 does not
+raise it, because every submission is signed by the single gateway fee-payer,
+which is write-locked on each transaction — as with settlement in §9.2, the
+ceiling is a shared-account serialisation limit, not per-meter contention. The
+flat CU confirms the on-chain write itself is already scale-free; converting the
+disjoint per-meter PDAs into proportional throughput requires the same remedy
+identified for settlement, namely pooling multiple gateway fee-payers so ingress
+is not funnelled through one signer.
 
 == 9.4 Discussion
 
@@ -714,7 +758,7 @@ true saturation point above concurrency 40, are left to future work.
 
 #line(length: 100%, stroke: 0.5pt)
 
-= 11. Formal Model: Settlement & Economic Equations
+= 11. Formal Model: Pricing, Settlement & Economic Equations
 
 All on-chain money math uses integer `checked_mul` with `u128` intermediates —
 overflow *rejects* the transaction, never clamps. $floor(dot)$ denotes the
@@ -738,7 +782,64 @@ integer floor division the SBF program performs.
   [$T$],        [total staked GRX (`total_staked`)],        [atoms],
 )
 
-== 11.2 Trade settlement
+== 11.2 Price formation
+
+Prices are limit prices quoted in THBG per kilowatt-hour (6-decimal fixed point).
+The market operates two coordinated mechanisms — a continuous double auction for
+immediate execution and a uniform-price auction over 15-minute epochs — and both
+resolve to the same settlement arithmetic of §11.3.
+
+*Order admission.* Every order carries a strictly positive limit price and must
+fall within the market's configured band (`programs/trading/src/lib.rs:221`,
+`lib.rs:226`–`233`); orders outside $[p_min , p_max]$ are rejected at entry, which
+bounds the price domain before any matching occurs:
+
+$ p_min <= p <= p_max $ <eq-band>
+
+*Continuous double auction (on-chain path).* Two orders may match only when they
+cross (`programs/trading/src/lib.rs:454`):
+
+$ p_b >= p_s $ <eq-cross>
+
+and the execution price is the seller's limit (`lib.rs:462`;
+`instructions/sharded_match_orders.rs:40`):
+
+$ p^* = p_s $ <eq-exec>
+
+i.e. the full bid–ask spread accrues to the buyer, a deliberately conservative
+rule for a market in which buyers are predominantly consumers.
+
+*Off-chain matching (settled on-chain).* The off-chain CDA engine is free to
+choose any execution price, but settlement enforces that the price lies within
+the limits *signed by both counterparties* in their Ed25519 payloads
+(`instructions/settle_offchain.rs:718`–`719`, `SlippageExceeded`):
+
+$ p_s <= p^* <= p_b $ <eq-bounds>
+
+so no participant can be settled at a price worse than the limit they signed,
+regardless of engine behaviour. The reference engine splits the spread at the
+midpoint, $p^* = floor((p_b + p_s) \/ 2)$
+(`scripts/simulate-market-clearing.ts:131`), which divides the surplus equally
+between the counterparties.
+
+*Uniform-price epoch clearing.* Accumulated bids clear at a single price per
+15-minute epoch. The oracle admits a clearing trigger only on an exact 900-second
+boundary strictly newer than the last cleared epoch
+(`programs/oracle/src/lib.rs:202`–`212`), and each executed match records its
+price as the zone's `last_clearing_price` (`programs/trading/src/lib.rs:494`;
+`settle_offchain.rs:946`).
+
+*Price transparency.* The market maintains a 24-slot ring buffer of recent trade
+prices and recomputes a volume-weighted average price on each update
+(`programs/trading/src/lib.rs:820`–`863`):
+
+$ "VWAP" = floor(frac(sum_i p_i v_i, sum_i v_i)) $ <eq-vwap>
+
+Network charges (market fee, wheeling, and loss, §11.3) are levied on top of the
+execution price and are bounded by the 20% cap of @eq-cap, so the effective
+delivered price a buyer faces is $p^*$ plus a capped, auditable surcharge.
+
+== 11.3 Trade settlement
 
 Gross value — rescale the $10^15$-scaled product (9-dec energy $times$ 6-dec
 price) back to 6-dec currency by the energy divisor $D_E = 10^9$
@@ -769,7 +870,7 @@ Seller net proceeds, with feasibility $F_m + C_"net" <= V$ enforced
 
 $ N_"seller" = V - F_m - C_"net" $ <eq-net>
 
-== 11.3 Treasury peg (GRX $arrow.l.r$ THBG)
+== 11.4 Treasury peg (GRX $arrow.l.r$ THBG)
 
 Swap GRX $arrow.r$ THBG, divisor $D_G = 10^9$ atoms/whole-GRX
 (`treasury/src/lib.rs:58`):
@@ -789,7 +890,7 @@ Redeem THBG $arrow.r$ GRX with collateral guards $a_"in" <= S_"thbg"$
 
 $ g_"out" = floor(frac(a_"in" dot 10^9, r)) $ <eq-redeem>
 
-== 11.4 MasterChef staking (GRX yield)
+== 11.5 MasterChef staking (GRX yield)
 
 Accumulator update on `fund_rewards`, precision $Pi = 10^12$, requires $T > 0$
 (`treasury/src/lib.rs:975`):
@@ -802,7 +903,7 @@ division loss (exactness unit-tested, `lib.rs:126`):
 $ rho = max(0, floor(frac(s dot A, 10^12)) - d), quad
   d = floor(frac(s dot A, 10^12)) $ <eq-reward>
 
-== 11.5 Oracle validation (15-min epoch)
+== 11.6 Oracle validation (15-min epoch)
 
 Anomaly gate — integer cross-multiplication avoids float division, $kappa$ =
 `max_production_consumption_ratio` (`oracle/src/lib.rs:462`):
@@ -815,7 +916,7 @@ $ Q = min(100, floor(frac(100 dot n_"valid", n_"valid" + n_"reject"))) $ <eq-qua
 
 Range admission: $E_"min" <= E <= E_"max"$.
 
-== 11.6 Registry sharding & slashing
+== 11.7 Registry sharding & slashing
 
 Deterministic shard from the first byte of the authority key $k$
 (`registry/src/lib.rs:71`):
@@ -827,7 +928,7 @@ Validator-active predicate, $beta_"min" = 10^13$ atoms $= 10{,}000$ GRX
 
 $ "active" <==> s_"grx" >= beta_"min" $ <eq-active>
 
-== 11.7 Parameters (data)
+== 11.8 Parameters (data)
 
 #table(
   columns: (auto, auto, auto),
@@ -843,3 +944,66 @@ $ "active" <==> s_"grx" >= beta_"min" $ <eq-active>
   [THBG dec],     [$6$],          [$1 "THB" = 10^6$ minor],
   [REC dec],      [$6$],          [$1$ token $= 1 "MWh"$],
 )
+
+== 11.9 Fleet-ingest benchmark: metric definitions and test data
+
+The meter-scaling benchmark of §9.3 is defined formally as follows. A run at
+fleet size $N$ submits one transaction per meter per epoch over $E = 2$ epochs.
+Let $N_"ok"$ denote confirmed transactions, and attribute every non-confirmed
+transaction to exactly one class: $N_"send"$ (rejected at submission),
+$N_"val"$ (executed, failed an oracle guard), or $N_"exp"$ (accepted, never
+confirmed within $tau_"conf"$). Conservation holds by construction:
+
+$ N = N_"ok" + N_"send" + N_"val" + N_"exp" $ <eq-conserve>
+
+Confirmed goodput over a burst starting at $t_0$ with last observed confirmation
+at $t_"last"$ (the value reported as TPS throughout §9):
+
+$ "TPS" = frac(N_"ok", t_"last" - t_0) $ <eq-goodput>
+
+Per-transaction latency is $L_i = t_i^"conf" - t_i^"send"$, quantised by the
+status-poll period $tau_"poll"$ (reported: median, 95th percentile, maximum).
+The loss decomposition of Table 4 separates the validation-rejection rate from
+true delivery loss:
+
+$ nu = frac(N_"val", N), quad delta = frac(N_"send" + N_"exp", N) $ <eq-loss-split>
+
+Because resubmission is idempotent (§9.3), $k$ independent retry rounds reduce
+effective delivery loss to $delta^(k+1)$; the measured worst case
+$delta = 0.0035$ (100,000 meters) yields $delta^2 approx 1.2 times 10^(-5)$
+after a single retry.
+
+The synthetic workload assigns meter $i$ the reading pair
+
+$ E_"prod" (i) = 80 + (7i mod 420), quad E_"cons" (i) = 40 + (3i mod 210) $ <eq-workload>
+
+which deliberately drives a fixed ≈0.47% of indices past the anomaly gate
+(@eq-anomaly with $kappa = 1000$): those transactions fail with
+`AnomalousReading`, at a fee, in every epoch — a deterministic, in-band probe
+that the oracle's input validation continues to fire under full fleet load. The
+per-transaction compute figures (Table 4) are sampled from the tail of each
+epoch's confirmed set, because the rotating ledger prunes older transaction
+history under loads above roughly $10^5$ transactions.
+
+Harness parameterisation (data):
+
+#table(
+  columns: (auto, auto, auto),
+  align: (left, right, left),
+  table.header([*Parameter*], [*Value*], [*Meaning*]),
+  [$N$],            [80 … $10^5$],  [fleet size (distinct meter PDAs)],
+  [$E$],            [2],            [epochs per run (init + steady-state)],
+  [epoch spacing],  [$>= 61$ s],    [on-chain `min_reading_interval` + 1 (on-chain clock)],
+  [$W$],            [3,000 tx],     [in-flight window (unconfirmed cap)],
+  [$tau_"poll"$],   [1.5 s],        [bulk `getSignatureStatuses` sweep period],
+  [$tau_"conf"$],   [90 s],         [confirmation deadline before a send is `expired`],
+  [blockhash refresh], [10 s],      [cached recent-blockhash renewal],
+  [send workers],   [64],           [concurrent submission tasks],
+  [CU sample],      [≤200 tx/epoch],[tail-of-burst `getTransaction` sample],
+  [retry],          [none],         [loss figures are first-attempt delivery],
+  [commitment],     [`confirmed`],  [counting threshold for $N_"ok"$],
+)
+
+Harness: `scripts/bench-meter-throughput.ts`; per-run artifacts under
+`test-results/meter-throughput-<N>m-<timestamp>.{json,md}` with the combined
+tables in `test-results/meter-scaling-summary.md`.
