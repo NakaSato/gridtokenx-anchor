@@ -24,8 +24,12 @@ pub enum EnergyTokenError {
     RecValidatorNotFound,
     #[msg("Validator to remove not found in the registered list")]
     RemoveValidatorNotFound,
-    #[msg("Window start must be a positive 15-minute (900_000 ms) boundary")]
+    #[msg("Window start must be a positive 15-minute (900_000 ms) boundary at or before now")]
     MisalignedWindow,
+    #[msg("Mint amount must be greater than zero")]
+    ZeroAmount,
+    #[msg("REC validator co-signer must differ from the platform authority")]
+    RecValidatorIsAuthority,
     #[msg("Invalid governance account — must be the canonical governance_config PDA")]
     InvalidGovernanceAccount,
 }

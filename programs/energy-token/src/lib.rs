@@ -279,12 +279,24 @@ pub mod energy_token {
                 return Ok(());
             }
 
+            // Reject a zero-amount mint: mint_to(_, 0) is a silent no-op that would
+            // still stamp `minted = true` below, permanently poisoning this window so
+            // the real generation mint can never run. Guard before any state write.
+            require!(amount > 0, EnergyTokenError::ZeroAmount);
+
+            let now = Clock::get()?.unix_timestamp;
+
             // Window-unit reconciliation: the off-chain node aligns 15-min windows to
             // wall-clock (oracle checks `epoch % 900 == 0` in *seconds*). This PDA keys on
             // `window_start_ms` (*milliseconds*), so enforce the same boundary in ms:
-            // 900 s = 900_000 ms. Rejects unaligned/garbage windows before minting.
+            // 900 s = 900_000 ms. Also upper-bound it: a settlement window cannot start in
+            // the future, so reject any window_start_ms past now + one window (defense in
+            // depth — the bridge already validates; this stops a buggy/hostile future
+            // window on-chain). Rejects unaligned/garbage windows before minting.
             require!(
-                window_start_ms > 0 && window_start_ms % 900_000 == 0,
+                window_start_ms > 0
+                    && window_start_ms % 900_000 == 0
+                    && window_start_ms / 1000 <= now + 900,
                 EnergyTokenError::MisalignedWindow
             );
 
@@ -308,9 +320,16 @@ pub mod energy_token {
                     rec_validator_registered(&token_info, &rec_key),
                     EnergyTokenError::RecValidatorNotFound
                 );
+
+                // Two-party control: the REC validator co-signer must be a DIFFERENT key
+                // from the platform authority, else one signer satisfies both gates and
+                // the mandatory co-sign collapses from 2-of-2 to 1-of-1.
+                require!(
+                    rec_key != ctx.accounts.authority.key(),
+                    EnergyTokenError::RecValidatorIsAuthority
+                );
             }
 
-            let now = Clock::get()?.unix_timestamp;
             let cpi_accounts = token_interface::MintTo {
                 mint: ctx.accounts.mint.to_account_info(),
                 to: ctx.accounts.destination.to_account_info(),
