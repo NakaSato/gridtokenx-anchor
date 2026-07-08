@@ -36,6 +36,9 @@ describe("generation-mint idempotency", () => {
   const energyTokenProgram = anchor.workspace.EnergyToken as Program<EnergyToken>;
   const governanceProgram = anchor.workspace.Governance as Program<Governance>;
   const authority = provider.wallet.publicKey;
+  // REC co-signer must DIFFER from the platform authority (RecValidatorIsAuthority
+  // guard), so use a dedicated keypair, registered below and co-signing each mint.
+  const recValidator = Keypair.generate();
 
   let energyMintPda: PublicKey;
   let energyTokenInfoPda: PublicKey;
@@ -58,11 +61,12 @@ describe("generation-mint idempotency", () => {
       energyTokenProgram.programId
     );
 
-    // REC provenance is mandatory (0.5): register the test authority as a REC validator so
-    // mint_generation below can co-sign. Idempotent — ignore if a validator already exists.
+    // REC provenance is mandatory (0.5): register a DISTINCT REC validator (not the
+    // authority — the RecValidatorIsAuthority guard forbids co-signing with the
+    // authority key) so mint_generation below can co-sign. Idempotent.
     try {
       await energyTokenProgram.methods
-        .addRecValidator(authority, "rec")
+        .addRecValidator(recValidator.publicKey, "rec")
         .accounts({ tokenInfo: energyTokenInfoPda, governanceConfig: governanceConfigPda, authority } as any)
         .rpc();
     } catch (_) { /* already registered */ }
@@ -106,7 +110,7 @@ describe("generation-mint idempotency", () => {
         destinationOwner: args.owner,
         mintRecord: genMintPda(args.meterId, args.windowStartMs),
         authority,
-        recValidator: authority, // mandatory registered REC co-signer (0.5)
+        recValidator: recValidator.publicKey, // mandatory REC co-signer; MUST differ from authority
         payer: authority,
         tokenProgram: TOKEN_2022_PROGRAM_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -146,7 +150,7 @@ describe("generation-mint idempotency", () => {
     const window = new BN(1_700_000_100_000); // 900_000-ms aligned (mint_generation MisalignedWindow guard)
     const amount = new BN(5_000);
 
-    await mintGenerationIx({ ata, owner: kp.publicKey, meterId: meter, windowStartMs: window, amount }).rpc();
+    await mintGenerationIx({ ata, owner: kp.publicKey, meterId: meter, windowStartMs: window, amount }).signers([recValidator]).rpc();
 
     expect(await balance(ata)).to.equal(5_000n);
     const record = await energyTokenProgram.account.generationMintRecord.fetch(genMintPda(meter, window));
@@ -161,12 +165,12 @@ describe("generation-mint idempotency", () => {
     const window = new BN(1_700_001_000_000); // aligned
     const amount = new BN(7_000);
 
-    await mintGenerationIx({ ata, owner: kp.publicKey, meterId: meter, windowStartMs: window, amount }).rpc();
+    await mintGenerationIx({ ata, owner: kp.publicKey, meterId: meter, windowStartMs: window, amount }).signers([recValidator]).rpc();
     expect(await balance(ata)).to.equal(7_000n);
 
     // Same (meter, window) again: the record already has minted == true, so the
     // instruction short-circuits. The tx succeeds, the balance does NOT grow.
-    await mintGenerationIx({ ata, owner: kp.publicKey, meterId: meter, windowStartMs: window, amount }).rpc();
+    await mintGenerationIx({ ata, owner: kp.publicKey, meterId: meter, windowStartMs: window, amount }).signers([recValidator]).rpc();
     expect(await balance(ata), "replay must not mint a second time").to.equal(7_000n);
   });
 
@@ -182,13 +186,13 @@ describe("generation-mint idempotency", () => {
     const amount = new BN(9_000);
 
     // Pre-mint A so its record exists with minted == true.
-    await mintGenerationIx({ ata: a.ata, owner: a.kp.publicKey, meterId: meterA, windowStartMs: window, amount }).rpc();
+    await mintGenerationIx({ ata: a.ata, owner: a.kp.publicKey, meterId: meterA, windowStartMs: window, amount }).signers([recValidator]).rpc();
     expect(await balance(a.ata)).to.equal(9_000n);
 
     const ixA = await mintGenerationIx({ ata: a.ata, owner: a.kp.publicKey, meterId: meterA, windowStartMs: window, amount }).instruction();
     const ixB = await mintGenerationIx({ ata: b.ata, owner: b.kp.publicKey, meterId: meterB, windowStartMs: window, amount }).instruction();
 
-    await provider.sendAndConfirm(new Transaction().add(ixA, ixB));
+    await provider.sendAndConfirm(new Transaction().add(ixA, ixB), [recValidator]);
 
     expect(await balance(a.ata), "replayed recipient must stay flat").to.equal(9_000n);
     expect(await balance(b.ata), "fresh recipient must mint despite the batched replay").to.equal(9_000n);
