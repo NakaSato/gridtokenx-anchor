@@ -1752,7 +1752,10 @@ pub mod trading {
     pub struct SubmitLimitOrderShardedContext<'info> {
         #[account(init, payer = authority, space = 8 + std::mem::size_of::<Order>(), seeds = [b"order", authority.key().as_ref(), &order_id_val.to_le_bytes()], bump)]
         pub order: AccountLoader<'info, Order>,
-        #[account(mut)]
+        // Read-only: handler never writes zone_market (only order + zone_shard); it is
+        // used solely to derive/validate the zone_shard PDA seed. `mut` here would take a
+        // write-lock on the shared parent and serialize every "sharded" submit across all
+        // shards in the zone, defeating the shard's purpose (same rule as ShardedMatchOrdersContext).
         pub zone_market: AccountLoader<'info, ZoneMarket>,
         #[account(mut, seeds = [b"zone_shard", zone_market.key().as_ref(), &[shard_id]], bump)]
         pub zone_shard: AccountLoader<'info, ZoneMarketShard>,
