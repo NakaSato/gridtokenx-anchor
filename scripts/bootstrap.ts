@@ -174,6 +174,27 @@ async function main() {
     console.log('  ℹ️  REC validator already registered or skipped:', e.message);
   }
 
+  // 2-rec-b. Register the DISTINCT REC co-signer used by the chain-bridge surplus-mint
+  // path. `mint_generation` enforces two-party control (`rec_key != authority`, Custom
+  // 6012), so the authority-as-validator above is NOT sufficient for a bridge-signed
+  // generation mint — the bridge co-signs with a separate key derived from
+  // CHAIN_BRIDGE_REC_VALIDATOR_KEY_NAME (default "gridtokenx-rec-validator"). This is
+  // that key's deterministic pubkey (keypair_from_seed(sha256(name)) in the insecure
+  // provider; a matching named Vault transit key in prod). Keep in sync with
+  // scripts/add-rec-validator.ts.
+  const REC_COSIGNER = new PublicKey(
+    process.env.REC_COSIGNER_PUBKEY || 'DzmdjTAB4qUVrpxjDAHUTY6cQSyMVNkWCEMkH7aHdpVA'
+  );
+  try {
+    await energyTokenProgram.methods
+      .addRecValidator(REC_COSIGNER, 'rec-cosigner')
+      .accounts({ tokenInfo: tokenInfoPda, governanceConfig: governanceConfigPda, authority: authority } as any)
+      .rpc();
+    console.log('  ✅ Distinct REC co-signer registered:', REC_COSIGNER.toBase58());
+  } catch (e: any) {
+    console.log('  ℹ️  REC co-signer already registered or skipped:', e.message);
+  }
+
   // 2a. Initialize Staking Vault
   console.log('\n[2a/5] Initializing Staking Vault...');
   const [grxVaultPda] = PublicKey.findProgramAddressSync(
