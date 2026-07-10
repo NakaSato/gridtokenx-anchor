@@ -26,7 +26,10 @@
  *
  * Env: ANCHOR_PROVIDER_URL, ANCHOR_WALLET.
  * Overrides: METERS, EPOCHS, INTERVAL_SEC, PREFIX, MAX_INFLIGHT, CU_SAMPLE,
- *            STATUS_POLL_MS, CONFIRM_TIMEOUT_SEC, BLOCKHASH_MS.
+ *            STATUS_POLL_MS, CONFIRM_TIMEOUT_SEC, BLOCKHASH_MS, DATASET.
+ * DATASET=<dir>: replay a gen-datasets.sh output (e.g. *-cap5) — real meter
+ *            identities (meters.json chain_id) + real energy (readings.jsonl
+ *            {g,c} Wh) for the first EPOCHS sim-ticks. METERS clamps to a subset.
  * Requires: validator up, oracle deployed + initialized (scripts/init-oracle.ts).
  */
 import * as anchor from "@anchor-lang/core";
@@ -37,7 +40,32 @@ import BN from "bn.js";
 import * as fs from "fs";
 import bs58 from "bs58";
 
-const METERS = parseInt(process.env.METERS || "80", 10);
+// ── Dataset replay (optional) ────────────────────────────────────────────────
+// DATASET=<dir> points at a gen-datasets.sh output (e.g. a *-cap5 dir). When set,
+// the bench replays REAL meter identities (meters.json chain_id → oracle PDA seed)
+// and REAL energy values (readings.jsonl {g,c} Wh) instead of synthetic ones.
+// meta.json + meters.json are small → loaded synchronously here; the (potentially
+// 100MB+) readings.jsonl is streamed later in main(), keeping only the ticks used.
+// The tx `timestamp` stays the ON-CHAIN clock (not the dataset's 2025 ts) — the
+// oracle rejects non-current stamps (FutureReading / min_reading_interval), so the
+// dataset supplies values + identities, the chain supplies the reading clock.
+const DATASET = process.env.DATASET || "";
+interface DsMeta { meters: number; prosumers: number; days: number; start_ts: number; interval: number; step_sec: number; }
+let dsMeta: DsMeta | null = null;
+let dsMeterIds: string[] | null = null;
+if (DATASET) {
+  dsMeta = JSON.parse(fs.readFileSync(`${DATASET}/meta.json`, "utf8")) as DsMeta;
+  const metersJson = JSON.parse(fs.readFileSync(`${DATASET}/meters.json`, "utf8")) as Array<{ idx: number; chain_id: string }>;
+  dsMeterIds = metersJson.sort((a, b) => a.idx - b.idx).map((m) => m.chain_id);
+  const bad = dsMeterIds.find((id) => Buffer.byteLength(id, "utf8") > 32);
+  if (bad) throw new Error(`dataset chain_id > 32 bytes (oracle seed limit): ${bad}`);
+}
+
+// METERS: from the dataset when replaying (clamped by env METERS if smaller —
+// lets you bench a subset of a large dataset), else the synthetic default.
+const METERS = DATASET
+  ? Math.min(parseInt(process.env.METERS || String(dsMeta!.meters), 10), dsMeta!.meters)
+  : parseInt(process.env.METERS || "80", 10);
 const EPOCHS = parseInt(process.env.EPOCHS || "2", 10);
 const INTERVAL_SEC = parseInt(process.env.INTERVAL_SEC || "61", 10);
 const PREFIX = process.env.PREFIX || `S${METERS}_M`;
@@ -88,10 +116,39 @@ async function main() {
   const conn = provider.connection;
 
   const oracleDataPda = findOracleDataPda(program.programId);
-  const meterIds = Array.from({ length: METERS }, (_, i) => `${PREFIX}${i.toString().padStart(6, "0")}`);
-  if (meterIds[0].length > 32) throw new Error(`meter_id > 32 bytes: ${meterIds[0]}`);
+  const meterIds = DATASET
+    ? dsMeterIds!.slice(0, METERS)
+    : Array.from({ length: METERS }, (_, i) => `${PREFIX}${i.toString().padStart(6, "0")}`);
+  if (Buffer.byteLength(meterIds[0], "utf8") > 32) throw new Error(`meter_id > 32 bytes: ${meterIds[0]}`);
   console.log(`Deriving ${METERS} meter PDAs...`);
   const meterPdas = meterIds.map((m) => findMeterPda(m, program.programId));
+
+  // ── Dataset replay values: one {g,c} map per epoch, streamed from readings ──
+  // Epoch e (1-based) replays sim-tick (e-1): timestamp = start_ts + (e-1)*interval.
+  // We collect only those EPOCHS ticks so a 2M-line readings.jsonl costs one pass,
+  // not full materialisation. Meters beyond the dataset (subset bench) fall back
+  // to the synthetic formula in the send loop.
+  const dsEpochVals: Array<Map<number, { g: number; c: number }>> = [];
+  if (DATASET) {
+    const step = dsMeta!.interval || dsMeta!.step_sec;
+    const targetTs = Array.from({ length: EPOCHS }, (_, k) => dsMeta!.start_ts + k * step);
+    const tsToEpoch = new Map<number, number>(targetTs.map((t, k) => [t, k]));
+    for (let k = 0; k < EPOCHS; k++) dsEpochVals.push(new Map());
+    console.log(`Streaming ${DATASET}/readings.jsonl for ${EPOCHS} ticks (ts ${targetTs[0]}..${targetTs[EPOCHS - 1]})...`);
+    const rl = require("readline").createInterface({
+      input: fs.createReadStream(`${DATASET}/readings.jsonl`),
+      crlfDelay: Infinity,
+    });
+    for await (const line of rl) {
+      if (!line) continue;
+      const r = JSON.parse(line) as { m: number; t: number; g: number; c: number };
+      const ep = tsToEpoch.get(r.t);
+      if (ep === undefined || r.m >= METERS) continue;
+      dsEpochVals[ep].set(r.m, { g: r.g, c: r.c });
+    }
+    const covered = dsEpochVals.map((mp, k) => `e${k + 1}=${mp.size}/${METERS}`).join(" ");
+    console.log(`  dataset values loaded: ${covered}`);
+  }
 
   console.log("═".repeat(70));
   console.log(`  ${METERS}-METER ORACLE THROUGHPUT BENCHMARK (raw-send + bulk status)`);
@@ -210,8 +267,14 @@ async function main() {
         const i = nextIdx++;
         if (i >= METERS) return;
         while (unresolved.size >= MAX_INFLIGHT) await sleep(25);
-        const produced = 80 + ((i * 7) % 420);
-        const consumed = 40 + ((i * 3) % 210);
+        // Dataset replay overrides synthetic values for meters the dataset covers;
+        // meters beyond the dataset (subset bench) keep the synthetic formula.
+        let produced = 80 + ((i * 7) % 420);
+        let consumed = 40 + ((i * 3) % 210);
+        if (DATASET) {
+          const v = dsEpochVals[e - 1].get(i);
+          if (v) { produced = v.g; consumed = v.c; }
+        }
         try {
           const ix: TransactionInstruction = await program.methods
             .submitMeterReading(meterIds[i], new BN(produced), new BN(consumed), new BN(ts), i32Zone(i))
@@ -296,6 +359,7 @@ async function main() {
     config: {
       meters: METERS, epochs: EPOCHS, intervalSec: INTERVAL_SEC, maxInflight: MAX_INFLIGHT,
       cuSample: CU_SAMPLE, statusPollMs: STATUS_POLL_MS, sendWorkers: SEND_WORKERS,
+      dataset: DATASET || null,
     },
     rpc: (conn as any)._rpcEndpoint,
     programId: program.programId.toBase58(),
