@@ -38,6 +38,7 @@ import { Oracle } from "../target/types/oracle";
 import { PublicKey, Keypair, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import BN from "bn.js";
 import * as fs from "fs";
+import * as readline from "readline";
 import bs58 from "bs58";
 
 // ── Dataset replay (optional) ────────────────────────────────────────────────
@@ -50,6 +51,11 @@ import bs58 from "bs58";
 // oracle rejects non-current stamps (FutureReading / min_reading_interval), so the
 // dataset supplies values + identities, the chain supplies the reading clock.
 const DATASET = process.env.DATASET || "";
+// Optional namespace prepended to dataset chain_ids → fresh meter PDAs. Needed to
+// replay dataset timestamps when the real ids were already written with newer
+// (on-chain-clock) stamps in a prior run (past dataset ts must exceed each meter's
+// stored last_reading_timestamp). Keep it short — chain_id must stay ≤ 32 bytes.
+const ID_PREFIX = process.env.ID_PREFIX || "";
 interface DsMeta { meters: number; prosumers: number; days: number; start_ts: number; interval: number; step_sec: number; }
 let dsMeta: DsMeta | null = null;
 let dsMeterIds: string[] | null = null;
@@ -117,7 +123,7 @@ async function main() {
 
   const oracleDataPda = findOracleDataPda(program.programId);
   const meterIds = DATASET
-    ? dsMeterIds!.slice(0, METERS)
+    ? dsMeterIds!.slice(0, METERS).map((id) => `${ID_PREFIX}${id}`)
     : Array.from({ length: METERS }, (_, i) => `${PREFIX}${i.toString().padStart(6, "0")}`);
   if (Buffer.byteLength(meterIds[0], "utf8") > 32) throw new Error(`meter_id > 32 bytes: ${meterIds[0]}`);
   console.log(`Deriving ${METERS} meter PDAs...`);
@@ -135,7 +141,7 @@ async function main() {
     const tsToEpoch = new Map<number, number>(targetTs.map((t, k) => [t, k]));
     for (let k = 0; k < EPOCHS; k++) dsEpochVals.push(new Map());
     console.log(`Streaming ${DATASET}/readings.jsonl for ${EPOCHS} ticks (ts ${targetTs[0]}..${targetTs[EPOCHS - 1]})...`);
-    const rl = require("readline").createInterface({
+    const rl = readline.createInterface({
       input: fs.createReadStream(`${DATASET}/readings.jsonl`),
       crlfDelay: Infinity,
     });
@@ -171,31 +177,44 @@ async function main() {
   const epochResults: EpochResult[] = [];
   let prevTsMs = 0;
 
+  const dsStep = DATASET ? (dsMeta!.interval || dsMeta!.step_sec) : 0;
   for (let e = 1; e <= EPOCHS; e++) {
-    // Respect on-chain min_reading_interval relative to the previous epoch's
-    // reading_timestamp — wait on the ON-CHAIN clock (see ts note below).
-    if (prevTsMs > 0) {
-      while (true) {
-        let chain = Math.floor(Date.now() / 1000);
-        try {
-          const bt = await conn.getBlockTime(await conn.getSlot("confirmed"));
-          if (typeof bt === "number") chain = bt;
-        } catch { /* fall back */ }
-        const wait = prevTsMs / 1000 + INTERVAL_SEC - chain;
-        if (wait <= 0) break;
-        console.log(`   … waiting ${wait.toFixed(0)}s (min_reading_interval=60, on-chain clock) before next epoch`);
-        await sleep(Math.min(wait, 15) * 1000);
+    let ts: number;
+    if (DATASET) {
+      // DATASET replay: stamp each epoch with the DATASET tick's OWN timestamp
+      // (start_ts + (e-1)*step). Dataset ticks are `step`s apart (≥ oracle
+      // min_reading_interval) and historical (< on-chain now), so the per-meter
+      // interval + FutureReading guards pass no matter how fast we submit — so
+      // inter-epoch pacing is a plain wall sleep (INTERVAL_SEC), NOT an on-chain
+      // clock wait. This lets a 15-min series be replayed at e.g. 5s/step.
+      // (Requires FRESH meter PDAs — see ID_PREFIX — since past dataset ts must
+      // exceed each meter's stored last_reading_timestamp.)
+      if (e > 1 && INTERVAL_SEC > 0) await sleep(INTERVAL_SEC * 1000);
+      ts = dsMeta!.start_ts + (e - 1) * dsStep;
+    } else {
+      // Synthetic mode: stamp with the ON-CHAIN clock and wait min_reading_interval
+      // (a laptop sleep/wake leaves the validator Bank clock behind wall time; the
+      // oracle rejects wall-clock stamps as FutureReading at clock+60s).
+      if (prevTsMs > 0) {
+        while (true) {
+          let chain = Math.floor(Date.now() / 1000);
+          try {
+            const bt = await conn.getBlockTime(await conn.getSlot("confirmed"));
+            if (typeof bt === "number") chain = bt;
+          } catch { /* fall back */ }
+          const wait = prevTsMs / 1000 + INTERVAL_SEC - chain;
+          if (wait <= 0) break;
+          console.log(`   … waiting ${wait.toFixed(0)}s (min_reading_interval=60, on-chain clock) before next epoch`);
+          await sleep(Math.min(wait, 15) * 1000);
+        }
       }
+      ts = Math.floor(Date.now() / 1000);
+      try {
+        const bt = await conn.getBlockTime(await conn.getSlot("confirmed"));
+        if (typeof bt === "number") ts = bt;
+      } catch { /* fall back to wall clock */ }
+      prevTsMs = ts * 1000;
     }
-    // Reading timestamp from the ON-CHAIN clock, not Date.now(): a laptop
-    // sleep/wake leaves the test validator's Bank clock hours behind wall time,
-    // and the oracle rejects wall-clock stamps as FutureReading (clock + 60s).
-    let ts = Math.floor(Date.now() / 1000);
-    try {
-      const bt = await conn.getBlockTime(await conn.getSlot("confirmed"));
-      if (typeof bt === "number") ts = bt;
-    } catch { /* fall back to wall clock */ }
-    prevTsMs = ts * 1000;
 
     console.log(`\n🕒 Epoch ${e}/${EPOCHS}  (ts=${ts})  draining ${METERS} submits (window ${MAX_INFLIGHT})...`);
     const burstStart = Date.now();
