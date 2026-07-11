@@ -11,9 +11,16 @@
 //!   I4  Reward pool:     reward_vault balance == treasury.reward_pool.
 //!   I5  GRX conservation: total GRX across every account the treasury touches is
 //!                         constant (the treasury never mints/burns GRX).
+//!   I6  Settlement conservation: global total_settled_thbg + Σ undrained shard
+//!                         balances == the exact sum of every value recorded (global
+//!                         + sharded). The sharded record + drain-and-fold aggregate
+//!                         must never create, lose, or double-count settled value.
+//!   I7  Shard count: Σ shard.settlement_count == # successful sharded records
+//!                         (settlement_count is cumulative, never zeroed by aggregate).
 
 use crucible_fuzzer::*;
 use crucible_fuzzer::anchor_lang::system_program;
+use crucible_fuzzer::anchor_lang::solana_program::instruction::AccountMeta;
 use solana_keypair::Keypair;
 use solana_pubkey::Pubkey;
 use solana_signer::Signer;
@@ -35,6 +42,7 @@ const INIT_RATE: u64 = 1_000_000; // THBG minor units per whole GRX
 const INIT_FEE_BPS: u16 = 30;
 const HUGE_TTL: i64 = i64::MAX; // freshness gate always passes; we don't fuzz staleness
 const INIT_RESERVE: u64 = 1_000_000_000_000_000_000; // 1e18 THBG headroom
+const NUM_SHARDS: u8 = 16; // treasury::state::NUM_SETTLE_SHARDS
 
 #[derive(Clone)]
 struct UserAcct {
@@ -60,6 +68,13 @@ struct TreasuryFixture {
     users: Vec<UserAcct>,
     /// Sum of every GRX-token account balance at genesis — must stay constant (I5).
     grx_total: u64,
+    /// The 16 per-shard settlement accumulator PDAs (index = shard_id).
+    shards: Vec<Pubkey>,
+    /// Running sum of every settled value the fixture has recorded (global + sharded)
+    /// via successful record/record_sharded calls — the ground truth for I6.
+    settle_expected: u64,
+    /// Count of successful sharded records — ground truth for I7.
+    settle_count_expected: u64,
 }
 
 fn spl_token_id() -> Pubkey {
@@ -189,6 +204,25 @@ impl TreasuryFixture {
             .send()
             .unwrap();
 
+        // --- initialize all 16 settlement-accumulator shards ---
+        let mut shards = Vec::new();
+        for id in 0..NUM_SHARDS {
+            let (shard, _) =
+                Pubkey::find_program_address(&[b"settle_shard", &[id]], &program_id);
+            ctx.program(program_id)
+                .call(instruction::InitializeSettlementShard { shard_id: id })
+                .accounts(accounts::InitializeSettlementShard {
+                    treasury: treasury_pda,
+                    shard,
+                    authority: admin.pubkey(),
+                    system_program: system_program::ID,
+                })
+                .signers(&[&*admin])
+                .send()
+                .unwrap();
+            shards.push(shard);
+        }
+
         Self {
             ctx,
             program_id,
@@ -203,6 +237,9 @@ impl TreasuryFixture {
             grx_mint,
             users,
             grx_total,
+            shards,
+            settle_expected: 0,
+            settle_count_expected: 0,
         }
     }
 
@@ -241,6 +278,13 @@ impl TreasuryFixture {
             .read_anchor_account::<state::StakePosition>(pk)
             .map(|p| p.amount)
             .unwrap_or(0)
+    }
+
+    /// SettlementShard is zero-copy → read the Pod after the 8-byte discriminator.
+    fn shard(&self, pk: &Pubkey) -> state::SettlementShard {
+        let acc = self.ctx.read_account(pk).unwrap();
+        let sz = core::mem::size_of::<state::SettlementShard>();
+        bytemuck::pod_read_unaligned::<state::SettlementShard>(&acc.data[8..8 + sz])
     }
 
     // --------------------------------------------------------------------- //
@@ -467,6 +511,74 @@ impl TreasuryFixture {
             .map(|o| o.is_success())
             .unwrap_or(false)
     }
+
+    // ------------------- settlement-shard accounting path ------------------ //
+
+    /// Record a single-match settlement against the GLOBAL total_settled_thbg
+    /// (record_settlement) — the recorder is the treasury's settlement_recorder (admin).
+    pub fn action_record_settlement(&mut self, value: u64) -> bool {
+        let v = (value % 1_000_000_000) + 1; // >0 (ZeroAmount), bounded so no overflow
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::RecordSettlement { value: v })
+            .accounts(accounts::RecordSettlement {
+                treasury: self.treasury_pda,
+                recorder: self.admin.pubkey(),
+            })
+            .signers(&[&*self.admin])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        if ok {
+            self.settle_expected += v;
+        }
+        ok
+    }
+
+    /// Record a settlement onto the per-shard accumulator for `sid`
+    /// (record_settlement_sharded) — bumps the shard, not the global total.
+    pub fn action_record_sharded(&mut self, #[range(0..16)] sid: usize, value: u64) -> bool {
+        let v = (value % 1_000_000_000) + 1;
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::RecordSettlementSharded { value: v, shard_id: sid as u8 })
+            .accounts(accounts::RecordSettlementSharded {
+                treasury: self.treasury_pda,
+                shard: self.shards[sid],
+                recorder: self.admin.pubkey(),
+            })
+            .signers(&[&*self.admin])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        if ok {
+            self.settle_expected += v;
+            self.settle_count_expected += 1;
+        }
+        ok
+    }
+
+    /// Drain-and-fold reconcile: add every shard's balance into the global total and
+    /// zero the shards. Shards MUST be passed writable (the program checks is_writable),
+    /// so use writable metas — remaining_accounts() would push read-only ones.
+    pub fn action_aggregate(&mut self) -> bool {
+        let metas: Vec<AccountMeta> =
+            self.shards.iter().map(|s| AccountMeta::new(*s, false)).collect();
+        self.ctx
+            .program(self.program_id)
+            .call(instruction::AggregateSettlementShards {})
+            .accounts(accounts::AggregateSettlementShards {
+                treasury: self.treasury_pda,
+                authority: self.admin.pubkey(),
+            })
+            .remaining_accounts_metas(metas)
+            .signers(&[&*self.admin])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false)
+    }
 }
 
 #[invariant_test]
@@ -540,5 +652,31 @@ fn invariant_test(fixture: &mut TreasuryFixture) {
         "GRX conservation broken: {} != genesis {}",
         grx_now,
         fixture.grx_total
+    );
+
+    // I6 — Settlement conservation across the sharded record + drain-and-fold aggregate.
+    // Every recorded value lands either in a shard (undrained) or already folded into the
+    // global; the two together must always equal the exact sum recorded. A lost/duplicated
+    // shard fold, a misrouted shard, or a double-drain would break this.
+    let shard_sum: u64 = fixture.shards.iter().map(|s| fixture.shard(s).settled_thbg).sum();
+    let settled_total = t.total_settled_thbg.wrapping_add(shard_sum);
+    fuzz_assert_eq!(
+        settled_total,
+        fixture.settle_expected,
+        "settlement conservation: global {} + shards {} != recorded {}",
+        t.total_settled_thbg,
+        shard_sum,
+        fixture.settle_expected
+    );
+
+    // I7 — Shard settlement_count is cumulative (aggregate zeroes settled_thbg but NEVER
+    // the count), so Σ count == number of successful sharded records.
+    let count_sum: u64 = fixture.shards.iter().map(|s| fixture.shard(s).settlement_count).sum();
+    fuzz_assert_eq!(
+        count_sum,
+        fixture.settle_count_expected,
+        "Σ shard.settlement_count {} != sharded records {}",
+        count_sum,
+        fixture.settle_count_expected
     );
 }
