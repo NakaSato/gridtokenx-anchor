@@ -20,6 +20,15 @@
 //!       TradeNullifier would move extra energy and break this equality.
 //!   I4  Double-settle guard: re-settling an already-committed trade_id must FAIL
 //!       (MatchAlreadySettled). If one ever succeeds, `double_settle_detected` trips.
+//!   I5  Cross-zone capacity throttle: the ZoneCapacity.committed_flow counter equals
+//!       Σ match_amount over accepted CROSS-zone settles and never exceeds the zone's
+//!       transmission capacity — a settle that would breach it is rejected
+//!       (CapacityExceeded), so the counter is the single source of truth for the
+//!       inter-zone transmission-line limit.
+//!   I6  REC conservation: the opt-in fungible-REC leg only MOVES the renewable
+//!       attribute seller->buyer escrow, so seller_rec + buyer_rec is constant.
+//!   I7  REC accounting: buyer REC escrow == Σ rec_base_units_for(match_amount) over
+//!       accepted REC settles (match_amount * 1000 / 1e9, sub-kWh truncated).
 
 use crucible_fuzzer::*;
 use crucible_fuzzer::anchor_lang::system_program;
@@ -35,6 +44,8 @@ crucible_idl_gen::declare_fuzz_program!("idls/trading.json");
 use trading::{accounts, instruction, types};
 
 const ZONE: u32 = 0;
+const REMOTE_ZONE: u32 = 1; // payload zone != zone_market.zone_id → cross-zone (wheeling)
+const ZONE_CAP: u64 = 3_000_000_000_000; // transmission cap; ~3 max-size cross matches
 const NUM_SHARDS: u8 = 16;
 const INITIAL_SOL: u64 = 1_000_000_000_000; // payer fees + rent for nullifier inits
 const BUYER_PRICE: u64 = 60; // 6-dec currency per kWh
@@ -43,6 +54,9 @@ const ORDER_ENERGY: u64 = 1_000_000_000_000_000; // payload energy_amount (order
 const MATCH_MAX: u64 = 1_000_000_000_000; // per-match cap (≤1000 kWh atomic)
 const CURRENCY_FUND: u64 = 1_000_000_000_000_000; // buyer currency escrow seed
 const ENERGY_FUND: u64 = 1_000_000_000_000_000; // seller energy escrow seed
+const REC_FUND: u64 = 1_000_000_000_000; // seller REC escrow seed (6-dec REC base units)
+const REC_DECIMALS: u8 = 6; // fungible REC mint: 1 kWh = 1_000 base units
+const ENERGY_DIVISOR: u128 = 1_000_000_000; // trading::ENERGY_AMOUNT_DECIMALS_DIVISOR
 const CURRENCY_DECIMALS: u8 = 6;
 const ENERGY_DECIMALS: u8 = 9;
 const TOK_AMOUNT: usize = 64; // classic spl_token Account.amount offset
@@ -136,6 +150,7 @@ struct SettleFixture {
     market_authority: Pubkey,
     market_shard: Pubkey,
     zone_shard: Pubkey,
+    zone_capacity: Pubkey, // cross-zone committed_flow counter
     // remaining-account gate PDAs
     governance_config: Pubkey,
     tariff_config: Pubkey,
@@ -148,11 +163,18 @@ struct SettleFixture {
     fee_collector: Pubkey,
     wheeling_collector: Pubkey,
     loss_collector: Pubkey,
+    // opt-in fungible REC leg
+    rec_mint: Pubkey,
+    seller_rec_escrow: Pubkey,
+    buyer_rec_escrow: Pubkey,
     // ground truth
     currency_total: u64,
     energy_total: u64,
-    settled_seeds: Vec<u32>,
+    rec_total: u64,
+    settled_trades: Vec<[u8; 16]>, // keyed by the actual trade_id (intra + cross)
     expected_buyer_energy: u64,
+    expected_buyer_rec: u64, // Σ rec moved to buyer over accepted REC settles (I7)
+    expected_committed: u64, // Σ accepted cross-zone match_amount == committed_flow (I5)
     double_settle_detected: bool,
 }
 
@@ -197,6 +219,15 @@ impl SettleFixture {
             .decimals(ENERGY_DECIMALS)
             .create()
             .unwrap();
+        // Fungible REC mint at governance [b"rec_mint"] (classic; the settle REC leg binds
+        // this PDA + reads decimals). Created here so it precedes the forge_tok closure.
+        let (rec_mint, _) = Pubkey::find_program_address(&[b"rec_mint"], &governance_id);
+        ctx.create_mint()
+            .pubkey(rec_mint)
+            .mint_authority(admin.pubkey())
+            .decimals(REC_DECIMALS)
+            .create()
+            .unwrap();
 
         // --- trading PDAs ---
         let (market, _) = Pubkey::find_program_address(&[b"market"], &program_id);
@@ -231,8 +262,8 @@ impl SettleFixture {
             .call(instruction::InitializeZoneMarket {
                 zone_id: ZONE,
                 num_shards: NUM_SHARDS,
-                capacity: 0, // 0 → intra-zone only → cross_zone gate never fires
-                segment: 0,  // Retail → aggregator segment check skipped
+                capacity: ZONE_CAP, // >0 → cross-zone matches throttle on committed_flow
+                segment: 0,         // Retail → aggregator segment check skipped
             })
             .accounts(accounts::InitializeZoneMarket {
                 market,
@@ -260,6 +291,21 @@ impl SettleFixture {
                 zone_market,
                 zone_shard,
                 payer: admin.pubkey(),
+                system_program: system_program::ID,
+            })
+            .signers(&[&*admin])
+            .send()
+            .unwrap();
+
+        // Cross-zone committed_flow counter (mandatory for cross-zone settles).
+        let (zone_capacity, _) =
+            Pubkey::find_program_address(&[b"zone_capacity", zone_market.as_ref()], &program_id);
+        ctx.program(program_id)
+            .call(instruction::InitZoneCapacity {})
+            .accounts(accounts::InitZoneCapacity {
+                zone_market,
+                zone_capacity,
+                authority: admin.pubkey(),
                 system_program: system_program::ID,
             })
             .signers(&[&*admin])
@@ -299,6 +345,13 @@ impl SettleFixture {
         forge_tok(fee_collector, currency_mint, 0);
         forge_tok(wheeling_collector, currency_mint, 0);
         forge_tok(loss_collector, currency_mint, 0);
+
+        // --- opt-in fungible REC escrows (rec_mint forged with the other mints above,
+        //     bound to governance [b"rec_mint"]); owned by market_authority. ---
+        let seller_rec_escrow = escrow(&seller.pubkey(), &rec_mint);
+        let buyer_rec_escrow = escrow(&buyer.pubkey(), &rec_mint);
+        forge_tok(seller_rec_escrow, rec_mint, REC_FUND);
+        forge_tok(buyer_rec_escrow, rec_mint, 0);
 
         // --- forged gate accounts (remaining_accounts) ---
         // governance_config: governance-owned, byte[235]==0 → operational.
@@ -347,6 +400,7 @@ impl SettleFixture {
             market_authority,
             market_shard,
             zone_shard,
+            zone_capacity,
             governance_config,
             tariff_config,
             aggregator_entry,
@@ -357,10 +411,16 @@ impl SettleFixture {
             fee_collector,
             wheeling_collector,
             loss_collector,
+            rec_mint,
+            seller_rec_escrow,
+            buyer_rec_escrow,
             currency_total: CURRENCY_FUND,
             energy_total: ENERGY_FUND,
-            settled_seeds: Vec::new(),
+            rec_total: REC_FUND,
+            settled_trades: Vec::new(),
             expected_buyer_energy: 0,
+            expected_buyer_rec: 0,
+            expected_committed: 0,
             double_settle_detected: false,
         }
     }
@@ -374,21 +434,57 @@ impl SettleFixture {
         }
     }
 
-    /// Settle one buyer/seller match. `seed` keys the order ids + trade_id, so the fuzzer
-    /// replaying a seed re-hits the same TradeNullifier (double-settle path).
+    /// Intra-zone settle: buyer/seller in the zone_market's own zone → no wheeling
+    /// throttle. `seed` keys the ids/trade_id so a replay re-hits the TradeNullifier.
     pub fn action_settle(&mut self, seed: u32, amount: u64, price: u64) -> bool {
+        self.do_settle(seed, amount, price, ZONE, false, false)
+    }
+
+    /// Cross-zone settle: payloads carry a REMOTE zone_id → the match consumes inter-zone
+    /// transmission and MUST pass the ZoneCapacity.committed_flow throttle (I5). Distinct
+    /// id16 markers so intra/cross of the same seed never collide on a PDA.
+    pub fn action_settle_cross(&mut self, seed: u32, amount: u64, price: u64) -> bool {
+        self.do_settle(seed, amount, price, REMOTE_ZONE, true, false)
+    }
+
+    /// Intra-zone settle carrying the OPT-IN fungible-REC group → the renewable attribute
+    /// moves seller->buyer escrow alongside the energy (I6/I7). Own marker namespace.
+    pub fn action_settle_rec(&mut self, seed: u32, amount: u64, price: u64) -> bool {
+        self.do_settle(seed, amount, price, ZONE, false, true)
+    }
+
+    fn do_settle(
+        &mut self,
+        seed: u32,
+        amount: u64,
+        price: u64,
+        zone_id: u32,
+        cross: bool,
+        rec: bool,
+    ) -> bool {
         let match_amount = (amount % MATCH_MAX) + 1;
         let match_price = SELLER_PRICE + (price % (BUYER_PRICE - SELLER_PRICE + 1)); // [50,60]
 
-        // Skip a match the seller escrow can't cover — a guaranteed transfer failure that
-        // would just add noise (the on-chain guard would reject it anyway).
+        // Skip a match the seller escrow can't cover — a guaranteed transfer failure.
         if match_amount > self.tok(&self.seller_eng_escrow) {
             return false;
         }
+        let rec_amount = ((match_amount as u128) * 1_000 / ENERGY_DIVISOR) as u64;
+        if rec && rec_amount > self.tok(&self.seller_rec_escrow) {
+            return false;
+        }
 
-        let buyer_oid = id16(seed, 0);
-        let seller_oid = id16(seed, 1);
-        let trade_id = id16(seed, 2);
+        // marker base keeps intra(0)/cross(10)/rec(20) trade_id + order-id PDAs disjoint.
+        let mk = if rec {
+            20
+        } else if cross {
+            10
+        } else {
+            0
+        };
+        let buyer_oid = id16(seed, mk);
+        let seller_oid = id16(seed, mk + 1);
+        let trade_id = id16(seed, mk + 2);
 
         let buyer_msg = order_message(
             &buyer_oid,
@@ -396,7 +492,7 @@ impl SettleFixture {
             ORDER_ENERGY,
             BUYER_PRICE,
             0,
-            ZONE,
+            zone_id,
             0,
         );
         let seller_msg = order_message(
@@ -405,7 +501,7 @@ impl SettleFixture {
             ORDER_ENERGY,
             SELLER_PRICE,
             1,
-            ZONE,
+            zone_id,
             0,
         );
         let buyer_ed = ed25519_ix(&self.buyer, &buyer_msg);
@@ -417,7 +513,7 @@ impl SettleFixture {
             energy_amount: ORDER_ENERGY,
             price_per_kwh: BUYER_PRICE,
             side: 0,
-            zone_id: ZONE,
+            zone_id,
             expires_at: 0,
         };
         let seller_payload = types::OffchainOrderPayload {
@@ -426,7 +522,7 @@ impl SettleFixture {
             energy_amount: ORDER_ENERGY,
             price_per_kwh: SELLER_PRICE,
             side: 1,
-            zone_id: ZONE,
+            zone_id,
             expires_at: 0,
         };
 
@@ -442,13 +538,24 @@ impl SettleFixture {
             Pubkey::find_program_address(&[b"trade", &trade_id], &self.program_id);
 
         // remaining_accounts[0..4] = governance_config, trade_nullifier(w), tariff_config,
-        // aggregator_entry. (intra-zone → no ZoneCapacity; no REC/treasury.)
-        let remaining = vec![
+        // aggregator_entry; cross-zone additionally passes ZoneCapacity(w) at [4].
+        let mut remaining = vec![
             AccountMeta::new_readonly(self.governance_config, false),
             AccountMeta::new(trade_nullifier, false),
             AccountMeta::new_readonly(self.tariff_config, false),
             AccountMeta::new_readonly(self.aggregator_entry, false),
         ];
+        if cross {
+            remaining.push(AccountMeta::new(self.zone_capacity, false));
+        }
+        // Opt-in REC group at rec_base (5 cross-zone [slot 4 taken], else 4):
+        // rec_mint, seller_rec_escrow(w), buyer_rec_escrow(w), rec_token_program.
+        if rec {
+            remaining.push(AccountMeta::new_readonly(self.rec_mint, false));
+            remaining.push(AccountMeta::new(self.seller_rec_escrow, false));
+            remaining.push(AccountMeta::new(self.buyer_rec_escrow, false));
+            remaining.push(AccountMeta::new_readonly(spl_token_id(), false));
+        }
 
         // Queue the 3-ix atomic tx: ed25519(buyer)@0, ed25519(seller)@1, settle@2.
         self.ctx.raw_call(buyer_ed).add_transaction().unwrap();
@@ -502,13 +609,20 @@ impl SettleFixture {
             .unwrap_or(false);
 
         if ok {
-            if self.settled_seeds.contains(&seed) {
+            if self.settled_trades.contains(&trade_id) {
                 // A replay of an already-committed trade_id succeeded → the per-match
                 // TradeNullifier guard was bypassed. This must never happen.
                 self.double_settle_detected = true;
             } else {
-                self.settled_seeds.push(seed);
+                self.settled_trades.push(trade_id);
                 self.expected_buyer_energy += match_amount;
+                if cross {
+                    // An accepted cross-zone match added exactly match_amount to committed_flow.
+                    self.expected_committed += match_amount;
+                }
+                if rec {
+                    self.expected_buyer_rec += rec_amount;
+                }
             }
         }
         ok
@@ -556,5 +670,48 @@ fn invariant_test(fixture: &mut SettleFixture) {
     fuzz_assert!(
         !fixture.double_settle_detected,
         "double-settle succeeded: a replayed trade_id bypassed the TradeNullifier"
+    );
+
+    // I5 — cross-zone capacity throttle: committed_flow (ZoneCapacity zero-copy u64 @
+    // offset 8+32=40) equals the sum of accepted cross-zone match amounts and never
+    // exceeds the zone's transmission capacity.
+    let committed_flow = match fixture.ctx.read_account(&fixture.zone_capacity) {
+        Ok(a) if a.data.len() >= 48 => u64::from_le_bytes(a.data[40..48].try_into().unwrap()),
+        _ => 0,
+    };
+    fuzz_assert_eq!(
+        committed_flow,
+        fixture.expected_committed,
+        "committed_flow {} != Σ accepted cross-zone match_amount {}",
+        committed_flow,
+        fixture.expected_committed
+    );
+    fuzz_assert_le!(
+        committed_flow,
+        ZONE_CAP,
+        "committed_flow {} exceeded zone capacity {}",
+        committed_flow,
+        ZONE_CAP
+    );
+
+    // I6 — REC conservation across the two REC escrows (the leg only moves seller->buyer).
+    let rec_now =
+        fixture.tok(&fixture.seller_rec_escrow) + fixture.tok(&fixture.buyer_rec_escrow);
+    fuzz_assert_eq!(
+        rec_now,
+        fixture.rec_total,
+        "REC conservation broken: {} != {}",
+        rec_now,
+        fixture.rec_total
+    );
+
+    // I7 — buyer received exactly the REC base units for the accepted REC settles.
+    let buyer_rec = fixture.tok(&fixture.buyer_rec_escrow);
+    fuzz_assert_eq!(
+        buyer_rec,
+        fixture.expected_buyer_rec,
+        "buyer REC {} != Σ rec_base_units_for(match_amount) {}",
+        buyer_rec,
+        fixture.expected_buyer_rec
     );
 }
