@@ -41,11 +41,14 @@ const SHARD_METER_COUNT: usize = 8 + 16;
 const USER_STAKED_GRX: usize = 8 + 80;
 const TOK_AMOUNT: usize = 64; // classic spl_token Account.amount
 
+const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000; // 10,000 GRX
+
 #[derive(Clone)]
 struct UserAcct {
     kp: Rc<Keypair>,
     grx_ata: Pubkey,
     user_pda: Pubkey,
+    agg_entry: Pubkey, // forged governance AggregatorEntry PDA (PoA gate)
     shard_id: u8,
     registered: bool,
     meters: u32,
@@ -59,6 +62,8 @@ struct RegistryFixture {
     registry_pda: Pubkey,
     grx_vault: Pubkey,
     grx_mint: Pubkey,
+    slash_dest: Pubkey, // GRX token account: slashed-bond fund remainder
+    victim: Pubkey,     // GRX token account: victim compensation sink
     shards: Vec<Pubkey>, // index = shard_id
     users: Vec<UserAcct>,
     n_users_registered: u64,
@@ -68,6 +73,9 @@ struct RegistryFixture {
 
 fn spl_token_id() -> Pubkey {
     Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap()
+}
+fn governance_program_id() -> Pubkey {
+    Pubkey::from_str("FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS").unwrap()
 }
 fn rent_sysvar() -> Pubkey {
     Pubkey::from_str("SysvarRent111111111111111111111111111111111").unwrap()
@@ -151,7 +159,36 @@ impl RegistryFixture {
             .send()
             .unwrap();
 
-        // users: SOL + pre-funded GRX ATA
+        // GRX sinks for slashing: fund remainder + victim compensation (start empty).
+        let slash_dest = Keypair::new().pubkey();
+        ctx.create_token_account()
+            .pubkey(slash_dest)
+            .mint(grx_mint)
+            .token_owner(admin.pubkey())
+            .amount(0)
+            .create()
+            .unwrap();
+        let victim = Keypair::new().pubkey();
+        ctx.create_token_account()
+            .pubkey(victim)
+            .mint(grx_mint)
+            .token_owner(admin.pubkey())
+            .amount(0)
+            .create()
+            .unwrap();
+
+        // Point the registry's slash destination at slash_dest (required before any slash).
+        ctx.program(program_id)
+            .call(instruction::SetSlashDestination { destination: slash_dest })
+            .accounts(accounts::SetSlashDestination {
+                registry: registry_pda,
+                authority: admin.pubkey(),
+            })
+            .signers(&[&*admin])
+            .send()
+            .unwrap();
+
+        // users: SOL + pre-funded GRX ATA + forged governance AggregatorEntry (PoA gate)
         let mut users = Vec::new();
         let mut grx_total = 0u64;
         for _ in 0..N_USERS {
@@ -173,11 +210,31 @@ impl RegistryFixture {
             grx_total += USER_GRX;
             let (user_pda, _) =
                 Pubkey::find_program_address(&[b"user", kp.pubkey().as_ref()], &program_id);
+
+            // Forge the governance AggregatorEntry admitting this user as an aggregator.
+            // Layout read by register_validator: owner==governance, PDA=[b"aggregator",user],
+            // data[8..40]=user, data[56]=1 (active), len>=57.
+            let (agg_entry, _) = Pubkey::find_program_address(
+                &[b"aggregator", kp.pubkey().as_ref()],
+                &governance_program_id(),
+            );
+            let mut agg_data = vec![0u8; 58];
+            agg_data[8..40].copy_from_slice(&kp.pubkey().to_bytes());
+            agg_data[56] = 1; // active
+            ctx.create_account()
+                .pubkey(agg_entry)
+                .lamports(1_000_000_000)
+                .owner(governance_program_id())
+                .data(&agg_data)
+                .create()
+                .unwrap();
+
             let shard_id = shard_for(&kp.pubkey());
             users.push(UserAcct {
                 kp,
                 grx_ata,
                 user_pda,
+                agg_entry,
                 shard_id,
                 registered: false,
                 meters: 0,
@@ -191,6 +248,8 @@ impl RegistryFixture {
             registry_pda,
             grx_vault,
             grx_mint,
+            slash_dest,
+            victim,
             shards,
             users,
             n_users_registered: 0,
@@ -380,6 +439,102 @@ impl RegistryFixture {
             .map(|o| o.is_success())
             .unwrap_or(false)
     }
+
+    /// Stake enough to clear MIN_VALIDATOR_STAKE so the user can register as validator.
+    pub fn action_stake_min(&mut self, #[range(0..3)] uidx: usize) -> bool {
+        let u = self.users[uidx].clone();
+        if !u.registered {
+            return false;
+        }
+        let bal = self.read_u64(&u.grx_ata, TOK_AMOUNT);
+        let amt = (MIN_VALIDATOR_STAKE + MIN_VALIDATOR_STAKE / 10).min(bal);
+        if amt == 0 {
+            return false;
+        }
+        self.ctx
+            .program(self.program_id)
+            .call(instruction::StakeGrx { amount: amt })
+            .accounts(accounts::StakeGrx {
+                user_account: u.user_pda,
+                grx_vault: self.grx_vault,
+                registry: self.registry_pda,
+                user_grx_ata: u.grx_ata,
+                grx_mint: self.grx_mint,
+                authority: u.kp.pubkey(),
+                token_program: spl_token_id(),
+            })
+            .signers(&[&*u.kp])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false)
+    }
+
+    pub fn action_register_validator(&mut self, #[range(0..3)] uidx: usize) -> bool {
+        let u = self.users[uidx].clone();
+        if !u.registered {
+            return false;
+        }
+        self.ctx
+            .program(self.program_id)
+            .call(instruction::RegisterValidator {})
+            .accounts(accounts::RegisterValidator {
+                user_account: u.user_pda,
+                aggregator_entry: u.agg_entry,
+                authority: u.kp.pubkey(),
+            })
+            .signers(&[&*u.kp])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false)
+    }
+
+    pub fn action_deregister_validator(&mut self, #[range(0..3)] uidx: usize) -> bool {
+        let u = self.users[uidx].clone();
+        if !u.registered {
+            return false;
+        }
+        self.ctx
+            .program(self.program_id)
+            .call(instruction::DeregisterValidator {})
+            .accounts(accounts::DeregisterValidator {
+                user_account: u.user_pda,
+                authority: u.kp.pubkey(),
+            })
+            .signers(&[&*u.kp])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false)
+    }
+
+    /// Slash a validator (admin only). Splits bond into victim compensation + fund
+    /// remainder, both drawn from grx_vault — GRX conservation (I5) covers both sinks;
+    /// bond conservation (I4) holds since grx_vault and staked_grx drop by the same amount.
+    pub fn action_slash(
+        &mut self,
+        #[range(0..3)] uidx: usize,
+        #[range(1..10_001)] slash_bps: u16,
+        proven_loss: u64,
+    ) -> bool {
+        let u = self.users[uidx].clone();
+        self.ctx
+            .program(self.program_id)
+            .call(instruction::SlashValidator { slash_bps, proven_loss })
+            .accounts(accounts::SlashValidator {
+                target_authority: u.kp.pubkey(),
+                target_user_account: u.user_pda,
+                grx_vault: self.grx_vault,
+                registry: self.registry_pda,
+                slash_destination: self.slash_dest,
+                victim_token_account: self.victim,
+                grx_mint: self.grx_mint,
+                authority: self.admin.pubkey(),
+                token_program: spl_token_id(),
+            })
+            .signers(&[&*self.admin])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false)
+    }
 }
 
 #[invariant_test]
@@ -437,8 +592,11 @@ fn invariant_test(fixture: &mut RegistryFixture) {
         sum_staked
     );
 
-    // I5 — GRX conservation across user ATAs + vault.
+    // I5 — GRX conservation across user ATAs + vault + slash sinks (slashing moves GRX
+    // from grx_vault to victim/slash_dest, all within this sum).
     let mut grx_now = vault;
+    grx_now += fixture.read_u64(&fixture.slash_dest, TOK_AMOUNT);
+    grx_now += fixture.read_u64(&fixture.victim, TOK_AMOUNT);
     for u in &fixture.users {
         grx_now += fixture.read_u64(&u.grx_ata, TOK_AMOUNT);
     }
