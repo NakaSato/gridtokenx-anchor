@@ -71,10 +71,17 @@ struct TreasuryFixture {
     /// The 16 per-shard settlement accumulator PDAs (index = shard_id).
     shards: Vec<Pubkey>,
     /// Running sum of every settled value the fixture has recorded (global + sharded)
-    /// via successful record/record_sharded calls — the ground truth for I6.
+    /// via successful record/record_sharded/batch calls — the ground truth for I6.
     settle_expected: u64,
-    /// Count of successful sharded records — ground truth for I7.
+    /// Count of successful sharded records (record_sharded + batch_sharded) — I7.
     settle_count_expected: u64,
+    /// Committed per-(zone,batch) audit records: (ns, zone, batch, value, vat, vat_rate).
+    /// ns = 0 record_settlement_batch (seed b"settlement_batch"), 1 batch_sharded
+    /// (seed b"settlement"). Ground truth for the I8 commitment-integrity check.
+    committed_records: Vec<(u8, u32, u64, u64, u64, u16)>,
+    /// A re-record of an already-committed (zone,batch) PDA must FAIL (init guard).
+    /// If one ever succeeds, this trips.
+    double_record_detected: bool,
 }
 
 fn spl_token_id() -> Pubkey {
@@ -240,6 +247,8 @@ impl TreasuryFixture {
             shards,
             settle_expected: 0,
             settle_count_expected: 0,
+            committed_records: Vec::new(),
+            double_record_detected: false,
         }
     }
 
@@ -579,6 +588,138 @@ impl TreasuryFixture {
             .map(|o| o.is_success())
             .unwrap_or(false)
     }
+
+    /// Deterministic Merkle root from (zone, batch) so the harness can assert the
+    /// commitment round-trips through the SettlementRecord.
+    fn merkle_for(zone: u32, batch: u64) -> [u8; 32] {
+        let mut r = [0u8; 32];
+        r[0..4].copy_from_slice(&zone.to_le_bytes());
+        r[4..12].copy_from_slice(&batch.to_le_bytes());
+        r
+    }
+
+    /// Record a batch to the GLOBAL total with an audit commitment
+    /// (record_settlement_batch → SettlementRecord PDA [b"settlement_batch", zone, batch]).
+    pub fn action_record_batch(
+        &mut self,
+        value: u64,
+        #[range(0..4)] zone: u32,
+        #[range(0..8)] batch: u64,
+        vat: u64,
+        vat_rate: u16,
+    ) -> bool {
+        let v = (value % 1_000_000_000) + 1;
+        let vat_amount = vat % 1_000_000;
+        let vat_rate_bps = vat_rate % 10_000;
+        let (record, _) = Pubkey::find_program_address(
+            &[b"settlement_batch", &zone.to_le_bytes(), &batch.to_le_bytes()],
+            &self.program_id,
+        );
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::RecordSettlementBatch {
+                value: v,
+                merkle_root: Self::merkle_for(zone, batch),
+                vat_amount,
+                vat_rate_bps,
+                zone_id: zone,
+                batch_id: batch,
+            })
+            .accounts(accounts::RecordSettlementBatch {
+                treasury: self.treasury_pda,
+                settlement_record: record,
+                recorder: self.admin.pubkey(),
+                payer: self.admin.pubkey(),
+                system_program: system_program::ID,
+            })
+            .signers(&[&*self.admin])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        self.note_record(ok, 0, zone, batch, v, vat_amount, vat_rate_bps, None);
+        ok
+    }
+
+    /// Record a batch to a per-shard accumulator with an audit commitment
+    /// (record_settlement_batch_sharded → SettlementRecord PDA [b"settlement", zone, batch]).
+    pub fn action_record_batch_sharded(
+        &mut self,
+        value: u64,
+        #[range(0..16)] sid: usize,
+        #[range(0..4)] zone: u32,
+        #[range(0..8)] batch: u64,
+        vat: u64,
+        vat_rate: u16,
+    ) -> bool {
+        let v = (value % 1_000_000_000) + 1;
+        let vat_amount = vat % 1_000_000;
+        let vat_rate_bps = vat_rate % 10_000;
+        let (record, _) = Pubkey::find_program_address(
+            &[b"settlement", &zone.to_le_bytes(), &batch.to_le_bytes()],
+            &self.program_id,
+        );
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::RecordSettlementBatchSharded {
+                value: v,
+                merkle_root: Self::merkle_for(zone, batch),
+                vat_amount,
+                vat_rate_bps,
+                zone_id: zone,
+                batch_id: batch,
+                shard_id: sid as u8,
+            })
+            .accounts(accounts::RecordSettlementBatchSharded {
+                treasury: self.treasury_pda,
+                shard: self.shards[sid],
+                settlement_record: record,
+                recorder: self.admin.pubkey(),
+                payer: self.admin.pubkey(),
+                system_program: system_program::ID,
+            })
+            .signers(&[&*self.admin])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        self.note_record(ok, 1, zone, batch, v, vat_amount, vat_rate_bps, Some(sid));
+        ok
+    }
+
+    /// Update the ground-truth after a batch-record attempt: a first commit of a
+    /// (ns, zone, batch) credits the settled total (+shard count); a re-commit of an
+    /// already-recorded (zone,batch) MUST have failed (init guard) — a success trips
+    /// `double_record_detected`.
+    #[allow(clippy::too_many_arguments)]
+    fn note_record(
+        &mut self,
+        ok: bool,
+        ns: u8,
+        zone: u32,
+        batch: u64,
+        value: u64,
+        vat: u64,
+        vat_rate: u16,
+        sharded: Option<usize>,
+    ) {
+        if !ok {
+            return;
+        }
+        let already = self
+            .committed_records
+            .iter()
+            .any(|r| r.0 == ns && r.1 == zone && r.2 == batch);
+        if already {
+            self.double_record_detected = true;
+            return;
+        }
+        self.committed_records.push((ns, zone, batch, value, vat, vat_rate));
+        self.settle_expected += value;
+        if sharded.is_some() {
+            self.settle_count_expected += 1;
+        }
+    }
 }
 
 #[invariant_test]
@@ -679,4 +820,39 @@ fn invariant_test(fixture: &mut TreasuryFixture) {
         count_sum,
         fixture.settle_count_expected
     );
+
+    // I8 — Audit-commitment integrity: each committed (zone,batch) SettlementRecord holds
+    // exactly the values recorded on its FIRST commit, and the init guard never let a
+    // (zone,batch) be re-recorded (double_record_detected). SettlementRecord (zero-copy,
+    // after 8-byte disc): merkle_root@8, total_value@72, vat_amount@80, batch_id@96,
+    // zone_id@104, vat_rate_bps@108.
+    fuzz_assert!(
+        !fixture.double_record_detected,
+        "double-record succeeded: a re-recorded (zone,batch) bypassed the init guard"
+    );
+    for (ns, zone, batch, value, vat, vat_rate) in fixture.committed_records.iter() {
+        let seed: &[u8] = if *ns == 0 { b"settlement_batch" } else { b"settlement" };
+        let (record, _) = Pubkey::find_program_address(
+            &[seed, &zone.to_le_bytes(), &batch.to_le_bytes()],
+            &fixture.program_id,
+        );
+        let a = fixture.ctx.read_account(&record).unwrap();
+        let rd_u64 = |off: usize| u64::from_le_bytes(a.data[off..off + 8].try_into().unwrap());
+        let total_value = rd_u64(72);
+        let vat_amount = rd_u64(80);
+        let batch_id = rd_u64(96);
+        let zone_id = u32::from_le_bytes(a.data[104..108].try_into().unwrap());
+        let vat_rate_bps = u16::from_le_bytes(a.data[108..110].try_into().unwrap());
+        let merkle_ok = a.data[8..40] == TreasuryFixture::merkle_for(*zone, *batch);
+        fuzz_assert!(
+            total_value == *value
+                && vat_amount == *vat
+                && batch_id == *batch
+                && zone_id == *zone
+                && vat_rate_bps == *vat_rate
+                && merkle_ok,
+            "SettlementRecord (ns {} zone {} batch {}) mismatch: value {}/{} vat {}/{} zone {}/{} batch {}/{} rate {}/{} merkle_ok {}",
+            ns, zone, batch, total_value, value, vat_amount, vat, zone_id, zone, batch_id, batch, vat_rate_bps, vat_rate, merkle_ok
+        );
+    }
 }
