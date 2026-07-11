@@ -19,14 +19,31 @@ use solana_keypair::Keypair;
 use solana_pubkey::Pubkey;
 use solana_signer::Signer;
 use std::rc::Rc;
+use std::str::FromStr;
 
 crucible_idl_gen::declare_fuzz_program!("idls/governance.json");
 
-use governance::{accounts, instruction, state};
+use governance::{accounts, instruction, state, types};
 
 const N_CAND: usize = 3; // candidate authority keypairs
 const N_AGG: usize = 3; // aggregator keys
 const INITIAL_SOL: u64 = 1_000_000_000_000;
+const ZONE_ID: i32 = 0;
+const METER_GEN: u64 = 1_000_000; // total_generation → vote weight = gen/1000 max 100 = 1000
+const VOTE_WEIGHT: u64 = 1_000;
+
+fn governance_program_id() -> Pubkey {
+    // self-owned: forged MeterAccount must be owned by the governance program itself
+    Pubkey::from_str("FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS").unwrap()
+}
+
+#[derive(Clone)]
+struct ProposalRec {
+    id: u64,
+    pda: Pubkey,
+    expected_total: u64,
+    voted: Vec<bool>, // per candidate: has this voter already voted on this proposal?
+}
 
 #[derive(Clone)]
 struct GovFixture {
@@ -36,6 +53,9 @@ struct GovFixture {
     gov_config: Pubkey,
     agg_keys: Vec<Pubkey>,
     agg_entries: Vec<Pubkey>,
+    meters: Vec<Pubkey>, // forged MeterAccount per candidate (owner=cand, zone=0)
+    proposals: Vec<ProposalRec>,
+    next_prop_id: u64,
     authority_idx: usize,
     pending_idx: Option<usize>,
     agg_active: Vec<bool>,
@@ -85,6 +105,26 @@ impl GovFixture {
             agg_entries.push(entry);
         }
 
+        // Forge a governance-owned MeterAccount per candidate for proposal/voting weight.
+        // MeterAccount layout (120 B): meter_id[32] | owner[32]@32 | type,status,pad | zone_id
+        // i32@68 | ... | total_generation u64@88. With the 8-byte disc: owner@[40..72],
+        // zone_id@[76..80] (0 = default), total_generation@[96..104].
+        let mut meters = Vec::new();
+        for c in &cands {
+            let m = Keypair::new().pubkey();
+            let mut data = vec![0u8; 8 + 120];
+            data[40..72].copy_from_slice(&c.pubkey().to_bytes());
+            data[96..104].copy_from_slice(&METER_GEN.to_le_bytes());
+            ctx.create_account()
+                .pubkey(m)
+                .lamports(1_000_000_000)
+                .owner(governance_program_id())
+                .data(&data)
+                .create()
+                .unwrap();
+            meters.push(m);
+        }
+
         Self {
             ctx,
             program_id,
@@ -92,6 +132,9 @@ impl GovFixture {
             gov_config,
             agg_keys,
             agg_entries,
+            meters,
+            proposals: Vec::new(),
+            next_prop_id: 1,
             authority_idx: 0,
             pending_idx: None,
             agg_active: vec![false; N_AGG],
@@ -218,6 +261,89 @@ impl GovFixture {
         }
         ok
     }
+
+    // ---- DAO proposals ----
+
+    pub fn action_create_proposal(&mut self, #[range(0..3)] proposer: usize) -> bool {
+        let id = self.next_prop_id;
+        let (pda, _) = Pubkey::find_program_address(
+            &[b"proposal", &ZONE_ID.to_le_bytes(), &id.to_le_bytes()],
+            &self.program_id,
+        );
+        let kp = self.cands[proposer].clone();
+        let meter = self.meters[proposer];
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::CreateProposal {
+                target_zone: ZONE_ID,
+                proposal_id: id,
+                parameter: types::GridParameter::IncentiveMultiplier,
+                new_value: 1,
+                voting_period_seconds: 1_000_000,
+            })
+            .accounts(accounts::CreateProposal {
+                proposal: pda,
+                proposer: kp.pubkey(),
+                meter_account: meter,
+                system_program: system_program::ID,
+            })
+            .signers(&[&*kp])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        if ok {
+            self.next_prop_id += 1;
+            self.proposals.push(ProposalRec {
+                id,
+                pda,
+                expected_total: 0,
+                voted: vec![false; N_CAND],
+            });
+        }
+        ok
+    }
+
+    pub fn action_vote(
+        &mut self,
+        prop_sel: u32,
+        #[range(0..3)] voter: usize,
+        choice: bool,
+    ) -> bool {
+        if self.proposals.is_empty() {
+            return false;
+        }
+        let pidx = (prop_sel as usize) % self.proposals.len();
+        let prop_pda = self.proposals[pidx].pda;
+        let kp = self.cands[voter].clone();
+        let meter = self.meters[voter];
+        let (vote_record, _) = Pubkey::find_program_address(
+            &[b"vote", prop_pda.as_ref(), kp.pubkey().as_ref()],
+            &self.program_id,
+        );
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::CastVote { choice })
+            .accounts(accounts::CastVote {
+                proposal: prop_pda,
+                vote_record,
+                voter: kp.pubkey(),
+                meter_account: meter,
+                system_program: system_program::ID,
+            })
+            .signers(&[&*kp])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        // Credit weight only on the FIRST successful vote by this voter on this proposal;
+        // the vote_record PDA makes a second vote fail, so it must not double-count.
+        if ok && !self.proposals[pidx].voted[voter] {
+            self.proposals[pidx].voted[voter] = true;
+            self.proposals[pidx].expected_total += VOTE_WEIGHT;
+        }
+        ok
+    }
 }
 
 #[invariant_test]
@@ -268,6 +394,24 @@ fn invariant_test(fixture: &mut GovFixture) {
             i,
             active,
             fixture.agg_active[i]
+        );
+    }
+
+    // I4 — DAO vote tally: votes_for + votes_against == Σ weights of distinct voters
+    // (the vote_record PDA prevents any voter double-counting on a proposal).
+    for p in &fixture.proposals {
+        let prop = fixture
+            .ctx
+            .read_anchor_account::<state::Proposal>(&p.pda)
+            .expect("created proposal must exist");
+        let tally = prop.votes_for + prop.votes_against;
+        fuzz_assert_eq!(
+            tally,
+            p.expected_total,
+            "proposal {} tally {} != expected {}",
+            p.id,
+            tally,
+            p.expected_total
         );
     }
 }
