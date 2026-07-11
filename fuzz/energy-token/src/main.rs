@@ -66,7 +66,13 @@ struct EnergyTokenFixture {
     mint: Pubkey,
     wallets: Vec<Wallet>,
     expected_supply: u64,
+    windows: Vec<i64>,        // 900_000-ms-aligned settlement windows (<= now)
+    minted_window: Vec<bool>, // idempotency: has this (gen_meter, window) already minted?
 }
+
+const N_WINDOWS: usize = 4;
+const GEN_METER: [u8; 16] = [7u8; 16];
+const TI_CREATED_AT: usize = 8 + 136; // TokenInfo.created_at (i64) offset
 
 #[fuzz_fixture]
 impl EnergyTokenFixture {
@@ -159,6 +165,19 @@ impl EnergyTokenFixture {
             wallets.push(Wallet { owner, token_acct });
         }
 
+        // Build 900_000-ms-aligned windows strictly below `now` (= TokenInfo.created_at),
+        // so mint_generation's `window_start_ms/1000 <= now+900` bound always passes.
+        let created_at = match ctx.read_account(&token_info) {
+            Ok(a) if a.data.len() >= TI_CREATED_AT + 8 => {
+                i64::from_le_bytes(a.data[TI_CREATED_AT..TI_CREATED_AT + 8].try_into().unwrap())
+            }
+            _ => 0,
+        };
+        let base_ms = (created_at * 1000 / 900_000) * 900_000; // align down
+        let windows: Vec<i64> = (0..N_WINDOWS)
+            .map(|i| base_ms - ((N_WINDOWS - i) as i64) * 900_000)
+            .collect();
+
         Self {
             ctx,
             program_id,
@@ -170,6 +189,8 @@ impl EnergyTokenFixture {
             mint,
             wallets,
             expected_supply: 0,
+            windows,
+            minted_window: vec![false; N_WINDOWS],
         }
     }
 
@@ -316,6 +337,58 @@ impl EnergyTokenFixture {
             .send()
             .map(|o| o.is_success())
             .unwrap_or(false)
+    }
+
+    /// Idempotent generation mint keyed by (GEN_METER, window). A replay of an
+    /// already-minted window must be a no-op — the fixture credits expected_supply
+    /// only on the FIRST mint of a window, so a double-mint would push supply past
+    /// expected and trip I2.
+    pub fn action_mint_generation(
+        &mut self,
+        #[range(0..3)] widx: usize,
+        #[range(0..4)] window_idx: usize,
+        amount: u64,
+    ) -> bool {
+        let amt = (amount % 1_000_000_000_000).max(1);
+        let w = self.windows[window_idx];
+        let (record, _) = Pubkey::find_program_address(
+            &[b"gen_mint", &GEN_METER, &w.to_le_bytes()],
+            &self.program_id,
+        );
+        let dest = self.wallets[widx].token_acct;
+        let dest_owner = self.wallets[widx].owner.pubkey();
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::MintGeneration {
+                meter_id: GEN_METER,
+                window_start_ms: w,
+                amount: amt,
+            })
+            .accounts(accounts::MintGeneration {
+                mint: self.mint,
+                token_info: self.token_info,
+                destination: dest,
+                destination_owner: dest_owner,
+                mint_record: record,
+                authority: self.admin.pubkey(),
+                rec_validator: Some(self.recval.pubkey()),
+                payer: self.admin.pubkey(),
+                token_program: spl_token_id(),
+                associated_token_program: ata_program_id(),
+                system_program: system_program::ID,
+            })
+            .signers(&[&*self.admin, &*self.recval])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        // Credit supply ONLY on the first successful mint of this window; a replay
+        // no-ops on-chain, so crediting again would mask a real double-mint.
+        if ok && !self.minted_window[window_idx] {
+            self.minted_window[window_idx] = true;
+            self.expected_supply = self.expected_supply.saturating_add(amt);
+        }
+        ok
     }
 }
 
