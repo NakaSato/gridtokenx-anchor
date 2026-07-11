@@ -1,0 +1,2686 @@
+{
+  "address": "FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS",
+  "metadata": {
+    "name": "governance",
+    "version": "0.1.1",
+    "spec": "0.1.0",
+    "description": "Governance program for P2P Energy Trading - Engineering Department administration"
+  },
+  "instructions": [
+    {
+      "name": "admit_aggregator",
+      "discriminator": [
+        137,
+        18,
+        65,
+        240,
+        182,
+        248,
+        201,
+        216
+      ],
+      "accounts": [
+        {
+          "name": "governance_config"
+        },
+        {
+          "name": "aggregator_entry",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "aggregator",
+          "type": "pubkey"
+        },
+        {
+          "name": "segment",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "approve_authority_change",
+      "discriminator": [
+        21,
+        188,
+        156,
+        246,
+        104,
+        125,
+        107,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "new_authority",
+          "docs": [
+            "The proposed new authority who must sign to approve"
+          ],
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_authority_change",
+      "discriminator": [
+        254,
+        193,
+        5,
+        128,
+        8,
+        87,
+        30,
+        194
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cast_vote",
+      "discriminator": [
+        20,
+        212,
+        15,
+        189,
+        69,
+        180,
+        69,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "vote_record",
+          "writable": true
+        },
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "meter_account",
+          "docs": [
+            "Voter's meter account to determine voting weight.",
+            "Bound to the registry program so a forged account with an inflated total_generation",
+            "cannot manufacture voting weight (handler still checks meter.owner == voter)."
+          ]
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "choice",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "create_proposal",
+      "discriminator": [
+        132,
+        116,
+        68,
+        174,
+        216,
+        160,
+        198,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "meter_account",
+          "docs": [
+            "We need to verify that the proposer has a registered meter in the target zone.",
+            "Bound to the registry program so a forged/attacker-owned account cannot stand in",
+            "for a real meter (handler still checks meter.owner == proposer)."
+          ]
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "target_zone",
+          "type": "i32"
+        },
+        {
+          "name": "proposal_id",
+          "type": "u64"
+        },
+        {
+          "name": "parameter",
+          "type": {
+            "defined": {
+              "name": "GridParameter"
+            }
+          }
+        },
+        {
+          "name": "new_value",
+          "type": "u64"
+        },
+        {
+          "name": "voting_period_seconds",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "execute_proposal",
+      "discriminator": [
+        186,
+        60,
+        116,
+        133,
+        108,
+        128,
+        111,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "docs": [
+            "Governance config - needed for quorum threshold"
+          ]
+        },
+        {
+          "name": "zone_config",
+          "writable": true
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "executor",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "get_governance_stats",
+      "discriminator": [
+        67,
+        29,
+        241,
+        120,
+        15,
+        8,
+        9,
+        16
+      ],
+      "accounts": [
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [],
+      "returns": {
+        "defined": {
+          "name": "GovernanceStats"
+        }
+      }
+    },
+    {
+      "name": "init_rec_mint",
+      "docs": [
+        "Initialize the fungible REC mint (1 token = 1 MWh, 6 decimals). Run once."
+      ],
+      "discriminator": [
+        157,
+        165,
+        110,
+        194,
+        161,
+        192,
+        87,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "governance_config"
+        },
+        {
+          "name": "rec_mint",
+          "docs": [
+            "Fungible REC mint: 1 token = 1 MWh, 6 decimals (base unit = 1 Wh; 1 kWh = 1000 units).",
+            "Mint authority = governance_config PDA `[b\"governance_config\"]`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_governance",
+      "discriminator": [
+        171,
+        87,
+        101,
+        237,
+        27,
+        107,
+        201,
+        57
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_zone_config",
+      "discriminator": [
+        136,
+        75,
+        141,
+        163,
+        77,
+        165,
+        61,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "zone_config",
+          "writable": true
+        },
+        {
+          "name": "governance_config"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "zone_id",
+          "type": "i32"
+        },
+        {
+          "name": "incentive_multiplier",
+          "type": "u64"
+        },
+        {
+          "name": "wheeling_charge",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "issue_erc",
+      "discriminator": [
+        174,
+        248,
+        149,
+        107,
+        155,
+        4,
+        196,
+        8
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "erc_certificate",
+          "writable": true
+        },
+        {
+          "name": "meter_account",
+          "docs": [
+            "Meter account from registry program - stricter validation via owner constraint"
+          ],
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "docs": [
+            "Meter owner must sign to authorize issuance"
+          ],
+          "signer": true
+        },
+        {
+          "name": "registry",
+          "docs": [
+            "Registry singleton PDA [\"registry\"] - authority must match governance authority"
+          ]
+        },
+        {
+          "name": "registry_program",
+          "docs": [
+            "The registry program - used to invoke mark_erc_claimed"
+          ]
+        },
+        {
+          "name": "rec_mint",
+          "docs": [
+            "Fungible REC mint (1 token = 1 MWh, 6 decimals). Created by `init_rec_mint`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "rec_token_account",
+          "docs": [
+            "Producer's REC associated token account (owner = meter owner signer).",
+            "REC tokens are minted here on issuance."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "associated_token_program"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "certificate_id",
+          "type": "string"
+        },
+        {
+          "name": "energy_amount",
+          "type": "u64"
+        },
+        {
+          "name": "renewable_source",
+          "type": "string"
+        },
+        {
+          "name": "validation_data",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "propose_authority_change",
+      "discriminator": [
+        22,
+        224,
+        215,
+        238,
+        184,
+        2,
+        83,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "retire_rec",
+      "docs": [
+        "Retire (burn) REC tokens; `amount` is base units (6 decimals)."
+      ],
+      "discriminator": [
+        116,
+        75,
+        5,
+        140,
+        13,
+        149,
+        139,
+        43
+      ],
+      "accounts": [
+        {
+          "name": "rec_mint",
+          "writable": true
+        },
+        {
+          "name": "holder",
+          "docs": [
+            "Holder retiring (burning) their REC tokens to claim the green attribute."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "holder_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "revoke_aggregator",
+      "discriminator": [
+        11,
+        175,
+        210,
+        222,
+        176,
+        2,
+        107,
+        126
+      ],
+      "accounts": [
+        {
+          "name": "governance_config"
+        },
+        {
+          "name": "aggregator_entry",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "revoke_erc",
+      "discriminator": [
+        16,
+        48,
+        113,
+        85,
+        118,
+        70,
+        185,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "erc_certificate",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "set_maintenance_mode",
+      "discriminator": [
+        87,
+        100,
+        0,
+        28,
+        116,
+        52,
+        46,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "maintenance_enabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_oracle_authority",
+      "discriminator": [
+        39,
+        155,
+        66,
+        106,
+        213,
+        226,
+        114,
+        174
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "oracle_authority",
+          "type": "pubkey"
+        },
+        {
+          "name": "min_confidence",
+          "type": "u8"
+        },
+        {
+          "name": "require_validation",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transfer_erc",
+      "discriminator": [
+        200,
+        15,
+        16,
+        13,
+        13,
+        143,
+        11,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "governance_config"
+        },
+        {
+          "name": "erc_certificate",
+          "writable": true
+        },
+        {
+          "name": "current_owner",
+          "docs": [
+            "Current owner of the certificate"
+          ],
+          "signer": true
+        },
+        {
+          "name": "new_owner",
+          "docs": [
+            "New owner to transfer to"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_authority_info",
+      "discriminator": [
+        199,
+        12,
+        195,
+        232,
+        185,
+        99,
+        112,
+        145
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "contact_info",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "update_erc_limits",
+      "discriminator": [
+        235,
+        208,
+        197,
+        149,
+        62,
+        109,
+        254,
+        110
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "min_energy_amount",
+          "type": "u64"
+        },
+        {
+          "name": "max_erc_amount",
+          "type": "u64"
+        },
+        {
+          "name": "erc_validity_period",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "update_governance_config",
+      "discriminator": [
+        140,
+        45,
+        181,
+        17,
+        77,
+        67,
+        157,
+        248
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "erc_validation_enabled",
+          "type": "bool"
+        },
+        {
+          "name": "allow_certificate_transfers",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "validate_erc_for_trading",
+      "discriminator": [
+        9,
+        215,
+        176,
+        63,
+        247,
+        150,
+        72,
+        139
+      ],
+      "accounts": [
+        {
+          "name": "governance_config",
+          "writable": true
+        },
+        {
+          "name": "erc_certificate",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AggregatorEntry",
+      "discriminator": [
+        175,
+        235,
+        133,
+        128,
+        2,
+        115,
+        157,
+        45
+      ]
+    },
+    {
+      "name": "ErcCertificate",
+      "discriminator": [
+        83,
+        161,
+        134,
+        16,
+        240,
+        92,
+        186,
+        157
+      ]
+    },
+    {
+      "name": "GovernanceConfig",
+      "discriminator": [
+        81,
+        63,
+        124,
+        107,
+        210,
+        100,
+        145,
+        70
+      ]
+    },
+    {
+      "name": "Proposal",
+      "discriminator": [
+        26,
+        94,
+        189,
+        187,
+        116,
+        136,
+        53,
+        33
+      ]
+    },
+    {
+      "name": "VoteRecord",
+      "discriminator": [
+        112,
+        9,
+        123,
+        165,
+        234,
+        9,
+        157,
+        167
+      ]
+    },
+    {
+      "name": "ZoneConfig",
+      "discriminator": [
+        45,
+        141,
+        64,
+        98,
+        31,
+        210,
+        93,
+        175
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AggregatorAdmitted",
+      "discriminator": [
+        195,
+        39,
+        96,
+        120,
+        225,
+        14,
+        97,
+        238
+      ]
+    },
+    {
+      "name": "AggregatorRevoked",
+      "discriminator": [
+        231,
+        2,
+        31,
+        89,
+        62,
+        135,
+        222,
+        77
+      ]
+    },
+    {
+      "name": "AuthorityChangeApproved",
+      "discriminator": [
+        134,
+        71,
+        45,
+        242,
+        232,
+        179,
+        79,
+        167
+      ]
+    },
+    {
+      "name": "AuthorityChangeCancelled",
+      "discriminator": [
+        188,
+        3,
+        132,
+        49,
+        248,
+        180,
+        98,
+        65
+      ]
+    },
+    {
+      "name": "AuthorityChangeProposed",
+      "discriminator": [
+        109,
+        230,
+        24,
+        90,
+        150,
+        78,
+        41,
+        3
+      ]
+    },
+    {
+      "name": "AuthorityInfoUpdated",
+      "discriminator": [
+        228,
+        61,
+        181,
+        210,
+        130,
+        130,
+        77,
+        145
+      ]
+    },
+    {
+      "name": "ErcIssued",
+      "discriminator": [
+        61,
+        14,
+        253,
+        164,
+        112,
+        61,
+        180,
+        73
+      ]
+    },
+    {
+      "name": "ErcLimitsUpdated",
+      "discriminator": [
+        117,
+        248,
+        58,
+        88,
+        196,
+        106,
+        198,
+        200
+      ]
+    },
+    {
+      "name": "ErcRevoked",
+      "discriminator": [
+        129,
+        169,
+        125,
+        210,
+        31,
+        250,
+        93,
+        116
+      ]
+    },
+    {
+      "name": "ErcTransferred",
+      "discriminator": [
+        218,
+        158,
+        242,
+        163,
+        19,
+        85,
+        132,
+        191
+      ]
+    },
+    {
+      "name": "ErcValidatedForTrading",
+      "discriminator": [
+        235,
+        179,
+        22,
+        112,
+        115,
+        143,
+        126,
+        29
+      ]
+    },
+    {
+      "name": "GovernanceConfigUpdated",
+      "discriminator": [
+        76,
+        140,
+        190,
+        10,
+        102,
+        221,
+        44,
+        0
+      ]
+    },
+    {
+      "name": "GovernanceInitialized",
+      "discriminator": [
+        41,
+        187,
+        103,
+        26,
+        42,
+        44,
+        30,
+        15
+      ]
+    },
+    {
+      "name": "MaintenanceModeUpdated",
+      "discriminator": [
+        111,
+        107,
+        239,
+        85,
+        2,
+        133,
+        144,
+        193
+      ]
+    },
+    {
+      "name": "OracleAuthoritySet",
+      "discriminator": [
+        36,
+        235,
+        5,
+        198,
+        13,
+        136,
+        42,
+        17
+      ]
+    },
+    {
+      "name": "ProposalCreated",
+      "discriminator": [
+        186,
+        8,
+        160,
+        108,
+        81,
+        13,
+        51,
+        206
+      ]
+    },
+    {
+      "name": "ProposalExecuted",
+      "discriminator": [
+        92,
+        213,
+        189,
+        201,
+        101,
+        83,
+        111,
+        83
+      ]
+    },
+    {
+      "name": "RecMinted",
+      "discriminator": [
+        219,
+        222,
+        19,
+        11,
+        213,
+        112,
+        145,
+        66
+      ]
+    },
+    {
+      "name": "RecRetired",
+      "discriminator": [
+        91,
+        119,
+        77,
+        243,
+        119,
+        237,
+        33,
+        251
+      ]
+    },
+    {
+      "name": "VoteCast",
+      "discriminator": [
+        39,
+        53,
+        195,
+        104,
+        188,
+        17,
+        225,
+        213
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "UnauthorizedAuthority",
+      "msg": "Unauthorized authority"
+    },
+    {
+      "code": 6001,
+      "name": "MaintenanceMode",
+      "msg": "System is in maintenance mode"
+    },
+    {
+      "code": 6002,
+      "name": "ErcValidationDisabled",
+      "msg": "ERC validation is disabled"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidErcStatus",
+      "msg": "Invalid ERC status"
+    },
+    {
+      "code": 6004,
+      "name": "AlreadyValidated",
+      "msg": "ERC already validated"
+    },
+    {
+      "code": 6005,
+      "name": "BelowMinimumEnergy",
+      "msg": "Energy amount below minimum required"
+    },
+    {
+      "code": 6006,
+      "name": "ExceedsMaximumEnergy",
+      "msg": "Energy amount exceeds maximum allowed"
+    },
+    {
+      "code": 6007,
+      "name": "CertificateIdTooLong",
+      "msg": "Certificate ID too long"
+    },
+    {
+      "code": 6008,
+      "name": "SourceNameTooLong",
+      "msg": "Renewable source name too long"
+    },
+    {
+      "code": 6009,
+      "name": "ErcExpired",
+      "msg": "ERC certificate has expired"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidMinimumEnergy",
+      "msg": "Invalid minimum energy amount"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidMaximumEnergy",
+      "msg": "Invalid maximum energy amount"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidValidityPeriod",
+      "msg": "Invalid validity period"
+    },
+    {
+      "code": 6013,
+      "name": "ContactInfoTooLong",
+      "msg": "Contact information too long"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidOracleConfidence",
+      "msg": "Invalid oracle confidence score (must be 0-100)"
+    },
+    {
+      "code": 6015,
+      "name": "OracleValidationRequired",
+      "msg": "Oracle validation required but not configured"
+    },
+    {
+      "code": 6016,
+      "name": "TransfersNotAllowed",
+      "msg": "Certificate transfers not allowed"
+    },
+    {
+      "code": 6017,
+      "name": "InsufficientUnclaimedGeneration",
+      "msg": "Insufficient unclaimed generation for ERC issuance"
+    },
+    {
+      "code": 6018,
+      "name": "AlreadyRevoked",
+      "msg": "Certificate already revoked"
+    },
+    {
+      "code": 6019,
+      "name": "RevocationReasonRequired",
+      "msg": "Revocation reason required"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidRecipient",
+      "msg": "Invalid transfer recipient"
+    },
+    {
+      "code": 6021,
+      "name": "CannotTransferToSelf",
+      "msg": "Cannot transfer to self"
+    },
+    {
+      "code": 6022,
+      "name": "NotValidatedForTrading",
+      "msg": "Certificate not validated for trading"
+    },
+    {
+      "code": 6023,
+      "name": "AuthorityChangePending",
+      "msg": "Authority change already pending"
+    },
+    {
+      "code": 6024,
+      "name": "NoAuthorityChangePending",
+      "msg": "No authority change pending"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidPendingAuthority",
+      "msg": "Invalid pending authority"
+    },
+    {
+      "code": 6026,
+      "name": "AuthorityChangeExpired",
+      "msg": "Authority change expired"
+    },
+    {
+      "code": 6027,
+      "name": "OracleConfidenceTooLow",
+      "msg": "Oracle confidence below minimum threshold"
+    },
+    {
+      "code": 6028,
+      "name": "InvalidOracleAuthority",
+      "msg": "Invalid oracle authority"
+    },
+    {
+      "code": 6029,
+      "name": "ValidationDataTooLong",
+      "msg": "Validation data too long"
+    },
+    {
+      "code": 6030,
+      "name": "InvalidMeterAccount",
+      "msg": "Invalid meter account"
+    },
+    {
+      "code": 6031,
+      "name": "InvalidProposalStatus",
+      "msg": "Invalid proposal status"
+    },
+    {
+      "code": 6032,
+      "name": "ProposalExpired",
+      "msg": "Proposal has expired"
+    },
+    {
+      "code": 6033,
+      "name": "ProposalNotExpired",
+      "msg": "Proposal has not expired yet"
+    },
+    {
+      "code": 6034,
+      "name": "InvalidTargetZone",
+      "msg": "Invalid target zone"
+    },
+    {
+      "code": 6035,
+      "name": "InvalidParameterType",
+      "msg": "Invalid parameter type"
+    },
+    {
+      "code": 6036,
+      "name": "InsufficientVotingPower",
+      "msg": "Insufficient voting power"
+    },
+    {
+      "code": 6037,
+      "name": "VoterNotRegisteredInZone",
+      "msg": "Voter is not registered in target zone"
+    },
+    {
+      "code": 6038,
+      "name": "RevocationReasonTooLong",
+      "msg": "Revocation reason too long"
+    },
+    {
+      "code": 6039,
+      "name": "InsufficientQuorum",
+      "msg": "Proposal did not reach quorum"
+    },
+    {
+      "code": 6040,
+      "name": "MeterOwnerMismatch",
+      "msg": "Meter account does not belong to signer"
+    },
+    {
+      "code": 6041,
+      "name": "MeterZoneMismatch",
+      "msg": "Meter's zone does not match the proposal's target zone"
+    },
+    {
+      "code": 6042,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6043,
+      "name": "InvalidAmount",
+      "msg": "Amount must be greater than zero"
+    }
+  ],
+  "types": [
+    {
+      "name": "AggregatorAdmitted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "aggregator",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AggregatorEntry",
+      "docs": [
+        "PoA-admitted aggregator (off-chain validator node) allow-list entry.",
+        "",
+        "One PDA per aggregator pubkey — `seeds = [b\"aggregator\", aggregator.as_ref()]` — so admission",
+        "scales without a growing `Vec` in a global account (Sealevel per-entity-PDA rule). Other",
+        "programs (e.g. `oracle`) authorize an aggregator by deriving this PDA for the signer, checking",
+        "it is owned by the governance program, and requiring `active == true`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "aggregator",
+            "docs": [
+              "The admitted aggregator's signing pubkey."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "admitted_at",
+            "docs": [
+              "When the entry was admitted (unix seconds)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "updated_at",
+            "docs": [
+              "When the entry was last revoked/re-admitted (unix seconds)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "active",
+            "docs": [
+              "True while the aggregator is permitted to act; false once revoked."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical PDA bump."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "segment",
+            "docs": [
+              "Market segment this aggregator is admitted to operate in (role-map.md fix #6):",
+              "0 = Retail (MEA/PEA), 1 = Wholesale (EGAT). Appended at the end so existing raw-byte",
+              "readers (registry's `register_validator`, trading's `require_admitted_aggregator`),",
+              "which only read `[8..40)` and `[56]`, are unaffected by the size change."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AggregatorRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "aggregator",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuthorityChangeApproved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuthorityChangeCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "cancelled_proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuthorityChangeProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "current_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "proposed_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuthorityInfoUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_contact",
+            "type": "string"
+          },
+          {
+            "name": "new_contact",
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ErcCertificate",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "certificate_id",
+            "docs": [
+              "Unique certificate identifier - FIXED: 64 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "id_len",
+            "type": "u8"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Issuing authority (Engineering Department)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Current owner of the certificate (for transfers)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "energy_amount",
+            "docs": [
+              "Amount of renewable energy (kWh)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "renewable_source",
+            "docs": [
+              "Source of renewable energy (solar, wind, etc.) - FIXED: 64 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "source_len",
+            "type": "u8"
+          },
+          {
+            "name": "validation_data",
+            "docs": [
+              "Additional validation data - FIXED: 256 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                256
+              ]
+            }
+          },
+          {
+            "name": "data_len",
+            "type": "u16"
+          },
+          {
+            "name": "issued_at",
+            "docs": [
+              "When the certificate was issued"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "When the certificate expires"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current status of the certificate"
+            ],
+            "type": {
+              "defined": {
+                "name": "ErcStatus"
+              }
+            }
+          },
+          {
+            "name": "validated_for_trading",
+            "docs": [
+              "Whether validated for trading"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "trading_validated_at",
+            "docs": [
+              "When validated for trading"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "revocation_reason",
+            "docs": [
+              "Revocation reason (if revoked) - FIXED: 128 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "reason_len",
+            "type": "u8"
+          },
+          {
+            "name": "revoked_at",
+            "docs": [
+              "When revoked"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "transfer_count",
+            "docs": [
+              "Number of times transferred"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "last_transferred_at",
+            "docs": [
+              "Last transfer timestamp"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ErcIssued",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "certificate_id",
+            "type": "string"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "energy_amount",
+            "type": "u64"
+          },
+          {
+            "name": "renewable_source",
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ErcLimitsUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_min",
+            "type": "u64"
+          },
+          {
+            "name": "new_min",
+            "type": "u64"
+          },
+          {
+            "name": "old_max",
+            "type": "u64"
+          },
+          {
+            "name": "new_max",
+            "type": "u64"
+          },
+          {
+            "name": "old_validity",
+            "type": "i64"
+          },
+          {
+            "name": "new_validity",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ErcRevoked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "certificate_id",
+            "type": "string"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "reason",
+            "type": "string"
+          },
+          {
+            "name": "energy_amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ErcStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Valid"
+          },
+          {
+            "name": "Expired"
+          },
+          {
+            "name": "Revoked"
+          },
+          {
+            "name": "Pending"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ErcTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "certificate_id",
+            "type": "string"
+          },
+          {
+            "name": "from_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "to_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "energy_amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ErcValidatedForTrading",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "certificate_id",
+            "type": "string"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GovernanceConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "Single authority - REC certifying entity"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "authority_name",
+            "docs": [
+              "Authority name (e.g., \"REC\") - FIXED: 64 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "name_len",
+            "type": "u8"
+          },
+          {
+            "name": "contact_info",
+            "docs": [
+              "Authority contact information - FIXED: 128 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "contact_len",
+            "type": "u8"
+          },
+          {
+            "name": "version",
+            "docs": [
+              "Governance version for upgrades"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "maintenance_mode",
+            "docs": [
+              "System maintenance mode"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "erc_validation_enabled",
+            "docs": [
+              "Whether ERC validation is enabled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "min_energy_amount",
+            "docs": [
+              "Minimum energy amount for ERC issuance (kWh)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_erc_amount",
+            "docs": [
+              "Maximum ERC amount per certificate (kWh)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "erc_validity_period",
+            "docs": [
+              "ERC certificate validity period (seconds)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "require_oracle_validation",
+            "docs": [
+              "Require oracle validation for ERC issuance"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "oracle_authority",
+            "docs": [
+              "Oracle authority for AMI data validation"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "min_oracle_confidence",
+            "docs": [
+              "Minimum confidence score for oracle validation (0-100)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "allow_certificate_transfers",
+            "docs": [
+              "Allow certificate transfers between accounts"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "min_quorum_votes",
+            "docs": [
+              "Minimum total votes (for + against) required for a proposal to be valid"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_ercs_issued",
+            "docs": [
+              "Total ERCs issued since inception"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_ercs_validated",
+            "docs": [
+              "Total ERCs validated for trading"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_ercs_revoked",
+            "docs": [
+              "Total ERCs revoked"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_energy_certified",
+            "docs": [
+              "Total energy certified (kWh)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "When governance was initialized"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_updated",
+            "docs": [
+              "Last configuration update"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_erc_issued_at",
+            "docs": [
+              "Last ERC issued timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pending_authority",
+            "docs": [
+              "Pending new authority (for 2-step transfer)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_authority_proposed_at",
+            "docs": [
+              "When the pending authority change was proposed"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pending_authority_expires_at",
+            "docs": [
+              "When the pending authority change expires (48 hours)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "_reserved",
+            "docs": [
+              "Reserved space for future upgrades (and to match on-chain size)"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                5
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GovernanceConfigUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "erc_validation_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "allow_certificate_transfers",
+            "type": "bool"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GovernanceInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority_name",
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GovernanceStats",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "total_ercs_issued",
+            "type": "u64"
+          },
+          {
+            "name": "total_ercs_validated",
+            "type": "u64"
+          },
+          {
+            "name": "total_ercs_revoked",
+            "type": "u64"
+          },
+          {
+            "name": "total_energy_certified",
+            "type": "u64"
+          },
+          {
+            "name": "authority_name",
+            "type": "string"
+          },
+          {
+            "name": "contact_info",
+            "type": "string"
+          },
+          {
+            "name": "erc_validation_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "maintenance_mode",
+            "type": "bool"
+          },
+          {
+            "name": "min_energy_amount",
+            "type": "u64"
+          },
+          {
+            "name": "max_erc_amount",
+            "type": "u64"
+          },
+          {
+            "name": "erc_validity_period",
+            "type": "i64"
+          },
+          {
+            "name": "require_oracle_validation",
+            "type": "bool"
+          },
+          {
+            "name": "allow_certificate_transfers",
+            "type": "bool"
+          },
+          {
+            "name": "min_quorum_votes",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_updated",
+            "type": "i64"
+          },
+          {
+            "name": "last_erc_issued_at",
+            "type": "i64"
+          },
+          {
+            "name": "pending_authority_change",
+            "type": "bool"
+          },
+          {
+            "name": "pending_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_authority_expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "oracle_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_oracle_confidence",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GridParameter",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "IncentiveMultiplier"
+          },
+          {
+            "name": "WheelingCharge"
+          },
+          {
+            "name": "LossFactor"
+          },
+          {
+            "name": "MaintenanceMode"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaintenanceModeUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "maintenance_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OracleAuthoritySet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "oracle_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_confidence",
+            "type": "u8"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Proposal",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposer",
+            "docs": [
+              "The wallet that created the proposal"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "target_zone",
+            "docs": [
+              "The microgrid zone this proposal affects (e.g., 301 for Ko Tao)"
+            ],
+            "type": "i32"
+          },
+          {
+            "name": "parameter",
+            "docs": [
+              "The specific parameter being adjusted"
+            ],
+            "type": {
+              "defined": {
+                "name": "GridParameter"
+              }
+            }
+          },
+          {
+            "name": "new_value",
+            "docs": [
+              "The new value for the parameter (scaled as needed)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "votes_for",
+            "docs": [
+              "Aggregate \"For\" voting weight"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "votes_against",
+            "docs": [
+              "Aggregate \"Against\" voting weight"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current lifecycle status"
+            ],
+            "type": {
+              "defined": {
+                "name": "ProposalStatus"
+              }
+            }
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "When voting ends"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "proposal_id",
+            "docs": [
+              "Unique proposal index or ID for the zone"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "target_zone",
+            "type": "i32"
+          },
+          {
+            "name": "parameter",
+            "type": "string"
+          },
+          {
+            "name": "new_value",
+            "type": "u64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "target_zone",
+            "type": "i32"
+          },
+          {
+            "name": "parameter",
+            "type": "string"
+          },
+          {
+            "name": "new_value",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Passed"
+          },
+          {
+            "name": "Rejected"
+          },
+          {
+            "name": "Executed"
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecMinted",
+      "docs": [
+        "Fungible REC tokens minted to a producer alongside certificate issuance.",
+        "`rec_amount` is base units (6 decimals; 1 token = 1 MWh, 1 kWh = 1_000 units)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "energy_amount",
+            "type": "u64"
+          },
+          {
+            "name": "rec_amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RecRetired",
+      "docs": [
+        "Fungible REC tokens retired (burned) — the green attribute is permanently claimed."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "holder",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteCast",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "choice",
+            "type": "bool"
+          },
+          {
+            "name": "weight",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal",
+            "docs": [
+              "The proposal being voted on"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "voter",
+            "docs": [
+              "The voter's wallet (linked to a registered meter)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "choice",
+            "docs": [
+              "Choice: True = For, False = Against"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "weight",
+            "docs": [
+              "The voting power (weight) at the time of voting"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "voted_at",
+            "docs": [
+              "Timestamp for the audit trail"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA derivation: [b\"vote\", proposal, voter]"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ZoneConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "zone_id",
+            "docs": [
+              "The zone ID (e.g., 301 for Ko Tao)"
+            ],
+            "type": "i32"
+          },
+          {
+            "name": "incentive_multiplier",
+            "docs": [
+              "Generation incentive multiplier (scaled by 1000, e.g., 1150 = 1.15x)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "wheeling_charge",
+            "docs": [
+              "Base wheeling charge (scaled)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "loss_factor",
+            "docs": [
+              "Loss factor for the zone (scaled by 1000, e.g., 1050 = 1.05x)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "maintenance_mode",
+            "docs": [
+              "Maintenance mode for this specific zone"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "last_updated",
+            "docs": [
+              "Last updated timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA: [b\"zone_config\", zone_id]"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

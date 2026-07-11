@@ -1,0 +1,2536 @@
+{
+  "address": "FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7",
+  "metadata": {
+    "name": "registry",
+    "version": "0.1.1",
+    "spec": "0.1.0",
+    "description": "Registry program for P2P Energy Trading - User and meter management"
+  },
+  "instructions": [
+    {
+      "name": "aggregate_shards",
+      "docs": [
+        "Aggregate counts from all shards into the global registry (admin only)"
+      ],
+      "discriminator": [
+        69,
+        203,
+        192,
+        104,
+        54,
+        244,
+        41,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_airdrop",
+      "docs": [
+        "Mint the one-time welcome airdrop to an already-registered user.",
+        "",
+        "Decoupled from `register_user` on purpose: a failed mint CPI aborts its whole",
+        "transaction, so bundling it with registration would let a mint failure roll back",
+        "the user's registration. Here the mint and the `airdrop_claimed` flag commit (or",
+        "roll back) together, leaving the claim safely retryable without touching the user",
+        "record created by `register_user`."
+      ],
+      "discriminator": [
+        137,
+        50,
+        122,
+        111,
+        89,
+        254,
+        8,
+        20
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "registry"
+        },
+        {
+          "name": "authority"
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "energy_token_program"
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "user_token_account",
+          "writable": true
+        },
+        {
+          "name": "token_info"
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "deactivate_meter",
+      "docs": [
+        "Deactivate a meter permanently (owner only)"
+      ],
+      "discriminator": [
+        161,
+        143,
+        238,
+        57,
+        176,
+        50,
+        169,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "meter_account",
+          "writable": true
+        },
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "registry"
+        },
+        {
+          "name": "registry_shard",
+          "writable": true
+        },
+        {
+          "name": "owner",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "deregister_validator",
+      "docs": [
+        "Announce an honest validator exit. Flips an Active validator to `Resigning` and stamps",
+        "`resign_at`. The bond stays locked and the validator stays slashable for",
+        "`RESIGN_COOLDOWN_SECS` (see `unstake_grx` + `compute_slash_amount`); only after the",
+        "window may the bond be unstaked below `MIN_VALIDATOR_STAKE`. Re-calling",
+        "`register_validator` before unstaking cancels the resignation."
+      ],
+      "discriminator": [
+        141,
+        36,
+        209,
+        110,
+        154,
+        252,
+        220,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "disburse_slash_fund",
+      "docs": [
+        "Disburse GRX out of the slash fund (e.g. to the treasury `reward_vault` for",
+        "redistribution via `fund_rewards`). PoA-gated; bounded by the vault balance;",
+        "updates the published `SlashFundLedger` and emits `SlashFundDisbursed`."
+      ],
+      "discriminator": [
+        67,
+        18,
+        206,
+        62,
+        216,
+        140,
+        145,
+        152
+      ],
+      "accounts": [
+        {
+          "name": "registry"
+        },
+        {
+          "name": "slash_fund",
+          "writable": true
+        },
+        {
+          "name": "slash_fund_ledger",
+          "writable": true
+        },
+        {
+          "name": "destination",
+          "docs": [
+            "Where the disbursed GRX goes (e.g. treasury `reward_vault`)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "PoA authority — must equal `registry.authority`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "get_unsettled_balance",
+      "docs": [
+        "Calculate unsettled net generation ready for tokenization",
+        "This is a view function that returns how much energy can be minted as GRID tokens"
+      ],
+      "discriminator": [
+        178,
+        120,
+        95,
+        9,
+        18,
+        81,
+        181,
+        83
+      ],
+      "accounts": [
+        {
+          "name": "meter_account"
+        }
+      ],
+      "args": [],
+      "returns": "u64"
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Initialize the registry with REC authority"
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_shard",
+      "docs": [
+        "Initialize a registry shard for distributed counting"
+      ],
+      "discriminator": [
+        100,
+        96,
+        88,
+        58,
+        225,
+        178,
+        9,
+        147
+      ],
+      "accounts": [
+        {
+          "name": "shard",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "initialize_slash_fund",
+      "docs": [
+        "Initialize the transparent slash fund (T1.4): a registry-owned GRX vault",
+        "`[b\"slash_fund\"]` that holds slashed remainders, plus a `SlashFundLedger`",
+        "PDA `[b\"slash_fund_ledger\"]` publishing disbursement accounting. Point",
+        "`slash_destination` at this vault (via `set_slash_destination`) so the",
+        "slash fund remainder routes here automatically — inflows are then the",
+        "vault's GRX balance, outflows are tracked precisely in the ledger."
+      ],
+      "discriminator": [
+        196,
+        238,
+        234,
+        243,
+        214,
+        88,
+        195,
+        242
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true
+        },
+        {
+          "name": "slash_fund",
+          "writable": true
+        },
+        {
+          "name": "slash_fund_ledger",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "rent"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_vault",
+      "docs": [
+        "Initialize the staking vault for GRX tokens (admin only)"
+      ],
+      "discriminator": [
+        48,
+        191,
+        163,
+        44,
+        71,
+        129,
+        63,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true
+        },
+        {
+          "name": "grx_vault",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "rent"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "is_valid_meter",
+      "docs": [
+        "Verify if a meter is valid and active"
+      ],
+      "discriminator": [
+        151,
+        114,
+        52,
+        252,
+        238,
+        233,
+        81,
+        91
+      ],
+      "accounts": [
+        {
+          "name": "meter_account"
+        }
+      ],
+      "args": [],
+      "returns": "bool"
+    },
+    {
+      "name": "is_valid_user",
+      "docs": [
+        "Verify if a user is valid and active"
+      ],
+      "discriminator": [
+        204,
+        118,
+        77,
+        53,
+        39,
+        63,
+        237,
+        250
+      ],
+      "accounts": [
+        {
+          "name": "user_account"
+        }
+      ],
+      "args": [],
+      "returns": "bool"
+    },
+    {
+      "name": "mark_erc_claimed",
+      "docs": [
+        "Mark energy as claimed for ERC issuance (authorized by governance/oracle)"
+      ],
+      "discriminator": [
+        236,
+        101,
+        147,
+        119,
+        124,
+        153,
+        149,
+        198
+      ],
+      "accounts": [
+        {
+          "name": "meter_account",
+          "writable": true
+        },
+        {
+          "name": "registry"
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "register_meter",
+      "docs": [
+        "Register a smart meter for an existing user"
+      ],
+      "discriminator": [
+        49,
+        106,
+        87,
+        72,
+        138,
+        214,
+        224,
+        125
+      ],
+      "accounts": [
+        {
+          "name": "meter_account",
+          "writable": true
+        },
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "registry_shard",
+          "writable": true
+        },
+        {
+          "name": "registry"
+        },
+        {
+          "name": "owner",
+          "docs": [
+            "(the user's key is Vault-custodied; the bridge's `payer` funds + signs).",
+            "Safe: the handler enforces `owner == user_account.authority` and the",
+            "meter/user PDAs are seeded by `owner.key()`, so a meter can only ever be",
+            "created under its true owner's registered account."
+          ]
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "meter_id",
+          "type": "string"
+        },
+        {
+          "name": "meter_type",
+          "type": {
+            "defined": {
+              "name": "MeterType"
+            }
+          }
+        },
+        {
+          "name": "shard_id",
+          "type": "u8"
+        },
+        {
+          "name": "zone_id",
+          "type": "i32"
+        }
+      ]
+    },
+    {
+      "name": "register_user",
+      "docs": [
+        "Register a new user in the P2P energy trading system",
+        "Also automatically distributes airdrop amount of GRID tokens to the user"
+      ],
+      "discriminator": [
+        2,
+        241,
+        150,
+        223,
+        99,
+        214,
+        116,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "registry_shard",
+          "writable": true
+        },
+        {
+          "name": "registry"
+        },
+        {
+          "name": "authority"
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "user_type",
+          "type": {
+            "defined": {
+              "name": "UserType"
+            }
+          }
+        },
+        {
+          "name": "lat_e7",
+          "type": "i32"
+        },
+        {
+          "name": "long_e7",
+          "type": "i32"
+        },
+        {
+          "name": "h3_index",
+          "type": "u64"
+        },
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "register_validator",
+      "docs": [
+        "Register as a validator (requires at least 10,000 GRX staked)"
+      ],
+      "discriminator": [
+        118,
+        98,
+        251,
+        58,
+        81,
+        30,
+        13,
+        240
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "aggregator_entry",
+          "docs": [
+            "(owner = governance program, PDA seeds match, `active`, `aggregator == authority`)",
+            "rather than via a typed account, because importing the governance crate would",
+            "cycle (governance depends on registry)."
+          ]
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "set_meter_status",
+      "docs": [
+        "Set meter status (owner or authority)"
+      ],
+      "discriminator": [
+        201,
+        50,
+        114,
+        251,
+        180,
+        1,
+        95,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "registry"
+        },
+        {
+          "name": "meter_account",
+          "writable": true
+        },
+        {
+          "name": "registry_shard",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_status",
+          "type": {
+            "defined": {
+              "name": "MeterStatus"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_oracle_authority",
+      "docs": [
+        "Set the oracle authority (admin only)"
+      ],
+      "discriminator": [
+        39,
+        155,
+        66,
+        106,
+        213,
+        226,
+        114,
+        174
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "oracle",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_slash_destination",
+      "docs": [
+        "Set the allowed destination for slashed validator bonds (admin only).",
+        "`slash_validator` will refuse to send the bond anywhere else, so a slash",
+        "cannot be misrouted (point this at the treasury `reward_vault`)."
+      ],
+      "discriminator": [
+        169,
+        103,
+        49,
+        31,
+        130,
+        160,
+        239,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "destination",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "settle_and_mint_tokens",
+      "docs": [
+        "Settle meter balance and automatically mint GRID tokens via CPI",
+        "This is a convenience function that combines settlement + minting in one transaction"
+      ],
+      "discriminator": [
+        51,
+        103,
+        164,
+        65,
+        160,
+        57,
+        142,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "meter_account",
+          "writable": true
+        },
+        {
+          "name": "meter_owner",
+          "signer": true
+        },
+        {
+          "name": "token_info",
+          "writable": true
+        },
+        {
+          "name": "mint",
+          "writable": true
+        },
+        {
+          "name": "user_token_account",
+          "writable": true
+        },
+        {
+          "name": "registry",
+          "docs": [
+            "We use the Registry account itself as the authority signer"
+          ],
+          "writable": true
+        },
+        {
+          "name": "energy_token_program",
+          "docs": [
+            "The energy token program"
+          ]
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "rec_validator",
+          "docs": [
+            "For registry->energy_token CPI, this can be the meter_owner or a separate validator"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "settle_meter_balance",
+      "docs": [
+        "Settle meter balance and prepare for GRID token minting",
+        "This updates the settled_net_generation tracker to prevent double-minting",
+        "The actual token minting should be called by the energy_token program"
+      ],
+      "discriminator": [
+        178,
+        46,
+        241,
+        202,
+        53,
+        99,
+        79,
+        119
+      ],
+      "accounts": [
+        {
+          "name": "meter_account",
+          "writable": true
+        },
+        {
+          "name": "meter_owner",
+          "signer": true
+        }
+      ],
+      "args": [],
+      "returns": "u64"
+    },
+    {
+      "name": "slash_validator",
+      "docs": [
+        "Slash a validator's bond for proven misbehaviour (PoA authority only).",
+        "",
+        "The slashed GRX moves out of the registry vault to `slash_destination` — point it at",
+        "the treasury `reward_vault` so honest stakers receive it (call `treasury::fund_rewards`",
+        "afterwards), per the node design's \"redistributed to honest stakers\" rule.",
+        "",
+        "The target validator is identified by `target_authority`; its `UserAccount` PDA is",
+        "passed mutably. The slashed amount is capped at the validator's staked balance.",
+        "Slash a validator's GRX bond by a severity fraction, compensating proven",
+        "victims (capped at their on-chain-provable loss) and routing the remainder to",
+        "the transparent fund (`slash_destination`, e.g. treasury `reward_vault`).",
+        "",
+        "`slash_bps` — severity in basis points (1..=10000); `slash_amount = bond * bps / 10000`.",
+        "`proven_loss` — total provable victim loss (governance-attested). Compensation is",
+        "`min(slash_amount, proven_loss)`, paid to `victim_token_account`; the rest is the",
+        "fund remainder. Value-accounting invariant: `slash_amount == compensation + fund`.",
+        "",
+        "Status: full forfeiture (bps == 10000 or bond fully consumed) → terminal `Slashed`;",
+        "a partial slash that drops the remaining bond below `MIN_VALIDATOR_STAKE` → `Suspended`",
+        "(recoverable by topping up + re-`register_validator`); otherwise stays `Active`."
+      ],
+      "discriminator": [
+        238,
+        57,
+        244,
+        40,
+        132,
+        82,
+        78,
+        5
+      ],
+      "accounts": [
+        {
+          "name": "target_authority"
+        },
+        {
+          "name": "target_user_account",
+          "writable": true
+        },
+        {
+          "name": "grx_vault",
+          "writable": true
+        },
+        {
+          "name": "registry"
+        },
+        {
+          "name": "slash_destination",
+          "docs": [
+            "Transparent fund: destination for the slash remainder (e.g. treasury `reward_vault`)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "victim_token_account",
+          "docs": [
+            "Harmed party's GRX token account, paid the capped victim compensation. When",
+            "`proven_loss == 0` no transfer occurs; pass any valid GRX account (e.g. the fund)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "PoA authority — must equal `registry.authority`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "slash_bps",
+          "type": "u16"
+        },
+        {
+          "name": "proven_loss",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "slash_validator_multi",
+      "docs": [
+        "Multi-victim variant of `slash_validator` (T1.3): slash an Active validator's",
+        "bond by `slash_bps` and distribute the capped compensation **pro-rata across",
+        "several harmed parties** by their proven loss, routing the remainder to the",
+        "configured fund. The single-victim `slash_validator` above is unchanged.",
+        "",
+        "Victim token accounts are passed as `remaining_accounts` (all GRX, all `mut`),",
+        "in the same order as `victim_losses` (the per-victim governance-attested loss).",
+        "Let `total_loss = Σ victim_losses` and `pool = min(slash_amount, total_loss)`;",
+        "victim `i` receives `pool * victim_losses[i] / total_loss` (integer division —",
+        "rounding dust falls to the fund). The fund receives `slash_amount − Σ paid`.",
+        "Value invariant: `slash_amount == Σ paid + fund_amount`."
+      ],
+      "discriminator": [
+        58,
+        20,
+        194,
+        51,
+        70,
+        44,
+        5,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "target_authority"
+        },
+        {
+          "name": "target_user_account",
+          "writable": true
+        },
+        {
+          "name": "grx_vault",
+          "writable": true
+        },
+        {
+          "name": "registry"
+        },
+        {
+          "name": "slash_destination",
+          "docs": [
+            "Transparent fund: destination for the slash remainder (e.g. treasury `reward_vault`)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "PoA authority — must equal `registry.authority`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "slash_bps",
+          "type": "u16"
+        },
+        {
+          "name": "victim_losses",
+          "type": {
+            "vec": "u64"
+          }
+        }
+      ]
+    },
+    {
+      "name": "stake_grx",
+      "docs": [
+        "Stake GRX tokens to participate in the network"
+      ],
+      "discriminator": [
+        217,
+        205,
+        170,
+        61,
+        90,
+        104,
+        21,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "grx_vault",
+          "writable": true
+        },
+        {
+          "name": "registry"
+        },
+        {
+          "name": "user_grx_ata",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "unstake_grx",
+      "docs": [
+        "Withdraw previously staked GRX back to the user's ATA.",
+        "",
+        "Enforces a cooldown since the last `stake_grx`, decrements the stake, and",
+        "demotes an Active validator to Suspended if the remaining stake drops below",
+        "`MIN_VALIDATOR_STAKE`. The registry PDA signs the vault → user transfer."
+      ],
+      "discriminator": [
+        22,
+        215,
+        235,
+        97,
+        8,
+        11,
+        212,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "grx_vault",
+          "writable": true
+        },
+        {
+          "name": "registry"
+        },
+        {
+          "name": "user_grx_ata",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_authority",
+      "docs": [
+        "Update the registry authority (admin only)"
+      ],
+      "discriminator": [
+        32,
+        46,
+        64,
+        28,
+        149,
+        75,
+        243,
+        88
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_meter_reading",
+      "docs": [
+        "Update meter reading (for oracles and authorized services)",
+        "Now requires oracle authorization via registry"
+      ],
+      "discriminator": [
+        192,
+        220,
+        135,
+        23,
+        89,
+        22,
+        163,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "registry"
+        },
+        {
+          "name": "meter_account",
+          "writable": true
+        },
+        {
+          "name": "oracle_meter_state",
+          "docs": [
+            "The oracle program's own per-meter reading record. Raw-validated in the handler",
+            "(owner + canonical PDA for THIS meter + byte layout) — no `oracle` crate dep, would",
+            "cycle through governance (see `ORACLE_PROGRAM_ID`). Cross-checked so this program's",
+            "cumulative totals can never exceed what the AMI gateway actually recorded on-chain."
+          ]
+        },
+        {
+          "name": "oracle_authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "energy_generated",
+          "type": "u64"
+        },
+        {
+          "name": "energy_consumed",
+          "type": "u64"
+        },
+        {
+          "name": "reading_timestamp",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "update_user_status",
+      "docs": [
+        "Update user status (admin only)"
+      ],
+      "discriminator": [
+        4,
+        129,
+        231,
+        220,
+        216,
+        44,
+        151,
+        55
+      ],
+      "accounts": [
+        {
+          "name": "registry",
+          "writable": true
+        },
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_status",
+          "type": {
+            "defined": {
+              "name": "UserStatus"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "MeterAccount",
+      "discriminator": [
+        87,
+        111,
+        139,
+        87,
+        181,
+        20,
+        104,
+        255
+      ]
+    },
+    {
+      "name": "Registry",
+      "discriminator": [
+        47,
+        174,
+        110,
+        246,
+        184,
+        182,
+        252,
+        218
+      ]
+    },
+    {
+      "name": "RegistryShard",
+      "discriminator": [
+        98,
+        27,
+        121,
+        8,
+        54,
+        239,
+        169,
+        252
+      ]
+    },
+    {
+      "name": "SlashFundLedger",
+      "discriminator": [
+        19,
+        217,
+        221,
+        78,
+        116,
+        205,
+        144,
+        221
+      ]
+    },
+    {
+      "name": "UserAccount",
+      "discriminator": [
+        211,
+        33,
+        136,
+        16,
+        186,
+        110,
+        242,
+        127
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AirdropClaimed",
+      "discriminator": [
+        125,
+        251,
+        195,
+        183,
+        202,
+        126,
+        89,
+        68
+      ]
+    },
+    {
+      "name": "AuthorityUpdated",
+      "discriminator": [
+        133,
+        207,
+        24,
+        122,
+        14,
+        234,
+        91,
+        34
+      ]
+    },
+    {
+      "name": "ErcClaimed",
+      "discriminator": [
+        187,
+        254,
+        137,
+        96,
+        243,
+        0,
+        133,
+        121
+      ]
+    },
+    {
+      "name": "MeterBalanceSettled",
+      "discriminator": [
+        30,
+        26,
+        22,
+        204,
+        7,
+        250,
+        157,
+        33
+      ]
+    },
+    {
+      "name": "MeterDeactivated",
+      "discriminator": [
+        8,
+        89,
+        230,
+        90,
+        182,
+        214,
+        103,
+        29
+      ]
+    },
+    {
+      "name": "MeterReadingUpdated",
+      "discriminator": [
+        144,
+        152,
+        178,
+        102,
+        206,
+        190,
+        72,
+        172
+      ]
+    },
+    {
+      "name": "MeterRegistered",
+      "discriminator": [
+        148,
+        168,
+        114,
+        254,
+        79,
+        45,
+        218,
+        143
+      ]
+    },
+    {
+      "name": "MeterStatusUpdated",
+      "discriminator": [
+        175,
+        206,
+        108,
+        233,
+        120,
+        112,
+        137,
+        211
+      ]
+    },
+    {
+      "name": "OracleAuthoritySet",
+      "discriminator": [
+        36,
+        235,
+        5,
+        198,
+        13,
+        136,
+        42,
+        17
+      ]
+    },
+    {
+      "name": "RegistryInitialized",
+      "discriminator": [
+        144,
+        138,
+        62,
+        105,
+        58,
+        38,
+        100,
+        177
+      ]
+    },
+    {
+      "name": "SlashDestinationSet",
+      "discriminator": [
+        165,
+        240,
+        36,
+        225,
+        164,
+        165,
+        56,
+        223
+      ]
+    },
+    {
+      "name": "SlashFundDisbursed",
+      "discriminator": [
+        179,
+        171,
+        233,
+        89,
+        228,
+        184,
+        91,
+        20
+      ]
+    },
+    {
+      "name": "Unstaked",
+      "discriminator": [
+        27,
+        179,
+        156,
+        215,
+        47,
+        71,
+        195,
+        7
+      ]
+    },
+    {
+      "name": "UserRegistered",
+      "discriminator": [
+        21,
+        42,
+        216,
+        163,
+        99,
+        51,
+        200,
+        222
+      ]
+    },
+    {
+      "name": "UserStatusUpdated",
+      "discriminator": [
+        215,
+        22,
+        145,
+        98,
+        124,
+        97,
+        11,
+        160
+      ]
+    },
+    {
+      "name": "ValidatorSlashed",
+      "discriminator": [
+        1,
+        160,
+        99,
+        18,
+        25,
+        42,
+        5,
+        213
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "UnauthorizedUser",
+      "msg": "Unauthorized user"
+    },
+    {
+      "code": 6001,
+      "name": "UnauthorizedAuthority",
+      "msg": "Unauthorized authority"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidMeterStatus",
+      "msg": "Invalid meter status"
+    },
+    {
+      "code": 6003,
+      "name": "NoUnsettledBalance",
+      "msg": "No unsettled balance to tokenize"
+    },
+    {
+      "code": 6004,
+      "name": "OracleNotConfigured",
+      "msg": "Oracle authority not configured"
+    },
+    {
+      "code": 6005,
+      "name": "UnauthorizedOracle",
+      "msg": "Unauthorized oracle - signer is not the configured oracle"
+    },
+    {
+      "code": 6006,
+      "name": "StaleReading",
+      "msg": "Stale reading - timestamp must be newer than last reading"
+    },
+    {
+      "code": 6007,
+      "name": "ReadingTooFrequent",
+      "msg": "Reading too frequent - minimum interval between readings not met"
+    },
+    {
+      "code": 6008,
+      "name": "ReadingTooHigh",
+      "msg": "Reading too high - exceeds maximum delta limit"
+    },
+    {
+      "code": 6009,
+      "name": "AlreadyInactive",
+      "msg": "Meter is already inactive"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidMeterId",
+      "msg": "Invalid meter ID length (max 32 bytes)"
+    },
+    {
+      "code": 6011,
+      "name": "MathOverflow",
+      "msg": "Mathematical overflow"
+    },
+    {
+      "code": 6012,
+      "name": "InvalidShardId",
+      "msg": "Invalid shard ID - must be less than 16"
+    },
+    {
+      "code": 6013,
+      "name": "DuplicateShard",
+      "msg": "Duplicate shard passed to aggregation"
+    },
+    {
+      "code": 6014,
+      "name": "InsufficientStakingBalance",
+      "msg": "Insufficient staking balance"
+    },
+    {
+      "code": 6015,
+      "name": "MinStakeNotMet",
+      "msg": "Minimum stake requirement not met"
+    },
+    {
+      "code": 6016,
+      "name": "UnstakingLocked",
+      "msg": "Unstaking is currently locked"
+    },
+    {
+      "code": 6017,
+      "name": "AirdropAlreadyClaimed",
+      "msg": "Airdrop already claimed for this user"
+    },
+    {
+      "code": 6018,
+      "name": "SlashDestinationNotSet",
+      "msg": "Slash destination is not configured — call set_slash_destination first"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidSlashDestination",
+      "msg": "Slash destination does not match the configured destination"
+    },
+    {
+      "code": 6020,
+      "name": "NotActiveValidator",
+      "msg": "Target is not an active validator"
+    },
+    {
+      "code": 6021,
+      "name": "ValidatorAlreadySlashed",
+      "msg": "Validator has been slashed and cannot re-register"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidSlashFraction",
+      "msg": "Slash fraction must be between 1 and 10000 basis points"
+    },
+    {
+      "code": 6023,
+      "name": "SlashAccountingMismatch",
+      "msg": "Slash accounting mismatch: slashed != compensation + fund"
+    },
+    {
+      "code": 6024,
+      "name": "VictimCountMismatch",
+      "msg": "victim_losses length must equal the number of victim token accounts passed"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6026,
+      "name": "InsufficientSlashFund",
+      "msg": "Slash fund has insufficient balance for this disbursement"
+    },
+    {
+      "code": 6027,
+      "name": "AggregatorNotAdmitted",
+      "msg": "Validator bond requires an active governance-admitted aggregator entry"
+    },
+    {
+      "code": 6028,
+      "name": "InvalidAggregatorEntry",
+      "msg": "Aggregator entry account is malformed or too short"
+    },
+    {
+      "code": 6029,
+      "name": "ValidatorStakeLocked",
+      "msg": "Active validator cannot unstake below the minimum bond; deregister or be slashed first"
+    },
+    {
+      "code": 6030,
+      "name": "InvalidMeterStatusTransition",
+      "msg": "set_meter_status cannot set or leave Inactive; Inactive is terminal (use deactivate_meter)"
+    },
+    {
+      "code": 6031,
+      "name": "InvalidZone",
+      "msg": "Zone id must be non-negative"
+    },
+    {
+      "code": 6032,
+      "name": "OracleTotalMismatch",
+      "msg": "Registry energy total exceeds the oracle's own recorded total for this meter"
+    }
+  ],
+  "types": [
+    {
+      "name": "AirdropClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuthorityUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ErcClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "meter_id",
+            "type": "string"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_claimed",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MeterAccount",
+      "docs": [
+        "Meter account for reading updates"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "meter_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "meter_type",
+            "type": {
+              "defined": {
+                "name": "MeterType"
+              }
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "MeterStatus"
+              }
+            }
+          },
+          {
+            "name": "_pad_a",
+            "type": {
+              "array": [
+                "u8",
+                2
+              ]
+            }
+          },
+          {
+            "name": "zone_id",
+            "type": "i32"
+          },
+          {
+            "name": "registered_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_reading_at",
+            "type": "i64"
+          },
+          {
+            "name": "total_generation",
+            "type": "u64"
+          },
+          {
+            "name": "total_consumption",
+            "type": "u64"
+          },
+          {
+            "name": "settled_net_generation",
+            "type": "u64"
+          },
+          {
+            "name": "claimed_erc_generation",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MeterBalanceSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "meter_id",
+            "type": "string"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "tokens_to_mint",
+            "type": "u64"
+          },
+          {
+            "name": "total_settled",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MeterDeactivated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "meter_id",
+            "type": "string"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "final_generation",
+            "type": "u64"
+          },
+          {
+            "name": "final_consumption",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MeterReadingUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "meter_id",
+            "type": "string"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "energy_generated",
+            "type": "u64"
+          },
+          {
+            "name": "energy_consumed",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MeterRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "meter_id",
+            "type": "string"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "meter_type",
+            "type": {
+              "defined": {
+                "name": "MeterType"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MeterStatus",
+      "repr": {
+        "kind": "rust"
+      },
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Inactive"
+          },
+          {
+            "name": "Maintenance"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MeterStatusUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "meter_id",
+            "type": "string"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_status",
+            "type": {
+              "defined": {
+                "name": "MeterStatus"
+              }
+            }
+          },
+          {
+            "name": "new_status",
+            "type": {
+              "defined": {
+                "name": "MeterStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MeterType",
+      "repr": {
+        "kind": "rust"
+      },
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Solar"
+          },
+          {
+            "name": "Wind"
+          },
+          {
+            "name": "Battery"
+          },
+          {
+            "name": "Grid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OracleAuthoritySet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_oracle",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "new_oracle",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Registry",
+      "docs": [
+        "Registry account for metadata storage"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "oracle_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "has_oracle_authority",
+            "type": "u8"
+          },
+          {
+            "name": "has_slash_destination",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "user_count",
+            "type": "u64"
+          },
+          {
+            "name": "meter_count",
+            "type": "u64"
+          },
+          {
+            "name": "active_meter_count",
+            "type": "u64"
+          },
+          {
+            "name": "slash_destination",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RegistryInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RegistryShard",
+      "docs": [
+        "RegistryShard account for distributed counters"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "shard_id",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "user_count",
+            "type": "u64"
+          },
+          {
+            "name": "meter_count",
+            "type": "u64"
+          },
+          {
+            "name": "active_meter_count",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlashDestinationSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_destination",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "new_destination",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlashFundDisbursed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_disbursed",
+            "type": "u64"
+          },
+          {
+            "name": "disbursement_count",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SlashFundLedger",
+      "docs": [
+        "Published accounting for the transparent slash fund (T1.4). Inflows are the",
+        "`slash_fund` vault's GRX balance (slashed remainders routed in via the existing",
+        "`slash_destination`); outflows are tracked here precisely, with one event per",
+        "disbursement, so the fund's redistribution history is auditable on-chain."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "total_disbursed",
+            "type": "u64"
+          },
+          {
+            "name": "disbursement_count",
+            "type": "u64"
+          },
+          {
+            "name": "last_disbursed_ts",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Unstaked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "remaining_stake",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserAccount",
+      "docs": [
+        "User account for frequent lookups"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "user_type",
+            "type": {
+              "defined": {
+                "name": "UserType"
+              }
+            }
+          },
+          {
+            "name": "_padding1",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "lat_e7",
+            "type": "i32"
+          },
+          {
+            "name": "long_e7",
+            "type": "i32"
+          },
+          {
+            "name": "_padding2",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "h3_index",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "UserStatus"
+              }
+            }
+          },
+          {
+            "name": "validator_status",
+            "type": {
+              "defined": {
+                "name": "ValidatorStatus"
+              }
+            }
+          },
+          {
+            "name": "shard_id",
+            "type": "u8"
+          },
+          {
+            "name": "airdrop_claimed",
+            "type": "u8"
+          },
+          {
+            "name": "_padding3",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "registered_at",
+            "type": "i64"
+          },
+          {
+            "name": "meter_count",
+            "type": "u32"
+          },
+          {
+            "name": "_padding4",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "staked_grx",
+            "type": "u64"
+          },
+          {
+            "name": "last_stake_at",
+            "type": "i64"
+          },
+          {
+            "name": "resign_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserRegistered",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "user_type",
+            "type": {
+              "defined": {
+                "name": "UserType"
+              }
+            }
+          },
+          {
+            "name": "lat_e7",
+            "type": "i32"
+          },
+          {
+            "name": "long_e7",
+            "type": "i32"
+          },
+          {
+            "name": "h3_index",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserStatus",
+      "repr": {
+        "kind": "rust"
+      },
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Suspended"
+          },
+          {
+            "name": "Inactive"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserStatusUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_status",
+            "type": {
+              "defined": {
+                "name": "UserStatus"
+              }
+            }
+          },
+          {
+            "name": "new_status",
+            "type": {
+              "defined": {
+                "name": "UserStatus"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserType",
+      "repr": {
+        "kind": "rust"
+      },
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Prosumer"
+          },
+          {
+            "name": "Consumer"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ValidatorSlashed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "validator",
+            "type": "pubkey"
+          },
+          {
+            "name": "slashed_amount",
+            "type": "u64"
+          },
+          {
+            "name": "compensation",
+            "type": "u64"
+          },
+          {
+            "name": "fund_amount",
+            "type": "u64"
+          },
+          {
+            "name": "proven_loss",
+            "type": "u64"
+          },
+          {
+            "name": "remaining_stake",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ValidatorStatus",
+      "repr": {
+        "kind": "rust"
+      },
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "None"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Slashed"
+          },
+          {
+            "name": "Suspended"
+          },
+          {
+            "name": "Resigning"
+          }
+        ]
+      }
+    }
+  ]
+}

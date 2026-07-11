@@ -1,0 +1,1992 @@
+{
+  "address": "FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn",
+  "metadata": {
+    "name": "treasury",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Treasury program — GRX↔THBG (THB-pegged stablecoin) swap, staking, baht-denominated settlement"
+  },
+  "instructions": [
+    {
+      "name": "aggregate_settlement_shards",
+      "docs": [
+        "Reconcile the global `total_settled_thbg` from the per-shard accumulators.",
+        "Admin-only.",
+        "",
+        "**Drain-and-fold:** each `SettlementShard` passed in `remaining_accounts`",
+        "(validated by program owner + stored-bump PDA, deduped by a shard-id bitmask)",
+        "has its `settled_thbg` ADDED to the running global and then ZEROED. Folding",
+        "into — instead of overwriting — the live global is deliberate: the single-match",
+        "settle path (`record_settlement`) bumps `total_settled_thbg` directly, while the",
+        "batch path bumps shards. Overwriting `global = sum(shards)` (the previous",
+        "behaviour) silently wiped every single-match contribution on each reconcile.",
+        "Folding preserves both; zeroing the shard makes it a delta-since-last-aggregate,",
+        "so re-running with no new settles is a no-op (no double counting). Shards must",
+        "therefore be passed writable. `settlement_count` is left cumulative."
+      ],
+      "discriminator": [
+        221,
+        254,
+        96,
+        54,
+        81,
+        59,
+        168,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_rewards",
+      "docs": [
+        "Claim accrued staking rewards (paid in GRX from the reward pool)."
+      ],
+      "discriminator": [
+        4,
+        144,
+        132,
+        71,
+        116,
+        23,
+        151,
+        80
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "reward_vault",
+          "writable": true
+        },
+        {
+          "name": "user_grx_ata",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "fund_rewards",
+      "docs": [
+        "Deposit GRX into the reward pool, distributing it pro-rata to current stakers",
+        "via the accumulator. Requires a non-zero total stake."
+      ],
+      "discriminator": [
+        114,
+        64,
+        163,
+        112,
+        175,
+        167,
+        19,
+        121
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "reward_vault",
+          "writable": true
+        },
+        {
+          "name": "funder_grx_ata",
+          "writable": true
+        },
+        {
+          "name": "funder",
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Bootstrap the treasury: config PDA, the THBG mint (authority = treasury PDA),",
+        "and the three GRX vaults (swap collateral, stake custody, reward pool)."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "grx_mint",
+          "docs": [
+            "GRX SPL mint (owned by the energy-token program)."
+          ]
+        },
+        {
+          "name": "thbg_mint",
+          "docs": [
+            "THBG stablecoin mint, created here with the treasury PDA as mint authority."
+          ],
+          "writable": true
+        },
+        {
+          "name": "swap_vault",
+          "docs": [
+            "GRX received from swaps (peg collateral source for redemptions)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "stake_vault",
+          "docs": [
+            "GRX held in custody for stakers (NEVER backs the peg)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "reward_vault",
+          "docs": [
+            "GRX reward pool paid out to stakers."
+          ],
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "rent"
+        }
+      ],
+      "args": [
+        {
+          "name": "attestor",
+          "type": "pubkey"
+        },
+        {
+          "name": "settlement_recorder",
+          "type": "pubkey"
+        },
+        {
+          "name": "grx_per_thbg_rate",
+          "type": "u64"
+        },
+        {
+          "name": "swap_fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "attestation_ttl",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_rebate_vault",
+      "docs": [
+        "Create the GRX rebate-pool vault (`[b\"rebate_vault\"]`) — a FOURTH treasury GRX vault,",
+        "distinct from swap/stake/reward, that registry's `slash_destination` (role-map.md",
+        "fix #10) should point at so slashed validator bonds reach a regulator / consumer-",
+        "rebate fund instead of yield-stakers. Admin-only, idempotent (fails harmlessly if",
+        "already created). No CPI wiring — registry sends slashed GRX here directly, this",
+        "program never reads or moves it; a later ERC-facing withdraw instruction is a",
+        "separate, explicit task."
+      ],
+      "discriminator": [
+        229,
+        225,
+        212,
+        22,
+        49,
+        72,
+        54,
+        244
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "rebate_vault",
+          "docs": [
+            "GRX slashed-bond destination for registry's `slash_destination` — regulator /",
+            "consumer-rebate pool, kept separate from `reward_vault` (yield-stakers)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_settlement_shard",
+      "docs": [
+        "Create one settlement accumulator shard PDA (`[b\"settle_shard\", &[shard_id]]`).",
+        "Admin-only, idempotent per shard_id. Run once per shard (0..NUM_SETTLE_SHARDS)",
+        "at deploy/init so the sharded settle path has its destination accounts."
+      ],
+      "discriminator": [
+        77,
+        86,
+        194,
+        132,
+        198,
+        59,
+        71,
+        144
+      ],
+      "accounts": [
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "shard",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "record_settlement",
+      "docs": [
+        "Record a baht-denominated trade settlement. Called via CPI by the trading",
+        "program after it pays a seller in THBG; bumps the cumulative settled total.",
+        "Non-custodial — moves no funds. Authorized by the `settlement_recorder`",
+        "signer (the trading market_authority PDA), so only genuine trading",
+        "settlements can advance the counter.",
+        "",
+        "Not independently replay-safe: this instruction has no per-call nullifier",
+        "of its own and relies on the caller (trading's per-match `TradeNullifier`,",
+        "see `settle_offchain.rs`) to guarantee it's never invoked twice for the",
+        "same match."
+      ],
+      "discriminator": [
+        225,
+        116,
+        158,
+        209,
+        29,
+        96,
+        45,
+        32
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "recorder",
+          "docs": [
+            "The authorized settlement recorder — the trading market_authority PDA,",
+            "passed as a signer via `invoke_signed` from the trading program."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "value",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "record_settlement_batch",
+      "docs": [
+        "Record a settlement BATCH with an audit commitment. Bumps the cumulative",
+        "settled total (as `record_settlement` does) and writes a per-`(zone, batch)`",
+        "`SettlementRecord` binding the Merkle root over the batch's matches plus the",
+        "VAT amount/rate. Commit-only — no on-chain verification of the root; off-chain",
+        "verifiers recompute it and e-Tax issuance consumes the VAT fields. Authorized",
+        "by the `settlement_recorder` (the trading market_authority PDA)."
+      ],
+      "discriminator": [
+        152,
+        189,
+        135,
+        6,
+        224,
+        151,
+        217,
+        231
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "settlement_record",
+          "docs": [
+            "Per-`(zone, batch)` audit commitment, created on first record for the batch.",
+            "Distinct seed namespace (`b\"settlement_batch\"`) from the sharded variant's",
+            "`b\"settlement\"` — this instruction is not on the live trading CPI path, so",
+            "the two must never `init` the same PDA for the same (zone, batch)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "recorder",
+          "docs": [
+            "The authorized settlement recorder — the trading market_authority PDA."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "value",
+          "type": "u64"
+        },
+        {
+          "name": "merkle_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "vat_amount",
+          "type": "u64"
+        },
+        {
+          "name": "vat_rate_bps",
+          "type": "u16"
+        },
+        {
+          "name": "zone_id",
+          "type": "u32"
+        },
+        {
+          "name": "batch_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "record_settlement_batch_sharded",
+      "docs": [
+        "Parallel-friendly variant of `record_settlement_batch`: bumps the per-shard",
+        "accumulator for `shard_id` instead of the global `total_settled_thbg`, while",
+        "still writing the per-`(zone, batch)` `SettlementRecord` audit commitment (which",
+        "is already non-global — unique per batch). Treasury is read-only here (recorder",
+        "gate only), so parallel batch settles on distinct shards don't serialize on it.",
+        "Reconcile the global total via `aggregate_settlement_shards`."
+      ],
+      "discriminator": [
+        211,
+        185,
+        59,
+        125,
+        45,
+        100,
+        84,
+        25
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "docs": [
+            "Read-only: only the recorder gate reads it (shared read lock does not serialize)."
+          ]
+        },
+        {
+          "name": "shard",
+          "docs": [
+            "The per-shard accumulator; bound to `shard_id` by its seeds."
+          ],
+          "writable": true
+        },
+        {
+          "name": "settlement_record",
+          "docs": [
+            "Per-`(zone, batch)` audit commitment, created on first record for the batch."
+          ],
+          "writable": true
+        },
+        {
+          "name": "recorder",
+          "docs": [
+            "The authorized settlement recorder — the trading market_authority PDA."
+          ],
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "value",
+          "type": "u64"
+        },
+        {
+          "name": "merkle_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "vat_amount",
+          "type": "u64"
+        },
+        {
+          "name": "vat_rate_bps",
+          "type": "u16"
+        },
+        {
+          "name": "zone_id",
+          "type": "u32"
+        },
+        {
+          "name": "batch_id",
+          "type": "u64"
+        },
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "record_settlement_sharded",
+      "docs": [
+        "Parallel-friendly variant of `record_settlement`: bumps the per-shard",
+        "accumulator for `shard_id` instead of the global `total_settled_thbg`, so",
+        "settles whose buyers fall on different shards don't write-lock one account.",
+        "`treasury` is read-only here (recorder gate only) — read locks are shared",
+        "across parallel txs, so it does not serialize. The shard account is bound to",
+        "`shard_id` by its PDA seeds, so a recorder cannot scatter onto an arbitrary",
+        "account. Reconcile the global total via `aggregate_settlement_shards`.",
+        "",
+        "Not independently replay-safe (same caveat as `record_settlement`): relies",
+        "on trading's per-match `TradeNullifier` to prevent duplicate calls."
+      ],
+      "discriminator": [
+        87,
+        203,
+        223,
+        57,
+        81,
+        47,
+        209,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "docs": [
+            "Read-only: only the recorder gate reads it. A shared read lock does not",
+            "serialize parallel settles (unlike the `mut` treasury in `record_settlement`)."
+          ]
+        },
+        {
+          "name": "shard",
+          "docs": [
+            "The per-shard accumulator; bound to `shard_id` by its seeds."
+          ],
+          "writable": true
+        },
+        {
+          "name": "recorder",
+          "docs": [
+            "The authorized settlement recorder — the trading market_authority PDA."
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "value",
+          "type": "u64"
+        },
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "redeem_thbg_for_grx",
+      "docs": [
+        "Redeem THBG → GRX from the swap vault. Burns the user's THBG (shrinking the",
+        "peg liability) and returns GRX at the configured rate."
+      ],
+      "discriminator": [
+        97,
+        157,
+        170,
+        155,
+        82,
+        44,
+        132,
+        35
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "grx_mint",
+          "writable": true
+        },
+        {
+          "name": "thbg_mint",
+          "writable": true
+        },
+        {
+          "name": "swap_vault",
+          "writable": true
+        },
+        {
+          "name": "user_grx_ata",
+          "writable": true
+        },
+        {
+          "name": "user_thbg_ata",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "thbg_in",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_params",
+      "docs": [
+        "Admin: update swap rate, fee, attestation TTL, pause flag, and the",
+        "authorized settlement recorder (the trading market_authority PDA)."
+      ],
+      "discriminator": [
+        27,
+        234,
+        178,
+        52,
+        147,
+        2,
+        187,
+        141
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "grx_per_thbg_rate",
+          "type": "u64"
+        },
+        {
+          "name": "swap_fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "attestation_ttl",
+          "type": "i64"
+        },
+        {
+          "name": "paused",
+          "type": "bool"
+        },
+        {
+          "name": "settlement_recorder",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "slash_stake",
+      "docs": [
+        "Slash a staker's principal for misbehaviour (treasury authority only).",
+        "",
+        "The slashed GRX moves from the staking vault into the reward vault and is redistributed",
+        "pro-rata to the *remaining* stakers via the reward accumulator (same mechanism as",
+        "`fund_rewards`) — \"redistributed to honest stakers, not burned\". The slashed staker's",
+        "already-accrued rewards are preserved (settled into `pending`); only principal is taken,",
+        "and they are excluded from this redistribution (their `reward_debt` is rebased at the new",
+        "accumulator). If no stake remains after slashing, the amount is parked in `reward_pool`."
+      ],
+      "discriminator": [
+        190,
+        242,
+        137,
+        27,
+        41,
+        18,
+        233,
+        37
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "target_owner"
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "stake_vault",
+          "writable": true
+        },
+        {
+          "name": "reward_vault",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "Treasury authority — must equal `treasury.authority`."
+          ],
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "stake_grx",
+      "docs": [
+        "Stake GRX into the staking vault. Settles any pending reward before changing",
+        "the position so the accumulator stays consistent."
+      ],
+      "discriminator": [
+        217,
+        205,
+        170,
+        61,
+        90,
+        104,
+        21,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "stake_vault",
+          "writable": true
+        },
+        {
+          "name": "user_grx_ata",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "swap_grx_for_thbg",
+      "docs": [
+        "Swap GRX → THBG. This is the baht-denominated settlement primitive: a",
+        "producer's GRX is converted to THB-pegged value at `grx_per_thbg_rate`.",
+        "",
+        "Peg invariants enforced here:",
+        "1. The reserve attestation must be fresh (`now - attestation_ts <= ttl`).",
+        "2. Outstanding `thbg_supply + minted` must never exceed `attested_reserve`.",
+        "Staked GRX is held in a separate vault and never backs the peg."
+      ],
+      "discriminator": [
+        21,
+        176,
+        61,
+        236,
+        134,
+        141,
+        113,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "grx_mint",
+          "writable": true
+        },
+        {
+          "name": "thbg_mint",
+          "writable": true
+        },
+        {
+          "name": "swap_vault",
+          "writable": true
+        },
+        {
+          "name": "user_grx_ata",
+          "writable": true
+        },
+        {
+          "name": "user_thbg_ata",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "grx_in",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "unstake_grx",
+      "docs": [
+        "Unstake GRX. Settles pending reward, returns principal from the staking vault."
+      ],
+      "discriminator": [
+        22,
+        215,
+        235,
+        97,
+        8,
+        11,
+        212,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "stake_vault",
+          "writable": true
+        },
+        {
+          "name": "user_grx_ata",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_attestation",
+      "docs": [
+        "Custodian: refresh the off-chain THB reserve figure that caps THBG supply.",
+        "This is the peg's source of truth — mints are blocked once it goes stale."
+      ],
+      "discriminator": [
+        251,
+        244,
+        74,
+        129,
+        95,
+        36,
+        57,
+        101
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "attestor",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "attested_reserve",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "SettlementRecord",
+      "discriminator": [
+        172,
+        159,
+        67,
+        74,
+        96,
+        85,
+        37,
+        205
+      ]
+    },
+    {
+      "name": "SettlementShard",
+      "discriminator": [
+        26,
+        72,
+        44,
+        58,
+        203,
+        99,
+        183,
+        81
+      ]
+    },
+    {
+      "name": "StakePosition",
+      "discriminator": [
+        78,
+        165,
+        30,
+        111,
+        171,
+        125,
+        11,
+        220
+      ]
+    },
+    {
+      "name": "Treasury",
+      "discriminator": [
+        238,
+        239,
+        123,
+        238,
+        89,
+        1,
+        168,
+        253
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ParamsUpdated",
+      "discriminator": [
+        2,
+        163,
+        138,
+        99,
+        135,
+        11,
+        136,
+        169
+      ]
+    },
+    {
+      "name": "RedeemedThbgForGrx",
+      "discriminator": [
+        208,
+        85,
+        153,
+        188,
+        91,
+        236,
+        159,
+        131
+      ]
+    },
+    {
+      "name": "ReserveAttested",
+      "discriminator": [
+        223,
+        244,
+        97,
+        196,
+        46,
+        168,
+        163,
+        229
+      ]
+    },
+    {
+      "name": "RewardsClaimed",
+      "discriminator": [
+        75,
+        98,
+        88,
+        18,
+        219,
+        112,
+        88,
+        121
+      ]
+    },
+    {
+      "name": "RewardsFunded",
+      "discriminator": [
+        84,
+        233,
+        245,
+        203,
+        228,
+        147,
+        165,
+        92
+      ]
+    },
+    {
+      "name": "SettlementBatchRecorded",
+      "discriminator": [
+        236,
+        23,
+        26,
+        157,
+        50,
+        180,
+        232,
+        140
+      ]
+    },
+    {
+      "name": "SettlementBatchShardRecorded",
+      "discriminator": [
+        123,
+        1,
+        211,
+        111,
+        14,
+        63,
+        62,
+        137
+      ]
+    },
+    {
+      "name": "SettlementRecorded",
+      "discriminator": [
+        192,
+        74,
+        226,
+        15,
+        81,
+        160,
+        21,
+        189
+      ]
+    },
+    {
+      "name": "SettlementShardRecorded",
+      "discriminator": [
+        42,
+        123,
+        230,
+        155,
+        193,
+        39,
+        46,
+        11
+      ]
+    },
+    {
+      "name": "StakeSlashed",
+      "discriminator": [
+        43,
+        41,
+        196,
+        25,
+        218,
+        235,
+        244,
+        35
+      ]
+    },
+    {
+      "name": "Staked",
+      "discriminator": [
+        11,
+        146,
+        45,
+        205,
+        230,
+        58,
+        213,
+        240
+      ]
+    },
+    {
+      "name": "SwappedGrxForThbg",
+      "discriminator": [
+        35,
+        232,
+        190,
+        49,
+        105,
+        41,
+        182,
+        167
+      ]
+    },
+    {
+      "name": "Unstaked",
+      "discriminator": [
+        27,
+        179,
+        156,
+        215,
+        47,
+        71,
+        195,
+        7
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "UnauthorizedAuthority",
+      "msg": "Unauthorized authority"
+    },
+    {
+      "code": 6001,
+      "name": "UnauthorizedAttestor",
+      "msg": "Unauthorized reserve attestor"
+    },
+    {
+      "code": 6002,
+      "name": "UnauthorizedRecorder",
+      "msg": "Unauthorized settlement recorder"
+    },
+    {
+      "code": 6003,
+      "name": "Paused",
+      "msg": "Treasury is paused"
+    },
+    {
+      "code": 6004,
+      "name": "ZeroAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6005,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6006,
+      "name": "StaleAttestation",
+      "msg": "Reserve attestation is stale — refresh before minting THBG"
+    },
+    {
+      "code": 6007,
+      "name": "PegBreach",
+      "msg": "Mint would breach the peg: outstanding THBG must not exceed attested THB reserve"
+    },
+    {
+      "code": 6008,
+      "name": "RateNotSet",
+      "msg": "Swap/redeem rate is not configured"
+    },
+    {
+      "code": 6009,
+      "name": "InsufficientStake",
+      "msg": "Insufficient staked balance"
+    },
+    {
+      "code": 6010,
+      "name": "InsufficientRewardPool",
+      "msg": "Insufficient reward pool to pay the claim"
+    },
+    {
+      "code": 6011,
+      "name": "InsufficientVault",
+      "msg": "Swap vault has insufficient GRX collateral to satisfy the redemption"
+    },
+    {
+      "code": 6012,
+      "name": "SupplyUnderflow",
+      "msg": "Redeem amount exceeds outstanding THBG supply"
+    },
+    {
+      "code": 6013,
+      "name": "NoStakeToReward",
+      "msg": "No stake to fund rewards against"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidShardId",
+      "msg": "Settlement shard id out of range (must be < NUM_SETTLE_SHARDS)"
+    },
+    {
+      "code": 6015,
+      "name": "DuplicateShard",
+      "msg": "Settlement shard passed more than once in aggregation"
+    },
+    {
+      "code": 6016,
+      "name": "ShardNotWritable",
+      "msg": "Settlement shard must be writable to be drained during aggregation"
+    },
+    {
+      "code": 6017,
+      "name": "InvalidFeeBps",
+      "msg": "swap_fee_bps must not exceed 10_000 (100%)"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidShardAccount",
+      "msg": "Settlement shard account is malformed or too small"
+    }
+  ],
+  "types": [
+    {
+      "name": "ParamsUpdated",
+      "docs": [
+        "Admin updated treasury params (rate, fee, attestation TTL, pause flag, or",
+        "the authorized settlement recorder)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "grx_per_thbg_rate",
+            "type": "u64"
+          },
+          {
+            "name": "swap_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "attestation_ttl",
+            "type": "i64"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "settlement_recorder",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RedeemedThbgForGrx",
+      "docs": [
+        "THBG redeemed back into GRX held by the treasury swap vault."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "thbg_in",
+            "type": "u64"
+          },
+          {
+            "name": "grx_out",
+            "type": "u64"
+          },
+          {
+            "name": "thbg_supply",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReserveAttested",
+      "docs": [
+        "Reserve attestor refreshed the off-chain THB reserve figure."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "attestor",
+            "type": "pubkey"
+          },
+          {
+            "name": "attested_reserve",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardsClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardsFunded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "funder",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementBatchRecorded",
+      "docs": [
+        "A settlement batch was recorded with an audit commitment (Merkle root + VAT)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "recorder",
+            "type": "pubkey"
+          },
+          {
+            "name": "zone_id",
+            "type": "u32"
+          },
+          {
+            "name": "batch_id",
+            "type": "u64"
+          },
+          {
+            "name": "total_value",
+            "type": "u64"
+          },
+          {
+            "name": "vat_amount",
+            "type": "u64"
+          },
+          {
+            "name": "vat_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "merkle_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "total_settled_thbg",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementBatchShardRecorded",
+      "docs": [
+        "A settlement batch was recorded against a per-shard accumulator with a full",
+        "audit commitment (Merkle root + VAT) — the sharded counterpart of",
+        "`SettlementBatchRecorded`. `shard_total` is this shard's running total, not",
+        "the global figure (reconciled via `aggregate_settlement_shards`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "recorder",
+            "type": "pubkey"
+          },
+          {
+            "name": "shard_id",
+            "type": "u8"
+          },
+          {
+            "name": "zone_id",
+            "type": "u32"
+          },
+          {
+            "name": "batch_id",
+            "type": "u64"
+          },
+          {
+            "name": "value",
+            "type": "u64"
+          },
+          {
+            "name": "shard_total",
+            "type": "u64"
+          },
+          {
+            "name": "vat_amount",
+            "type": "u64"
+          },
+          {
+            "name": "vat_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "merkle_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementRecord",
+      "docs": [
+        "Per-batch settlement audit commitment (zero-copy). Binds a Merkle root over",
+        "the matches in one zone's settlement batch, plus the gross baht value and the",
+        "VAT, for off-chain verification and e-Tax issuance. Commit-only — the chain",
+        "stores the root; off-chain verifiers recompute and check it. The VAT rate is",
+        "recorded per batch (a parameter, not a constant: the reduced 7% expires).",
+        "",
+        "Hand-padded for `bytemuck` Pod (no implicit padding). Two distinct PDA seed",
+        "namespaces write this account type, deliberately kept separate so the two",
+        "instructions can never collide on the same address:",
+        "- `record_settlement_batch_sharded` (the live trading CPI path):",
+        "`[b\"settlement\", zone_id.to_le_bytes(), batch_id.to_le_bytes()]`",
+        "- `record_settlement_batch` (standalone, non-sharded, not on the trading",
+        "CPI path today): `[b\"settlement_batch\", zone_id.to_le_bytes(), batch_id.to_le_bytes()]`"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merkle_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "recorder",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_value",
+            "type": "u64"
+          },
+          {
+            "name": "vat_amount",
+            "type": "u64"
+          },
+          {
+            "name": "committed_ts",
+            "type": "i64"
+          },
+          {
+            "name": "batch_id",
+            "type": "u64"
+          },
+          {
+            "name": "zone_id",
+            "type": "u32"
+          },
+          {
+            "name": "vat_rate_bps",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                9
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementRecorded",
+      "docs": [
+        "A baht-denominated trade settlement was recorded via trading CPI."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "recorder",
+            "type": "pubkey"
+          },
+          {
+            "name": "value",
+            "type": "u64"
+          },
+          {
+            "name": "total_settled_thbg",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementShard",
+      "docs": [
+        "Per-shard settlement accumulator (zero-copy). Hot-path settles bump the shard",
+        "PDA for the buyer's shard instead of the global `Treasury.total_settled_thbg`, so",
+        "settles on distinct shards don't write-lock a single account. PDA seeds:",
+        "`[b\"settle_shard\", &[shard_id]]`. Global total reconciled via",
+        "`aggregate_settlement_shards`."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "settled_thbg",
+            "type": "u64"
+          },
+          {
+            "name": "settlement_count",
+            "type": "u64"
+          },
+          {
+            "name": "shard_id",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementShardRecorded",
+      "docs": [
+        "A baht-denominated settlement was recorded against a per-shard accumulator",
+        "(parallel-friendly variant of `SettlementRecorded`). `shard_total` is this",
+        "shard's running total, not the global figure (reconciled via aggregation)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "recorder",
+            "type": "pubkey"
+          },
+          {
+            "name": "shard_id",
+            "type": "u8"
+          },
+          {
+            "name": "value",
+            "type": "u64"
+          },
+          {
+            "name": "shard_total",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StakePosition",
+      "docs": [
+        "Per-user staking position (regular Borsh account — staking is not a hot path).",
+        "PDA seeds: `[b\"stake\", owner]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reward_debt",
+            "type": "u128"
+          },
+          {
+            "name": "pending",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StakeSlashed",
+      "docs": [
+        "A staker's principal was slashed and redistributed to the remaining stakers."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "slashed_amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Staked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwappedGrxForThbg",
+      "docs": [
+        "GRX swapped into THBG — the baht-denominated settlement primitive."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "grx_in",
+            "type": "u64"
+          },
+          {
+            "name": "thbg_out",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "thbg_supply",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Treasury",
+      "docs": [
+        "Global treasury configuration + accounting (zero-copy, single PDA `[b\"treasury\"]`).",
+        "",
+        "Layout is hand-padded for `bytemuck` Pod (no implicit padding). `u128` forces",
+        "16-byte struct alignment, so it leads the struct and the tail is padded to a",
+        "multiple of 16. Recount by hand when adding fields."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "acc_reward_per_share",
+            "docs": [
+              "Staking reward accumulator: cumulative GRX reward per staked GRX, scaled by ACC_PRECISION."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "attestor",
+            "type": "pubkey"
+          },
+          {
+            "name": "grx_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "thbg_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "settlement_recorder",
+            "type": "pubkey"
+          },
+          {
+            "name": "attested_reserve",
+            "type": "u64"
+          },
+          {
+            "name": "attestation_ts",
+            "type": "i64"
+          },
+          {
+            "name": "attestation_ttl",
+            "type": "i64"
+          },
+          {
+            "name": "thbg_supply",
+            "type": "u64"
+          },
+          {
+            "name": "grx_per_thbg_rate",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked",
+            "type": "u64"
+          },
+          {
+            "name": "reward_pool",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "total_settled_thbg",
+            "type": "u64"
+          },
+          {
+            "name": "swap_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "paused",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "thbg_mint_bump",
+            "type": "u8"
+          },
+          {
+            "name": "swap_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "stake_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "reward_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "rebate_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                15
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Unstaked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
