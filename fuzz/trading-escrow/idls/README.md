@@ -1,0 +1,12 @@
+# IDL Files
+
+Place your program's IDL JSON file here as `trading-escrow.json`.
+
+## Generating IDL
+
+If you have the legacy (v0.29) IDL format:
+```bash
+anchor idl convert target/idl/trading-escrow.json -o fuzz/trading-escrow/idls/trading-escrow.json
+```
+
+If you have the new IDL format (v0.30+), copy it directly.
