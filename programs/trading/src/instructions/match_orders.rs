@@ -1,22 +1,13 @@
 use anchor_lang::prelude::*;
+use crate::error::TradingError;
 use crate::state::*;
 use crate::utils::get_governance_config;
 
-#[cfg(feature = "localnet")]
-use compute_debug::compute_fn;
-#[cfg(not(feature = "localnet"))]
-use crate::compute_fn;
-
 #[derive(Accounts)]
-#[instruction(match_amount: u64, shard_id: u8)]
-pub struct ShardedMatchOrdersContext<'info> {
-    // Read-only: handler never writes market/zone_market (only zone_shard).
-    // `mut` here would take write-locks on the shared zone accounts and
-    // serialize every "sharded" match, defeating the shard's purpose.
+pub struct MatchOrdersContext<'info> {
     pub market: AccountLoader<'info, Market>,
+    #[account(mut)]
     pub zone_market: AccountLoader<'info, ZoneMarket>,
-    #[account(mut, seeds = [b"zone_shard", zone_market.key().as_ref(), &[shard_id]], bump)]
-    pub zone_shard: AccountLoader<'info, ZoneMarketShard>,
     #[account(mut)]
     pub buy_order: AccountLoader<'info, Order>,
     #[account(mut)]
@@ -30,78 +21,82 @@ pub struct ShardedMatchOrdersContext<'info> {
     pub governance_config: UncheckedAccount<'info>,
 }
 
-pub fn sharded_match_orders(ctx: Context<ShardedMatchOrdersContext>, match_amount: u64, _shard_id: u8) -> Result<()> {
-    compute_fn!("sharded_match_orders" => {
+pub fn match_orders(ctx: Context<MatchOrdersContext>, match_amount: u64) -> Result<()> {
     require!(
         get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
-        crate::error::TradingError::MaintenanceMode
+        TradingError::MaintenanceMode
     );
+    require!(match_amount > 0, TradingError::InvalidAmount);
 
+    let mut zone_market = ctx.accounts.zone_market.load_mut()?;
     let mut buy_order = ctx.accounts.buy_order.load_mut()?;
     let mut sell_order = ctx.accounts.sell_order.load_mut()?;
-    let mut zone_shard = ctx.accounts.zone_shard.load_mut()?;
     let mut trade_record = ctx.accounts.trade_record.load_init()?;
     let clock = Clock::get()?;
 
-    // Validate order statuses
     require!(
         buy_order.status == OrderStatus::Active as u8
             || buy_order.status == OrderStatus::PartiallyFilled as u8,
-        crate::error::TradingError::InactiveBuyOrder
+        TradingError::InactiveBuyOrder
     );
     require!(
         sell_order.status == OrderStatus::Active as u8
             || sell_order.status == OrderStatus::PartiallyFilled as u8,
-        crate::error::TradingError::InactiveSellOrder
+        TradingError::InactiveSellOrder
     );
     require!(
         buy_order.price_per_kwh >= sell_order.price_per_kwh,
-        crate::error::TradingError::PriceMismatch
+        TradingError::PriceMismatch
     );
 
-    let clearing_price = sell_order.price_per_kwh;
     let buy_remaining = buy_order.amount.saturating_sub(buy_order.filled_amount);
     let sell_remaining = sell_order.amount.saturating_sub(sell_order.filled_amount);
     let actual_match_amount = match_amount.min(buy_remaining).min(sell_remaining);
+
+    let clearing_price = sell_order.price_per_kwh;
+    let total_value = actual_match_amount.saturating_mul(clearing_price);
 
     buy_order.filled_amount += actual_match_amount;
     sell_order.filled_amount += actual_match_amount;
 
     if buy_order.filled_amount >= buy_order.amount {
         buy_order.status = OrderStatus::Completed as u8;
+        zone_market.active_orders = zone_market.active_orders.saturating_sub(1);
     } else {
         buy_order.status = OrderStatus::PartiallyFilled as u8;
     }
 
     if sell_order.filled_amount >= sell_order.amount {
         sell_order.status = OrderStatus::Completed as u8;
+        zone_market.active_orders = zone_market.active_orders.saturating_sub(1);
     } else {
         sell_order.status = OrderStatus::PartiallyFilled as u8;
     }
 
-    // Update SHARD instead of ZoneMarket
-    zone_shard.volume_accumulated += actual_match_amount;
-    zone_shard.trade_count += 1;
-    zone_shard.last_clearing_price = clearing_price;
-    zone_shard.last_update = clock.unix_timestamp;
-
-    trade_record.buy_order = ctx.accounts.buy_order.key();
     trade_record.sell_order = ctx.accounts.sell_order.key();
+    trade_record.buy_order = ctx.accounts.buy_order.key();
+    trade_record.seller = sell_order.seller;
+    trade_record.buyer = buy_order.buyer;
     trade_record.amount = actual_match_amount;
     trade_record.price_per_kwh = clearing_price;
+    trade_record.total_value = total_value;
+    trade_record.fee_amount = 0;
     trade_record.executed_at = clock.unix_timestamp;
 
+    zone_market.total_volume = zone_market.total_volume.saturating_add(actual_match_amount);
+    zone_market.total_trades = zone_market.total_trades.saturating_add(1);
+    zone_market.last_clearing_price = clearing_price;
+
     emit!(crate::events::OrderMatched {
-        buy_order: ctx.accounts.buy_order.key(),
         sell_order: ctx.accounts.sell_order.key(),
-        buyer: buy_order.buyer,
+        buy_order: ctx.accounts.buy_order.key(),
         seller: sell_order.seller,
+        buyer: buy_order.buyer,
         amount: actual_match_amount,
         price: clearing_price,
-        total_value: actual_match_amount.saturating_mul(clearing_price),
+        total_value,
         fee_amount: 0,
         timestamp: clock.unix_timestamp,
-    });
     });
 
     Ok(())

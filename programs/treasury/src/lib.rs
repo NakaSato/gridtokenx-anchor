@@ -1,30 +1,35 @@
 #![allow(unexpected_cfgs)]
 
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{
-    self as token_interface, Burn as BurnInterface, Mint as MintInterface, MintTo as MintToInterface,
-    TokenAccount as TokenAccountInterface, TokenInterface, TransferChecked as TransferCheckedInterface,
-};
 
 pub mod error;
 pub mod events;
+pub mod instructions;
 pub mod state;
 
 pub use error::TreasuryError;
 pub use events::*;
+// Handler fns share names with the #[program]-generated re-exports; the glob is
+// deliberate (Context structs + client accounts must be crate-public).
+#[allow(ambiguous_glob_reexports)]
+pub use instructions::*;
 pub use state::*;
 
 // compute_fn! / compute_checkpoint! — real macros under `localnet`, no-ops otherwise.
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
 
+// No-op versions for non-localnet builds. `#[macro_export]` hoists them to the crate
+// root so the `instructions/` submodules can `use crate::{compute_fn, compute_checkpoint}`.
 #[cfg(not(feature = "localnet"))]
+#[macro_export]
 macro_rules! compute_fn {
     ($name:expr => $block:block) => {
         $block
     };
 }
 #[cfg(not(feature = "localnet"))]
+#[macro_export]
 macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
@@ -36,7 +41,7 @@ declare_id!("FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn");
 const GRX_ATOMS_PER_WHOLE: u128 = 1_000_000_000;
 
 /// `pending = amount * acc / ACC_PRECISION - reward_debt` (saturating at 0).
-fn accrued_since(amount: u64, acc: u128, reward_debt: u128) -> Result<u64> {
+pub(crate) fn accrued_since(amount: u64, acc: u128, reward_debt: u128) -> Result<u64> {
     let gross = (amount as u128)
         .checked_mul(acc)
         .ok_or(TreasuryError::MathOverflow)?
@@ -46,7 +51,7 @@ fn accrued_since(amount: u64, acc: u128, reward_debt: u128) -> Result<u64> {
 }
 
 /// `reward_debt = amount * acc / ACC_PRECISION`.
-fn reward_debt_for(amount: u64, acc: u128) -> Result<u128> {
+pub(crate) fn reward_debt_for(amount: u64, acc: u128) -> Result<u128> {
     (amount as u128)
         .checked_mul(acc)
         .ok_or(TreasuryError::MathOverflow)
@@ -59,7 +64,7 @@ fn reward_debt_for(amount: u64, acc: u128) -> Result<u128> {
 /// Enforces `net > 0` (ZeroAmount) and the peg invariant
 /// `thbg_supply + net <= attested_reserve` (PegBreach). All products use checked u128
 /// math (MathOverflow on overflow / u64 truncation). Returns `(net, fee, new_supply)`.
-fn compute_swap_grx_for_thbg(
+pub(crate) fn compute_swap_grx_for_thbg(
     grx_in: u64,
     rate: u64,
     fee_bps: u16,
@@ -92,7 +97,7 @@ fn compute_swap_grx_for_thbg(
 /// tracked supply (SupplyUnderflow) or paying out more GRX than the swap vault holds
 /// (InsufficientVault) — so a rate change can never let a redeemer drain the vault.
 /// Returns `(grx_out, new_supply)`.
-fn compute_redeem_thbg_for_grx(
+pub(crate) fn compute_redeem_thbg_for_grx(
     thbg_in: u64,
     rate: u64,
     thbg_supply: u64,
@@ -284,33 +289,15 @@ pub mod treasury {
         attestation_ttl: i64,
     ) -> Result<()> {
         compute_fn!("initialize" => {
-            require!(swap_fee_bps <= 10_000, TreasuryError::InvalidFeeBps);
-            let now = Clock::get()?.unix_timestamp;
-            let mut t = ctx.accounts.treasury.load_init()?;
-            t.acc_reward_per_share = 0;
-            t.authority = ctx.accounts.authority.key();
-            t.attestor = attestor;
-            t.grx_mint = ctx.accounts.grx_mint.key();
-            t.thbg_mint = ctx.accounts.thbg_mint.key();
-            t.settlement_recorder = settlement_recorder;
-            t.attested_reserve = 0;
-            t.attestation_ts = 0;
-            t.attestation_ttl = attestation_ttl;
-            t.thbg_supply = 0;
-            t.grx_per_thbg_rate = grx_per_thbg_rate;
-            t.total_staked = 0;
-            t.reward_pool = 0;
-            t.created_at = now;
-            t.total_settled_thbg = 0;
-            t.swap_fee_bps = swap_fee_bps;
-            t.paused = 0;
-            t.bump = ctx.bumps.treasury;
-            t.thbg_mint_bump = ctx.bumps.thbg_mint;
-            t.swap_vault_bump = ctx.bumps.swap_vault;
-            t.stake_vault_bump = ctx.bumps.stake_vault;
-            t.reward_vault_bump = ctx.bumps.reward_vault;
-        });
-        Ok(())
+            instructions::initialize(
+                ctx,
+                attestor,
+                settlement_recorder,
+                grx_per_thbg_rate,
+                swap_fee_bps,
+                attestation_ttl,
+            )
+        })
     }
 
     /// Admin: update swap rate, fee, attestation TTL, pause flag, and the
@@ -324,27 +311,15 @@ pub mod treasury {
         settlement_recorder: Pubkey,
     ) -> Result<()> {
         compute_fn!("set_params" => {
-            require!(swap_fee_bps <= 10_000, TreasuryError::InvalidFeeBps);
-            let now = Clock::get()?.unix_timestamp;
-            let mut t = ctx.accounts.treasury.load_mut()?;
-            require!(t.authority == ctx.accounts.authority.key(), TreasuryError::UnauthorizedAuthority);
-            t.grx_per_thbg_rate = grx_per_thbg_rate;
-            t.swap_fee_bps = swap_fee_bps;
-            t.attestation_ttl = attestation_ttl;
-            t.paused = if paused { 1 } else { 0 };
-            t.settlement_recorder = settlement_recorder;
-
-            emit!(ParamsUpdated {
-                authority: ctx.accounts.authority.key(),
+            instructions::set_params(
+                ctx,
                 grx_per_thbg_rate,
                 swap_fee_bps,
                 attestation_ttl,
                 paused,
                 settlement_recorder,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            )
+        })
     }
 
     /// Record a baht-denominated trade settlement. Called via CPI by the trading
@@ -359,25 +334,8 @@ pub mod treasury {
     /// same match.
     pub fn record_settlement(ctx: Context<RecordSettlement>, value: u64) -> Result<()> {
         compute_fn!("record_settlement" => {
-            require!(value > 0, TreasuryError::ZeroAmount);
-            let now = Clock::get()?.unix_timestamp;
-            let mut t = ctx.accounts.treasury.load_mut()?;
-            require!(
-                t.settlement_recorder == ctx.accounts.recorder.key(),
-                TreasuryError::UnauthorizedRecorder
-            );
-            t.total_settled_thbg = t
-                .total_settled_thbg
-                .checked_add(value)
-                .ok_or(TreasuryError::MathOverflow)?;
-            emit!(SettlementRecorded {
-                recorder: ctx.accounts.recorder.key(),
-                value,
-                total_settled_thbg: t.total_settled_thbg,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::record_settlement(ctx, value)
+        })
     }
 
     /// Record a settlement BATCH with an audit commitment. Bumps the cumulative
@@ -396,45 +354,16 @@ pub mod treasury {
         batch_id: u64,
     ) -> Result<()> {
         compute_fn!("record_settlement_batch" => {
-            require!(value > 0, TreasuryError::ZeroAmount);
-            let now = Clock::get()?.unix_timestamp;
-            let total = {
-                let mut t = ctx.accounts.treasury.load_mut()?;
-                require!(
-                    t.settlement_recorder == ctx.accounts.recorder.key(),
-                    TreasuryError::UnauthorizedRecorder
-                );
-                t.total_settled_thbg = t
-                    .total_settled_thbg
-                    .checked_add(value)
-                    .ok_or(TreasuryError::MathOverflow)?;
-                t.total_settled_thbg
-            };
-
-            let mut rec = ctx.accounts.settlement_record.load_init()?;
-            rec.merkle_root = merkle_root;
-            rec.recorder = ctx.accounts.recorder.key();
-            rec.total_value = value;
-            rec.vat_amount = vat_amount;
-            rec.committed_ts = now;
-            rec.batch_id = batch_id;
-            rec.zone_id = zone_id;
-            rec.vat_rate_bps = vat_rate_bps;
-            rec.bump = ctx.bumps.settlement_record;
-
-            emit!(SettlementBatchRecorded {
-                recorder: ctx.accounts.recorder.key(),
-                zone_id,
-                batch_id,
-                total_value: value,
+            instructions::record_settlement_batch(
+                ctx,
+                value,
+                merkle_root,
                 vat_amount,
                 vat_rate_bps,
-                merkle_root,
-                total_settled_thbg: total,
-                timestamp: now,
-            });
-        });
-        Ok(())
+                zone_id,
+                batch_id,
+            )
+        })
     }
 
     /// Create one settlement accumulator shard PDA (`[b"settle_shard", &[shard_id]]`).
@@ -445,18 +374,8 @@ pub mod treasury {
         shard_id: u8,
     ) -> Result<()> {
         compute_fn!("initialize_settlement_shard" => {
-            require!(shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
-            require!(
-                ctx.accounts.treasury.load()?.authority == ctx.accounts.authority.key(),
-                TreasuryError::UnauthorizedAuthority
-            );
-            let mut shard = ctx.accounts.shard.load_init()?;
-            shard.shard_id = shard_id;
-            shard.bump = ctx.bumps.shard;
-            shard.settled_thbg = 0;
-            shard.settlement_count = 0;
-        });
-        Ok(())
+            instructions::initialize_settlement_shard(ctx, shard_id)
+        })
     }
 
     /// Create the GRX rebate-pool vault (`[b"rebate_vault"]`) — a FOURTH treasury GRX vault,
@@ -468,11 +387,8 @@ pub mod treasury {
     /// separate, explicit task.
     pub fn initialize_rebate_vault(ctx: Context<InitializeRebateVault>) -> Result<()> {
         compute_fn!("initialize_rebate_vault" => {
-            let mut t = ctx.accounts.treasury.load_mut()?;
-            require!(t.authority == ctx.accounts.authority.key(), TreasuryError::UnauthorizedAuthority);
-            t.rebate_vault_bump = ctx.bumps.rebate_vault;
-        });
-        Ok(())
+            instructions::initialize_rebate_vault(ctx)
+        })
     }
 
     /// Parallel-friendly variant of `record_settlement`: bumps the per-shard
@@ -491,31 +407,8 @@ pub mod treasury {
         shard_id: u8,
     ) -> Result<()> {
         compute_fn!("record_settlement_sharded" => {
-            require!(value > 0, TreasuryError::ZeroAmount);
-            require!(shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
-            let now = Clock::get()?.unix_timestamp;
-            require!(
-                ctx.accounts.treasury.load()?.settlement_recorder == ctx.accounts.recorder.key(),
-                TreasuryError::UnauthorizedRecorder
-            );
-            let mut shard = ctx.accounts.shard.load_mut()?;
-            shard.settled_thbg = shard
-                .settled_thbg
-                .checked_add(value)
-                .ok_or(TreasuryError::MathOverflow)?;
-            shard.settlement_count = shard
-                .settlement_count
-                .checked_add(1)
-                .ok_or(TreasuryError::MathOverflow)?;
-            emit!(SettlementShardRecorded {
-                recorder: ctx.accounts.recorder.key(),
-                shard_id,
-                value,
-                shard_total: shard.settled_thbg,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::record_settlement_sharded(ctx, value, shard_id)
+        })
     }
 
     /// Reconcile the global `total_settled_thbg` from the per-shard accumulators.
@@ -533,47 +426,8 @@ pub mod treasury {
     /// therefore be passed writable. `settlement_count` is left cumulative.
     pub fn aggregate_settlement_shards(ctx: Context<AggregateSettlementShards>) -> Result<()> {
         compute_fn!("aggregate_settlement_shards" => {
-            let mut t = ctx.accounts.treasury.load_mut()?;
-            require!(t.authority == ctx.accounts.authority.key(), TreasuryError::UnauthorizedAuthority);
-
-            // Start from the live global so single-match `record_settlement` writes are
-            // preserved across reconciles.
-            let mut running: u64 = t.total_settled_thbg;
-            // Bitmask of shard_ids already counted — reject duplicates so a shard
-            // passed twice cannot inflate the total.
-            let mut seen: u16 = 0;
-            const SHARD_LEN: usize = std::mem::size_of::<SettlementShard>();
-
-            for account_info in ctx.remaining_accounts.iter() {
-                require_keys_eq!(*account_info.owner, crate::ID, TreasuryError::UnauthorizedAuthority);
-                let mut data = account_info.try_borrow_mut_data()?;
-                require!(data.len() >= 8 + SHARD_LEN, TreasuryError::InvalidShardAccount);
-                let shard = SettlementShard::load_mut_from_bytes(&mut data[8..8 + SHARD_LEN])?;
-                require!(shard.shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
-
-                // Validate via the stored canonical bump (create_program_address)
-                // instead of re-deriving with find_program_address.
-                let expected_pda = Pubkey::create_program_address(
-                    &[b"settle_shard", &[shard.shard_id], &[shard.bump]], &crate::ID
-                ).map_err(|_| TreasuryError::InvalidShardId)?;
-                require_keys_eq!(account_info.key(), expected_pda, TreasuryError::InvalidShardId);
-
-                let bit = 1u16 << shard.shard_id;
-                require!(seen & bit == 0, TreasuryError::DuplicateShard);
-                seen |= bit;
-
-                // Must be writable: the drain below mutates the shard's data.
-                require!(account_info.is_writable, TreasuryError::ShardNotWritable);
-
-                running = running
-                    .checked_add(shard.settled_thbg)
-                    .ok_or(TreasuryError::MathOverflow)?;
-                shard.settled_thbg = 0; // drain — shard now holds the next delta window
-            }
-
-            t.total_settled_thbg = running;
-        });
-        Ok(())
+            instructions::aggregate_settlement_shards(ctx)
+        })
     }
 
     /// Parallel-friendly variant of `record_settlement_batch`: bumps the per-shard
@@ -594,70 +448,25 @@ pub mod treasury {
         shard_id: u8,
     ) -> Result<()> {
         compute_fn!("record_settlement_batch_sharded" => {
-            require!(value > 0, TreasuryError::ZeroAmount);
-            require!(shard_id < NUM_SETTLE_SHARDS, TreasuryError::InvalidShardId);
-            let now = Clock::get()?.unix_timestamp;
-            require!(
-                ctx.accounts.treasury.load()?.settlement_recorder == ctx.accounts.recorder.key(),
-                TreasuryError::UnauthorizedRecorder
-            );
-
-            let shard_total = {
-                let mut shard = ctx.accounts.shard.load_mut()?;
-                shard.settled_thbg = shard
-                    .settled_thbg
-                    .checked_add(value)
-                    .ok_or(TreasuryError::MathOverflow)?;
-                shard.settlement_count = shard
-                    .settlement_count
-                    .checked_add(1)
-                    .ok_or(TreasuryError::MathOverflow)?;
-                shard.settled_thbg
-            };
-
-            let mut rec = ctx.accounts.settlement_record.load_init()?;
-            rec.merkle_root = merkle_root;
-            rec.recorder = ctx.accounts.recorder.key();
-            rec.total_value = value;
-            rec.vat_amount = vat_amount;
-            rec.committed_ts = now;
-            rec.batch_id = batch_id;
-            rec.zone_id = zone_id;
-            rec.vat_rate_bps = vat_rate_bps;
-            rec.bump = ctx.bumps.settlement_record;
-
-            emit!(SettlementBatchShardRecorded {
-                recorder: ctx.accounts.recorder.key(),
-                shard_id,
-                zone_id,
-                batch_id,
+            instructions::record_settlement_batch_sharded(
+                ctx,
                 value,
-                shard_total,
+                merkle_root,
                 vat_amount,
                 vat_rate_bps,
-                merkle_root,
-                timestamp: now,
-            });
-        });
-        Ok(())
+                zone_id,
+                batch_id,
+                shard_id,
+            )
+        })
     }
 
     /// Custodian: refresh the off-chain THB reserve figure that caps THBG supply.
     /// This is the peg's source of truth — mints are blocked once it goes stale.
     pub fn update_attestation(ctx: Context<UpdateAttestation>, attested_reserve: u64) -> Result<()> {
         compute_fn!("update_attestation" => {
-            let now = Clock::get()?.unix_timestamp;
-            let mut t = ctx.accounts.treasury.load_mut()?;
-            require!(t.attestor == ctx.accounts.attestor.key(), TreasuryError::UnauthorizedAttestor);
-            t.attested_reserve = attested_reserve;
-            t.attestation_ts = now;
-            emit!(ReserveAttested {
-                attestor: ctx.accounts.attestor.key(),
-                attested_reserve,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::update_attestation(ctx, attested_reserve)
+        })
     }
 
     /// Swap GRX → THBG. This is the baht-denominated settlement primitive: a
@@ -669,325 +478,46 @@ pub mod treasury {
     /// Staked GRX is held in a separate vault and never backs the peg.
     pub fn swap_grx_for_thbg(ctx: Context<SwapGrxForThbg>, grx_in: u64) -> Result<()> {
         compute_fn!("swap_grx_for_thbg" => {
-            require!(grx_in > 0, TreasuryError::ZeroAmount);
-            let now = Clock::get()?.unix_timestamp;
-
-            let (bump, thbg_net, fee, new_supply) = {
-                let t = ctx.accounts.treasury.load()?;
-                require!(t.paused == 0, TreasuryError::Paused);
-                require!(t.grx_per_thbg_rate > 0, TreasuryError::RateNotSet);
-                require!(
-                    now.saturating_sub(t.attestation_ts) <= t.attestation_ttl,
-                    TreasuryError::StaleAttestation
-                );
-
-                let (net, fee, new_supply) = compute_swap_grx_for_thbg(
-                    grx_in,
-                    t.grx_per_thbg_rate,
-                    t.swap_fee_bps,
-                    t.thbg_supply,
-                    t.attested_reserve,
-                )?;
-
-                (t.bump, net, fee, new_supply)
-            };
-
-            // Pull GRX collateral from the user into the swap vault.
-            let xfer = TransferCheckedInterface {
-                from: ctx.accounts.user_grx_ata.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-                to: ctx.accounts.swap_vault.to_account_info(),
-                authority: ctx.accounts.user.to_account_info(),
-            };
-            compute_checkpoint!("before_grx_pull");
-            token_interface::transfer_checked(
-                CpiContext::new(ctx.accounts.token_program.key(), xfer),
-                grx_in,
-                ctx.accounts.grx_mint.decimals,
-            )?;
-            compute_checkpoint!("after_grx_pull");
-
-            // Mint THBG to the user, signed by the treasury PDA.
-            let seeds: &[&[u8]] = &[b"treasury", &[bump]];
-            let signer = &[seeds];
-            let mint_to = MintToInterface {
-                mint: ctx.accounts.thbg_mint.to_account_info(),
-                to: ctx.accounts.user_thbg_ata.to_account_info(),
-                authority: ctx.accounts.treasury.to_account_info(),
-            };
-            compute_checkpoint!("before_thbg_mint");
-            token_interface::mint_to(
-                CpiContext::new_with_signer(ctx.accounts.token_program.key(), mint_to, signer),
-                thbg_net,
-            )?;
-            compute_checkpoint!("after_thbg_mint");
-
-            ctx.accounts.treasury.load_mut()?.thbg_supply = new_supply;
-
-            emit!(SwappedGrxForThbg {
-                user: ctx.accounts.user.key(),
-                grx_in,
-                thbg_out: thbg_net,
-                fee,
-                thbg_supply: new_supply,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::swap_grx_for_thbg(ctx, grx_in)
+        })
     }
 
     /// Redeem THBG → GRX from the swap vault. Burns the user's THBG (shrinking the
     /// peg liability) and returns GRX at the configured rate.
     pub fn redeem_thbg_for_grx(ctx: Context<RedeemThbgForGrx>, thbg_in: u64) -> Result<()> {
         compute_fn!("redeem_thbg_for_grx" => {
-            require!(thbg_in > 0, TreasuryError::ZeroAmount);
-            let now = Clock::get()?.unix_timestamp;
-
-            let (bump, grx_out, new_supply) = {
-                let t = ctx.accounts.treasury.load()?;
-                require!(t.paused == 0, TreasuryError::Paused);
-                require!(t.grx_per_thbg_rate > 0, TreasuryError::RateNotSet);
-
-                // Math + collateral guards (SupplyUnderflow / InsufficientVault) — the swap
-                // vault is the redemption collateral, so a rate change (set_params) can never
-                // let a redeemer drain more GRX than was deposited.
-                let (grx_out, new_supply) = compute_redeem_thbg_for_grx(
-                    thbg_in,
-                    t.grx_per_thbg_rate,
-                    t.thbg_supply,
-                    ctx.accounts.swap_vault.amount,
-                )?;
-                (t.bump, grx_out, new_supply)
-            };
-
-            // Burn the user's THBG.
-            let burn = BurnInterface {
-                mint: ctx.accounts.thbg_mint.to_account_info(),
-                from: ctx.accounts.user_thbg_ata.to_account_info(),
-                authority: ctx.accounts.user.to_account_info(),
-            };
-            token_interface::burn(
-                CpiContext::new(ctx.accounts.token_program.key(), burn),
-                thbg_in,
-            )?;
-
-            // Return GRX from the swap vault, signed by the treasury PDA.
-            let seeds: &[&[u8]] = &[b"treasury", &[bump]];
-            let signer = &[seeds];
-            let xfer = TransferCheckedInterface {
-                from: ctx.accounts.swap_vault.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-                to: ctx.accounts.user_grx_ata.to_account_info(),
-                authority: ctx.accounts.treasury.to_account_info(),
-            };
-            token_interface::transfer_checked(
-                CpiContext::new_with_signer(ctx.accounts.token_program.key(), xfer, signer),
-                grx_out,
-                ctx.accounts.grx_mint.decimals,
-            )?;
-
-            ctx.accounts.treasury.load_mut()?.thbg_supply = new_supply;
-
-            emit!(RedeemedThbgForGrx {
-                user: ctx.accounts.user.key(),
-                thbg_in,
-                grx_out,
-                thbg_supply: new_supply,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::redeem_thbg_for_grx(ctx, thbg_in)
+        })
     }
 
     /// Stake GRX into the staking vault. Settles any pending reward before changing
     /// the position so the accumulator stays consistent.
     pub fn stake_grx(ctx: Context<StakeGrx>, amount: u64) -> Result<()> {
         compute_fn!("stake_grx" => {
-            require!(amount > 0, TreasuryError::ZeroAmount);
-            let now = Clock::get()?.unix_timestamp;
-
-            let (acc, new_total) = {
-                let t = ctx.accounts.treasury.load()?;
-                let new_total = t.total_staked.checked_add(amount).ok_or(TreasuryError::MathOverflow)?;
-                (t.acc_reward_per_share, new_total)
-            };
-
-            // Settle pending against the OLD position before it grows.
-            let pos = &mut ctx.accounts.position;
-            if pos.amount > 0 {
-                let acc_rew = accrued_since(pos.amount, acc, pos.reward_debt)?;
-                pos.pending = pos.pending.checked_add(acc_rew).ok_or(TreasuryError::MathOverflow)?;
-            }
-
-            let xfer = TransferCheckedInterface {
-                from: ctx.accounts.user_grx_ata.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-                to: ctx.accounts.stake_vault.to_account_info(),
-                authority: ctx.accounts.user.to_account_info(),
-            };
-            token_interface::transfer_checked(
-                CpiContext::new(ctx.accounts.token_program.key(), xfer),
-                amount,
-                ctx.accounts.grx_mint.decimals,
-            )?;
-
-            pos.owner = ctx.accounts.user.key();
-            pos.amount = pos.amount.checked_add(amount).ok_or(TreasuryError::MathOverflow)?;
-            pos.reward_debt = reward_debt_for(pos.amount, acc)?;
-            pos.bump = ctx.bumps.position;
-
-            ctx.accounts.treasury.load_mut()?.total_staked = new_total;
-
-            emit!(Staked {
-                user: ctx.accounts.user.key(),
-                amount,
-                total_staked: new_total,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::stake_grx(ctx, amount)
+        })
     }
 
     /// Unstake GRX. Settles pending reward, returns principal from the staking vault.
     pub fn unstake_grx(ctx: Context<UnstakeGrx>, amount: u64) -> Result<()> {
         compute_fn!("unstake_grx" => {
-            require!(amount > 0, TreasuryError::ZeroAmount);
-            let now = Clock::get()?.unix_timestamp;
-
-            let (acc, bump) = {
-                let t = ctx.accounts.treasury.load()?;
-                (t.acc_reward_per_share, t.bump)
-            };
-
-            let pos = &mut ctx.accounts.position;
-            require!(amount <= pos.amount, TreasuryError::InsufficientStake);
-            let acc_rew = accrued_since(pos.amount, acc, pos.reward_debt)?;
-            pos.pending = pos.pending.checked_add(acc_rew).ok_or(TreasuryError::MathOverflow)?;
-            pos.amount -= amount;
-            pos.reward_debt = reward_debt_for(pos.amount, acc)?;
-
-            let seeds: &[&[u8]] = &[b"treasury", &[bump]];
-            let signer = &[seeds];
-            let xfer = TransferCheckedInterface {
-                from: ctx.accounts.stake_vault.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-                to: ctx.accounts.user_grx_ata.to_account_info(),
-                authority: ctx.accounts.treasury.to_account_info(),
-            };
-            token_interface::transfer_checked(
-                CpiContext::new_with_signer(ctx.accounts.token_program.key(), xfer, signer),
-                amount,
-                ctx.accounts.grx_mint.decimals,
-            )?;
-
-            let new_total = {
-                let mut t = ctx.accounts.treasury.load_mut()?;
-                // checked, not saturating: `amount <= pos.amount <= total_staked` always holds,
-                // so a clamp would mean corrupted accounting — fail loud instead of silently
-                // understating total_staked (which would inflate per-share rewards in fund_rewards).
-                t.total_staked = t.total_staked.checked_sub(amount).ok_or(TreasuryError::MathOverflow)?;
-                t.total_staked
-            };
-
-            emit!(Unstaked {
-                user: ctx.accounts.user.key(),
-                amount,
-                total_staked: new_total,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::unstake_grx(ctx, amount)
+        })
     }
 
     /// Claim accrued staking rewards (paid in GRX from the reward pool).
     pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
         compute_fn!("claim_rewards" => {
-            let now = Clock::get()?.unix_timestamp;
-            let (acc, bump) = {
-                let t = ctx.accounts.treasury.load()?;
-                (t.acc_reward_per_share, t.bump)
-            };
-
-            let payout = {
-                let pos = &mut ctx.accounts.position;
-                let acc_rew = accrued_since(pos.amount, acc, pos.reward_debt)?;
-                let total = pos.pending.checked_add(acc_rew).ok_or(TreasuryError::MathOverflow)?;
-                pos.pending = 0;
-                pos.reward_debt = reward_debt_for(pos.amount, acc)?;
-                total
-            };
-            require!(payout > 0, TreasuryError::ZeroAmount);
-
-            {
-                let t = ctx.accounts.treasury.load()?;
-                require!(t.reward_pool >= payout, TreasuryError::InsufficientRewardPool);
-            }
-
-            let seeds: &[&[u8]] = &[b"treasury", &[bump]];
-            let signer = &[seeds];
-            let xfer = TransferCheckedInterface {
-                from: ctx.accounts.reward_vault.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-                to: ctx.accounts.user_grx_ata.to_account_info(),
-                authority: ctx.accounts.treasury.to_account_info(),
-            };
-            token_interface::transfer_checked(
-                CpiContext::new_with_signer(ctx.accounts.token_program.key(), xfer, signer),
-                payout,
-                ctx.accounts.grx_mint.decimals,
-            )?;
-
-            ctx.accounts.treasury.load_mut()?.reward_pool -= payout;
-
-            emit!(RewardsClaimed {
-                user: ctx.accounts.user.key(),
-                amount: payout,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::claim_rewards(ctx)
+        })
     }
 
     /// Deposit GRX into the reward pool, distributing it pro-rata to current stakers
     /// via the accumulator. Requires a non-zero total stake.
     pub fn fund_rewards(ctx: Context<FundRewards>, amount: u64) -> Result<()> {
         compute_fn!("fund_rewards" => {
-            require!(amount > 0, TreasuryError::ZeroAmount);
-            let now = Clock::get()?.unix_timestamp;
-
-            let total_staked = {
-                let t = ctx.accounts.treasury.load()?;
-                require!(t.total_staked > 0, TreasuryError::NoStakeToReward);
-                t.total_staked
-            };
-
-            let xfer = TransferCheckedInterface {
-                from: ctx.accounts.funder_grx_ata.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-                to: ctx.accounts.reward_vault.to_account_info(),
-                authority: ctx.accounts.funder.to_account_info(),
-            };
-            token_interface::transfer_checked(
-                CpiContext::new(ctx.accounts.token_program.key(), xfer),
-                amount,
-                ctx.accounts.grx_mint.decimals,
-            )?;
-
-            let delta = (amount as u128)
-                .checked_mul(ACC_PRECISION)
-                .ok_or(TreasuryError::MathOverflow)?
-                / (total_staked as u128);
-            let mut t = ctx.accounts.treasury.load_mut()?;
-            t.acc_reward_per_share = t.acc_reward_per_share.checked_add(delta).ok_or(TreasuryError::MathOverflow)?;
-            t.reward_pool = t.reward_pool.checked_add(amount).ok_or(TreasuryError::MathOverflow)?;
-
-            emit!(RewardsFunded {
-                funder: ctx.accounts.funder.key(),
-                amount,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::fund_rewards(ctx, amount)
+        })
     }
 
     /// Slash a staker's principal for misbehaviour (treasury authority only).
@@ -999,507 +529,8 @@ pub mod treasury {
     /// and they are excluded from this redistribution (their `reward_debt` is rebased at the new
     /// accumulator). If no stake remains after slashing, the amount is parked in `reward_pool`.
     pub fn slash_stake(ctx: Context<SlashStake>, amount: u64) -> Result<()> {
-        require!(amount > 0, TreasuryError::ZeroAmount);
         compute_fn!("slash_stake" => {
-            let now = Clock::get()?.unix_timestamp;
-
-            let (acc_old, total_staked, bump) = {
-                let t = ctx.accounts.treasury.load()?;
-                (t.acc_reward_per_share, t.total_staked, t.bump)
-            };
-
-            // Settle the slashed staker's accrued reward at the OLD accumulator, then take principal.
-            let slashed = {
-                let pos = &mut ctx.accounts.position;
-                require!(pos.amount > 0, TreasuryError::InsufficientStake);
-                let acc_rew = accrued_since(pos.amount, acc_old, pos.reward_debt)?;
-                pos.pending = pos.pending.checked_add(acc_rew).ok_or(TreasuryError::MathOverflow)?;
-                let slashed = amount.min(pos.amount);
-                pos.amount -= slashed;
-                slashed
-            };
-
-            // checked, not saturating: `slashed <= pos.amount <= total_staked`, so a clamp
-            // would signal corrupted accounting — fail loud rather than understate total_staked.
-            let total_after = total_staked.checked_sub(slashed).ok_or(TreasuryError::MathOverflow)?;
-
-            // Redistribute to remaining stakers (acc bump); if none remain, just hold in pool.
-            let acc_new = if total_after > 0 {
-                let delta = (slashed as u128)
-                    .checked_mul(ACC_PRECISION)
-                    .ok_or(TreasuryError::MathOverflow)?
-                    / (total_after as u128);
-                acc_old.checked_add(delta).ok_or(TreasuryError::MathOverflow)?
-            } else {
-                acc_old
-            };
-
-            // Rebase the slashed staker at the new accumulator so they don't share their own slash.
-            {
-                let pos = &mut ctx.accounts.position;
-                pos.reward_debt = reward_debt_for(pos.amount, acc_new)?;
-            }
-
-            {
-                let mut t = ctx.accounts.treasury.load_mut()?;
-                t.acc_reward_per_share = acc_new;
-                t.total_staked = total_after;
-                t.reward_pool = t.reward_pool.checked_add(slashed).ok_or(TreasuryError::MathOverflow)?;
-            }
-
-            let seeds: &[&[u8]] = &[b"treasury", &[bump]];
-            let signer = &[seeds];
-            let xfer = TransferCheckedInterface {
-                from: ctx.accounts.stake_vault.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-                to: ctx.accounts.reward_vault.to_account_info(),
-                authority: ctx.accounts.treasury.to_account_info(),
-            };
-            token_interface::transfer_checked(
-                CpiContext::new_with_signer(ctx.accounts.token_program.key(), xfer, signer),
-                slashed,
-                ctx.accounts.grx_mint.decimals,
-            )?;
-
-            emit!(StakeSlashed {
-                authority: ctx.accounts.authority.key(),
-                owner: ctx.accounts.position.owner,
-                slashed_amount: slashed,
-                total_staked: total_after,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::slash_stake(ctx, amount)
+        })
     }
-}
-
-// ---------------------------------------------------------------------------
-// Account contexts
-// ---------------------------------------------------------------------------
-
-#[derive(Accounts)]
-pub struct Initialize<'info> {
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + std::mem::size_of::<Treasury>(),
-        seeds = [b"treasury"],
-        bump,
-    )]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    /// GRX SPL mint (owned by the energy-token program).
-    pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
-
-    /// THBG stablecoin mint, created here with the treasury PDA as mint authority.
-    #[account(
-        init,
-        payer = authority,
-        seeds = [b"thbg_mint"],
-        bump,
-        mint::decimals = THBG_DECIMALS,
-        mint::authority = treasury,
-        mint::token_program = token_program,
-    )]
-    pub thbg_mint: Box<InterfaceAccount<'info, MintInterface>>,
-
-    /// GRX received from swaps (peg collateral source for redemptions).
-    #[account(
-        init,
-        payer = authority,
-        seeds = [b"swap_vault"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = treasury,
-        token::token_program = token_program,
-    )]
-    pub swap_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    /// GRX held in custody for stakers (NEVER backs the peg).
-    #[account(
-        init,
-        payer = authority,
-        seeds = [b"stake_vault"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = treasury,
-        token::token_program = token_program,
-    )]
-    pub stake_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    /// GRX reward pool paid out to stakers.
-    #[account(
-        init,
-        payer = authority,
-        seeds = [b"reward_vault"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = treasury,
-        token::token_program = token_program,
-    )]
-    pub reward_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-    pub system_program: Program<'info, System>,
-    pub rent: Sysvar<'info, Rent>,
-}
-
-#[derive(Accounts)]
-pub struct SetParams<'info> {
-    #[account(mut, seeds = [b"treasury"], bump)]
-    pub treasury: AccountLoader<'info, Treasury>,
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateAttestation<'info> {
-    #[account(mut, seeds = [b"treasury"], bump)]
-    pub treasury: AccountLoader<'info, Treasury>,
-    pub attestor: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct SwapGrxForThbg<'info> {
-    #[account(
-        mut,
-        seeds = [b"treasury"],
-        bump,
-        constraint = grx_mint.key() == treasury.load()?.grx_mint @ TreasuryError::UnauthorizedAuthority,
-        constraint = thbg_mint.key() == treasury.load()?.thbg_mint @ TreasuryError::UnauthorizedAuthority,
-    )]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    #[account(mut)]
-    pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
-    #[account(mut, seeds = [b"thbg_mint"], bump = treasury.load()?.thbg_mint_bump)]
-    pub thbg_mint: Box<InterfaceAccount<'info, MintInterface>>,
-
-    #[account(mut, seeds = [b"swap_vault"], bump = treasury.load()?.swap_vault_bump)]
-    pub swap_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    #[account(mut, token::mint = grx_mint, token::authority = user)]
-    pub user_grx_ata: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-    #[account(mut, token::mint = thbg_mint, token::authority = user)]
-    pub user_thbg_ata: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    pub user: Signer<'info>,
-    pub token_program: Interface<'info, TokenInterface>,
-}
-
-#[derive(Accounts)]
-pub struct RedeemThbgForGrx<'info> {
-    #[account(
-        mut,
-        seeds = [b"treasury"],
-        bump,
-        constraint = grx_mint.key() == treasury.load()?.grx_mint @ TreasuryError::UnauthorizedAuthority,
-        constraint = thbg_mint.key() == treasury.load()?.thbg_mint @ TreasuryError::UnauthorizedAuthority,
-    )]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    #[account(mut)]
-    pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
-    #[account(mut, seeds = [b"thbg_mint"], bump = treasury.load()?.thbg_mint_bump)]
-    pub thbg_mint: Box<InterfaceAccount<'info, MintInterface>>,
-
-    #[account(mut, seeds = [b"swap_vault"], bump = treasury.load()?.swap_vault_bump)]
-    pub swap_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    #[account(mut, token::mint = grx_mint, token::authority = user)]
-    pub user_grx_ata: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-    #[account(mut, token::mint = thbg_mint, token::authority = user)]
-    pub user_thbg_ata: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    pub user: Signer<'info>,
-    pub token_program: Interface<'info, TokenInterface>,
-}
-
-#[derive(Accounts)]
-pub struct StakeGrx<'info> {
-    #[account(
-        mut,
-        seeds = [b"treasury"],
-        bump,
-        constraint = grx_mint.key() == treasury.load()?.grx_mint @ TreasuryError::UnauthorizedAuthority,
-    )]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    #[account(
-        init_if_needed,
-        payer = user,
-        space = 8 + StakePosition::LEN,
-        seeds = [b"stake", user.key().as_ref()],
-        bump,
-    )]
-    pub position: Account<'info, StakePosition>,
-
-    pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
-    #[account(mut, seeds = [b"stake_vault"], bump = treasury.load()?.stake_vault_bump)]
-    pub stake_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    #[account(mut, token::mint = grx_mint, token::authority = user)]
-    pub user_grx_ata: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    #[account(mut)]
-    pub user: Signer<'info>,
-    pub token_program: Interface<'info, TokenInterface>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct UnstakeGrx<'info> {
-    #[account(
-        mut,
-        seeds = [b"treasury"],
-        bump,
-        constraint = grx_mint.key() == treasury.load()?.grx_mint @ TreasuryError::UnauthorizedAuthority,
-    )]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    #[account(
-        mut,
-        seeds = [b"stake", user.key().as_ref()],
-        bump = position.bump,
-    )]
-    pub position: Account<'info, StakePosition>,
-
-    pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
-    #[account(mut, seeds = [b"stake_vault"], bump = treasury.load()?.stake_vault_bump)]
-    pub stake_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    #[account(mut, token::mint = grx_mint, token::authority = user)]
-    pub user_grx_ata: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    pub user: Signer<'info>,
-    pub token_program: Interface<'info, TokenInterface>,
-}
-
-#[derive(Accounts)]
-pub struct ClaimRewards<'info> {
-    #[account(
-        mut,
-        seeds = [b"treasury"],
-        bump,
-        constraint = grx_mint.key() == treasury.load()?.grx_mint @ TreasuryError::UnauthorizedAuthority,
-    )]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    #[account(
-        mut,
-        seeds = [b"stake", user.key().as_ref()],
-        bump = position.bump,
-    )]
-    pub position: Account<'info, StakePosition>,
-
-    pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
-    #[account(mut, seeds = [b"reward_vault"], bump = treasury.load()?.reward_vault_bump)]
-    pub reward_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    #[account(mut, token::mint = grx_mint, token::authority = user)]
-    pub user_grx_ata: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    pub user: Signer<'info>,
-    pub token_program: Interface<'info, TokenInterface>,
-}
-
-#[derive(Accounts)]
-pub struct FundRewards<'info> {
-    #[account(
-        mut,
-        seeds = [b"treasury"],
-        bump,
-        constraint = grx_mint.key() == treasury.load()?.grx_mint @ TreasuryError::UnauthorizedAuthority,
-    )]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
-    #[account(mut, seeds = [b"reward_vault"], bump = treasury.load()?.reward_vault_bump)]
-    pub reward_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    #[account(mut, token::mint = grx_mint, token::authority = funder)]
-    pub funder_grx_ata: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    pub funder: Signer<'info>,
-    pub token_program: Interface<'info, TokenInterface>,
-}
-
-#[derive(Accounts)]
-pub struct RecordSettlement<'info> {
-    #[account(mut, seeds = [b"treasury"], bump)]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    /// The authorized settlement recorder — the trading market_authority PDA,
-    /// passed as a signer via `invoke_signed` from the trading program.
-    pub recorder: Signer<'info>,
-}
-
-#[derive(Accounts)]
-#[instruction(value: u64, merkle_root: [u8; 32], vat_amount: u64, vat_rate_bps: u16, zone_id: u32, batch_id: u64)]
-pub struct RecordSettlementBatch<'info> {
-    #[account(mut, seeds = [b"treasury"], bump)]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    /// Per-`(zone, batch)` audit commitment, created on first record for the batch.
-    /// Distinct seed namespace (`b"settlement_batch"`) from the sharded variant's
-    /// `b"settlement"` — this instruction is not on the live trading CPI path, so
-    /// the two must never `init` the same PDA for the same (zone, batch).
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + std::mem::size_of::<SettlementRecord>(),
-        seeds = [b"settlement_batch", zone_id.to_le_bytes().as_ref(), batch_id.to_le_bytes().as_ref()],
-        bump
-    )]
-    pub settlement_record: AccountLoader<'info, SettlementRecord>,
-
-    /// The authorized settlement recorder — the trading market_authority PDA.
-    pub recorder: Signer<'info>,
-
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(shard_id: u8)]
-pub struct InitializeSettlementShard<'info> {
-    #[account(seeds = [b"treasury"], bump)]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + std::mem::size_of::<SettlementShard>(),
-        seeds = [b"settle_shard".as_ref(), &[shard_id]],
-        bump
-    )]
-    pub shard: AccountLoader<'info, SettlementShard>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct InitializeRebateVault<'info> {
-    #[account(
-        mut,
-        seeds = [b"treasury"],
-        bump,
-        constraint = grx_mint.key() == treasury.load()?.grx_mint @ TreasuryError::UnauthorizedAuthority,
-    )]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
-
-    /// GRX slashed-bond destination for registry's `slash_destination` — regulator /
-    /// consumer-rebate pool, kept separate from `reward_vault` (yield-stakers).
-    #[account(
-        init,
-        payer = authority,
-        seeds = [b"rebate_vault"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = treasury,
-        token::token_program = token_program,
-    )]
-    pub rebate_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(value: u64, shard_id: u8)]
-pub struct RecordSettlementSharded<'info> {
-    /// Read-only: only the recorder gate reads it. A shared read lock does not
-    /// serialize parallel settles (unlike the `mut` treasury in `record_settlement`).
-    #[account(seeds = [b"treasury"], bump)]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    /// The per-shard accumulator; bound to `shard_id` by its seeds.
-    #[account(mut, seeds = [b"settle_shard".as_ref(), &[shard_id]], bump = shard.load()?.bump)]
-    pub shard: AccountLoader<'info, SettlementShard>,
-
-    /// The authorized settlement recorder — the trading market_authority PDA.
-    pub recorder: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct AggregateSettlementShards<'info> {
-    #[account(mut, seeds = [b"treasury"], bump)]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    pub authority: Signer<'info>,
-    // Shards passed via remaining_accounts.
-}
-
-#[derive(Accounts)]
-#[instruction(value: u64, merkle_root: [u8; 32], vat_amount: u64, vat_rate_bps: u16, zone_id: u32, batch_id: u64, shard_id: u8)]
-pub struct RecordSettlementBatchSharded<'info> {
-    /// Read-only: only the recorder gate reads it (shared read lock does not serialize).
-    #[account(seeds = [b"treasury"], bump)]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    /// The per-shard accumulator; bound to `shard_id` by its seeds.
-    #[account(mut, seeds = [b"settle_shard".as_ref(), &[shard_id]], bump = shard.load()?.bump)]
-    pub shard: AccountLoader<'info, SettlementShard>,
-
-    /// Per-`(zone, batch)` audit commitment, created on first record for the batch.
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + std::mem::size_of::<SettlementRecord>(),
-        seeds = [b"settlement", zone_id.to_le_bytes().as_ref(), batch_id.to_le_bytes().as_ref()],
-        bump
-    )]
-    pub settlement_record: AccountLoader<'info, SettlementRecord>,
-
-    /// The authorized settlement recorder — the trading market_authority PDA.
-    pub recorder: Signer<'info>,
-
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct SlashStake<'info> {
-    #[account(
-        mut,
-        seeds = [b"treasury"],
-        bump,
-        has_one = authority @ TreasuryError::UnauthorizedAuthority,
-        constraint = grx_mint.key() == treasury.load()?.grx_mint @ TreasuryError::UnauthorizedAuthority,
-    )]
-    pub treasury: AccountLoader<'info, Treasury>,
-
-    /// CHECK: identifies the slashed staker; only used to derive the position PDA and label the event.
-    pub target_owner: UncheckedAccount<'info>,
-
-    #[account(
-        mut,
-        seeds = [b"stake", target_owner.key().as_ref()],
-        bump = position.bump,
-    )]
-    pub position: Account<'info, StakePosition>,
-
-    pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
-    #[account(mut, seeds = [b"stake_vault"], bump = treasury.load()?.stake_vault_bump)]
-    pub stake_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-    #[account(mut, seeds = [b"reward_vault"], bump = treasury.load()?.reward_vault_bump)]
-    pub reward_vault: Box<InterfaceAccount<'info, TokenAccountInterface>>,
-
-    /// Treasury authority — must equal `treasury.authority`.
-    pub authority: Signer<'info>,
-    pub token_program: Interface<'info, TokenInterface>,
 }

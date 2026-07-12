@@ -3,18 +3,20 @@
 use anchor_lang::prelude::*;
 
 // Module declarations
-mod contexts;
 mod errors;
 mod events;
-mod handlers;
+mod instructions;
 mod state;
 
 #[cfg(test)]
 mod size_test;
 
-pub use contexts::*;
 pub use errors::*;
 pub use events::*;
+// Handler fns share names with the #[program]-generated re-exports; the glob is
+// deliberate (Context structs + client accounts must be crate-public).
+#[allow(ambiguous_glob_reexports)]
+pub use instructions::*;
 pub use state::*;
 
 declare_id!("FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS");
@@ -40,7 +42,7 @@ pub mod governance {
 
     pub fn initialize_governance(ctx: Context<InitializeGovernance>) -> Result<()> {
         compute_fn!("initialize_governance" => {
-            handlers::initialize::handler(ctx)
+            instructions::initialize_governance(ctx)
         })
     }
 
@@ -52,7 +54,7 @@ pub mod governance {
         validation_data: String,
     ) -> Result<()> {
         compute_fn!("issue_erc" => {
-            handlers::erc::issue(
+            instructions::issue_erc(
                 ctx,
                 certificate_id,
                 energy_amount,
@@ -64,21 +66,21 @@ pub mod governance {
 
     pub fn validate_erc_for_trading(ctx: Context<ValidateErc>) -> Result<()> {
         compute_fn!("validate_erc_for_trading" => {
-            handlers::erc::validate_for_trading(ctx)
+            instructions::validate_erc_for_trading(ctx)
         })
     }
 
     /// Initialize the fungible REC mint (1 token = 1 MWh, 6 decimals). Run once.
     pub fn init_rec_mint(ctx: Context<InitRecMint>) -> Result<()> {
         compute_fn!("init_rec_mint" => {
-            handlers::erc::init_rec_mint(ctx)
+            instructions::init_rec_mint(ctx)
         })
     }
 
     /// Retire (burn) REC tokens; `amount` is base units (6 decimals).
     pub fn retire_rec(ctx: Context<RetireRec>, amount: u64) -> Result<()> {
         compute_fn!("retire_rec" => {
-            handlers::erc::retire_rec(ctx, amount)
+            instructions::retire_rec(ctx, amount)
         })
     }
 
@@ -88,7 +90,7 @@ pub mod governance {
         allow_certificate_transfers: bool,
     ) -> Result<()> {
         compute_fn!("update_governance_config" => {
-            handlers::config::update_governance_config(ctx, erc_validation_enabled, allow_certificate_transfers)
+            instructions::update_governance_config(ctx, erc_validation_enabled, allow_certificate_transfers)
         })
     }
 
@@ -97,7 +99,7 @@ pub mod governance {
         maintenance_enabled: bool,
     ) -> Result<()> {
         compute_fn!("set_maintenance_mode" => {
-            handlers::config::set_maintenance_mode(ctx, maintenance_enabled)
+            instructions::set_maintenance_mode(ctx, maintenance_enabled)
         })
     }
 
@@ -108,7 +110,7 @@ pub mod governance {
         erc_validity_period: i64,
     ) -> Result<()> {
         compute_fn!("update_erc_limits" => {
-            handlers::config::update_erc_limits(
+            instructions::update_erc_limits(
                 ctx,
                 min_energy_amount,
                 max_erc_amount,
@@ -122,25 +124,26 @@ pub mod governance {
         contact_info: String,
     ) -> Result<()> {
         compute_fn!("update_authority_info" => {
-            handlers::config::update_authority_info(ctx, contact_info)
+            instructions::update_authority_info(ctx, contact_info)
         })
     }
 
     pub fn get_governance_stats(ctx: Context<GetGovernanceStats>) -> Result<GovernanceStats> {
-        compute_fn!("get_governance_stats" => {
-            handlers::stats::handler(ctx)
-        })
+        let res = compute_fn!("get_governance_stats" => {
+            instructions::get_governance_stats(ctx)
+        })?;
+        Ok(res)
     }
 
     pub fn revoke_erc(ctx: Context<RevokeErc>, reason: String) -> Result<()> {
         compute_fn!("revoke_erc" => {
-            handlers::erc::revoke(ctx, reason)
+            instructions::revoke_erc(ctx, reason)
         })
     }
 
     pub fn transfer_erc(ctx: Context<TransferErc>) -> Result<()> {
         compute_fn!("transfer_erc" => {
-            handlers::erc::transfer(ctx)
+            instructions::transfer_erc(ctx)
         })
     }
 
@@ -149,19 +152,19 @@ pub mod governance {
         new_authority: Pubkey,
     ) -> Result<()> {
         compute_fn!("propose_authority_change" => {
-            handlers::authority::propose_authority_change(ctx, new_authority)
+            instructions::propose_authority_change(ctx, new_authority)
         })
     }
 
     pub fn approve_authority_change(ctx: Context<ApproveAuthorityChange>) -> Result<()> {
         compute_fn!("approve_authority_change" => {
-            handlers::authority::approve_authority_change(ctx)
+            instructions::approve_authority_change(ctx)
         })
     }
 
     pub fn cancel_authority_change(ctx: Context<CancelAuthorityChange>) -> Result<()> {
         compute_fn!("cancel_authority_change" => {
-            handlers::authority::cancel_authority_change(ctx)
+            instructions::cancel_authority_change(ctx)
         })
     }
 
@@ -172,7 +175,7 @@ pub mod governance {
         require_validation: bool,
     ) -> Result<()> {
         compute_fn!("set_oracle_authority" => {
-            handlers::authority::set_oracle_authority(ctx, oracle_authority, min_confidence, require_validation)
+            instructions::set_oracle_authority(ctx, oracle_authority, min_confidence, require_validation)
         })
     }
 
@@ -180,13 +183,13 @@ pub mod governance {
 
     pub fn admit_aggregator(ctx: Context<AdmitAggregator>, aggregator: Pubkey, segment: u8) -> Result<()> {
         compute_fn!("admit_aggregator" => {
-            handlers::aggregator::admit_aggregator(ctx, aggregator, segment)
+            instructions::admit_aggregator(ctx, aggregator, segment)
         })
     }
 
     pub fn revoke_aggregator(ctx: Context<RevokeAggregator>) -> Result<()> {
         compute_fn!("revoke_aggregator" => {
-            handlers::aggregator::revoke_aggregator(ctx)
+            instructions::revoke_aggregator(ctx)
         })
     }
 
@@ -199,7 +202,7 @@ pub mod governance {
         wheeling_charge: u64,
     ) -> Result<()> {
         compute_fn!("initialize_zone_config" => {
-            handlers::dao::initialize_zone_config(ctx, zone_id, incentive_multiplier, wheeling_charge)
+            instructions::initialize_zone_config(ctx, zone_id, incentive_multiplier, wheeling_charge)
         })
     }
 
@@ -212,19 +215,19 @@ pub mod governance {
         voting_period_seconds: i64,
     ) -> Result<()> {
         compute_fn!("create_proposal" => {
-            handlers::dao::create_proposal(ctx, target_zone, proposal_id, parameter, new_value, voting_period_seconds)
+            instructions::create_proposal(ctx, target_zone, proposal_id, parameter, new_value, voting_period_seconds)
         })
     }
 
     pub fn cast_vote(ctx: Context<CastVote>, choice: bool) -> Result<()> {
         compute_fn!("cast_vote" => {
-            handlers::dao::cast_vote(ctx, choice)
+            instructions::cast_vote(ctx, choice)
         })
     }
 
     pub fn execute_proposal(ctx: Context<ExecuteProposal>) -> Result<()> {
         compute_fn!("execute_proposal" => {
-            handlers::dao::execute_proposal(ctx)
+            instructions::execute_proposal(ctx)
         })
     }
 }

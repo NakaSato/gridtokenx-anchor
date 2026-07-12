@@ -1,13 +1,19 @@
+#![allow(unexpected_cfgs)]
+
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface};
 
 // Core modules
 pub mod error;
 pub mod events;
+pub mod instructions;
 pub mod state;
 
 pub use error::RegistryError;
 pub use events::*;
+// Handler fns share names with the #[program]-generated re-exports; the glob is
+// deliberate (Context structs + client accounts must be crate-public).
+#[allow(ambiguous_glob_reexports)]
+pub use instructions::*;
 pub use state::*;
 
 declare_id!("FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7");
@@ -41,23 +47,27 @@ pub const UNSTAKE_COOLDOWN_SECS: i64 = 24 * 60 * 60; // 24h
 /// to dodge a pending slash. Only after it elapses may the bond be unstaked below MIN.
 pub const RESIGN_COOLDOWN_SECS: i64 = 24 * 60 * 60; // 24h
 
+// compute_fn! / compute_checkpoint! — real macros under `localnet`, no-ops otherwise.
 #[cfg(feature = "localnet")]
 use compute_debug::{compute_checkpoint, compute_fn};
 
+// No-op versions for non-localnet builds. `#[macro_export]` hoists them to the crate
+// root so the `instructions/` submodules can `use crate::{compute_fn, compute_checkpoint}`.
 #[cfg(not(feature = "localnet"))]
+#[macro_export]
 macro_rules! compute_fn {
     ($name:expr => $block:block) => {
         $block
     };
 }
 #[cfg(not(feature = "localnet"))]
-#[allow(unused_macros)]
+#[macro_export]
 macro_rules! compute_checkpoint {
     ($name:expr) => {};
 }
 
 /// Helper to convert fixed [u8; 32] to String (trimming nulls)
-fn bytes32_to_string(bytes: &[u8; 32]) -> String {
+pub(crate) fn bytes32_to_string(bytes: &[u8; 32]) -> String {
     let mut len = 0;
     while len < 32 && bytes[len] != 0 {
         len += 1;
@@ -67,12 +77,12 @@ fn bytes32_to_string(bytes: &[u8; 32]) -> String {
 
 /// Canonical shard selector — binds an entity to one of the 16 shards by its
 /// first key byte. Matches the SKILL invariant `authority.to_bytes()[0] % num_shards`.
-fn shard_for(key: &Pubkey) -> u8 {
+pub(crate) fn shard_for(key: &Pubkey) -> u8 {
     key.to_bytes()[0] % 16
 }
 
 /// Helper to convert String to fixed [u8; 32]
-fn string_to_bytes32(s: &str) -> [u8; 32] {
+pub(crate) fn string_to_bytes32(s: &str) -> [u8; 32] {
     let mut bytes = [0u8; 32];
     let bytes_source = s.as_bytes();
     let len = bytes_source.len().min(32);
@@ -86,166 +96,34 @@ pub mod registry {
 
     /// Initialize the registry with REC authority
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        compute_fn!("initialize" => {
-            let mut registry = ctx.accounts.registry.load_init()?;
-            registry.authority = ctx.accounts.authority.key();
-            registry.has_oracle_authority = 0;
-            registry.has_slash_destination = 0;
-            registry.user_count = 0;
-            registry.meter_count = 0;
-            registry.active_meter_count = 0;
-
-            emit!(RegistryInitialized {
-                authority: ctx.accounts.authority.key(),
-            });
-        });
-        Ok(())
+        compute_fn!("initialize" => { instructions::initialize(ctx) })
     }
 
     /// Initialize a registry shard for distributed counting
     pub fn initialize_shard(ctx: Context<InitializeShard>, shard_id: u8) -> Result<()> {
-        require!(shard_id < 16, RegistryError::InvalidShardId);
-        compute_fn!("initialize_shard" => {
-            let mut shard = ctx.accounts.shard.load_init()?;
-            shard.shard_id = shard_id;
-            shard.bump = ctx.bumps.shard; // cache canonical bump for cheap PDA checks later
-            shard.user_count = 0;
-            shard.meter_count = 0;
-            shard.active_meter_count = 0;
-        });
-        Ok(())
+        compute_fn!("initialize_shard" => { instructions::initialize_shard(ctx, shard_id) })
     }
 
     /// Set the oracle authority (admin only)
     pub fn set_oracle_authority(ctx: Context<SetOracleAuthority>, oracle: Pubkey) -> Result<()> {
-        compute_fn!("set_oracle_authority" => {
-            let mut registry = ctx.accounts.registry.load_mut()?;
-            require_keys_eq!(
-                registry.authority,
-                ctx.accounts.authority.key(),
-                RegistryError::UnauthorizedAuthority
-            );
-
-            let old_oracle = if registry.has_oracle_authority == 1 {
-                Some(registry.oracle_authority)
-            } else {
-                None
-            };
-
-            registry.oracle_authority = oracle;
-            registry.has_oracle_authority = 1;
-
-            emit!(OracleAuthoritySet {
-                old_oracle,
-                new_oracle: oracle,
-            });
-        });
-        Ok(())
+        compute_fn!("set_oracle_authority" => { instructions::set_oracle_authority(ctx, oracle) })
     }
 
     /// Set the allowed destination for slashed validator bonds (admin only).
     /// `slash_validator` will refuse to send the bond anywhere else, so a slash
     /// cannot be misrouted (point this at the treasury `reward_vault`).
     pub fn set_slash_destination(ctx: Context<SetSlashDestination>, destination: Pubkey) -> Result<()> {
-        compute_fn!("set_slash_destination" => {
-            let mut registry = ctx.accounts.registry.load_mut()?;
-            require_keys_eq!(
-                registry.authority,
-                ctx.accounts.authority.key(),
-                RegistryError::UnauthorizedAuthority
-            );
-
-            let old_destination = if registry.has_slash_destination == 1 {
-                Some(registry.slash_destination)
-            } else {
-                None
-            };
-
-            registry.slash_destination = destination;
-            registry.has_slash_destination = 1;
-
-            emit!(SlashDestinationSet {
-                old_destination,
-                new_destination: destination,
-            });
-        });
-        Ok(())
+        compute_fn!("set_slash_destination" => { instructions::set_slash_destination(ctx, destination) })
     }
 
     /// Update the registry authority (admin only)
     pub fn update_authority(ctx: Context<UpdateAuthority>, new_authority: Pubkey) -> Result<()> {
-        compute_fn!("update_authority" => {
-            let mut registry = ctx.accounts.registry.load_mut()?;
-            require_keys_eq!(
-                registry.authority,
-                ctx.accounts.authority.key(),
-                RegistryError::UnauthorizedAuthority
-            );
-
-            let old_authority = registry.authority;
-            registry.authority = new_authority;
-
-            emit!(AuthorityUpdated {
-                old_authority,
-                new_authority,
-            });
-        });
-        Ok(())
+        compute_fn!("update_authority" => { instructions::update_authority(ctx, new_authority) })
     }
 
     /// Aggregate counts from all shards into the global registry (admin only)
     pub fn aggregate_shards(ctx: Context<AggregateShards>) -> Result<()> {
-        compute_fn!("aggregate_shards" => {
-            let mut registry = ctx.accounts.registry.load_mut()?;
-            require_keys_eq!(
-                registry.authority,
-                ctx.accounts.authority.key(),
-                RegistryError::UnauthorizedAuthority
-            );
-
-            let mut total_users = 0u64;
-            let mut total_meters = 0u64;
-            let mut total_active_meters = 0u64;
-            // Bitmask of shard_ids already counted — reject duplicates so a shard
-            // passed twice cannot inflate the totals.
-            let mut seen: u16 = 0;
-            const SHARD_LEN: usize = std::mem::size_of::<RegistryShard>();
-
-            for account_info in ctx.remaining_accounts.iter() {
-                require_keys_eq!(*account_info.owner, crate::ID, RegistryError::UnauthorizedAuthority);
-
-                let shard_data = account_info.try_borrow_data()?;
-                if shard_data.len() >= 8 + SHARD_LEN {
-                    let shard = RegistryShard::load_from_bytes(&shard_data[8..8 + SHARD_LEN])?;
-
-                    // Validate via the stored canonical bump (create_program_address ~1,651 CU)
-                    // instead of re-deriving with find_program_address (~12,136 CU).
-                    let expected_pda = Pubkey::create_program_address(
-                        &[b"registry_shard", &[shard.shard_id], &[shard.bump]], &crate::ID
-                    ).map_err(|_| RegistryError::UnauthorizedAuthority)?;
-                    require_keys_eq!(account_info.key(), expected_pda, RegistryError::UnauthorizedAuthority);
-
-                    let bit = 1u16 << shard.shard_id;
-                    require!(seen & bit == 0, RegistryError::DuplicateShard);
-                    seen |= bit;
-
-                    total_users = total_users
-                        .checked_add(shard.user_count)
-                        .ok_or(RegistryError::MathOverflow)?;
-                    total_meters = total_meters
-                        .checked_add(shard.meter_count)
-                        .ok_or(RegistryError::MathOverflow)?;
-                    total_active_meters = total_active_meters
-                        .checked_add(shard.active_meter_count)
-                        .ok_or(RegistryError::MathOverflow)?;
-                }
-            }
-
-            registry.user_count = total_users;
-            registry.meter_count = total_meters;
-            registry.active_meter_count = total_active_meters;
-        });
-        Ok(())
+        compute_fn!("aggregate_shards" => { instructions::aggregate_shards(ctx) })
     }
 
     /// Register a new user in the P2P energy trading system
@@ -258,56 +136,9 @@ pub mod registry {
         h3_index: u64,
         shard_id: u8,
     ) -> Result<()> {
-        require!(shard_id < 16, RegistryError::InvalidShardId);
-        // Shard is bound to the user's key — caller cannot scatter counts onto arbitrary shards.
-        require!(
-            shard_id == shard_for(&ctx.accounts.authority.key()),
-            RegistryError::InvalidShardId
-        );
         compute_fn!("register_user" => {
-            let registry = ctx.accounts.registry.load()?;
-            
-            // Authorization Check: Either the user signs for themselves, or the Registry Authority signs for them.
-            // Note: `authority` is an `AccountInfo` instead of `Signer` because the admin can sign on behalf of the user.
-            let is_user_signing = ctx.accounts.authority.is_signer;
-            let is_admin_signing = ctx.accounts.payer.key() == registry.authority;
-            
-            require!(
-                is_user_signing || is_admin_signing,
-                RegistryError::UnauthorizedAuthority
-            );
-
-            let user_authority = ctx.accounts.authority.key();
-            let now = Clock::get()?.unix_timestamp;
-            let mut user_account = ctx.accounts.user_account.load_init()?;
-            let mut shard = ctx.accounts.registry_shard.load_mut()?;
-
-            user_account.authority = user_authority;
-            user_account.user_type = user_type;
-            user_account.lat_e7 = lat_e7;
-            user_account.long_e7 = long_e7;
-            user_account.h3_index = h3_index;
-            user_account.status = UserStatus::Active;
-            user_account.shard_id = shard_id;
-            user_account.registered_at = now;
-            user_account.meter_count = 0;
-            user_account.airdrop_claimed = 0;
-
-            shard.user_count = shard.user_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
-
-            // The welcome airdrop is NOT minted here. A failed mint CPI would abort the
-            // whole transaction (Solana cannot "swallow" a failed CPI), which would block
-            // registration entirely. Registration must always succeed independently; the
-            // airdrop is claimed separately via `claim_airdrop` and is safely retryable.
-            emit!(UserRegistered {
-                user: user_authority,
-                user_type,
-                lat_e7,
-                long_e7,
-                h3_index,
-            });
-        });
-        Ok(())
+            instructions::register_user(ctx, user_type, lat_e7, long_e7, h3_index, shard_id)
+        })
     }
 
     /// Mint the one-time welcome airdrop to an already-registered user.
@@ -318,56 +149,7 @@ pub mod registry {
     /// roll back) together, leaving the claim safely retryable without touching the user
     /// record created by `register_user`.
     pub fn claim_airdrop(ctx: Context<ClaimAirdrop>) -> Result<()> {
-        compute_fn!("claim_airdrop" => {
-            // Authorization: the user signs for themselves, or the registry admin signs for them.
-            let is_user_signing = ctx.accounts.authority.is_signer;
-            let is_admin_signing = {
-                let registry = ctx.accounts.registry.load()?;
-                ctx.accounts.payer.key() == registry.authority
-            };
-            require!(is_user_signing || is_admin_signing, RegistryError::UnauthorizedAuthority);
-
-            // Mark claimed first; if the mint CPI below fails, this write rolls back with
-            // the failed tx, so the flag never desyncs from the actual mint.
-            {
-                let mut user_account = ctx.accounts.user_account.load_mut()?;
-                require!(
-                    user_account.authority == ctx.accounts.authority.key(),
-                    RegistryError::UnauthorizedAuthority
-                );
-                require!(user_account.airdrop_claimed == 0, RegistryError::AirdropAlreadyClaimed);
-                user_account.airdrop_claimed = 1;
-            }
-
-            let cpi_accounts = energy_token::cpi::accounts::MintTokensDirect {
-                token_info: ctx.accounts.token_info.to_account_info(),
-                mint: ctx.accounts.mint.to_account_info(),
-                user_token_account: ctx.accounts.user_token_account.to_account_info(),
-                authority: ctx.accounts.registry.to_account_info(), // Registry PDA signs
-                registry_authority: ctx.accounts.registry.to_account_info(), // Must match stored registry_authority
-                rec_validator: ctx.accounts.registry.to_account_info(), // Placeholder when REC count is 0
-                token_program: ctx.accounts.token_program.to_account_info(),
-            };
-            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
-            let signer = &[&registry_seeds[..]];
-            let cpi_ctx = CpiContext::new_with_signer(
-                ctx.accounts.energy_token_program.key(),
-                cpi_accounts,
-                signer,
-            );
-
-            compute_checkpoint!("before_claim_cpi");
-            energy_token::cpi::mint_tokens_direct(cpi_ctx, AIRDROP_AMOUNT)?;
-            compute_checkpoint!("after_claim_cpi");
-
-            let now = Clock::get()?.unix_timestamp;
-            emit!(AirdropClaimed {
-                user: ctx.accounts.authority.key(),
-                amount: AIRDROP_AMOUNT,
-                timestamp: now,
-            });
-        });
-        Ok(())
+        compute_fn!("claim_airdrop" => { instructions::claim_airdrop(ctx) })
     }
 
     /// Register a smart meter for an existing user
@@ -378,56 +160,9 @@ pub mod registry {
         shard_id: u8,
         zone_id: i32,
     ) -> Result<()> {
-        require!(shard_id < 16, RegistryError::InvalidShardId);
-        require!(zone_id >= 0, RegistryError::InvalidZone);
-        let owner = ctx.accounts.owner.key();
-        // Meter co-locates on its owner's shard.
-        require!(shard_id == shard_for(&owner), RegistryError::InvalidShardId);
         compute_fn!("register_meter" => {
-            let mut meter_account = ctx.accounts.meter_account.load_init()?;
-            let mut user_account = ctx.accounts.user_account.load_mut()?;
-            let mut shard = ctx.accounts.registry_shard.load_mut()?;
-
-            require!(
-                user_account.status == UserStatus::Active,
-                RegistryError::UnauthorizedUser
-            );
-
-            // Basic owner-user validation (though PDA seeds also protect this)
-            require_keys_eq!(
-                owner,
-                user_account.authority,
-                RegistryError::UnauthorizedUser
-            );
-
-            require!(meter_id.len() <= 32, RegistryError::InvalidMeterId);
-
-            meter_account.meter_id = string_to_bytes32(&meter_id);
-            meter_account.owner = owner;
-            meter_account.meter_type = meter_type;
-            meter_account.status = MeterStatus::Active;
-            meter_account.zone_id = zone_id;
-            meter_account.registered_at = Clock::get()?.unix_timestamp;
-            meter_account.last_reading_at = 0;
-            meter_account.total_generation = 0;
-            meter_account.total_consumption = 0;
-            meter_account.settled_net_generation = 0;
-            meter_account.claimed_erc_generation = 0;
-
-            user_account.meter_count = user_account.meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
-            shard.meter_count = shard.meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
-            // New meters are created Active — count on the shard, NOT the global Registry.
-            // Writing the global account here would take a write lock on every registration
-            // and serialize the hot path; aggregate_shards reconciles the global total.
-            shard.active_meter_count = shard.active_meter_count.checked_add(1).ok_or(RegistryError::MathOverflow)?;
-
-            emit!(MeterRegistered {
-                meter_id: meter_id.clone(),
-                owner,
-                meter_type,
-            });
-        });
-        Ok(())
+            instructions::register_meter(ctx, meter_id, meter_type, shard_id, zone_id)
+        })
     }
 
     /// Update user status (admin only)
@@ -435,26 +170,7 @@ pub mod registry {
         ctx: Context<UpdateUserStatus>,
         new_status: UserStatus,
     ) -> Result<()> {
-        compute_fn!("update_user_status" => {
-            let mut user_account = ctx.accounts.user_account.load_mut()?;
-            let registry = ctx.accounts.registry.load()?;
-
-            require_keys_eq!(
-                ctx.accounts.authority.key(),
-                registry.authority,
-                RegistryError::UnauthorizedAuthority
-            );
-
-            let old_status = user_account.status;
-            user_account.status = new_status;
-
-            emit!(UserStatusUpdated {
-                user: user_account.authority,
-                old_status,
-                new_status,
-            });
-        });
-        Ok(())
+        compute_fn!("update_user_status" => { instructions::update_user_status(ctx, new_status) })
     }
 
     /// Update meter reading (for oracles and authorized services)
@@ -466,207 +182,36 @@ pub mod registry {
         reading_timestamp: i64,
     ) -> Result<()> {
         compute_fn!("update_meter_reading" => {
-            let registry = ctx.accounts.registry.load()?;
-            let mut meter_account = ctx.accounts.meter_account.load_mut()?;
-
-            require!(registry.has_oracle_authority == 1, RegistryError::OracleNotConfigured);
-            require_keys_eq!(
-                ctx.accounts.oracle_authority.key(),
-                registry.oracle_authority,
-                RegistryError::UnauthorizedOracle
-            );
-
-            require!(
-                meter_account.status == MeterStatus::Active,
-                RegistryError::InvalidMeterStatus
-            );
-
-            require!(
-                reading_timestamp > meter_account.last_reading_at,
-                RegistryError::StaleReading
-            );
-
-            // Rate-limit: minimum interval between readings (skipped on first reading).
-            const MIN_READING_INTERVAL_SECS: i64 = 60;
-            if meter_account.last_reading_at > 0 {
-                require!(
-                    reading_timestamp >= meter_account.last_reading_at + MIN_READING_INTERVAL_SECS,
-                    RegistryError::ReadingTooFrequent
-                );
-            }
-
-            const MAX_READING_DELTA: u64 = 1_000_000_000_000;
-            require!(
-                energy_generated <= MAX_READING_DELTA,
-                RegistryError::ReadingTooHigh
-            );
-            require!(
-                energy_consumed <= MAX_READING_DELTA,
-                RegistryError::ReadingTooHigh
-            );
-
-            meter_account.last_reading_at = reading_timestamp;
-            meter_account.total_generation = meter_account.total_generation.checked_add(energy_generated).ok_or(RegistryError::MathOverflow)?;
-            meter_account.total_consumption = meter_account.total_consumption.checked_add(energy_consumed).ok_or(RegistryError::MathOverflow)?;
-
-            // Bound this program's cumulative totals by the oracle's own independently
-            // rate-limited/anomaly-checked totals for the same meter. The two ledgers are
-            // pushed by separate calls from the same off-chain caller with no CPI between
-            // them; without this, a corrupt oracle_authority could report energy_generated/
-            // consumed values here that were never actually recorded in oracle, inflating
-            // the settleable (mintable) balance. `<=` (not `==`) tolerates a registry sync
-            // that lags an oracle submission — only "registry claims more than oracle ever
-            // saw" is rejected. Raw-validate (owner + canonical PDA + bytes), no oracle
-            // crate dep — see `ORACLE_PROGRAM_ID`.
-            let oracle_meter_ai = ctx.accounts.oracle_meter_state.to_account_info();
-            require_keys_eq!(*oracle_meter_ai.owner, ORACLE_PROGRAM_ID, RegistryError::OracleTotalMismatch);
-            let meter_id_str = bytes32_to_string(&meter_account.meter_id);
-            let (expected_meter_state, _bump) = Pubkey::find_program_address(
-                &[b"meter", meter_id_str.as_bytes()],
-                &ORACLE_PROGRAM_ID,
-            );
-            require_keys_eq!(oracle_meter_ai.key(), expected_meter_state, RegistryError::OracleTotalMismatch);
-            // oracle::MeterState borsh layout: [0..8] disc | [8..40] meter_id | [40] meter_id_len
-            // | [41] bump | [42..46] zone_id | [46..54] energy_produced | [54..62] energy_consumed
-            // | [62..70] total_energy_produced | [70..78] total_energy_consumed | ...
-            let data = oracle_meter_ai.try_borrow_data()?;
-            require!(data.len() >= 78, RegistryError::OracleTotalMismatch);
-            let oracle_total_produced = u64::from_le_bytes(data[62..70].try_into().unwrap());
-            let oracle_total_consumed = u64::from_le_bytes(data[70..78].try_into().unwrap());
-            require!(meter_account.total_generation <= oracle_total_produced, RegistryError::OracleTotalMismatch);
-            require!(meter_account.total_consumption <= oracle_total_consumed, RegistryError::OracleTotalMismatch);
-            drop(data);
-
-            emit!(MeterReadingUpdated {
-                meter_id: bytes32_to_string(&meter_account.meter_id),
-                owner: meter_account.owner,
-                energy_generated,
-                energy_consumed,
-            });
-        });
-        Ok(())
+            instructions::update_meter_reading(ctx, energy_generated, energy_consumed, reading_timestamp)
+        })
     }
 
     /// Set meter status (owner or authority)
     pub fn set_meter_status(ctx: Context<SetMeterStatus>, new_status: MeterStatus) -> Result<()> {
-        compute_fn!("set_meter_status" => {
-            let mut meter = ctx.accounts.meter_account.load_mut()?;
-            let registry_acc = ctx.accounts.registry.load()?;
-            let mut shard = ctx.accounts.registry_shard.load_mut()?;
-
-            let is_owner = ctx.accounts.authority.key() == meter.owner;
-            let is_admin = ctx.accounts.authority.key() == registry_acc.authority;
-            require!(is_owner || is_admin, RegistryError::UnauthorizedUser);
-
-            // Active counting lives on the owner's shard (see register_meter); the
-            // global Registry stays read-only here and is reconciled via aggregate_shards.
-            require!(
-                shard.shard_id == shard_for(&meter.owner),
-                RegistryError::InvalidShardId
-            );
-
-            let old_status = meter.status;
-
-            // Inactive is terminal and owned solely by `deactivate_meter` (which also drops
-            // meter_count + user.meter_count). `set_meter_status` only toggles the reversible
-            // Active<->Maintenance states. It must NOT revive a deactivated meter (old ==
-            // Inactive) — that would re-add active_meter_count without restoring meter_count,
-            // leaving active_meter_count > meter_count — nor set Inactive itself (which would
-            // drop active_meter_count but leave meter_count/user.meter_count overcounted).
-            require!(
-                old_status != MeterStatus::Inactive && new_status != MeterStatus::Inactive,
-                RegistryError::InvalidMeterStatusTransition
-            );
-
-            if old_status == MeterStatus::Active && new_status != MeterStatus::Active {
-                shard.active_meter_count = shard.active_meter_count.saturating_sub(1);
-            } else if old_status != MeterStatus::Active && new_status == MeterStatus::Active {
-                shard.active_meter_count = shard.active_meter_count.saturating_add(1);
-            }
-
-            meter.status = new_status;
-
-            emit!(MeterStatusUpdated {
-                meter_id: bytes32_to_string(&meter.meter_id),
-                owner: meter.owner,
-                old_status,
-                new_status,
-            });
-        });
-        Ok(())
+        compute_fn!("set_meter_status" => { instructions::set_meter_status(ctx, new_status) })
     }
 
     /// Deactivate a meter permanently (owner only)
     pub fn deactivate_meter(ctx: Context<DeactivateMeter>) -> Result<()> {
-        compute_fn!("deactivate_meter" => {
-            let mut meter = ctx.accounts.meter_account.load_mut()?;
-            let mut user = ctx.accounts.user_account.load_mut()?;
-            let mut shard = ctx.accounts.registry_shard.load_mut()?;
-
-            require_keys_eq!(
-                ctx.accounts.owner.key(),
-                meter.owner,
-                RegistryError::UnauthorizedUser
-            );
-
-            require!(
-                meter.status != MeterStatus::Inactive,
-                RegistryError::AlreadyInactive
-            );
-
-            if meter.status == MeterStatus::Active {
-                // Per-shard count; global total reconciled via aggregate_shards.
-                shard.active_meter_count = shard.active_meter_count.saturating_sub(1);
-            }
-
-            meter.status = MeterStatus::Inactive;
-            user.meter_count = user.meter_count.saturating_sub(1);
-            // Meter leaves the registry — drop it from its owner's shard count so
-            // aggregate_shards reflects live (non-deactivated) meters.
-            shard.meter_count = shard.meter_count.saturating_sub(1);
-
-            emit!(MeterDeactivated {
-                meter_id: bytes32_to_string(&meter.meter_id),
-                owner: meter.owner,
-                final_generation: meter.total_generation,
-                final_consumption: meter.total_consumption,
-            });
-        });
-        Ok(())
+        compute_fn!("deactivate_meter" => { instructions::deactivate_meter(ctx) })
     }
 
     /// Verify if a user is valid and active
     pub fn is_valid_user(ctx: Context<IsValidUser>) -> Result<bool> {
-        let res = compute_fn!("is_valid_user" => {
-            let user_account = ctx.accounts.user_account.load()?;
-            user_account.status == UserStatus::Active
-        });
+        let res = compute_fn!("is_valid_user" => { instructions::is_valid_user(ctx) })?;
         Ok(res)
     }
 
     /// Verify if a meter is valid and active
     pub fn is_valid_meter(ctx: Context<IsValidMeter>) -> Result<bool> {
-        let res = compute_fn!("is_valid_meter" => {
-            let meter_account = ctx.accounts.meter_account.load()?;
-            meter_account.status == MeterStatus::Active
-        });
+        let res = compute_fn!("is_valid_meter" => { instructions::is_valid_meter(ctx) })?;
         Ok(res)
     }
 
     /// Calculate unsettled net generation ready for tokenization
     /// This is a view function that returns how much energy can be minted as GRID tokens
     pub fn get_unsettled_balance(ctx: Context<GetUnsettledBalance>) -> Result<u64> {
-        let res = compute_fn!("get_unsettled_balance" => {
-            let meter = ctx.accounts.meter_account.load()?;
-
-            // Calculate current net generation (total produced - total consumed)
-            let current_net_gen = meter
-                .total_generation
-                .saturating_sub(meter.total_consumption);
-
-            // Calculate how much hasn't been tokenized yet
-            current_net_gen.saturating_sub(meter.settled_net_generation)
-        });
+        let res = compute_fn!("get_unsettled_balance" => { instructions::get_unsettled_balance(ctx) })?;
         Ok(res)
     }
 
@@ -674,172 +219,34 @@ pub mod registry {
     /// This updates the settled_net_generation tracker to prevent double-minting
     /// The actual token minting should be called by the energy_token program
     pub fn settle_meter_balance(ctx: Context<SettleMeterBalance>) -> Result<u64> {
-        let res = compute_fn!("settle_meter_balance" => {
-            let mut meter = ctx.accounts.meter_account.load_mut()?;
-            do_settle_meter(&mut meter, ctx.accounts.meter_owner.key())?
-        });
-
+        let res = compute_fn!("settle_meter_balance" => { instructions::settle_meter_balance(ctx) })?;
         Ok(res)
     }
 
     /// Settle meter balance and automatically mint GRID tokens via CPI
     /// This is a convenience function that combines settlement + minting in one transaction
     pub fn settle_and_mint_tokens(ctx: Context<SettleAndMintTokens>) -> Result<()> {
-        compute_fn!("settle_and_mint_tokens" => {
-            let mut meter = ctx.accounts.meter_account.load_mut()?;
-            let new_tokens_to_mint = do_settle_meter(&mut meter, ctx.accounts.meter_owner.key())?;
-
-            // We need to sign as the Registry because the Registry is the authority of the Energy Token (TokenInfo)
-            let bump = ctx.bumps.registry;
-            let signer_seeds = &[
-                b"registry".as_ref(),
-                &[bump],
-            ];
-            let signer = &[&signer_seeds[..]];
-
-            // let cpi_program = ctx.accounts.energy_token_program.to_account_info();
-            let cpi_accounts = energy_token::cpi::accounts::MintTokensDirect {
-                token_info: ctx.accounts.token_info.to_account_info(),
-                mint: ctx.accounts.mint.to_account_info(),
-                user_token_account: ctx.accounts.user_token_account.to_account_info(),
-                authority: ctx.accounts.registry.to_account_info(), // Registry signs
-                registry_authority: ctx.accounts.registry.to_account_info(),
-                rec_validator: ctx.accounts.rec_validator.to_account_info(),
-                token_program: ctx.accounts.token_program.to_account_info(),
-            };
-
-            let cpi_ctx = CpiContext::new_with_signer(ctx.accounts.energy_token_program.key(), cpi_accounts, signer);
-            energy_token::cpi::mint_tokens_direct(cpi_ctx, new_tokens_to_mint)?;
-        });
-
-        Ok(())
+        compute_fn!("settle_and_mint_tokens" => { instructions::settle_and_mint_tokens(ctx) })
     }
 
     /// Mark energy as claimed for ERC issuance (authorized by governance/oracle)
     pub fn mark_erc_claimed(ctx: Context<MarkErcClaimed>, amount: u64) -> Result<()> {
-        compute_fn!("mark_erc_claimed" => {
-            let mut meter = ctx.accounts.meter_account.load_mut()?;
-
-            // Authorization check - usually either the registry authority or a specific governance program
-            let registry = ctx.accounts.registry.load()?;
-            require!(
-                ctx.accounts.authority.key() == registry.authority
-                    || ctx.accounts.authority.key() == registry.oracle_authority,
-                RegistryError::UnauthorizedAuthority
-            );
-
-            // Bound ERC claims against NET generation (same base as do_settle_meter),
-            // so combined GRID + ERC claims can never exceed net generation.
-            let net_gen = meter
-                .total_generation
-                .saturating_sub(meter.total_consumption);
-            let unclaimed = net_gen
-                .saturating_sub(meter.claimed_erc_generation)
-                .saturating_sub(meter.settled_net_generation);
-            require!(amount <= unclaimed, RegistryError::NoUnsettledBalance);
-
-            meter.claimed_erc_generation = meter.claimed_erc_generation.saturating_add(amount);
-
-            emit!(ErcClaimed {
-                meter_id: bytes32_to_string(&meter.meter_id),
-                owner: meter.owner,
-                amount,
-                total_claimed: meter.claimed_erc_generation,
-            });
-        });
-        Ok(())
+        compute_fn!("mark_erc_claimed" => { instructions::mark_erc_claimed(ctx, amount) })
     }
 
     /// Initialize the staking vault for GRX tokens (admin only)
-    pub fn initialize_vault(_ctx: Context<InitializeVault>) -> Result<()> {
-        Ok(())
+    pub fn initialize_vault(ctx: Context<InitializeVault>) -> Result<()> {
+        instructions::initialize_vault(ctx)
     }
 
     /// Stake GRX tokens to participate in the network
     pub fn stake_grx(ctx: Context<StakeGrx>, amount: u64) -> Result<()> {
-        require!(amount > 0, RegistryError::MinStakeNotMet);
-        compute_fn!("stake_grx" => {
-            let cpi_accounts = token_interface::TransferChecked {
-                from: ctx.accounts.user_grx_ata.to_account_info(),
-                to: ctx.accounts.grx_vault.to_account_info(),
-                authority: ctx.accounts.authority.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-            };
-            let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
-
-            compute_checkpoint!("before_stake_transfer_cpi");
-            token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.grx_mint.decimals)?;
-            compute_checkpoint!("after_stake_transfer_cpi");
-
-            let mut user_account = ctx.accounts.user_account.load_mut()?;
-            user_account.staked_grx = user_account
-                .staked_grx
-                .checked_add(amount)
-                .ok_or(RegistryError::MathOverflow)?;
-            // Re-anchor the unstake cooldown to the most recent stake/top-up on
-            // EVERY stake. Anchoring only to the first deposit let a staker keep a
-            // dust balance permanently staked so `last_stake_at` never refreshed,
-            // then stake-large-and-immediately-unstake-large with zero cooldown —
-            // escaping the slashing window. Every fresh GRX must serve the full
-            // cooldown before it can leave the vault.
-            user_account.last_stake_at = Clock::get()?.unix_timestamp;
-        });
-        Ok(())
+        compute_fn!("stake_grx" => { instructions::stake_grx(ctx, amount) })
     }
 
     /// Register as a validator (requires at least 10,000 GRX staked)
     pub fn register_validator(ctx: Context<RegisterValidator>) -> Result<()> {
-        compute_fn!("register_validator" => {
-            let mut user_account = ctx.accounts.user_account.load_mut()?;
-
-            // A slashed validator is permanently barred from self-reinstatement;
-            // restaking must not silently undo a slash. Reinstatement, if ever
-            // desired, belongs in an explicit admin-gated instruction.
-            require!(
-                user_account.validator_status != ValidatorStatus::Slashed,
-                RegistryError::ValidatorAlreadySlashed
-            );
-
-            require!(
-                user_account.staked_grx >= MIN_VALIDATOR_STAKE,
-                RegistryError::MinStakeNotMet
-            );
-
-            // PoA gate: the validator bond is only granted to a governance-admitted
-            // aggregator — the bond cannot be self-promoted by anyone holding MIN stake.
-            // Raw-validate the allow-list entry (no governance crate dep — would cycle):
-            // owner == governance, canonical PDA for this authority, active, identity match.
-            let entry_ai = ctx.accounts.aggregator_entry.to_account_info();
-            require_keys_eq!(
-                *entry_ai.owner,
-                GOVERNANCE_PROGRAM_ID,
-                RegistryError::AggregatorNotAdmitted
-            );
-            let (expected_entry, _bump) = Pubkey::find_program_address(
-                &[b"aggregator", ctx.accounts.authority.key().as_ref()],
-                &GOVERNANCE_PROGRAM_ID,
-            );
-            require_keys_eq!(
-                entry_ai.key(),
-                expected_entry,
-                RegistryError::AggregatorNotAdmitted
-            );
-            // AggregatorEntry borsh layout:
-            // [0..8] discriminator | [8..40] aggregator | [40..48] admitted_at
-            // [48..56] updated_at | [56] active | [57] bump
-            let data = entry_ai.try_borrow_data()?;
-            require!(data.len() >= 57, RegistryError::InvalidAggregatorEntry);
-            require!(
-                &data[8..40] == ctx.accounts.authority.key().as_ref(),
-                RegistryError::AggregatorNotAdmitted
-            );
-            require!(data[56] == 1, RegistryError::AggregatorNotAdmitted);
-
-            // Activating (or re-activating from Resigning) clears any pending resignation.
-            user_account.validator_status = ValidatorStatus::Active;
-            user_account.resign_at = 0;
-        });
-        Ok(())
+        compute_fn!("register_validator" => { instructions::register_validator(ctx) })
     }
 
     /// Announce an honest validator exit. Flips an Active validator to `Resigning` and stamps
@@ -848,17 +255,7 @@ pub mod registry {
     /// window may the bond be unstaked below `MIN_VALIDATOR_STAKE`. Re-calling
     /// `register_validator` before unstaking cancels the resignation.
     pub fn deregister_validator(ctx: Context<DeregisterValidator>) -> Result<()> {
-        compute_fn!("deregister_validator" => {
-            let now = Clock::get()?.unix_timestamp;
-            let mut user_account = ctx.accounts.user_account.load_mut()?;
-            require!(
-                user_account.validator_status == ValidatorStatus::Active,
-                RegistryError::NotActiveValidator
-            );
-            user_account.validator_status = ValidatorStatus::Resigning;
-            user_account.resign_at = now;
-        });
-        Ok(())
+        compute_fn!("deregister_validator" => { instructions::deregister_validator(ctx) })
     }
 
     /// Withdraw previously staked GRX back to the user's ATA.
@@ -867,63 +264,7 @@ pub mod registry {
     /// demotes an Active validator to Suspended if the remaining stake drops below
     /// `MIN_VALIDATOR_STAKE`. The registry PDA signs the vault → user transfer.
     pub fn unstake_grx(ctx: Context<UnstakeGrx>, amount: u64) -> Result<()> {
-        require!(amount > 0, RegistryError::InsufficientStakingBalance);
-        compute_fn!("unstake_grx" => {
-            let now = Clock::get()?.unix_timestamp;
-
-            // Read-then-drop the loader borrow before the CPI; re-borrow after.
-            let (staked, last_stake_at, validator_status, resign_at) = {
-                let user_account = ctx.accounts.user_account.load()?;
-                (
-                    user_account.staked_grx,
-                    user_account.last_stake_at,
-                    user_account.validator_status,
-                    user_account.resign_at,
-                )
-            };
-            // Balance + cooldown + anti-slash-escape bond lock (see check_unstake_allowed).
-            check_unstake_allowed(amount, staked, last_stake_at, resign_at, now, validator_status)?;
-
-            // Registry PDA is the vault authority — sign the withdrawal.
-            let bump = ctx.bumps.registry;
-            let signer_seeds: &[&[u8]] = &[b"registry".as_ref(), &[bump]];
-            let signer = &[signer_seeds];
-
-            let cpi_accounts = token_interface::TransferChecked {
-                from: ctx.accounts.grx_vault.to_account_info(),
-                to: ctx.accounts.user_grx_ata.to_account_info(),
-                authority: ctx.accounts.registry.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-            };
-            let cpi_ctx = CpiContext::new_with_signer(
-                ctx.accounts.token_program.key(),
-                cpi_accounts,
-                signer,
-            );
-
-            compute_checkpoint!("before_unstake_transfer_cpi");
-            token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.grx_mint.decimals)?;
-            compute_checkpoint!("after_unstake_transfer_cpi");
-
-            let mut user_account = ctx.accounts.user_account.load_mut()?;
-            let remaining = user_account
-                .staked_grx
-                .checked_sub(amount)
-                .ok_or(RegistryError::MathOverflow)?;
-            user_account.staked_grx = remaining;
-
-            // No Active->Suspended demotion here: the pre-CPI guard guarantees an Active
-            // validator's remaining stake never drops below MIN_VALIDATOR_STAKE via unstake.
-            // Suspended/Slashed/Inactive statuses are unaffected by a withdrawal.
-
-            emit!(Unstaked {
-                user: ctx.accounts.authority.key(),
-                amount,
-                remaining_stake: remaining,
-                timestamp: now,
-            });
-        });
-        Ok(())
+        compute_fn!("unstake_grx" => { instructions::unstake_grx(ctx, amount) })
     }
 
     /// Slash a validator's bond for proven misbehaviour (PoA authority only).
@@ -951,102 +292,7 @@ pub mod registry {
         slash_bps: u16,
         proven_loss: u64,
     ) -> Result<()> {
-        require!(
-            slash_bps > 0 && slash_bps <= 10_000,
-            RegistryError::InvalidSlashFraction
-        );
-        // PoA gate: only the registry authority may slash, and only to the configured
-        // slash destination (e.g. treasury reward_vault) so the fund remainder cannot
-        // be misrouted.
-        {
-            let registry = ctx.accounts.registry.load()?;
-            poa_slash_gate(
-                &registry,
-                ctx.accounts.authority.key(),
-                ctx.accounts.slash_destination.key(),
-            )?;
-        }
-        compute_fn!("slash_validator" => {
-            let (slash_amount, compensation, fund_amount, remaining) = {
-                let user_account = ctx.accounts.target_user_account.load()?;
-                let bond = user_account.staked_grx;
-                // bond * slash_bps / 10_000, capped at bond (validates Active + bond>0).
-                let slash_amount = compute_slash_amount(&user_account, slash_bps)?;
-                // Compensation capped at proven loss removes the bounty-gaming incentive.
-                let compensation = slash_amount.min(proven_loss);
-                let fund_amount = slash_amount - compensation; // safe: compensation <= slash_amount
-                let remaining = bond - slash_amount;            // safe: slash_amount <= bond
-                (slash_amount, compensation, fund_amount, remaining)
-            };
-
-            // Value-accounting invariant: nothing created or destroyed.
-            require!(
-                slash_amount == compensation + fund_amount,
-                RegistryError::SlashAccountingMismatch
-            );
-
-            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
-            let signer = &[&registry_seeds[..]];
-            let decimals = ctx.accounts.grx_mint.decimals;
-
-            // Victim compensation (skip zero-amount transfer).
-            if compensation > 0 {
-                let cpi_accounts = token_interface::TransferChecked {
-                    from: ctx.accounts.grx_vault.to_account_info(),
-                    to: ctx.accounts.victim_token_account.to_account_info(),
-                    authority: ctx.accounts.registry.to_account_info(),
-                    mint: ctx.accounts.grx_mint.to_account_info(),
-                };
-                compute_checkpoint!("before_victim_comp_cpi");
-                token_interface::transfer_checked(
-                    CpiContext::new_with_signer(
-                        ctx.accounts.token_program.key(),
-                        cpi_accounts,
-                        signer,
-                    ),
-                    compensation,
-                    decimals,
-                )?;
-                compute_checkpoint!("after_victim_comp_cpi");
-            }
-
-            // Fund remainder to the configured destination (skip zero-amount transfer).
-            if fund_amount > 0 {
-                let cpi_accounts = token_interface::TransferChecked {
-                    from: ctx.accounts.grx_vault.to_account_info(),
-                    to: ctx.accounts.slash_destination.to_account_info(),
-                    authority: ctx.accounts.registry.to_account_info(),
-                    mint: ctx.accounts.grx_mint.to_account_info(),
-                };
-                compute_checkpoint!("before_fund_cpi");
-                token_interface::transfer_checked(
-                    CpiContext::new_with_signer(
-                        ctx.accounts.token_program.key(),
-                        cpi_accounts,
-                        signer,
-                    ),
-                    fund_amount,
-                    decimals,
-                )?;
-                compute_checkpoint!("after_fund_cpi");
-            }
-
-            let mut user_account = ctx.accounts.target_user_account.load_mut()?;
-            user_account.staked_grx = remaining;
-            apply_slash_status(&mut user_account, slash_bps, remaining);
-
-            let now = Clock::get()?.unix_timestamp;
-            emit!(ValidatorSlashed {
-                validator: ctx.accounts.target_authority.key(),
-                slashed_amount: slash_amount,
-                compensation,
-                fund_amount,
-                proven_loss,
-                remaining_stake: remaining,
-                timestamp: now,
-            });
-        });
-        Ok(())
+        compute_fn!("slash_validator" => { instructions::slash_validator(ctx, slash_bps, proven_loss) })
     }
 
     /// Multi-victim variant of `slash_validator` (T1.3): slash an Active validator's
@@ -1065,114 +311,9 @@ pub mod registry {
         slash_bps: u16,
         victim_losses: Vec<u64>,
     ) -> Result<()> {
-        require!(
-            slash_bps > 0 && slash_bps <= 10_000,
-            RegistryError::InvalidSlashFraction
-        );
-        require!(
-            victim_losses.len() == ctx.remaining_accounts.len(),
-            RegistryError::VictimCountMismatch
-        );
-        // PoA gate — authority + configured destination, identical to slash_validator.
-        {
-            let registry = ctx.accounts.registry.load()?;
-            poa_slash_gate(
-                &registry,
-                ctx.accounts.authority.key(),
-                ctx.accounts.slash_destination.key(),
-            )?;
-        }
         compute_fn!("slash_validator_multi" => {
-            let (slash_amount, pool, total_loss, remaining) = {
-                let user_account = ctx.accounts.target_user_account.load()?;
-                let bond = user_account.staked_grx;
-                // bond * slash_bps / 10_000, capped at bond (validates Active + bond>0).
-                let slash_amount = compute_slash_amount(&user_account, slash_bps)?;
-                // total proven loss across victims; compensation pool capped at it.
-                let total_loss = victim_losses
-                    .iter()
-                    .try_fold(0u64, |a, &l| a.checked_add(l))
-                    .ok_or(RegistryError::MathOverflow)?;
-                let pool = slash_amount.min(total_loss);
-                let remaining = bond - slash_amount; // safe: slash_amount <= bond
-                (slash_amount, pool, total_loss, remaining)
-            };
-
-            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
-            let signer = &[&registry_seeds[..]];
-            let decimals = ctx.accounts.grx_mint.decimals;
-
-            // Pro-rata victim payouts (skipped entirely when total_loss == 0).
-            let mut paid: u64 = 0;
-            if total_loss > 0 && pool > 0 {
-                for (i, victim_ai) in ctx.remaining_accounts.iter().enumerate() {
-                    // comp_i = pool * victim_losses[i] / total_loss (u128, floor).
-                    let comp_i = ((pool as u128)
-                        .checked_mul(victim_losses[i] as u128)
-                        .ok_or(RegistryError::MathOverflow)?
-                        / total_loss as u128) as u64;
-                    if comp_i == 0 {
-                        continue;
-                    }
-                    let cpi_accounts = token_interface::TransferChecked {
-                        from: ctx.accounts.grx_vault.to_account_info(),
-                        to: victim_ai.clone(),
-                        authority: ctx.accounts.registry.to_account_info(),
-                        mint: ctx.accounts.grx_mint.to_account_info(),
-                    };
-                    token_interface::transfer_checked(
-                        CpiContext::new_with_signer(
-                            ctx.accounts.token_program.key(),
-                            cpi_accounts,
-                            signer,
-                        ),
-                        comp_i,
-                        decimals,
-                    )?;
-                    paid = paid.checked_add(comp_i).ok_or(RegistryError::MathOverflow)?;
-                }
-            }
-
-            // Fund remainder = everything not paid to victims (incl. rounding dust).
-            let fund_amount = slash_amount - paid; // safe: paid <= pool <= slash_amount
-            require!(
-                slash_amount == paid + fund_amount,
-                RegistryError::SlashAccountingMismatch
-            );
-            if fund_amount > 0 {
-                let cpi_accounts = token_interface::TransferChecked {
-                    from: ctx.accounts.grx_vault.to_account_info(),
-                    to: ctx.accounts.slash_destination.to_account_info(),
-                    authority: ctx.accounts.registry.to_account_info(),
-                    mint: ctx.accounts.grx_mint.to_account_info(),
-                };
-                token_interface::transfer_checked(
-                    CpiContext::new_with_signer(
-                        ctx.accounts.token_program.key(),
-                        cpi_accounts,
-                        signer,
-                    ),
-                    fund_amount,
-                    decimals,
-                )?;
-            }
-
-            let mut user_account = ctx.accounts.target_user_account.load_mut()?;
-            user_account.staked_grx = remaining;
-            apply_slash_status(&mut user_account, slash_bps, remaining);
-
-            let now = Clock::get()?.unix_timestamp;
-            emit!(ValidatorSlashed {
-                validator: ctx.accounts.target_authority.key(),
-                slashed_amount: slash_amount,
-                compensation: paid,
-                fund_amount,
-                proven_loss: total_loss,
-                remaining_stake: remaining,
-                timestamp: now,
-            });
-        });
-        Ok(())
+            instructions::slash_validator_multi(ctx, slash_bps, victim_losses)
+        })
     }
 
     /// Initialize the transparent slash fund (T1.4): a registry-owned GRX vault
@@ -1182,81 +323,19 @@ pub mod registry {
     /// slash fund remainder routes here automatically — inflows are then the
     /// vault's GRX balance, outflows are tracked precisely in the ledger.
     pub fn initialize_slash_fund(ctx: Context<InitializeSlashFund>) -> Result<()> {
-        compute_fn!("initialize_slash_fund" => {
-            let mut ledger = ctx.accounts.slash_fund_ledger.load_init()?;
-            ledger.total_disbursed = 0;
-            ledger.disbursement_count = 0;
-            ledger.last_disbursed_ts = 0;
-            ledger.bump = ctx.bumps.slash_fund_ledger;
-        });
-        Ok(())
+        compute_fn!("initialize_slash_fund" => { instructions::initialize_slash_fund(ctx) })
     }
 
     /// Disburse GRX out of the slash fund (e.g. to the treasury `reward_vault` for
     /// redistribution via `fund_rewards`). PoA-gated; bounded by the vault balance;
     /// updates the published `SlashFundLedger` and emits `SlashFundDisbursed`.
     pub fn disburse_slash_fund(ctx: Context<DisburseSlashFund>, amount: u64) -> Result<()> {
-        require!(amount > 0, RegistryError::InvalidAmount);
-        {
-            let registry = ctx.accounts.registry.load()?;
-            require_keys_eq!(
-                ctx.accounts.authority.key(),
-                registry.authority,
-                RegistryError::UnauthorizedAuthority
-            );
-        }
-        require!(
-            amount <= ctx.accounts.slash_fund.amount,
-            RegistryError::InsufficientSlashFund
-        );
-        compute_fn!("disburse_slash_fund" => {
-            let registry_seeds = &[b"registry".as_ref(), &[ctx.bumps.registry]];
-            let signer = &[&registry_seeds[..]];
-            let decimals = ctx.accounts.grx_mint.decimals;
-            let cpi_accounts = token_interface::TransferChecked {
-                from: ctx.accounts.slash_fund.to_account_info(),
-                to: ctx.accounts.destination.to_account_info(),
-                authority: ctx.accounts.registry.to_account_info(),
-                mint: ctx.accounts.grx_mint.to_account_info(),
-            };
-            token_interface::transfer_checked(
-                CpiContext::new_with_signer(
-                    ctx.accounts.token_program.key(),
-                    cpi_accounts,
-                    signer,
-                ),
-                amount,
-                decimals,
-            )?;
-
-            let now = Clock::get()?.unix_timestamp;
-            let (total_disbursed, disbursement_count) = {
-                let mut ledger = ctx.accounts.slash_fund_ledger.load_mut()?;
-                ledger.total_disbursed = ledger
-                    .total_disbursed
-                    .checked_add(amount)
-                    .ok_or(RegistryError::MathOverflow)?;
-                ledger.disbursement_count = ledger
-                    .disbursement_count
-                    .checked_add(1)
-                    .ok_or(RegistryError::MathOverflow)?;
-                ledger.last_disbursed_ts = now;
-                (ledger.total_disbursed, ledger.disbursement_count)
-            };
-            emit!(SlashFundDisbursed {
-                amount,
-                destination: ctx.accounts.destination.key(),
-                total_disbursed,
-                disbursement_count,
-                timestamp: now,
-            });
-        });
-        Ok(())
+        compute_fn!("disburse_slash_fund" => { instructions::disburse_slash_fund(ctx, amount) })
     }
 }
 
 // Internal helpers
-fn do_settle_meter(meter: &mut MeterAccount, owner_key: Pubkey) -> Result<u64> {
+pub(crate) fn do_settle_meter(meter: &mut MeterAccount, owner_key: Pubkey) -> Result<u64> {
     require!(
         meter.status == MeterStatus::Active,
         RegistryError::InvalidMeterStatus
@@ -1295,7 +374,7 @@ fn do_settle_meter(meter: &mut MeterAccount, owner_key: Pubkey) -> Result<u64> {
 /// PoA slash gate — shared by `slash_validator` and `slash_validator_multi`. Verifies
 /// the caller is the registry authority and that the passed destination is the single
 /// configured `slash_destination`, so the slash remainder can never be misrouted.
-fn poa_slash_gate(registry: &Registry, authority: Pubkey, slash_destination: Pubkey) -> Result<()> {
+pub(crate) fn poa_slash_gate(registry: &Registry, authority: Pubkey, slash_destination: Pubkey) -> Result<()> {
     require_keys_eq!(authority, registry.authority, RegistryError::UnauthorizedAuthority);
     require!(
         registry.has_slash_destination == 1,
@@ -1311,7 +390,7 @@ fn poa_slash_gate(registry: &Registry, authority: Pubkey, slash_destination: Pub
 
 /// `slash_amount = bond * slash_bps / 10_000`, capped at the bond. Validates the
 /// target is an Active validator with a positive bond. Shared by both slash paths.
-fn compute_slash_amount(user: &UserAccount, slash_bps: u16) -> Result<u64> {
+pub(crate) fn compute_slash_amount(user: &UserAccount, slash_bps: u16) -> Result<u64> {
     // Only an Active or Resigning validator can be slashed — never a plain staker, an
     // already-slashed account, or a Suspended one. Including Resigning is what keeps the
     // honest-exit path from being a slash dodge: the bond stays slashable for the whole
@@ -1338,7 +417,7 @@ fn compute_slash_amount(user: &UserAccount, slash_bps: u16) -> Result<u64> {
 /// Active validator (always), or a Resigning one still within its resign cooldown, cannot
 /// draw the bond below MIN_VALIDATOR_STAKE; excess above the floor is always withdrawable,
 /// and Suspended/Slashed/None accounts are unlocked.
-fn check_unstake_allowed(
+pub(crate) fn check_unstake_allowed(
     amount: u64,
     staked: u64,
     last_stake_at: i64,
@@ -1365,7 +444,7 @@ fn check_unstake_allowed(
 
 /// Post-slash validator status transition (shared): full forfeiture (bps == 10000 or
 /// nothing left) → terminal `Slashed`; below the bond floor → `Suspended`; else Active.
-fn apply_slash_status(user: &mut UserAccount, slash_bps: u16, remaining: u64) {
+pub(crate) fn apply_slash_status(user: &mut UserAccount, slash_bps: u16, remaining: u64) {
     if slash_bps == 10_000 || remaining == 0 {
         // Full forfeiture is terminal — barred from re-registration.
         user.validator_status = ValidatorStatus::Slashed;
@@ -1373,675 +452,6 @@ fn apply_slash_status(user: &mut UserAccount, slash_bps: u16, remaining: u64) {
         // Partial slash below the bond floor: suspend until topped up.
         user.validator_status = ValidatorStatus::Suspended;
     } // else: remains Active.
-}
-
-
-// Account structs
-#[derive(Accounts)]
-pub struct Initialize<'info> {
-    // Shared registry account for authorities and global state
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + std::mem::size_of::<Registry>(),
-        seeds = [b"registry"],
-        bump
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(shard_id: u8)]
-pub struct InitializeShard<'info> {
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + std::mem::size_of::<RegistryShard>(),
-        seeds = [b"registry_shard".as_ref(), &[shard_id]],
-        bump
-    )]
-    pub shard: AccountLoader<'info, RegistryShard>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-#[instruction(user_type: UserType, lat_e7: i32, long_e7: i32, h3_index: u64, shard_id: u8)]
-pub struct RegisterUser<'info> {
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + std::mem::size_of::<UserAccount>(),
-        seeds = [b"user", authority.key().as_ref()],
-        bump
-    )]
-    pub user_account: AccountLoader<'info, UserAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"registry_shard".as_ref(), &[shard_id]],
-        bump
-    )]
-    pub registry_shard: AccountLoader<'info, RegistryShard>,
-
-    #[account(
-        seeds = [b"registry"],
-        bump,
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    /// CHECK: The user's public key. Authorization checked in instruction body.
-    pub authority: UncheckedAccount<'info>,
-
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-/// Accounts for the decoupled welcome airdrop. Mirrors the energy-token
-/// `mint_tokens_direct` CPI inputs; the registry PDA signs the mint.
-#[derive(Accounts)]
-pub struct ClaimAirdrop<'info> {
-    #[account(
-        mut,
-        seeds = [b"user", authority.key().as_ref()],
-        bump
-    )]
-    pub user_account: AccountLoader<'info, UserAccount>,
-
-    #[account(
-        seeds = [b"registry"],
-        bump,
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    /// CHECK: The user's public key. Authorization checked in instruction body.
-    pub authority: UncheckedAccount<'info>,
-
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    /// CHECK: The energy token program.
-    pub energy_token_program: UncheckedAccount<'info>,
-
-    /// CHECK: The energy token mint.
-    #[account(mut)]
-    pub mint: UncheckedAccount<'info>,
-
-    /// CHECK: The user's token account (ATA).
-    #[account(mut)]
-    pub user_token_account: UncheckedAccount<'info>,
-
-    /// CHECK: The token info account (mint authority).
-    pub token_info: UncheckedAccount<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-}
-
-#[derive(Accounts)]
-#[instruction(meter_id: String, meter_type: MeterType, shard_id: u8)]
-pub struct RegisterMeter<'info> {
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + std::mem::size_of::<MeterAccount>(),
-        seeds = [b"meter", owner.key().as_ref(), meter_id.as_bytes()],
-        bump
-    )]
-    pub meter_account: AccountLoader<'info, MeterAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"user", owner.key().as_ref()],
-        bump
-    )]
-    pub user_account: AccountLoader<'info, UserAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"registry_shard".as_ref(), &[shard_id]],
-        bump
-    )]
-    pub registry_shard: AccountLoader<'info, RegistryShard>,
-
-    // Read-only on purpose: a `mut` here would take a Sealevel write lock on the
-    // global Registry for every registration, serializing the hot path.
-    #[account(seeds = [b"registry"], bump)]
-    pub registry: AccountLoader<'info, Registry>,
-
-    /// CHECK: The user's wallet pubkey. Non-signing in the custodial-bridge model
-    /// (the user's key is Vault-custodied; the bridge's `payer` funds + signs).
-    /// Safe: the handler enforces `owner == user_account.authority` and the
-    /// meter/user PDAs are seeded by `owner.key()`, so a meter can only ever be
-    /// created under its true owner's registered account.
-    pub owner: UncheckedAccount<'info>,
-
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateUserStatus<'info> {
-    #[account(mut, seeds = [b"registry"], bump)]
-    pub registry: AccountLoader<'info, Registry>,
-
-    #[account(mut)]
-    pub user_account: AccountLoader<'info, UserAccount>,
-
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateMeterReading<'info> {
-    #[account(seeds = [b"registry"], bump)]
-    pub registry: AccountLoader<'info, Registry>,
-
-    #[account(mut)]
-    pub meter_account: AccountLoader<'info, MeterAccount>,
-
-    /// The oracle program's own per-meter reading record. Raw-validated in the handler
-    /// (owner + canonical PDA for THIS meter + byte layout) — no `oracle` crate dep, would
-    /// cycle through governance (see `ORACLE_PROGRAM_ID`). Cross-checked so this program's
-    /// cumulative totals can never exceed what the AMI gateway actually recorded on-chain.
-    /// CHECK: validated in the handler body.
-    pub oracle_meter_state: UncheckedAccount<'info>,
-
-    pub oracle_authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct SetOracleAuthority<'info> {
-    #[account(mut)]
-    pub registry: AccountLoader<'info, Registry>,
-
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct SetSlashDestination<'info> {
-    #[account(mut)]
-    pub registry: AccountLoader<'info, Registry>,
-
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateAuthority<'info> {
-    #[account(mut)]
-    pub registry: AccountLoader<'info, Registry>,
-
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct SetMeterStatus<'info> {
-    #[account(seeds = [b"registry"], bump)]
-    pub registry: AccountLoader<'info, Registry>,
-
-    #[account(mut)]
-    pub meter_account: AccountLoader<'info, MeterAccount>,
-
-    // Owner's shard — handler verifies shard_id == shard_for(meter.owner), so the
-    // Active count moves on the same shard register_meter incremented.
-    #[account(
-        mut,
-        seeds = [b"registry_shard".as_ref(), &[meter_account.load()?.owner.to_bytes()[0] % 16]],
-        bump
-    )]
-    pub registry_shard: AccountLoader<'info, RegistryShard>,
-
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct DeactivateMeter<'info> {
-    #[account(mut)]
-    pub meter_account: AccountLoader<'info, MeterAccount>,
-
-    // Bound to `owner` so the `meter_count` decrement can only ever hit the signer's
-    // OWN UserAccount. Without this seed binding an attacker could pass a victim's
-    // account and grief their meter_count down on each deactivate of an owned meter.
-    #[account(
-        mut,
-        seeds = [b"user", owner.key().as_ref()],
-        bump
-    )]
-    pub user_account: AccountLoader<'info, UserAccount>,
-
-    #[account(seeds = [b"registry"], bump)]
-    pub registry: AccountLoader<'info, Registry>,
-
-    // Owner's shard — seeds bind to `owner` so the count is decremented on the
-    // same shard `register_meter` incremented (shard = owner first byte % 16).
-    #[account(
-        mut,
-        seeds = [b"registry_shard".as_ref(), &[owner.key().to_bytes()[0] % 16]],
-        bump
-    )]
-    pub registry_shard: AccountLoader<'info, RegistryShard>,
-
-    pub owner: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct IsValidUser<'info> {
-    pub user_account: AccountLoader<'info, UserAccount>,
-}
-
-#[derive(Accounts)]
-pub struct IsValidMeter<'info> {
-    pub meter_account: AccountLoader<'info, MeterAccount>,
-}
-
-#[derive(Accounts)]
-pub struct GetUnsettledBalance<'info> {
-    pub meter_account: AccountLoader<'info, MeterAccount>,
-}
-
-#[derive(Accounts)]
-pub struct SettleMeterBalance<'info> {
-    #[account(mut)]
-    pub meter_account: AccountLoader<'info, MeterAccount>,
-
-    pub meter_owner: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct SettleAndMintTokens<'info> {
-    #[account(mut)]
-    pub meter_account: AccountLoader<'info, MeterAccount>,
-
-    pub meter_owner: Signer<'info>,
-
-    /// CHECK: Energy token program's token_info PDA
-    #[account(mut)]
-    pub token_info: UncheckedAccount<'info>,
-
-    /// CHECK: Energy token mint account
-    #[account(mut)]
-    pub mint: UncheckedAccount<'info>,
-
-    /// CHECK: User's token account for receiving minted tokens
-    #[account(mut)]
-    pub user_token_account: UncheckedAccount<'info>,
-
-    /// CHECK: Authority that can mint tokens (usually program authority)
-    /// We use the Registry account itself as the authority signer
-    #[account(
-        mut,
-        seeds = [b"registry"],
-        bump
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    /// The energy token program
-    /// CHECK: This is validated by the CPI call
-    pub energy_token_program: UncheckedAccount<'info>,
-
-    /// CHECK: SPL Token program
-    pub token_program: UncheckedAccount<'info>,
-
-    /// CHECK: REC Validator co-signer (required when validators are registered in token_info)
-    /// For registry->energy_token CPI, this can be the meter_owner or a separate validator
-    pub rec_validator: UncheckedAccount<'info>,
-}
-#[derive(Accounts)]
-pub struct MarkErcClaimed<'info> {
-    #[account(mut)]
-    pub meter_account: AccountLoader<'info, MeterAccount>,
-    #[account(seeds = [b"registry"], bump)]
-    pub registry: AccountLoader<'info, Registry>,
-    pub authority: Signer<'info>,
-}
-#[derive(Accounts)]
-pub struct AggregateShards<'info> {
-    #[account(mut, seeds = [b"registry"], bump)]
-    pub registry: AccountLoader<'info, Registry>,
-
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct InitializeVault<'info> {
-    #[account(
-        mut,
-        seeds = [b"registry"],
-        bump,
-        has_one = authority,
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    #[account(
-        init,
-        payer = authority,
-        seeds = [b"grx_vault"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = registry,
-        token::token_program = token_program,
-    )]
-    pub grx_vault: InterfaceAccount<'info, TokenAccount>,
-
-    pub grx_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-    pub system_program: Program<'info, System>,
-    pub rent: Sysvar<'info, Rent>,
-}
-
-#[derive(Accounts)]
-pub struct StakeGrx<'info> {
-    #[account(
-        mut,
-        seeds = [b"user", authority.key().as_ref()],
-        bump,
-        has_one = authority,
-    )]
-    pub user_account: AccountLoader<'info, UserAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"grx_vault"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = registry,
-        token::token_program = token_program,
-    )]
-    pub grx_vault: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(
-        seeds = [b"registry"],
-        bump,
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    #[account(
-        mut,
-        token::mint = grx_mint,
-        token::authority = authority,
-        token::token_program = token_program,
-    )]
-    pub user_grx_ata: InterfaceAccount<'info, TokenAccount>,
-
-    pub grx_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-}
-
-#[derive(Accounts)]
-pub struct RegisterValidator<'info> {
-    #[account(
-        mut,
-        seeds = [b"user", authority.key().as_ref()],
-        bump,
-        has_one = authority,
-    )]
-    pub user_account: AccountLoader<'info, UserAccount>,
-
-    /// CHECK: governance `AggregatorEntry` PDA for `authority`. Validated in-handler
-    /// (owner = governance program, PDA seeds match, `active`, `aggregator == authority`)
-    /// rather than via a typed account, because importing the governance crate would
-    /// cycle (governance depends on registry).
-    pub aggregator_entry: UncheckedAccount<'info>,
-
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct DeregisterValidator<'info> {
-    #[account(
-        mut,
-        seeds = [b"user", authority.key().as_ref()],
-        bump,
-        has_one = authority,
-    )]
-    pub user_account: AccountLoader<'info, UserAccount>,
-
-    pub authority: Signer<'info>,
-}
-
-#[derive(Accounts)]
-pub struct UnstakeGrx<'info> {
-    #[account(
-        mut,
-        seeds = [b"user", authority.key().as_ref()],
-        bump,
-        has_one = authority,
-    )]
-    pub user_account: AccountLoader<'info, UserAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"grx_vault"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = registry,
-        token::token_program = token_program,
-    )]
-    pub grx_vault: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(
-        seeds = [b"registry"],
-        bump,
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    #[account(
-        mut,
-        token::mint = grx_mint,
-        token::authority = authority,
-        token::token_program = token_program,
-    )]
-    pub user_grx_ata: InterfaceAccount<'info, TokenAccount>,
-
-    pub grx_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-}
-
-#[derive(Accounts)]
-pub struct SlashValidator<'info> {
-    /// CHECK: the validator being slashed; only used to derive its UserAccount PDA and label the event.
-    pub target_authority: UncheckedAccount<'info>,
-
-    #[account(
-        mut,
-        seeds = [b"user", target_authority.key().as_ref()],
-        bump,
-    )]
-    pub target_user_account: AccountLoader<'info, UserAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"grx_vault"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = registry,
-        token::token_program = token_program,
-    )]
-    pub grx_vault: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(
-        seeds = [b"registry"],
-        bump,
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    /// Transparent fund: destination for the slash remainder (e.g. treasury `reward_vault`).
-    #[account(
-        mut,
-        token::mint = grx_mint,
-        token::token_program = token_program,
-    )]
-    pub slash_destination: InterfaceAccount<'info, TokenAccount>,
-
-    /// Harmed party's GRX token account, paid the capped victim compensation. When
-    /// `proven_loss == 0` no transfer occurs; pass any valid GRX account (e.g. the fund).
-    #[account(
-        mut,
-        token::mint = grx_mint,
-        token::token_program = token_program,
-    )]
-    pub victim_token_account: InterfaceAccount<'info, TokenAccount>,
-
-    pub grx_mint: InterfaceAccount<'info, Mint>,
-
-    /// PoA authority — must equal `registry.authority`.
-    pub authority: Signer<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-}
-
-/// Multi-victim slash (T1.3). Same as `SlashValidator` but the victim token
-/// accounts are passed as `remaining_accounts` (all GRX, all `mut`), parallel to
-/// the `victim_losses` arg, instead of a single `victim_token_account`.
-#[derive(Accounts)]
-pub struct SlashValidatorMulti<'info> {
-    /// CHECK: the validator being slashed; only used to derive its UserAccount PDA and label the event.
-    pub target_authority: UncheckedAccount<'info>,
-
-    #[account(
-        mut,
-        seeds = [b"user", target_authority.key().as_ref()],
-        bump,
-    )]
-    pub target_user_account: AccountLoader<'info, UserAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"grx_vault"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = registry,
-        token::token_program = token_program,
-    )]
-    pub grx_vault: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(
-        seeds = [b"registry"],
-        bump,
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    /// Transparent fund: destination for the slash remainder (e.g. treasury `reward_vault`).
-    #[account(
-        mut,
-        token::mint = grx_mint,
-        token::token_program = token_program,
-    )]
-    pub slash_destination: InterfaceAccount<'info, TokenAccount>,
-
-    pub grx_mint: InterfaceAccount<'info, Mint>,
-
-    /// PoA authority — must equal `registry.authority`.
-    pub authority: Signer<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-    // remaining_accounts: N victim GRX token accounts (mut), parallel to victim_losses.
-}
-
-/// Init the transparent slash fund (T1.4): GRX vault `[b"slash_fund"]` (registry
-/// authority) + `SlashFundLedger` PDA `[b"slash_fund_ledger"]`.
-#[derive(Accounts)]
-pub struct InitializeSlashFund<'info> {
-    #[account(
-        mut,
-        seeds = [b"registry"],
-        bump,
-        has_one = authority,
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    #[account(
-        init,
-        payer = authority,
-        seeds = [b"slash_fund"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = registry,
-        token::token_program = token_program,
-    )]
-    pub slash_fund: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + std::mem::size_of::<SlashFundLedger>(),
-        seeds = [b"slash_fund_ledger"],
-        bump,
-    )]
-    pub slash_fund_ledger: AccountLoader<'info, SlashFundLedger>,
-
-    pub grx_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(mut)]
-    pub authority: Signer<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-    pub system_program: Program<'info, System>,
-    pub rent: Sysvar<'info, Rent>,
-}
-
-/// Disburse GRX from the slash fund; PoA-gated, updates the published ledger.
-#[derive(Accounts)]
-pub struct DisburseSlashFund<'info> {
-    #[account(
-        seeds = [b"registry"],
-        bump,
-    )]
-    pub registry: AccountLoader<'info, Registry>,
-
-    #[account(
-        mut,
-        seeds = [b"slash_fund"],
-        bump,
-        token::mint = grx_mint,
-        token::authority = registry,
-        token::token_program = token_program,
-    )]
-    pub slash_fund: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(
-        mut,
-        seeds = [b"slash_fund_ledger"],
-        bump,
-    )]
-    pub slash_fund_ledger: AccountLoader<'info, SlashFundLedger>,
-
-    /// Where the disbursed GRX goes (e.g. treasury `reward_vault`).
-    #[account(
-        mut,
-        token::mint = grx_mint,
-        token::token_program = token_program,
-    )]
-    pub destination: InterfaceAccount<'info, TokenAccount>,
-
-    pub grx_mint: InterfaceAccount<'info, Mint>,
-
-    /// PoA authority — must equal `registry.authority`.
-    pub authority: Signer<'info>,
-
-    pub token_program: Interface<'info, TokenInterface>,
 }
 
 #[cfg(test)]
