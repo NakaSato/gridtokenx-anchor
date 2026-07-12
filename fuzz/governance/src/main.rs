@@ -32,9 +32,47 @@ const ZONE_ID: i32 = 0;
 const METER_GEN: u64 = 1_000_000; // total_generation → vote weight = gen/1000 max 100 = 1000
 const VOTE_WEIGHT: u64 = 1_000;
 
+const N_CERTS: usize = 4; // forged ErcCertificate pool for validate/revoke
+const ERC_DISC: [u8; 8] = [83, 161, 134, 16, 240, 92, 186, 157]; // ErcCertificate discriminator
+
 fn governance_program_id() -> Pubkey {
     // self-owned: forged MeterAccount must be owned by the governance program itself
     Pubkey::from_str("FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS").unwrap()
+}
+
+/// Build a Valid, not-yet-validated ErcCertificate directly (borsh #[account]). All four
+/// Option fields are None (1-byte tag) so there is no clock dependency and the layout is
+/// fixed. PDA seed = [b"erc_certificate", certificate_id[..id_len]] = [.., cidx_le] (id_len=4).
+fn forge_cert_bytes(cidx: u32) -> Vec<u8> {
+    let mut d = Vec::with_capacity(612);
+    d.extend_from_slice(&ERC_DISC);
+    let mut id = [0u8; 64];
+    id[0..4].copy_from_slice(&cidx.to_le_bytes());
+    d.extend_from_slice(&id); // certificate_id[64]
+    d.push(4); // id_len
+    d.extend_from_slice(&[0u8; 32]); // authority (unchecked by validate/revoke)
+    d.extend_from_slice(&[0u8; 32]); // owner
+    d.extend_from_slice(&1_000u64.to_le_bytes()); // energy_amount
+    d.extend_from_slice(&[0u8; 64]); // renewable_source
+    d.push(0); // source_len
+    d.extend_from_slice(&[0u8; 256]); // validation_data
+    d.extend_from_slice(&0u16.to_le_bytes()); // data_len
+    d.extend_from_slice(&0i64.to_le_bytes()); // issued_at
+    d.push(0); // expires_at: None
+    d.push(0); // status: Valid
+    d.push(0); // validated_for_trading: false
+    d.push(0); // trading_validated_at: None
+    d.extend_from_slice(&[0u8; 128]); // revocation_reason
+    d.push(0); // reason_len
+    d.push(0); // revoked_at: None
+    d.push(0); // transfer_count
+    d.push(0); // last_transferred_at: None
+    // Allocate the account at its MAX serialized size (8 + ErcCertificate::LEN = 644):
+    // validate/revoke flip Option fields None(1B)->Some(9B), so re-serialize needs the
+    // headroom or it fails AccountDidNotSerialize (3004). Trailing zeros are ignored on
+    // deserialize (borsh reads from the front, stops at the struct end).
+    d.resize(644, 0);
+    d
 }
 
 #[derive(Clone)]
@@ -60,6 +98,13 @@ struct GovFixture {
     pending_idx: Option<usize>,
     agg_active: Vec<bool>,
     agg_admitted_once: Vec<bool>,
+    // ERC lifecycle (forged cert pool)
+    certs: Vec<Pubkey>,
+    cert_validated: Vec<bool>,
+    cert_revoked: Vec<bool>,
+    expected_validated: u64,
+    expected_revoked: u64,
+    erc_double_op: bool,
 }
 
 #[fuzz_fixture]
@@ -125,6 +170,24 @@ impl GovFixture {
             meters.push(m);
         }
 
+        // Forge a pool of Valid ErcCertificates for the validate/revoke lifecycle.
+        let mut certs = Vec::new();
+        for i in 0..N_CERTS {
+            let cidx = i as u32;
+            let (pda, _) = Pubkey::find_program_address(
+                &[b"erc_certificate", &cidx.to_le_bytes()],
+                &program_id,
+            );
+            ctx.create_account()
+                .pubkey(pda)
+                .lamports(5_000_000)
+                .owner(program_id)
+                .data(&forge_cert_bytes(cidx))
+                .create()
+                .unwrap();
+            certs.push(pda);
+        }
+
         Self {
             ctx,
             program_id,
@@ -139,6 +202,12 @@ impl GovFixture {
             pending_idx: None,
             agg_active: vec![false; N_AGG],
             agg_admitted_once: vec![false; N_AGG],
+            certs,
+            cert_validated: vec![false; N_CERTS],
+            cert_revoked: vec![false; N_CERTS],
+            expected_validated: 0,
+            expected_revoked: 0,
+            erc_double_op: false,
         }
     }
 
@@ -344,6 +413,66 @@ impl GovFixture {
         }
         ok
     }
+
+    // ---- ERC lifecycle (validate / revoke on the forged cert pool) ----
+
+    /// validate_erc_for_trading — succeeds once per Valid cert (AlreadyValidated guard),
+    /// signed by the CURRENT governance authority (has_one). Bumps total_ercs_validated.
+    pub fn action_validate_erc(&mut self, #[range(0..4)] cidx: usize) -> bool {
+        let cur = self.cur_kp();
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::ValidateErcForTrading {})
+            .accounts(accounts::ValidateErcForTrading {
+                governance_config: self.gov_config,
+                erc_certificate: self.certs[cidx],
+                authority: cur.pubkey(),
+            })
+            .signers(&[&*cur])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        if ok {
+            // Only a Valid, not-yet-validated cert may validate; anything else that
+            // succeeded means the once-only guard was bypassed.
+            if self.cert_validated[cidx] || self.cert_revoked[cidx] {
+                self.erc_double_op = true;
+            } else {
+                self.cert_validated[cidx] = true;
+                self.expected_validated += 1;
+            }
+        }
+        ok
+    }
+
+    /// revoke_erc — succeeds once per Valid/Pending cert (can_revoke guard). A validated
+    /// cert is still revocable (status stays Valid). Bumps total_ercs_revoked.
+    pub fn action_revoke_erc(&mut self, #[range(0..4)] cidx: usize) -> bool {
+        let cur = self.cur_kp();
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::RevokeErc { reason: "x".to_string() })
+            .accounts(accounts::RevokeErc {
+                governance_config: self.gov_config,
+                erc_certificate: self.certs[cidx],
+                authority: cur.pubkey(),
+            })
+            .signers(&[&*cur])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        if ok {
+            if self.cert_revoked[cidx] {
+                self.erc_double_op = true;
+            } else {
+                self.cert_revoked[cidx] = true;
+                self.expected_revoked += 1;
+            }
+        }
+        ok
+    }
 }
 
 #[invariant_test]
@@ -414,4 +543,26 @@ fn invariant_test(fixture: &mut GovFixture) {
             p.expected_total
         );
     }
+
+    // I5/I6 — ERC lifecycle counters: total_ercs_validated/revoked track exactly the
+    // first-time validate/revoke ops. The once-only guards (AlreadyValidated, status
+    // check, can_revoke) must never let a cert be counted twice.
+    fuzz_assert!(
+        !fixture.erc_double_op,
+        "ERC double validate/revoke succeeded — a once-only guard was bypassed"
+    );
+    fuzz_assert_eq!(
+        cfg.total_ercs_validated,
+        fixture.expected_validated,
+        "total_ercs_validated {} != {}",
+        cfg.total_ercs_validated,
+        fixture.expected_validated
+    );
+    fuzz_assert_eq!(
+        cfg.total_ercs_revoked,
+        fixture.expected_revoked,
+        "total_ercs_revoked {} != {}",
+        cfg.total_ercs_revoked,
+        fixture.expected_revoked
+    );
 }

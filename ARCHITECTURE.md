@@ -126,8 +126,6 @@ npm run test:blockbench      # tests/blockbench.ts (BLOCKBENCH OLTP)
 npm run test:smallbank       # tests/smallbank.ts
 npm run test:tpc-stress      # tests/tpc_stress_test.ts (TPC-C, needs tpc_benchmark .so)
 npm run test:all             # oracle+registry+governance+blockbench+smallbank+tpc
-
-./scripts/run-tests.sh --suite oracle   # standalone/CI runner: --skip-build --skip-deploy --suite
 npm run lint                 # eslint .
 ```
 
@@ -138,7 +136,7 @@ npm run simnet               # surfpool, mainnet, watch, legacy-anchor-compat
 npm run simnet:ci            # headless / fast
 ```
 
-## 8. Init & Simulation Scripts
+## 8. Init Scripts
 
 `scripts/*.ts` run via `npx tsx`. **Order matters** for init:
 
@@ -148,9 +146,6 @@ bootstrap.ts → init-registry.ts → init-oracle.ts → init-market.ts
 ```
 
 (`init-zone-config` also available as `anchor run init-zone-config`.)
-
-Lifecycle / load simulations: `simulate-trading.ts`, `simulate-market-clearing.ts`,
-`simulate-meter-stream.ts`, `simulate-token-lifecycle.ts`, `execute-settlement.ts`.
 
 ## 9. Further Reading (in this repo)
 

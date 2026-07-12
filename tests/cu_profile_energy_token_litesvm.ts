@@ -123,11 +123,11 @@ describe("energy-token CU profile (litesvm)", () => {
     expect(cu("energy_token.transfer_tokens", ix, [destOwner])).to.be.below(BUDGET);
   });
 
-  it("energy_token.burn_tokens", async () => {
-    const ix = await program.methods.burnTokens(new BN(10)).accounts({
+  it("energy_token.retire_energy_tokens", async () => {
+    const ix = await program.methods.retireEnergyTokens(new BN(10)).accounts({
       mint: mintPda, tokenAccount: destAta, authority: destOwner.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
     } as any).instruction();
-    expect(cu("energy_token.burn_tokens", ix, [destOwner])).to.be.below(BUDGET);
+    expect(cu("energy_token.retire_energy_tokens", ix, [destOwner])).to.be.below(BUDGET);
   });
 
   it("energy_token.remove_rec_validator", async () => {

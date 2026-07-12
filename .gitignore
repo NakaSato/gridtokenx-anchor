@@ -111,3 +111,5 @@ check.cjs
 # so program IDs survive `anchor clean` / fresh clones — see
 # scripts/pin-program-keys.sh.
 !keys/localnet/*-keypair.json
+.bench-ledger-pm/
+docs/reports/*.pdf

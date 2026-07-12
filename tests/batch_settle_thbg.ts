@@ -58,7 +58,24 @@ import {
 } from "@solana/spl-token";
 import { expect } from "chai";
 import BN from "bn.js";
-import { settlementRecordPda } from "../scripts/settlement-pda";
+
+// Inlined §2b SettlementRecord PDA helper (was scripts/settlement-pda.ts).
+// Seeds must match treasury on-chain exactly:
+//   [ b"settlement", zone_id u32 LE (4B), batch_id u64 LE (8B) ] under the treasury program.
+function settlementRecordPda(
+  zoneId: number,
+  batchId: number | bigint | BN | string,
+  treasuryProgram: PublicKey
+): [PublicKey, number] {
+  const zone = Buffer.alloc(4);
+  zone.writeUInt32LE(zoneId, 0);
+  const bn = BN.isBN(batchId) ? batchId : new BN(batchId.toString());
+  const batch = bn.toArrayLike(Buffer, "le", 8);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("settlement"), zone, batch],
+    treasuryProgram
+  );
+}
 
 // Mirrors OffchainOrderPayload::get_message() in settle_offchain.rs.
 function orderMessage(p: {

@@ -463,4 +463,4 @@ These run under `cd gridtokenx-anchor && cargo test -p governance` (per-crate te
 - `npm run test:all` includes governance among the bundled suites (`package.json:23`).
 - Raw mocha invocation (validator already running): `npx mocha -r tsx tests/governance.ts --timeout 1000000`.
 
-Per the repo `CLAUDE.md`, Anchor 1.0 spawns `surfpool` as the test validator; where `surfpool` is unavailable, `./scripts/run-tests.sh` drives `solana-test-validator` instead.
+Per the repo `CLAUDE.md`, Anchor 1.0 spawns `surfpool` as the test validator.

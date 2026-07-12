@@ -462,7 +462,7 @@ describe("trading settle_offchain_match — validation guards (litesvm)", () => 
     send([await trading.methods.initializeZoneMarketShard(shardByte).accounts({ zoneMarket: lowZonePda, zoneShard: lowZoneShardPda, payer: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     // Tier-A: cross-zone capacity counter for the low-cap zone.
     [lowZoneCapacityPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_capacity"), lowZonePda.toBuffer()], tradingId);
-    send([await trading.methods.initZoneCapacity().accounts({ zoneMarket: lowZonePda, zoneCapacity: lowZoneCapacityPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
+    send([await trading.methods.initializeZoneCapacity().accounts({ zoneMarket: lowZonePda, zoneCapacity: lowZoneCapacityPda, authority: payer.publicKey, systemProgram: SystemProgram.programId } as any).instruction()], []);
     // Wholesale-segment zone for the AggregatorSegmentMismatch case (segment = 1).
     [wholesaleZonePda] = PublicKey.findProgramAddressSync([Buffer.from("zone_market"), marketPda.toBuffer(), new BN(WHOLESALE_ZONE).toArrayLike(Buffer, "le", 4)], tradingId);
     [wholesaleZoneShardPda] = PublicKey.findProgramAddressSync([Buffer.from("zone_shard"), wholesaleZonePda.toBuffer(), Buffer.from([shardByte])], tradingId);

@@ -235,11 +235,11 @@ npm run test:blockbench          # anchor test tests/blockbench.ts (package.json
 npm run test:smallbank           # anchor test tests/smallbank.ts (package.json:20)
 ```
 
-**Merkle-verify spike** — `tests/spike_merkle_cu.ts`. Not wired into any npm recipe or `scripts/run-tests.sh`; run manually against an already-running validator with the current `blockbench.so` deployed (`tests/spike_merkle_cu.ts:10-12`):
+**Merkle-verify spike** — `tests/spike_merkle_cu.ts`. Not wired into any npm recipe; run manually against an already-running validator with the current `blockbench.so` deployed (`tests/spike_merkle_cu.ts:10-12`):
 
 ```bash
 ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=$HOME/.config/solana/id.json \
   npx mocha -r tsx tests/spike_merkle_cu.ts --timeout 600000
 ```
 
-Both suites accept `BENCH_ITERS` and `BENCH_WARMUP` environment variables (defaults 100 / 10), which the report raises to `150` / `10` for paper-grade runs (`tests/blockbench.ts:28-29`, `BENCHMARKS.md:36-43`). They are also reachable via the aggregate `npm run test:all` recipe and `./scripts/run-tests.sh`. Per the repository build gotcha, Anchor 1.0 may spawn `surfpool` as the test validator; where it is unavailable, `./scripts/run-tests.sh` uses `solana-test-validator` instead.
+Both suites accept `BENCH_ITERS` and `BENCH_WARMUP` environment variables (defaults 100 / 10), which the report raises to `150` / `10` for paper-grade runs (`tests/blockbench.ts:28-29`, `BENCHMARKS.md:36-43`). They are also reachable via the aggregate `npm run test:all` recipe and `anchor test`. Per the repository build gotcha, Anchor 1.0 may spawn `surfpool` as the test validator.

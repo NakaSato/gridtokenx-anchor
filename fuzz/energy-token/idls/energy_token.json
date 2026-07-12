@@ -53,19 +53,19 @@
       ]
     },
     {
-      "name": "burn_tokens",
+      "name": "retire_energy_tokens",
       "docs": [
         "Burn energy tokens (for energy consumption)"
       ],
       "discriminator": [
-        76,
-        15,
-        51,
-        254,
-        229,
-        215,
-        121,
-        66
+        125,
+        221,
+        127,
+        140,
+        70,
+        104,
+        66,
+        197
       ],
       "accounts": [
         {

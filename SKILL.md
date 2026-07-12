@@ -146,7 +146,6 @@ anchor build -- --features localnet   # feature-gated compute profiling
 anchor test                  # build + validator + deploy + mocha (Anchor.toml [scripts] test = npx mocha -r tsx 'tests/**/*.ts')
 npm run test:oracle          # per-suite npm scripts: oracle | registry | governance | blockbench | smallbank | tpc-stress | all
 npx mocha -r tsx tests/oracle.ts --timeout 1000000   # single file (validator must be running)
-./scripts/run-tests.sh --suite oracle                # standalone/CI runner (--skip-build --skip-deploy --suite)
 
 npm run simnet               # Surfpool mainnet sim (no local validator); simnet:ci for headless
 ```

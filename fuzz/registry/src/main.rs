@@ -43,6 +43,14 @@ const TOK_AMOUNT: usize = 64; // classic spl_token Account.amount
 
 const MIN_VALIDATOR_STAKE: u64 = 10_000_000_000_000; // 10,000 GRX
 
+const ORACLE_ID: &str = "64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU";
+const READER_METER_ID: &str = "rdr"; // dedicated meter for the update_meter_reading path
+const ORACLE_CAP: u64 = 5_000_000_000; // forged oracle total (gen+cons upper bound)
+// MeterAccount offsets in account.data (8-byte disc + struct): status@73,
+// last_reading_at@[88..96], total_generation@[96..104], total_consumption@[104..112].
+const METER_TOTAL_GEN: usize = 96;
+const METER_TOTAL_CONS: usize = 104;
+
 #[derive(Clone)]
 struct UserAcct {
     kp: Rc<Keypair>,
@@ -69,6 +77,13 @@ struct RegistryFixture {
     n_users_registered: u64,
     n_meters_registered: u64,
     grx_total: u64,
+    // --- update_meter_reading path (dedicated Active reader meter) ---
+    reader_kp: Rc<Keypair>,
+    reader_meter: Pubkey,
+    oracle_meter_state: Pubkey, // forged oracle MeterState, caps registry totals
+    exp_gen: u64,               // Σ accepted energy_generated == reader_meter.total_generation
+    exp_cons: u64,              // Σ accepted energy_consumed  == reader_meter.total_consumption
+    reader_last_ts: i64,        // mirror of last_reading_at (monotonic + rate-limit)
 }
 
 fn spl_token_id() -> Pubkey {
@@ -241,6 +256,89 @@ impl RegistryFixture {
             });
         }
 
+        // --- update_meter_reading setup: oracle authority + a dedicated Active meter ---
+        // Point the registry oracle authority at admin (gates update_meter_reading).
+        let oracle_id = Pubkey::from_str(ORACLE_ID).unwrap();
+        ctx.program(program_id)
+            .call(instruction::SetOracleAuthority { oracle: admin.pubkey() })
+            .accounts(accounts::SetOracleAuthority {
+                registry: registry_pda,
+                authority: admin.pubkey(),
+            })
+            .signers(&[&*admin])
+            .send()
+            .unwrap();
+
+        // Dedicated reader user (registered) + reader meter (Active) with a fixed id.
+        let reader_kp = Rc::new(Keypair::new());
+        ctx.create_account()
+            .pubkey(reader_kp.pubkey())
+            .lamports(INITIAL_SOL)
+            .owner(system_program::ID)
+            .create()
+            .unwrap();
+        let reader_shard = shard_for(&reader_kp.pubkey());
+        let (reader_user_pda, _) =
+            Pubkey::find_program_address(&[b"user", reader_kp.pubkey().as_ref()], &program_id);
+        ctx.program(program_id)
+            .call(instruction::RegisterUser {
+                user_type: types::UserType::Prosumer,
+                lat_e7: 0,
+                long_e7: 0,
+                h3_index: 0,
+                shard_id: reader_shard,
+            })
+            .accounts(accounts::RegisterUser {
+                user_account: reader_user_pda,
+                registry_shard: shards[reader_shard as usize],
+                registry: registry_pda,
+                authority: reader_kp.pubkey(),
+                payer: reader_kp.pubkey(),
+                system_program: system_program::ID,
+            })
+            .signers(&[&*reader_kp])
+            .send()
+            .unwrap();
+        let (reader_meter, _) = Pubkey::find_program_address(
+            &[b"meter", reader_kp.pubkey().as_ref(), READER_METER_ID.as_bytes()],
+            &program_id,
+        );
+        ctx.program(program_id)
+            .call(instruction::RegisterMeter {
+                meter_id: READER_METER_ID.to_string(),
+                meter_type: types::MeterType::Solar,
+                shard_id: reader_shard,
+                zone_id: 0,
+            })
+            .accounts(accounts::RegisterMeter {
+                meter_account: reader_meter,
+                user_account: reader_user_pda,
+                registry_shard: shards[reader_shard as usize],
+                registry: registry_pda,
+                owner: reader_kp.pubkey(),
+                payer: reader_kp.pubkey(),
+                system_program: system_program::ID,
+            })
+            .signers(&[&*reader_kp])
+            .send()
+            .unwrap();
+
+        // Forge the oracle MeterState [b"meter", meter_id] at ORACLE_ID. update_meter_reading
+        // raw-reads total_energy_produced@62 / total_energy_consumed@70 (borsh, no disc check)
+        // and requires the registry cumulative totals stay <= these — the anti-inflation bound.
+        let (oracle_meter_state, _) =
+            Pubkey::find_program_address(&[b"meter", READER_METER_ID.as_bytes()], &oracle_id);
+        let mut oms = vec![0u8; 80];
+        oms[62..70].copy_from_slice(&ORACLE_CAP.to_le_bytes());
+        oms[70..78].copy_from_slice(&ORACLE_CAP.to_le_bytes());
+        ctx.create_account()
+            .pubkey(oracle_meter_state)
+            .lamports(5_000_000)
+            .owner(oracle_id)
+            .data(&oms)
+            .create()
+            .unwrap();
+
         Self {
             ctx,
             program_id,
@@ -252,9 +350,17 @@ impl RegistryFixture {
             victim,
             shards,
             users,
-            n_users_registered: 0,
-            n_meters_registered: 0,
+            // Start at 1 each: the dedicated reader user + meter are registered in setup,
+            // so they already count toward the shard user/meter counters (I1/I2).
+            n_users_registered: 1,
+            n_meters_registered: 1,
             grx_total,
+            reader_kp,
+            reader_meter,
+            oracle_meter_state,
+            exp_gen: 0,
+            exp_cons: 0,
+            reader_last_ts: 0,
         }
     }
 
@@ -340,6 +446,40 @@ impl RegistryFixture {
         if ok {
             self.users[uidx].meters += 1;
             self.n_meters_registered += 1;
+        }
+        ok
+    }
+
+    /// Push a meter reading (oracle-authority gated). Timestamps advance monotonically
+    /// past the 60s rate-limit. The registry's cumulative totals are bounded by the forged
+    /// oracle totals (ORACLE_CAP) — a reading that would exceed them is rejected
+    /// (OracleTotalMismatch, atomic → no partial write), so the mirror stays exact.
+    pub fn action_update_reading(&mut self, gen: u64, cons: u64) -> bool {
+        let g = gen % 1_000_000_000; // <= MAX_READING_DELTA (1e12); small enough to fit under cap
+        let c = cons % 1_000_000_000;
+        let ts = self.reader_last_ts + 61; // > last AND >= last + 60
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::UpdateMeterReading {
+                energy_generated: g,
+                energy_consumed: c,
+                reading_timestamp: ts,
+            })
+            .accounts(accounts::UpdateMeterReading {
+                registry: self.registry_pda,
+                meter_account: self.reader_meter,
+                oracle_meter_state: self.oracle_meter_state,
+                oracle_authority: self.admin.pubkey(),
+            })
+            .signers(&[&*self.admin])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        if ok {
+            self.exp_gen += g;
+            self.exp_cons += c;
+            self.reader_last_ts = ts;
         }
         ok
     }
@@ -607,4 +747,28 @@ fn invariant_test(fixture: &mut RegistryFixture) {
         grx_now,
         fixture.grx_total
     );
+
+    // I6 — meter-reading accounting + anti-inflation bound: the registry's cumulative
+    // totals equal exactly the accepted readings AND never exceed the oracle's own totals
+    // (ORACLE_CAP). update_meter_reading rejects any reading that would push the registry
+    // past what the AMI gateway recorded, so a corrupt oracle_authority can't inflate the
+    // settleable/mintable balance.
+    let total_gen = fixture.read_u64(&fixture.reader_meter, METER_TOTAL_GEN);
+    let total_cons = fixture.read_u64(&fixture.reader_meter, METER_TOTAL_CONS);
+    fuzz_assert_eq!(
+        total_gen,
+        fixture.exp_gen,
+        "meter total_generation {} != Σ accepted gen {}",
+        total_gen,
+        fixture.exp_gen
+    );
+    fuzz_assert_eq!(
+        total_cons,
+        fixture.exp_cons,
+        "meter total_consumption {} != Σ accepted cons {}",
+        total_cons,
+        fixture.exp_cons
+    );
+    fuzz_assert_le!(total_gen, ORACLE_CAP, "total_generation {} > oracle cap {}", total_gen, ORACLE_CAP);
+    fuzz_assert_le!(total_cons, ORACLE_CAP, "total_consumption {} > oracle cap {}", total_cons, ORACLE_CAP);
 }

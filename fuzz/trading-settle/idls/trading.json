@@ -670,42 +670,6 @@
       ]
     },
     {
-      "name": "init_zone_capacity",
-      "docs": [
-        "One-time creation of the per-zone `ZoneCapacity` PDA (Tier-A). Holds the cross-zone",
-        "`committed_flow` counter moved off `ZoneMarket` so the settle hot path can keep",
-        "`ZoneMarket` read-only on intra-zone batches. Idempotent per zone_market."
-      ],
-      "discriminator": [
-        102,
-        54,
-        227,
-        255,
-        135,
-        101,
-        240,
-        113
-      ],
-      "accounts": [
-        {
-          "name": "zone_market"
-        },
-        {
-          "name": "zone_capacity",
-          "writable": true
-        },
-        {
-          "name": "authority",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program"
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "initialize_collectors",
       "docs": [
         "One-time creation of the fee/wheeling/loss collector PDAs for a currency mint."
@@ -949,6 +913,42 @@
           "type": "u16"
         }
       ]
+    },
+    {
+      "name": "initialize_zone_capacity",
+      "docs": [
+        "One-time creation of the per-zone `ZoneCapacity` PDA (Tier-A). Holds the cross-zone",
+        "`committed_flow` counter moved off `ZoneMarket` so the settle hot path can keep",
+        "`ZoneMarket` read-only on intra-zone batches. Idempotent per zone_market."
+      ],
+      "discriminator": [
+        11,
+        248,
+        65,
+        94,
+        34,
+        32,
+        8,
+        61
+      ],
+      "accounts": [
+        {
+          "name": "zone_market"
+        },
+        {
+          "name": "zone_capacity",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
     },
     {
       "name": "initialize_zone_config",

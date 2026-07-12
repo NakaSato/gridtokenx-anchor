@@ -20,10 +20,11 @@ There is **no root `Cargo.toml` workspace** — each program in `programs/*` is 
 
 ```bash
 anchor build                      # build all programs (Anchor 1.0 emits programs/<p>/target/deploy/<p>.so;
-                                  #   copy to root target/deploy/ for scripts/run-tests.sh — see SKILL.md gotcha #1)
+                                  #   copy to root target/deploy/ for the litesvm suites — see SKILL.md gotcha #1)
 anchor test                       # build, spin up validator, deploy, run mocha suite
                                   #   NOTE: Anchor 1.0 spawns `surfpool` as the test validator — if it's not
-                                  #   installed, use ./scripts/run-tests.sh (solana-test-validator) instead
+                                  #   installed, start a local solana-test-validator yourself and run the raw
+                                  #   mocha suite (below) or the per-suite `npm run test:*` recipes instead
 anchor keys sync                  # regenerate program IDs (then update declare_id! in each lib.rs)
 
 # Per-suite (each spins its own validator via anchor test):
@@ -39,17 +40,13 @@ npm run test:all                  # oracle+registry+governance+blockbench+smallb
 npx mocha -r tsx 'tests/**/*.ts' --timeout 1000000
 npx mocha -r tsx tests/oracle.ts --timeout 1000000   # single file
 
-./scripts/run-tests.sh --suite oracle                # standalone/CI runner, flags: --skip-build --skip-deploy --suite
-
 # In-process litesvm suites (no validator): guard tests + CU profiles.
-npm run test:litesvm        # every tests/*_litesvm.ts  (auto-stages fresh .so via pretest hook)
+npm run test:litesvm        # every tests/*_litesvm.ts
 npm run test:cu-profile     # tests/cu_profile_*_litesvm.ts (each asserts < 200k CU)
-npm run build:programs      # cargo build-sbf every program, then stage into target/deploy
-npm run stage:programs      # copy programs/*/target/deploy/*.so -> target/deploy (newest wins)
 # The litesvm suites load target/deploy/<p>.so; Anchor 1.0 emits per-program binaries under
-# programs/<p>/target/deploy, so a stale root copy makes tests run the WRONG binary. The
-# stage script (scripts/stage-programs.sh, also a CI step) keeps root current; `--check`
-# fails if drift exists. Rebuild + restage after editing a program: `npm run build:programs`.
+# programs/<p>/target/deploy, so a stale root copy makes tests run the WRONG binary — after
+# editing a program, rebuild (cargo build-sbf) and copy the fresh .so into root target/deploy
+# (see SKILL.md gotcha #1).
 
 npm run lint        # eslint .
 npm run lint:fix
@@ -64,7 +61,7 @@ npm run simnet:ci   # --ci (headless, fast)
 
 ### Init / simulation scripts (run against a live validator)
 
-`scripts/*.ts` run via `npx tsx`. Order matters: `bootstrap.ts` then `init-registry.ts` → `init-oracle.ts` → `init-market.ts` → `init-governance.ts` → `init-rec-mint.ts` (fungible REC mint, after governance) → `init-zone-config.ts` (also `npm exec` via `anchor run init-zone-config`). Lifecycle/load sims: `simulate-trading.ts`, `simulate-market-clearing.ts`, `simulate-meter-stream.ts`, `simulate-token-lifecycle.ts`, `execute-settlement.ts`.
+`scripts/*.ts` run via `npx tsx`. Order matters: `bootstrap.ts` then `init-registry.ts` → `init-oracle.ts` → `init-market.ts` → `init-governance.ts` → `init-rec-mint.ts` (fungible REC mint, after governance) → `init-zone-config.ts` (also `npm exec` via `anchor run init-zone-config`).
 
 ---
 

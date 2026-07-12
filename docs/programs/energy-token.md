@@ -166,7 +166,7 @@ Transfers GRID between token accounts (`lib.rs:443-460`).
 - **State effects:** issues `transfer_checked` with a fixed 9-decimal scale (`lib.rs:455`).
 - **Events:** none. **Error paths:** SPL token program errors (e.g. insufficient balance, mint mismatch).
 
-### 4.8 `burn_tokens`
+### 4.8 `retire_energy_tokens`
 
 Burns GRID to represent energy consumption (`lib.rs:463-480`).
 
@@ -297,7 +297,7 @@ The program's TypeScript bindings are generated to `target/types/energy_token` a
 
 The `set_authority` instruction (§4.13) currently has no dedicated test coverage in `tests/`.
 
-Related scripts that drive the program against a live validator include `scripts/bootstrap.ts`, `scripts/mint-tokens.ts`, `scripts/mint-to-owners.ts`, `scripts/sync-supply.ts`, and `scripts/simulate-token-lifecycle.ts` (all reference the `energy_token` program type).
+`scripts/bootstrap.ts` drives the program against a live validator (it references the `energy_token` program type).
 
 ### Commands
 
@@ -319,8 +319,8 @@ npm run test:cu-profile
 # In-crate unit tests (rec_validator_registered)
 cd programs/energy-token && cargo test
 
-# Standalone/CI runner
-./scripts/run-tests.sh
+# Full validator-backed suite
+anchor test
 ```
 
-There is no dedicated `npm run test:*` script scoped to the energy-token program in `package.json`; the named scripts target the oracle, registry, staking, governance, treasury, and benchmark suites, while `npm run test:litesvm` runs every `tests/*_litesvm.ts` suite (the energy-token ones among them). The validator-backed energy-token tests are run via raw mocha or the `run-tests.sh` runner as shown above.
+There is no dedicated `npm run test:*` script scoped to the energy-token program in `package.json`; the named scripts target the oracle, registry, staking, governance, treasury, and benchmark suites, while `npm run test:litesvm` runs every `tests/*_litesvm.ts` suite (the energy-token ones among them). The validator-backed energy-token tests are run via raw mocha or the full `anchor test` suite as shown above.

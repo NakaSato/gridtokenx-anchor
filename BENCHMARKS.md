@@ -329,7 +329,7 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 | `energy_token.initialize_token` | 18 424 |
 | `energy_token.mint_to_wallet` (REC-gated) | 13 722 |
 | `energy_token.transfer_tokens` | 8 035 |
-| `energy_token.burn_tokens` | 6 537 |
+| `energy_token.retire_energy_tokens` | 6 537 |
 | `energy_token.add_rec_validator` | 3 496 |
 | `energy_token.remove_rec_validator` | 3 291 |
 
@@ -367,13 +367,9 @@ rejected as `FutureReading`. An earlier two-transport run (per-tx `.rpc()` webso
 confirms ≤10k) produced the same CU values with lower TPS (~120–220): transport-bound,
 retained in git history (`46fc183`).
 
-Reproduce (validator up, oracle deployed + `scripts/init-oracle.ts` run):
-
-```bash
-NODE_OPTIONS=--max-old-space-size=16384 \
-METERS=100000 EPOCHS=2 MAX_INFLIGHT=3000 CU_SAMPLE=200 PREFIX=RUN_M \
-  caffeinate -is npx tsx scripts/bench-meter-throughput.ts
-```
+Reproduce: the `bench-meter-throughput.ts` harness has been _removed_; the tables
+below are retained as historical record (it ran with `METERS`/`EPOCHS`/`MAX_INFLIGHT`/
+`CU_SAMPLE` env against a live validator with the oracle deployed + `scripts/init-oracle.ts` run).
 
 **Outcome decomposition.** Every non-confirmed transaction is attributed to one of
 three classes: **send-rejected** (RPC refused — never entered the validator, no fee),
@@ -430,7 +426,7 @@ multi-node deployment to convert into proportional throughput, and the flat CU s
 the per-write cost is already scale-free. **True delivery loss stays ≤ 0.46% at every
 fleet size** (0.35% at 100 000 meters / 200 000 tx, no client retry — one retry round
 would push effective loss to ~10⁻⁵); p95 latency ≤ 3.1 s under the 3 000-tx window.
-(Solana 3.1.10, Apple M2, 2026-07-07; harness `scripts/bench-meter-throughput.ts`.)
+(Solana 3.1.10, Apple M2, 2026-07-07; harness `bench-meter-throughput.ts`, since removed.)
 
 ---
 
@@ -441,11 +437,9 @@ instructions (alternating buy/sell, 16 zone shards round-robin, one per-order PD
 each) fired at a live validator through the same raw-send + bulk-status transport
 and outcome attribution as §9.
 
-Reproduce (validator up, trading deployed; self-bootstraps market/zone/shards):
-
-```bash
-ORDERS=10000 ZONE_ID=701 caffeinate -is npx tsx scripts/bench-trading-throughput.ts
-```
+Reproduce: the `bench-trading-throughput.ts` harness has been _removed_; the table
+below is retained as historical record (it ran with `ORDERS`/`ZONE_ID` env against a
+live validator with trading deployed, self-bootstrapping market/zone/shards).
 
 | ok/N | delivery loss | on-chain err | TPS | lat p50 | lat p95 | CU min | CU med | CU max |
 |-----:|--------------:|-------------:|----:|--------:|--------:|-------:|-------:|-------:|
@@ -463,7 +457,7 @@ it. This is the same defect class fixed for `ShardedMatchOrdersContext` in
 `95e7cdd` (measured there: writable → 1 match/slot, read-only → 3/slot) and is the
 identified next fix; delivery loss is pure transport (23 expired, zero on-chain
 errors). (Solana 3.1.10, Apple M2, 2026-07-07; harness
-`scripts/bench-trading-throughput.ts`.)
+`bench-trading-throughput.ts`, since removed.)
 
 ---
 
@@ -474,8 +468,8 @@ End-to-end month of a real community, replayed against a live validator: an
 seeded solar/load models, 12 solar prosumers + 68 consumers), 30 days × 96
 15-minute ticks = **230,400 readings**, with a **10 kWh/day sell cap** per
 prosumer. Month energy: 15,868.5 kWh generated / 144,879.8 kWh consumed /
-10,386.7 kWh tick-surplus. Three phases (harness
-`scripts/bench-community-month.ts`; dataset exported via the simulator's Python
+10,386.7 kWh tick-surplus. Three phases (the `bench-community-month.ts` harness has
+since been _removed_; dataset exported via the simulator's Python
 API — `MeterGenerator` + `SmartMeter.generate_reading`, seed 42):
 
 1. **Telemetry replay** — historical timestamps (the oracle only rejects future
@@ -489,16 +483,14 @@ API — `MeterGenerator` + `SmartMeter.generate_reading`, seed 42):
    buyers bid their actual daily consumption.
 3. **Token lifecycle** — daily per prosumer: registry sync + `settle_and_mint_tokens`
    (GRID, Token-2022) → escrow deposit → Ed25519-signed `settle_offchain_match`
-   against a rotating consumer (v0 tx + ALT) → buyer withdraw + `burn_tokens`.
+   against a rotating consumer (v0 tx + ALT) → buyer withdraw + `retire_energy_tokens`.
    Month-end: cap-withheld surplus certified as RECs via governance `issue_erc`
    (CPIs `mark_erc_claimed` → GRID + REC ≤ metered generation, on-chain).
 
-Reproduce (fresh validator; deploy oracle/trading/registry/governance/energy_token,
-then `bootstrap.ts` + `init-shards.ts`):
-
-```bash
-DATA_DIR=<exported-dataset> caffeinate -is npx tsx scripts/bench-community-month.ts
-```
+Reproduce: the `bench-community-month.ts` harness has been _removed_; the results
+below are retained as historical record (it took a `DATA_DIR=<exported-dataset>` env
+against a fresh validator with oracle/trading/registry/governance/energy_token deployed,
+then `bootstrap.ts` + `init-shards.ts` run).
 
 **Canonical run (2026-07-07, Solana 3.1.10, Apple M2):**
 
@@ -518,8 +510,8 @@ tick-surplus from the market. Settlement currency volume 13,137 units across
 rejected) reproduced **bit-identically across four runs**; throughput varied
 213–232 readings/s with host load.
 
-**On-chain audit.** `scripts/audit-community-month.ts` re-derives every headline
-number from live chain state (RPC reads only, run right after the bench):
+**On-chain audit.** A companion `audit-community-month.ts` harness (since _removed_)
+re-derived every headline number from live chain state (RPC reads only, run right after the bench):
 Σ per-meter `total_readings` = 229,481; Order/TradeNullifier/OrderNullifier PDA
 counts = 2,396/353/706; registry Σ `settled_net_generation` = 3,290,724 Wh and
 Σ `claimed_erc_generation` = 4,962,778 Wh (= the 12 ErcCertificates); GRID

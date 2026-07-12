@@ -116,7 +116,7 @@ The Anchor programs are above this layer, but it explains operational realities:
   the validator/RPC layer, not in every microservice.
 - **litesvm tests skip all this.** In-process litesvm (`litesvm-test-harness`) has no network,
   no Turbine/gossip — it executes instructions directly. Fast, but it can't surface
-  propagation/fork timing; those need a real validator (`anchor test` / `run-tests.sh`).
+  propagation/fork timing; those need a real validator (`anchor test`).
 
 ---
 

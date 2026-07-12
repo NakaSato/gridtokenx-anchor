@@ -82,6 +82,10 @@ struct TreasuryFixture {
     /// A re-record of an already-committed (zone,batch) PDA must FAIL (init guard).
     /// If one ever succeeds, this trips.
     double_record_detected: bool,
+    /// Mirror of the on-chain `paused` flag (set_params writes it unconditionally).
+    paused: bool,
+    /// A swap/redeem that landed while `paused` bypassed the Paused gate (I9).
+    pause_violation: bool,
 }
 
 fn spl_token_id() -> Pubkey {
@@ -249,6 +253,8 @@ impl TreasuryFixture {
             settle_count_expected: 0,
             committed_records: Vec::new(),
             double_record_detected: false,
+            paused: false,
+            pause_violation: false,
         }
     }
 
@@ -308,7 +314,8 @@ impl TreasuryFixture {
             return false;
         }
         let amt = (grx_in % bal).max(1);
-        self.ctx
+        let ok = self
+            .ctx
             .program(self.program_id)
             .call(instruction::SwapGrxForThbg { grx_in: amt })
             .accounts(accounts::SwapGrxForThbg {
@@ -324,7 +331,11 @@ impl TreasuryFixture {
             .signers(&[&*u.kp])
             .send()
             .map(|o| o.is_success())
-            .unwrap_or(false)
+            .unwrap_or(false);
+        if ok && self.paused {
+            self.pause_violation = true; // a swap that landed while paused bypassed the gate
+        }
+        ok
     }
 
     /// Redeem THBG → GRX (burns THBG, returns GRX from swap_vault).
@@ -335,7 +346,8 @@ impl TreasuryFixture {
             return false;
         }
         let amt = (thbg_in % bal).max(1);
-        self.ctx
+        let ok = self
+            .ctx
             .program(self.program_id)
             .call(instruction::RedeemThbgForGrx { thbg_in: amt })
             .accounts(accounts::RedeemThbgForGrx {
@@ -351,7 +363,11 @@ impl TreasuryFixture {
             .signers(&[&*u.kp])
             .send()
             .map(|o| o.is_success())
-            .unwrap_or(false)
+            .unwrap_or(false);
+        if ok && self.paused {
+            self.pause_violation = true; // a redeem that landed while paused bypassed the gate
+        }
+        ok
     }
 
     /// Attest a fresh reserve. Kept >= current supply so I2 stays a meaningful
@@ -379,7 +395,8 @@ impl TreasuryFixture {
         #[range(1..10_000_000)] rate: u64,
         #[range(0..10_001)] fee_bps: u16,
     ) -> bool {
-        self.ctx
+        let ok = self
+            .ctx
             .program(self.program_id)
             .call(instruction::SetParams {
                 grx_per_thbg_rate: rate,
@@ -395,7 +412,39 @@ impl TreasuryFixture {
             .signers(&[&*self.admin])
             .send()
             .map(|o| o.is_success())
-            .unwrap_or(false)
+            .unwrap_or(false);
+        if ok {
+            self.paused = false; // set_params unconditionally writes paused = false here
+        }
+        ok
+    }
+
+    /// Toggle the pause flag via set_params. When paused, swap_grx_for_thbg and
+    /// redeem_thbg_for_grx must halt (TreasuryError::Paused) — the pause-violation
+    /// invariant (I9) checks no swap/redeem lands while `self.paused`.
+    pub fn action_set_pause(&mut self, paused: bool) -> bool {
+        let ok = self
+            .ctx
+            .program(self.program_id)
+            .call(instruction::SetParams {
+                grx_per_thbg_rate: INIT_RATE,
+                swap_fee_bps: INIT_FEE_BPS,
+                attestation_ttl: HUGE_TTL,
+                paused,
+                settlement_recorder: self.admin.pubkey(),
+            })
+            .accounts(accounts::SetParams {
+                treasury: self.treasury_pda,
+                authority: self.admin.pubkey(),
+            })
+            .signers(&[&*self.admin])
+            .send()
+            .map(|o| o.is_success())
+            .unwrap_or(false);
+        if ok {
+            self.paused = paused; // mirror on-chain paused (set_params writes it unconditionally)
+        }
+        ok
     }
 
     /// Stake GRX into the yield vault (init_if_needed position).
@@ -830,6 +879,13 @@ fn invariant_test(fixture: &mut TreasuryFixture) {
         !fixture.double_record_detected,
         "double-record succeeded: a re-recorded (zone,batch) bypassed the init guard"
     );
+    // I9 — pause safety: swap_grx_for_thbg / redeem_thbg_for_grx must halt while paused.
+    // Any that landed while the mirror said paused bypassed the TreasuryError::Paused gate.
+    fuzz_assert!(
+        !fixture.pause_violation,
+        "swap/redeem succeeded while treasury was paused"
+    );
+
     for (ns, zone, batch, value, vat, vat_rate) in fixture.committed_records.iter() {
         let seed: &[u8] = if *ns == 0 { b"settlement_batch" } else { b"settlement" };
         let (record, _) = Pubkey::find_program_address(

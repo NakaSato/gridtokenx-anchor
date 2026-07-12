@@ -745,11 +745,9 @@ no compile-time dependency on the treasury program.
 | Staking (LiteSVM, in-process) | `npm run test:staking-litesvm` → `mocha -r tsx tests/staking_unstake_litesvm.ts` (`package.json:17`) | clock-warped unstake happy-path, cooldown, and demotion without a live validator |
 | Meter-reading guards (LiteSVM) | part of `npm run test:litesvm` → `tests/registry_meter_reading_guards_litesvm.ts` | `update_meter_reading` oracle-auth / staleness / rate-limit / delta-cap guards; bootstraps a real oracle `MeterState` for the cross-check account |
 
-Standalone / CI runner: `scripts/run-tests.sh --suite registry` runs only the sharding
-suite (`scripts/run-tests.sh:94-95`), and `--suite staking` runs the staking suite
-(`scripts/run-tests.sh:97-98`); flags `--skip-build` / `--skip-deploy` skip the
-respective phases. The runner deploys `registry` among the programs it builds and deploys
-(`scripts/run-tests.sh:211`).
+Per-suite npm recipes: `npm run test:registry` runs only the sharding suite, and
+`npm run test:staking` runs the staking suite; both build, deploy `registry` among the
+programs, spin up a validator, and run the Mocha file.
 
 The LiteSVM harness (`tests/staking_unstake_litesvm.ts`) runs the program in-process with
 the ability to warp the validator clock, which is required to exercise the 24-hour

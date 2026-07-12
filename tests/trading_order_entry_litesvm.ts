@@ -2,8 +2,10 @@
 // had zero test coverage: submit_limit_order, submit_market_order, update_depth,
 // update_market_params, set_settlement_thbg_mint.
 //
-// These are the alternate (CDA / off-chain-matcher) order path, distinct from the
-// create_sell_order/create_buy_order legacy path covered in order_guards_litesvm.ts.
+// These are the off-chain-matcher CDA path (order emitted as intent for off-chain
+// matching agents), distinct from the ERC/REC-gated on-chain-book path
+// (create_sell_order/create_buy_order) covered in order_guards_litesvm.ts. Both are
+// live, current paths — not legacy-vs-new; they model two different trading designs.
 // submit_limit_order opens an Order PDA + bumps market.active_orders; submit_market_order
 // only checks opposite-side depth and emits (matching is off-chain). update_depth seeds the
 // zone_market depth arrays that submit_market_order's liquidity guard reads.

@@ -134,7 +134,7 @@ a free fn with ~15 params is error-prone and hard to verify byte-identical. Pref
   the one critical review point.
 - Intra-zone batches omit `zone_capacity` → `zone_market` read-only → parallel. Cross-zone pass
   it (mut) → serialized on `ZoneCapacity` only (correct; hard physical ceiling, minority path).
-- Migration: add an `init_zone_capacity` instruction; existing zones start `committed_flow` at 0
+- Migration: add an `initialize_zone_capacity` instruction; existing zones start `committed_flow` at 0
   (localnet has no real committed flow to carry). The `committed_flow` field on `zone_market`
   becomes reserved/dead (keep for layout, like the batch-builder fields).
 

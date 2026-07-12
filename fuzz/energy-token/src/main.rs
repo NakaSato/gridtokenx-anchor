@@ -275,8 +275,8 @@ impl EnergyTokenFixture {
         let ok = self
             .ctx
             .program(self.program_id)
-            .call(instruction::BurnTokens { amount: amt })
-            .accounts(accounts::BurnTokens {
+            .call(instruction::RetireEnergyTokens { amount: amt })
+            .accounts(accounts::RetireEnergyTokens {
                 mint: self.mint,
                 token_account: w.token_acct,
                 authority: w.owner.pubkey(),

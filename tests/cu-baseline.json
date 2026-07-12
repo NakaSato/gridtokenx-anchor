@@ -1,6 +1,6 @@
 {
   "energy_token.add_rec_validator": 3496,
-  "energy_token.burn_tokens": 6537,
+  "energy_token.retire_energy_tokens": 6537,
   "energy_token.initialize_token": 18424,
   "energy_token.mint_to_wallet": 13722,
   "energy_token.remove_rec_validator": 3291,

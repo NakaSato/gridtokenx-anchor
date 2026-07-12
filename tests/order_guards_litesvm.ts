@@ -9,7 +9,7 @@
 // keys on. governance_config is an UncheckedAccount (manual deserialize, owner unchecked);
 // erc_certificate is Account<ErcCertificate> so it must carry the governance owner + disc.
 //
-// create_sell_order is a 7-account legacy tx (no Ed25519, no shards) → plain send, no ALT.
+// create_sell_order is a plain 7-account tx (no Ed25519, no shards) → plain send, no ALT.
 
 import { LiteSVM, Clock, FailedTransactionMetadata } from "litesvm";
 import { Program } from "@anchor-lang/core";

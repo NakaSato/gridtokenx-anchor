@@ -45,10 +45,9 @@ registers no REC validator and admits no aggregator, so each test self-provision
   validator", 1/1 green), not actually pending despite this table's original framing.
 - `tests/batch_settle_tps.ts` (0.3 trailing gov acct + 0.5 REC)
 - `tests/generation_mint_idempotency.ts` (0.5 REC)
-- `scripts/simulate-token-lifecycle.ts` (0.1 admit + 0.5 REC + zone arg)
 - Zone-binding `register_meter` arg added to: `tests/governance_dao.ts` (meter zone = proposal zone 301), `tests/oracle_integration.ts`, `tests/governance.ts` (zone 0). The litesvm callers (`cu_profile_registry`, `registry_meter_reading_guards`) are already green.
 
-Verify: `anchor test` (or `./scripts/run-tests.sh`).
+Verify: `anchor test` (or `npm run test:*` for a single suite).
 
 **Zone-binding residual trust:** zone is *self-declared* at `register_meter` — it binds a meter to ONE zone (a meter can no longer vote across zones), but does not prove physical location. Airtight assignment (authority-set or h3-derived from `UserAccount.h3_index`) is a later step. The cross-zone-rejection enforcement IS runtime-verified in `governance_zone_binding_litesvm.ts` (fabricated registry-owned meters); the validator `governance_dao.ts` covers the happy path with real registration.
 
