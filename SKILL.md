@@ -137,33 +137,37 @@ The sibling Rust client library hardcodes Anchor's 8-byte SHA256 discriminators 
 
 Two distinct meter seed conventions: **oracle** uses `[b"meter", meter_id]` (AMI gateway identifies meters by serial); **registry** uses `[b"meter", owner, meter_id]` (owner-scoped). Don't unify these.
 
-## Build & test
+## Build
 
 ```bash
 anchor build                 # build all source programs → target/deploy + target/types
 anchor build -- --features localnet   # feature-gated compute profiling
 
-anchor test                  # build + validator + deploy + mocha (Anchor.toml [scripts] test = npx mocha -r tsx 'tests/**/*.ts')
-npm run test:oracle          # per-suite npm scripts: oracle | registry | governance | blockbench | smallbank | tpc-stress | all
-npx mocha -r tsx tests/oracle.ts --timeout 1000000   # single file (validator must be running)
-
 npm run simnet               # Surfpool mainnet sim (no local validator); simnet:ci for headless
 ```
 
-Tests use `AnchorProvider` against a live validator (import from `@anchor-lang/core`). `litesvm` is a devDependency but not used by the current `tests/`.
+> **The `tests/` directory has been removed** (along with the `test`, `test:*`
+> npm scripts and the `Anchor.toml [scripts] test` entry). `anchor test` /
+> `npm test` no longer have a target. Build, `simnet`, and the `scripts/*.ts`
+> init/simulation flow remain. If you re-add tests, restore the
+> `mocha -r tsx` runner + the `Anchor.toml [scripts] test` line; the
+> test-authoring notes below are kept as guidance for that.
 
-### Build & test gotchas
+### Build gotchas
 
 1. **Stale-binary blocker (no global Cargo workspace)**: because there's no root workspace, `anchor build` may emit `.so` to `programs/<name>/target/deploy/` while the validator deploy looks in root `./target/deploy/`. If a deploy uses a stale binary, copy explicitly:
    ```bash
    cp programs/oracle/target/deploy/oracle.so target/deploy/oracle.so
    ```
-2. **Test runner is `mocha -r tsx`** (in `Anchor.toml`), not `ts-mocha` — fixes ESM module resolution conflicts.
-3. **Benchmark crates** (`blockbench`, `tpc_benchmark`) must stay in `Anchor.toml [programs.localnet]` so the test validator deploys them on startup.
-4. **Time in tests**: don't `sleep` to advance time. Construct initial states with past timestamps (e.g. `timestamp.sub(new BN(70))`) to pass rate-limit / monotonicity checks without races.
-5. **Apple Silicon validator crash**: `solana-test-validator` on M-series panics under load ("Too many open files"). Run `ulimit -n 65536` before launching (the superproject `scripts/app.sh` handles this).
-6. **Arithmetic**: use `checked_*` / `saturating_*` for every on-chain arithmetic op. Every program's `Cargo.toml` also sets `[profile.release] overflow-checks = true` (cargo build-sbf defaults to off, which silently wraps), so any bare `+`/`-`/`*` that slips through panics instead of corrupting state. **New programs must include the same profile block.**
-7. **Oracle epochs are 900-second-aligned**: `trigger_market_clearing` rejects any `epoch_timestamp` where `epoch_timestamp % 900 != 0` (and any epoch ≤ `last_cleared_epoch` or in the future). Tests must align: `now.sub(now.mod(new BN(900)))`.
+2. **Benchmark crates** (`blockbench`, `tpc_benchmark`) must stay in `Anchor.toml [programs.localnet]` so the test validator deploys them on startup.
+3. **Apple Silicon validator crash**: `solana-test-validator` on M-series panics under load ("Too many open files"). Run `ulimit -n 65536` before launching (the superproject `scripts/app.sh` handles this).
+4. **Arithmetic**: use `checked_*` / `saturating_*` for every on-chain arithmetic op. Every program's `Cargo.toml` also sets `[profile.release] overflow-checks = true` (cargo build-sbf defaults to off, which silently wraps), so any bare `+`/`-`/`*` that slips through panics instead of corrupting state. **New programs must include the same profile block.**
+
+### If you re-add tests (authoring notes)
+
+- **Test runner is `mocha -r tsx`** (was in `Anchor.toml [scripts] test`), not `ts-mocha` — fixes ESM module resolution conflicts. Tests use `AnchorProvider` against a live validator (import from `@anchor-lang/core`); `litesvm` is a devDependency for in-process suites.
+- **Time in tests**: don't `sleep` to advance time. Construct initial states with past timestamps (e.g. `timestamp.sub(new BN(70))`) to pass rate-limit / monotonicity checks without races.
+- **Oracle epochs are 900-second-aligned**: `trigger_market_clearing` rejects any `epoch_timestamp` where `epoch_timestamp % 900 != 0` (and any epoch ≤ `last_cleared_epoch` or in the future). Tests must align: `now.sub(now.mod(new BN(900)))`.
 
 ## Common tasks
 
