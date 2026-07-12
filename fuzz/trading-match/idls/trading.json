@@ -1,0 +1,4491 @@
+{
+  "address": "CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX",
+  "metadata": {
+    "name": "trading",
+    "version": "0.1.1",
+    "spec": "0.1.0",
+    "description": "Trading program for P2P Energy Trading - Order book and marketplace"
+  },
+  "instructions": [
+    {
+      "name": "batch_settle_offchain_match",
+      "discriminator": [
+        104,
+        149,
+        174,
+        115,
+        221,
+        21,
+        169,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "market"
+        },
+        {
+          "name": "zone_market"
+        },
+        {
+          "name": "currency_mint"
+        },
+        {
+          "name": "energy_mint"
+        },
+        {
+          "name": "market_authority"
+        },
+        {
+          "name": "market_shard",
+          "writable": true
+        },
+        {
+          "name": "zone_shard",
+          "writable": true
+        },
+        {
+          "name": "fee_collector",
+          "writable": true
+        },
+        {
+          "name": "wheeling_collector",
+          "writable": true
+        },
+        {
+          "name": "loss_collector",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "sysvar_instructions"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "secondary_token_program"
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "treasury_program",
+          "optional": true
+        },
+        {
+          "name": "treasury_state",
+          "optional": true
+        },
+        {
+          "name": "settlement_shard",
+          "docs": [
+            "Per-shard settlement accumulator (`[b\"settle_shard\", &[shard_id]]`), bumped via",
+            "CPI instead of the global `total_settled_thbg`. Required when recording fires."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "settlement_record",
+          "docs": [
+            "Per-`(zone, batch)` treasury `SettlementRecord` PDA, created via CPI when",
+            "the batch is committed. Required whenever treasury recording fires."
+          ],
+          "writable": true,
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "matches",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "BatchMatchPair"
+              }
+            }
+          }
+        },
+        {
+          "name": "merkle_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "vat_amount",
+          "type": "u64"
+        },
+        {
+          "name": "vat_rate_bps",
+          "type": "u16"
+        },
+        {
+          "name": "batch_id",
+          "type": "u64"
+        },
+        {
+          "name": "settle_shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "cancel_order",
+      "discriminator": [
+        95,
+        129,
+        237,
+        240,
+        8,
+        49,
+        223,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "market"
+        },
+        {
+          "name": "zone_market",
+          "writable": true
+        },
+        {
+          "name": "order",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "clear_auction",
+      "docs": [
+        "Clear Auction - Periodic Batch Auction Mechanism",
+        "",
+        "Implements uniform price auction clearing by finding the supply-demand intersection.",
+        "All matched orders execute at the same clearing price, ensuring fair treatment.",
+        "",
+        "Algorithm:",
+        "1. Collect sell orders (sorted ascending by price)",
+        "2. Collect buy orders (sorted descending by price)",
+        "3. Build aggregate supply and demand curves",
+        "4. Find clearing price where supply = demand",
+        "5. Match all compatible orders at uniform clearing price",
+        "",
+        "Time Complexity: O(n log n) for sorting + O(m × k) for clearing point",
+        "Space Complexity: O(n) for order vectors"
+      ],
+      "discriminator": [
+        134,
+        224,
+        172,
+        82,
+        51,
+        143,
+        234,
+        32
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "zone_market",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "fee_collector",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "sell_orders",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "AuctionOrder"
+              }
+            }
+          }
+        },
+        {
+          "name": "buy_orders",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "AuctionOrder"
+              }
+            }
+          }
+        }
+      ],
+      "returns": {
+        "defined": {
+          "name": "ClearAuctionResult"
+        }
+      }
+    },
+    {
+      "name": "close_tariff_config",
+      "discriminator": [
+        38,
+        236,
+        43,
+        133,
+        188,
+        182,
+        162,
+        203
+      ],
+      "accounts": [
+        {
+          "name": "tariff_config",
+          "docs": [
+            "`tariff_config` account whose on-chain bytes may predate the current `TariffConfig`",
+            "layout (a typed `Account<'info, TariffConfig>` would fail to deserialize the old",
+            "layout before the handler even runs). Ownership + PDA-seeds are still verified."
+          ],
+          "writable": true
+        },
+        {
+          "name": "market"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_buy_order",
+      "discriminator": [
+        182,
+        87,
+        0,
+        160,
+        192,
+        66,
+        151,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "market"
+        },
+        {
+          "name": "zone_market",
+          "writable": true
+        },
+        {
+          "name": "order",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "order_id_val",
+          "type": "u64"
+        },
+        {
+          "name": "energy_amount",
+          "type": "u64"
+        },
+        {
+          "name": "max_price_per_kwh",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "create_sell_order",
+      "discriminator": [
+        53,
+        52,
+        255,
+        44,
+        191,
+        74,
+        171,
+        225
+      ],
+      "accounts": [
+        {
+          "name": "market"
+        },
+        {
+          "name": "zone_market",
+          "writable": true
+        },
+        {
+          "name": "order",
+          "writable": true
+        },
+        {
+          "name": "erc_certificate",
+          "optional": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "order_id_val",
+          "type": "u64"
+        },
+        {
+          "name": "energy_amount",
+          "type": "u64"
+        },
+        {
+          "name": "price_per_kwh",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "deposit_escrow",
+      "docs": [
+        "Deposit currency/energy into the caller's per-user escrow PDA (funds the",
+        "off-chain settlement path)."
+      ],
+      "discriminator": [
+        226,
+        112,
+        158,
+        176,
+        178,
+        118,
+        153,
+        128
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "user_wallet",
+          "writable": true
+        },
+        {
+          "name": "user_escrow",
+          "writable": true
+        },
+        {
+          "name": "market_authority"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_atomic_settlement",
+      "discriminator": [
+        86,
+        216,
+        13,
+        114,
+        76,
+        114,
+        212,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "buy_order",
+          "writable": true
+        },
+        {
+          "name": "sell_order",
+          "writable": true
+        },
+        {
+          "name": "trade_nullifier",
+          "writable": true
+        },
+        {
+          "name": "buyer_currency_escrow",
+          "writable": true
+        },
+        {
+          "name": "seller_energy_escrow",
+          "writable": true
+        },
+        {
+          "name": "seller_currency_account",
+          "writable": true
+        },
+        {
+          "name": "buyer_energy_account",
+          "writable": true
+        },
+        {
+          "name": "fee_collector",
+          "writable": true
+        },
+        {
+          "name": "wheeling_collector",
+          "writable": true
+        },
+        {
+          "name": "loss_collector",
+          "writable": true
+        },
+        {
+          "name": "energy_mint"
+        },
+        {
+          "name": "currency_mint"
+        },
+        {
+          "name": "escrow_authority",
+          "signer": true
+        },
+        {
+          "name": "market_authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "secondary_token_program"
+        },
+        {
+          "name": "governance_config"
+        },
+        {
+          "name": "tariff_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "trade_id",
+          "type": {
+            "array": [
+              "u8",
+              16
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "execute_auction_matches",
+      "docs": [
+        "Execute Auction Matches - Atomic Settlement",
+        "",
+        "Executes token transfers for auction matches generated by clear_auction.",
+        "This separates price discovery (clear_auction) from settlement (execute_auction_matches).",
+        "",
+        "# Arguments",
+        "* `matches` - Vector of AuctionMatch from clear_auction",
+        "* `clearing_price` - Uniform clearing price from clear_auction"
+      ],
+      "discriminator": [
+        1,
+        143,
+        86,
+        176,
+        52,
+        186,
+        76,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "zone_market",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "fee_collector",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "matches",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "AuctionMatch"
+              }
+            }
+          }
+        },
+        {
+          "name": "clearing_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "fund_escrow_custodial",
+      "docs": [
+        "Custodial escrow funding (Option A): platform funds `user`'s escrow on their",
+        "behalf. `user` is a non-signing instruction arg; the platform `funder` signs.",
+        "Off-chain authorization is enforced by Chain Bridge RBAC."
+      ],
+      "discriminator": [
+        14,
+        190,
+        150,
+        156,
+        231,
+        62,
+        48,
+        243
+      ],
+      "accounts": [
+        {
+          "name": "funder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "funder_source",
+          "writable": true
+        },
+        {
+          "name": "user_escrow",
+          "writable": true
+        },
+        {
+          "name": "market_authority"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "user",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_collectors",
+      "docs": [
+        "One-time creation of the fee/wheeling/loss collector PDAs for a currency mint."
+      ],
+      "discriminator": [
+        161,
+        17,
+        98,
+        172,
+        192,
+        126,
+        19,
+        65
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "currency_mint"
+        },
+        {
+          "name": "fee_collector",
+          "writable": true
+        },
+        {
+          "name": "wheeling_collector",
+          "writable": true
+        },
+        {
+          "name": "loss_collector",
+          "writable": true
+        },
+        {
+          "name": "market_authority"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_market",
+      "discriminator": [
+        35,
+        35,
+        189,
+        193,
+        155,
+        48,
+        170,
+        203
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "num_shards",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "initialize_market_shard",
+      "discriminator": [
+        231,
+        13,
+        176,
+        97,
+        233,
+        3,
+        185,
+        126
+      ],
+      "accounts": [
+        {
+          "name": "market"
+        },
+        {
+          "name": "market_shard",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "initialize_program",
+      "discriminator": [
+        176,
+        107,
+        205,
+        168,
+        24,
+        157,
+        175,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_sharded_collectors",
+      "docs": [
+        "One-time creation of the SHARDED collector PDAs for a currency mint + shard",
+        "(§2c Part B). Run once per shard (0..NUM_SETTLE_SHARDS)."
+      ],
+      "discriminator": [
+        43,
+        218,
+        142,
+        106,
+        1,
+        239,
+        63,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "currency_mint"
+        },
+        {
+          "name": "fee_collector",
+          "writable": true
+        },
+        {
+          "name": "wheeling_collector",
+          "writable": true
+        },
+        {
+          "name": "loss_collector",
+          "writable": true
+        },
+        {
+          "name": "market_authority"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "initialize_tariff_config",
+      "docs": [
+        "One-time init of the on-chain tariff schedule (§role-map.md fix #7b): wheeling/loss",
+        "charges are no longer caller-supplied settlement args, they're computed from this",
+        "config, which only `wheeling_authority` / `loss_authority` (both MEA-PEA) can move."
+      ],
+      "discriminator": [
+        126,
+        102,
+        240,
+        127,
+        98,
+        113,
+        252,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "tariff_config",
+          "writable": true
+        },
+        {
+          "name": "market"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "wheeling_authority",
+          "type": "pubkey"
+        },
+        {
+          "name": "loss_authority",
+          "type": "pubkey"
+        },
+        {
+          "name": "wheeling_rate_per_kwh",
+          "type": "u64"
+        },
+        {
+          "name": "loss_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "initialize_zone_capacity",
+      "docs": [
+        "One-time creation of the per-zone `ZoneCapacity` PDA (Tier-A). Holds the cross-zone",
+        "`committed_flow` counter moved off `ZoneMarket` so the settle hot path can keep",
+        "`ZoneMarket` read-only on intra-zone batches. Idempotent per zone_market."
+      ],
+      "discriminator": [
+        11,
+        248,
+        65,
+        94,
+        34,
+        32,
+        8,
+        61
+      ],
+      "accounts": [
+        {
+          "name": "zone_market"
+        },
+        {
+          "name": "zone_capacity",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_zone_config",
+      "discriminator": [
+        136,
+        75,
+        141,
+        163,
+        77,
+        165,
+        61,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "zone_config",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "zone_id",
+          "type": "u32"
+        },
+        {
+          "name": "incentive_multiplier_bps",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_zone_market",
+      "discriminator": [
+        185,
+        121,
+        4,
+        197,
+        200,
+        69,
+        32,
+        201
+      ],
+      "accounts": [
+        {
+          "name": "market"
+        },
+        {
+          "name": "zone_market",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "zone_id",
+          "type": "u32"
+        },
+        {
+          "name": "num_shards",
+          "type": "u8"
+        },
+        {
+          "name": "capacity",
+          "type": "u64"
+        },
+        {
+          "name": "segment",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "initialize_zone_market_shard",
+      "discriminator": [
+        108,
+        237,
+        237,
+        24,
+        211,
+        10,
+        135,
+        193
+      ],
+      "accounts": [
+        {
+          "name": "zone_market"
+        },
+        {
+          "name": "zone_shard",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "match_orders",
+      "discriminator": [
+        17,
+        1,
+        201,
+        93,
+        7,
+        51,
+        251,
+        134
+      ],
+      "accounts": [
+        {
+          "name": "market"
+        },
+        {
+          "name": "zone_market",
+          "writable": true
+        },
+        {
+          "name": "buy_order",
+          "writable": true
+        },
+        {
+          "name": "sell_order",
+          "writable": true
+        },
+        {
+          "name": "trade_record",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "match_amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "record_order_custodial",
+      "docs": [
+        "Custodial order record (Option A): platform records a buy/sell order PDA on a",
+        "user's behalf. The order PDA is seed-bound to [b\"order\", user, order_id] with",
+        "`user` stored as the non-signing authority; the platform `funder` signs + pays",
+        "rent. Mirrors create_{buy,sell}_order validation. Off-chain authorization is",
+        "enforced by Chain Bridge RBAC (trading-service role only)."
+      ],
+      "discriminator": [
+        56,
+        128,
+        26,
+        144,
+        147,
+        1,
+        229,
+        112
+      ],
+      "accounts": [
+        {
+          "name": "market"
+        },
+        {
+          "name": "zone_market",
+          "writable": true
+        },
+        {
+          "name": "order",
+          "writable": true
+        },
+        {
+          "name": "funder",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "order_id_val",
+          "type": "u64"
+        },
+        {
+          "name": "user",
+          "type": "pubkey"
+        },
+        {
+          "name": "is_buy",
+          "type": "bool"
+        },
+        {
+          "name": "energy_amount",
+          "type": "u64"
+        },
+        {
+          "name": "price_per_kwh",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_loss_rate",
+      "discriminator": [
+        118,
+        222,
+        204,
+        19,
+        250,
+        53,
+        218,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "tariff_config",
+          "writable": true
+        },
+        {
+          "name": "loss_authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "set_settlement_thbg_mint",
+      "docs": [
+        "Configure the settlement THBG mint for this market (admin only). Once set,",
+        "any match that settles in this mint MUST pass the treasury accounts so the",
+        "baht-denominated settlement is recorded — recording is no longer optional for",
+        "THBG-denominated trades. Pass `Pubkey::default()` is not allowed (use the real",
+        "THBG mint); to disable, this could be extended with a clear flag if ever needed."
+      ],
+      "discriminator": [
+        3,
+        243,
+        227,
+        136,
+        118,
+        246,
+        158,
+        162
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "thbg_mint",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_tariff_authorities",
+      "discriminator": [
+        249,
+        71,
+        250,
+        241,
+        58,
+        26,
+        110,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "tariff_config",
+          "writable": true
+        },
+        {
+          "name": "market"
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_wheeling_authority",
+          "type": "pubkey"
+        },
+        {
+          "name": "new_loss_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_wheeling_rate",
+      "discriminator": [
+        162,
+        16,
+        96,
+        153,
+        18,
+        149,
+        125,
+        234
+      ],
+      "accounts": [
+        {
+          "name": "tariff_config",
+          "writable": true
+        },
+        {
+          "name": "wheeling_authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_rate_per_kwh",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "settle_offchain_match",
+      "discriminator": [
+        140,
+        170,
+        63,
+        151,
+        81,
+        62,
+        212,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "market"
+        },
+        {
+          "name": "zone_market"
+        },
+        {
+          "name": "buyer_nullifier",
+          "writable": true
+        },
+        {
+          "name": "seller_nullifier",
+          "writable": true
+        },
+        {
+          "name": "currency_mint"
+        },
+        {
+          "name": "energy_mint"
+        },
+        {
+          "name": "market_authority"
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "secondary_token_program"
+        },
+        {
+          "name": "buyer_currency_escrow",
+          "writable": true
+        },
+        {
+          "name": "seller_currency_escrow",
+          "writable": true
+        },
+        {
+          "name": "seller_energy_escrow",
+          "writable": true
+        },
+        {
+          "name": "buyer_energy_escrow",
+          "writable": true
+        },
+        {
+          "name": "fee_collector",
+          "writable": true
+        },
+        {
+          "name": "wheeling_collector",
+          "writable": true
+        },
+        {
+          "name": "loss_collector",
+          "writable": true
+        },
+        {
+          "name": "market_shard",
+          "writable": true
+        },
+        {
+          "name": "zone_shard",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "sysvar_instructions"
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "treasury_program",
+          "optional": true
+        },
+        {
+          "name": "treasury_state",
+          "writable": true,
+          "optional": true
+        }
+      ],
+      "args": [
+        {
+          "name": "buyer_payload",
+          "type": {
+            "defined": {
+              "name": "OffchainOrderPayload"
+            }
+          }
+        },
+        {
+          "name": "seller_payload",
+          "type": {
+            "defined": {
+              "name": "OffchainOrderPayload"
+            }
+          }
+        },
+        {
+          "name": "match_amount",
+          "type": "u64"
+        },
+        {
+          "name": "match_price",
+          "type": "u64"
+        },
+        {
+          "name": "trade_id",
+          "type": {
+            "array": [
+              "u8",
+              16
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "sharded_match_orders",
+      "discriminator": [
+        232,
+        142,
+        111,
+        139,
+        239,
+        19,
+        236,
+        142
+      ],
+      "accounts": [
+        {
+          "name": "market"
+        },
+        {
+          "name": "zone_market"
+        },
+        {
+          "name": "zone_shard",
+          "writable": true
+        },
+        {
+          "name": "buy_order",
+          "writable": true
+        },
+        {
+          "name": "sell_order",
+          "writable": true
+        },
+        {
+          "name": "trade_record",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "match_amount",
+          "type": "u64"
+        },
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "submit_limit_order",
+      "docs": [
+        "CDA (Continuous Double Auction) Limit Order",
+        "Submits a limit order and attempts immediate matching against the order book"
+      ],
+      "discriminator": [
+        88,
+        229,
+        102,
+        53,
+        138,
+        92,
+        41,
+        76
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "order",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "order_id_val",
+          "type": "u64"
+        },
+        {
+          "name": "side",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "submit_limit_order_sharded",
+      "discriminator": [
+        140,
+        36,
+        215,
+        167,
+        73,
+        186,
+        32,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "order",
+          "writable": true
+        },
+        {
+          "name": "zone_market"
+        },
+        {
+          "name": "zone_shard",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program"
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "order_id_val",
+          "type": "u64"
+        },
+        {
+          "name": "side",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "submit_market_order",
+      "docs": [
+        "CDA Market Order - Execute immediately at best available price"
+      ],
+      "discriminator": [
+        55,
+        227,
+        97,
+        34,
+        86,
+        37,
+        73,
+        12
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "zone_market"
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "side",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "sweep_collectors",
+      "docs": [
+        "Consolidate a shard's fee/wheeling/loss balances into the canonical collectors."
+      ],
+      "discriminator": [
+        241,
+        105,
+        138,
+        53,
+        13,
+        230,
+        194,
+        109
+      ],
+      "accounts": [
+        {
+          "name": "currency_mint"
+        },
+        {
+          "name": "market_authority"
+        },
+        {
+          "name": "fee_shard",
+          "writable": true
+        },
+        {
+          "name": "wheeling_shard",
+          "writable": true
+        },
+        {
+          "name": "loss_shard",
+          "writable": true
+        },
+        {
+          "name": "fee_main",
+          "writable": true
+        },
+        {
+          "name": "wheeling_main",
+          "writable": true
+        },
+        {
+          "name": "loss_main",
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "shard_id",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "update_depth",
+      "docs": [
+        "Update market depth tracking",
+        "This instruction updates the buy/sell side depth arrays based on current orders"
+      ],
+      "discriminator": [
+        181,
+        172,
+        219,
+        119,
+        18,
+        167,
+        28,
+        168
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "zone_market",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "buy_prices",
+          "type": {
+            "vec": "u64"
+          }
+        },
+        {
+          "name": "buy_amounts",
+          "type": {
+            "vec": "u64"
+          }
+        },
+        {
+          "name": "sell_prices",
+          "type": {
+            "vec": "u64"
+          }
+        },
+        {
+          "name": "sell_amounts",
+          "type": {
+            "vec": "u64"
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_market_params",
+      "discriminator": [
+        70,
+        117,
+        202,
+        191,
+        205,
+        174,
+        92,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "clearing",
+          "type": "bool"
+        },
+        {
+          "name": "min_price",
+          "type": "u64"
+        },
+        {
+          "name": "max_price",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_price_history",
+      "docs": [
+        "Update price history with new trade data",
+        "Maintains rolling 24-hour price history and calculates VWAP"
+      ],
+      "discriminator": [
+        23,
+        154,
+        255,
+        160,
+        30,
+        165,
+        151,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance_config"
+        }
+      ],
+      "args": [
+        {
+          "name": "trade_price",
+          "type": "u64"
+        },
+        {
+          "name": "trade_volume",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_escrow",
+      "docs": [
+        "Withdraw from the caller's own escrow PDA back to their wallet."
+      ],
+      "discriminator": [
+        81,
+        84,
+        226,
+        128,
+        245,
+        47,
+        96,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "user_escrow",
+          "writable": true
+        },
+        {
+          "name": "user_wallet",
+          "writable": true
+        },
+        {
+          "name": "market_authority"
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Market",
+      "discriminator": [
+        219,
+        190,
+        213,
+        55,
+        0,
+        227,
+        198,
+        154
+      ]
+    },
+    {
+      "name": "MarketShard",
+      "discriminator": [
+        5,
+        159,
+        111,
+        99,
+        156,
+        5,
+        78,
+        117
+      ]
+    },
+    {
+      "name": "Order",
+      "discriminator": [
+        134,
+        173,
+        223,
+        185,
+        77,
+        86,
+        28,
+        51
+      ]
+    },
+    {
+      "name": "OrderNullifier",
+      "discriminator": [
+        68,
+        220,
+        230,
+        170,
+        239,
+        47,
+        76,
+        166
+      ]
+    },
+    {
+      "name": "TariffConfig",
+      "discriminator": [
+        213,
+        98,
+        239,
+        231,
+        255,
+        248,
+        149,
+        140
+      ]
+    },
+    {
+      "name": "TradeNullifier",
+      "discriminator": [
+        47,
+        4,
+        232,
+        35,
+        180,
+        236,
+        215,
+        148
+      ]
+    },
+    {
+      "name": "TradeRecord",
+      "discriminator": [
+        150,
+        248,
+        182,
+        169,
+        229,
+        100,
+        24,
+        37
+      ]
+    },
+    {
+      "name": "ZoneCapacity",
+      "discriminator": [
+        102,
+        137,
+        173,
+        128,
+        229,
+        34,
+        132,
+        6
+      ]
+    },
+    {
+      "name": "ZoneConfig",
+      "discriminator": [
+        45,
+        141,
+        64,
+        98,
+        31,
+        210,
+        93,
+        175
+      ]
+    },
+    {
+      "name": "ZoneMarket",
+      "discriminator": [
+        83,
+        27,
+        231,
+        64,
+        5,
+        239,
+        21,
+        196
+      ]
+    },
+    {
+      "name": "ZoneMarketShard",
+      "discriminator": [
+        185,
+        97,
+        211,
+        124,
+        206,
+        118,
+        141,
+        93
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AuctionCleared",
+      "discriminator": [
+        14,
+        162,
+        105,
+        210,
+        219,
+        36,
+        142,
+        160
+      ]
+    },
+    {
+      "name": "BuyOrderCreated",
+      "discriminator": [
+        110,
+        19,
+        133,
+        233,
+        185,
+        79,
+        4,
+        170
+      ]
+    },
+    {
+      "name": "DepthUpdated",
+      "discriminator": [
+        244,
+        243,
+        211,
+        98,
+        67,
+        41,
+        9,
+        99
+      ]
+    },
+    {
+      "name": "EscrowDeposited",
+      "discriminator": [
+        28,
+        193,
+        105,
+        27,
+        40,
+        101,
+        65,
+        211
+      ]
+    },
+    {
+      "name": "EscrowWithdrawn",
+      "discriminator": [
+        43,
+        206,
+        174,
+        47,
+        105,
+        219,
+        216,
+        239
+      ]
+    },
+    {
+      "name": "LimitOrderSubmitted",
+      "discriminator": [
+        120,
+        94,
+        26,
+        49,
+        158,
+        86,
+        6,
+        202
+      ]
+    },
+    {
+      "name": "MaintenanceModeChanged",
+      "discriminator": [
+        84,
+        212,
+        246,
+        43,
+        24,
+        32,
+        175,
+        196
+      ]
+    },
+    {
+      "name": "MarketInitialized",
+      "discriminator": [
+        134,
+        160,
+        122,
+        87,
+        50,
+        3,
+        255,
+        81
+      ]
+    },
+    {
+      "name": "MarketOrderSubmitted",
+      "discriminator": [
+        202,
+        42,
+        198,
+        182,
+        164,
+        185,
+        6,
+        55
+      ]
+    },
+    {
+      "name": "MarketParamsUpdated",
+      "discriminator": [
+        88,
+        163,
+        120,
+        117,
+        160,
+        118,
+        99,
+        60
+      ]
+    },
+    {
+      "name": "OrderCancelled",
+      "discriminator": [
+        108,
+        56,
+        128,
+        68,
+        168,
+        113,
+        168,
+        239
+      ]
+    },
+    {
+      "name": "OrderMatched",
+      "discriminator": [
+        211,
+        0,
+        178,
+        174,
+        61,
+        245,
+        45,
+        250
+      ]
+    },
+    {
+      "name": "PriceHistoryUpdated",
+      "discriminator": [
+        143,
+        95,
+        218,
+        141,
+        1,
+        158,
+        222,
+        142
+      ]
+    },
+    {
+      "name": "SellOrderCreated",
+      "discriminator": [
+        24,
+        91,
+        248,
+        209,
+        136,
+        163,
+        239,
+        240
+      ]
+    },
+    {
+      "name": "SettlementThbgMintSet",
+      "discriminator": [
+        30,
+        253,
+        168,
+        138,
+        37,
+        8,
+        161,
+        27
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "UnauthorizedAuthority",
+      "msg": "Unauthorized authority"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidAmount",
+      "msg": "Invalid amount"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidPrice",
+      "msg": "Invalid price"
+    },
+    {
+      "code": 6003,
+      "name": "InactiveSellOrder",
+      "msg": "Inactive sell order"
+    },
+    {
+      "code": 6004,
+      "name": "InactiveBuyOrder",
+      "msg": "Inactive buy order"
+    },
+    {
+      "code": 6005,
+      "name": "PriceMismatch",
+      "msg": "Price mismatch"
+    },
+    {
+      "code": 6006,
+      "name": "OrderNotCancellable",
+      "msg": "Order not cancellable"
+    },
+    {
+      "code": 6007,
+      "name": "InsufficientEscrowBalance",
+      "msg": "Insufficient escrow balance"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidErcCertificate",
+      "msg": "Invalid ERC certificate status"
+    },
+    {
+      "code": 6009,
+      "name": "ErcExpired",
+      "msg": "ERC certificate has expired"
+    },
+    {
+      "code": 6010,
+      "name": "NotValidatedForTrading",
+      "msg": "ERC certificate not validated for trading"
+    },
+    {
+      "code": 6011,
+      "name": "ExceedsErcAmount",
+      "msg": "Order amount exceeds available ERC certificate amount"
+    },
+    {
+      "code": 6012,
+      "name": "BatchProcessingDisabled",
+      "msg": "Batch processing is disabled"
+    },
+    {
+      "code": 6013,
+      "name": "BatchSizeExceeded",
+      "msg": "Batch size exceeded"
+    },
+    {
+      "code": 6014,
+      "name": "ReentrancyLock",
+      "msg": "Re-entrancy Guard Lock"
+    },
+    {
+      "code": 6015,
+      "name": "EmptyBatch",
+      "msg": "Batch is empty"
+    },
+    {
+      "code": 6016,
+      "name": "BatchTooLarge",
+      "msg": "Batch size exceeds maximum allowed (5)"
+    },
+    {
+      "code": 6017,
+      "name": "MaintenanceMode",
+      "msg": "System is in maintenance mode"
+    },
+    {
+      "code": 6018,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6019,
+      "name": "PriceBelowMinimum",
+      "msg": "Price below market minimum"
+    },
+    {
+      "code": 6020,
+      "name": "PriceAboveMaximum",
+      "msg": "Price above market maximum"
+    },
+    {
+      "code": 6021,
+      "name": "InsufficientLiquidity",
+      "msg": "Insufficient liquidity for market order"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidOrderSide",
+      "msg": "Invalid order side"
+    },
+    {
+      "code": 6023,
+      "name": "OrderExpired",
+      "msg": "Order has expired"
+    },
+    {
+      "code": 6024,
+      "name": "SlippageExceeded",
+      "msg": "Slippage exceeded: Price outside allowed bounds"
+    },
+    {
+      "code": 6025,
+      "name": "CapacityExceeded",
+      "msg": "Grid capacity exceeded: Transmission bottleneck detected"
+    },
+    {
+      "code": 6026,
+      "name": "InvalidGovernanceAccount",
+      "msg": "Invalid governance account"
+    },
+    {
+      "code": 6027,
+      "name": "ChargesExceedCap",
+      "msg": "Network charges (wheeling + loss) exceed the allowed fraction of trade value"
+    },
+    {
+      "code": 6028,
+      "name": "ChargesExceedValue",
+      "msg": "Total deductions (fee + wheeling + loss) exceed the trade value"
+    },
+    {
+      "code": 6029,
+      "name": "InvalidEscrow",
+      "msg": "Escrow account does not match the expected per-user PDA"
+    },
+    {
+      "code": 6030,
+      "name": "InvalidNullifier",
+      "msg": "Nullifier account does not match the expected per-order PDA"
+    },
+    {
+      "code": 6031,
+      "name": "NullifierUserMismatch",
+      "msg": "Nullifier authority does not match the signed order owner"
+    },
+    {
+      "code": 6032,
+      "name": "TreasuryCurrencyMismatch",
+      "msg": "Settlement currency mint is not the treasury THBG mint"
+    },
+    {
+      "code": 6033,
+      "name": "TreasurySettlementRequired",
+      "msg": "This market settles in THBG: the treasury accounts are required to record the settlement"
+    },
+    {
+      "code": 6034,
+      "name": "InvalidShardId",
+      "msg": "Settlement collector shard id out of range (must be < NUM_SETTLE_SHARDS)"
+    },
+    {
+      "code": 6035,
+      "name": "ZoneCapacityRequired",
+      "msg": "Cross-zone settlement requires the ZoneCapacity account (committed_flow ceiling)"
+    },
+    {
+      "code": 6036,
+      "name": "MatchAlreadySettled",
+      "msg": "This match (trade_id) has already been settled on-chain (replay rejected)"
+    },
+    {
+      "code": 6037,
+      "name": "InvalidTradeNullifier",
+      "msg": "Trade nullifier account does not match the expected per-match PDA"
+    },
+    {
+      "code": 6038,
+      "name": "InvalidRecMint",
+      "msg": "REC token account mint is not the governance rec_mint PDA"
+    },
+    {
+      "code": 6039,
+      "name": "RecAccountOwnerMismatch",
+      "msg": "REC token account owner does not match the order seller"
+    },
+    {
+      "code": 6040,
+      "name": "InsufficientRecBalance",
+      "msg": "Seller holds insufficient REC tokens to cover the energy offered"
+    },
+    {
+      "code": 6041,
+      "name": "InvalidTariffConfig",
+      "msg": "Tariff config account is not the canonical PDA / not owned by this program"
+    },
+    {
+      "code": 6042,
+      "name": "TariffRateExceedsCap",
+      "msg": "Combined wheeling + loss tariff rate exceeds the allowed cap"
+    },
+    {
+      "code": 6043,
+      "name": "AggregatorNotAdmitted",
+      "msg": "Settlement payer is not a governance-admitted, active aggregator"
+    },
+    {
+      "code": 6044,
+      "name": "AggregatorSegmentMismatch",
+      "msg": "Settlement payer's aggregator is not admitted for this zone's market segment (Wholesale/Retail)"
+    },
+    {
+      "code": 6045,
+      "name": "InvalidAggregatorEntry",
+      "msg": "Aggregator entry account is not the canonical PDA / malformed"
+    }
+  ],
+  "types": [
+    {
+      "name": "AuctionCleared",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "clearing_price",
+            "type": "u64"
+          },
+          {
+            "name": "clearing_volume",
+            "type": "u64"
+          },
+          {
+            "name": "matched_orders",
+            "type": "u32"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuctionMatch",
+      "docs": [
+        "Match result for auction clearing"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buy_order",
+            "type": "pubkey"
+          },
+          {
+            "name": "sell_order",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuctionOrder",
+      "docs": [
+        "Auction order with price and volume"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_key",
+            "type": "pubkey"
+          },
+          {
+            "name": "price_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "filled_amount",
+            "type": "u64"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_buy",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BatchConfig",
+      "docs": [
+        "Batch configuration for batch processing"
+      ],
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "enabled",
+            "type": "u8"
+          },
+          {
+            "name": "_padding1",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "max_batch_size",
+            "type": "u32"
+          },
+          {
+            "name": "batch_timeout_seconds",
+            "type": "u32"
+          },
+          {
+            "name": "min_batch_size",
+            "type": "u32"
+          },
+          {
+            "name": "price_improvement_threshold",
+            "type": "u16"
+          },
+          {
+            "name": "_padding2",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BatchInfo",
+      "docs": [
+        "Batch information for grouped order execution"
+      ],
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "batch_id",
+            "type": "u64"
+          },
+          {
+            "name": "order_count",
+            "type": "u32"
+          },
+          {
+            "name": "_padding1",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "total_volume",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "order_ids",
+            "type": {
+              "array": [
+                "pubkey",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BatchMatchPair",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buyer_payload",
+            "type": {
+              "defined": {
+                "name": "OffchainOrderPayload"
+              }
+            }
+          },
+          {
+            "name": "seller_payload",
+            "type": {
+              "defined": {
+                "name": "OffchainOrderPayload"
+              }
+            }
+          },
+          {
+            "name": "match_amount",
+            "type": "u64"
+          },
+          {
+            "name": "match_price",
+            "type": "u64"
+          },
+          {
+            "name": "trade_id",
+            "docs": [
+              "Unique per-match id (the off-chain matcher's UUID). Keys the per-match TradeNullifier",
+              "PDA so a re-sent batch can never double-settle a match that already landed (F3c)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "BuyOrderCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "order_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "price_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClearAuctionResult",
+      "docs": [
+        "Clear auction result"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "clearing_price",
+            "type": "u64"
+          },
+          {
+            "name": "clearing_volume",
+            "type": "u64"
+          },
+          {
+            "name": "matched_buy_volume",
+            "type": "u64"
+          },
+          {
+            "name": "matched_sell_volume",
+            "type": "u64"
+          },
+          {
+            "name": "total_matches",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DepthUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buy_levels",
+            "type": "u8"
+          },
+          {
+            "name": "sell_levels",
+            "type": "u8"
+          },
+          {
+            "name": "best_bid",
+            "type": "u64"
+          },
+          {
+            "name": "best_ask",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ErcCertificate",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "certificate_id",
+            "docs": [
+              "Unique certificate identifier - FIXED: 64 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "id_len",
+            "type": "u8"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Issuing authority (Engineering Department)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Current owner of the certificate (for transfers)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "energy_amount",
+            "docs": [
+              "Amount of renewable energy (kWh)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "renewable_source",
+            "docs": [
+              "Source of renewable energy (solar, wind, etc.) - FIXED: 64 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "source_len",
+            "type": "u8"
+          },
+          {
+            "name": "validation_data",
+            "docs": [
+              "Additional validation data - FIXED: 256 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                256
+              ]
+            }
+          },
+          {
+            "name": "data_len",
+            "type": "u16"
+          },
+          {
+            "name": "issued_at",
+            "docs": [
+              "When the certificate was issued"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "When the certificate expires"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current status of the certificate"
+            ],
+            "type": {
+              "defined": {
+                "name": "ErcStatus"
+              }
+            }
+          },
+          {
+            "name": "validated_for_trading",
+            "docs": [
+              "Whether validated for trading"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "trading_validated_at",
+            "docs": [
+              "When validated for trading"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "revocation_reason",
+            "docs": [
+              "Revocation reason (if revoked) - FIXED: 128 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "reason_len",
+            "type": "u8"
+          },
+          {
+            "name": "revoked_at",
+            "docs": [
+              "When revoked"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "transfer_count",
+            "docs": [
+              "Number of times transferred"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "last_transferred_at",
+            "docs": [
+              "Last transfer timestamp"
+            ],
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ErcStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Valid"
+          },
+          {
+            "name": "Expired"
+          },
+          {
+            "name": "Revoked"
+          },
+          {
+            "name": "Pending"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowDeposited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EscrowWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GovernanceConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "Single authority - REC certifying entity"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "authority_name",
+            "docs": [
+              "Authority name (e.g., \"REC\") - FIXED: 64 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "name_len",
+            "type": "u8"
+          },
+          {
+            "name": "contact_info",
+            "docs": [
+              "Authority contact information - FIXED: 128 bytes"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "contact_len",
+            "type": "u8"
+          },
+          {
+            "name": "version",
+            "docs": [
+              "Governance version for upgrades"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "maintenance_mode",
+            "docs": [
+              "System maintenance mode"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "erc_validation_enabled",
+            "docs": [
+              "Whether ERC validation is enabled"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "min_energy_amount",
+            "docs": [
+              "Minimum energy amount for ERC issuance (kWh)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_erc_amount",
+            "docs": [
+              "Maximum ERC amount per certificate (kWh)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "erc_validity_period",
+            "docs": [
+              "ERC certificate validity period (seconds)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "require_oracle_validation",
+            "docs": [
+              "Require oracle validation for ERC issuance"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "oracle_authority",
+            "docs": [
+              "Oracle authority for AMI data validation"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "min_oracle_confidence",
+            "docs": [
+              "Minimum confidence score for oracle validation (0-100)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "allow_certificate_transfers",
+            "docs": [
+              "Allow certificate transfers between accounts"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "min_quorum_votes",
+            "docs": [
+              "Minimum total votes (for + against) required for a proposal to be valid"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_ercs_issued",
+            "docs": [
+              "Total ERCs issued since inception"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_ercs_validated",
+            "docs": [
+              "Total ERCs validated for trading"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_ercs_revoked",
+            "docs": [
+              "Total ERCs revoked"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_energy_certified",
+            "docs": [
+              "Total energy certified (kWh)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "When governance was initialized"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_updated",
+            "docs": [
+              "Last configuration update"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_erc_issued_at",
+            "docs": [
+              "Last ERC issued timestamp"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pending_authority",
+            "docs": [
+              "Pending new authority (for 2-step transfer)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_authority_proposed_at",
+            "docs": [
+              "When the pending authority change was proposed"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "pending_authority_expires_at",
+            "docs": [
+              "When the pending authority change expires (48 hours)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "_reserved",
+            "docs": [
+              "Reserved space for future upgrades (and to match on-chain size)"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                5
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LimitOrderSubmitted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaintenanceModeChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "maintenance_mode",
+            "type": "bool"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Market",
+      "docs": [
+        "Market account for order and trade management"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_volume",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_clearing_price",
+            "type": "u64"
+          },
+          {
+            "name": "volume_weighted_price",
+            "type": "u64"
+          },
+          {
+            "name": "active_orders",
+            "type": "u32"
+          },
+          {
+            "name": "total_trades",
+            "type": "u32"
+          },
+          {
+            "name": "market_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "clearing_enabled",
+            "type": "u8"
+          },
+          {
+            "name": "_reserved_guard",
+            "type": "u8"
+          },
+          {
+            "name": "_padding1",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "min_price_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "max_price_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "batch_config",
+            "type": {
+              "defined": {
+                "name": "BatchConfig"
+              }
+            }
+          },
+          {
+            "name": "current_batch",
+            "type": {
+              "defined": {
+                "name": "BatchInfo"
+              }
+            }
+          },
+          {
+            "name": "has_current_batch",
+            "type": "u8"
+          },
+          {
+            "name": "_padding_batch",
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          },
+          {
+            "name": "_padding_depth_1",
+            "type": {
+              "array": [
+                "u8",
+                512
+              ]
+            }
+          },
+          {
+            "name": "_padding_depth_2",
+            "type": {
+              "array": [
+                "u8",
+                256
+              ]
+            }
+          },
+          {
+            "name": "_padding_depth_3",
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "settlement_thbg_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "has_settlement_thbg_mint",
+            "type": "u8"
+          },
+          {
+            "name": "_padding_depth_4",
+            "type": {
+              "array": [
+                "u8",
+                31
+              ]
+            }
+          },
+          {
+            "name": "_padding_depth_5",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "price_history_count",
+            "type": "u8"
+          },
+          {
+            "name": "price_history_head",
+            "type": "u8"
+          },
+          {
+            "name": "price_history",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "PricePoint"
+                  }
+                },
+                24
+              ]
+            }
+          },
+          {
+            "name": "total_volume_global",
+            "type": "u64"
+          },
+          {
+            "name": "total_trades_global",
+            "type": "u32"
+          },
+          {
+            "name": "num_shards",
+            "type": "u8"
+          },
+          {
+            "name": "_padding_sharding",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketOrderSubmitted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketParamsUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "market_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "clearing_enabled",
+            "type": "bool"
+          },
+          {
+            "name": "min_price_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "max_price_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketShard",
+      "docs": [
+        "Sharded market statistics for reduced contention",
+        "Each shard tracks independent volume/order counts that can be aggregated",
+        "This allows parallel writes without MVCC conflicts on the main Market account"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "shard_id",
+            "type": "u8"
+          },
+          {
+            "name": "_padding1",
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          },
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "volume_accumulated",
+            "type": "u64"
+          },
+          {
+            "name": "order_count",
+            "type": "u32"
+          },
+          {
+            "name": "_padding2",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "last_update",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OffchainOrderPayload",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "energy_amount",
+            "type": "u64"
+          },
+          {
+            "name": "price_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "zone_id",
+            "type": "u32"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Order",
+      "docs": [
+        "Order account for trading"
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "order_id",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "filled_amount",
+            "type": "u64"
+          },
+          {
+            "name": "price_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "order_type",
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OrderCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OrderMatched",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sell_order",
+            "type": "pubkey"
+          },
+          {
+            "name": "buy_order",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "total_value",
+            "type": "u64"
+          },
+          {
+            "name": "fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OrderNullifier",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "filled_amount",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceHistoryUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "trade_price",
+            "type": "u64"
+          },
+          {
+            "name": "trade_volume",
+            "type": "u64"
+          },
+          {
+            "name": "vwap",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceLevel",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "total_amount",
+            "type": "u64"
+          },
+          {
+            "name": "order_count",
+            "type": "u16"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PricePoint",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "volume",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SellOrderCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "order_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "price_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementShard",
+      "docs": [
+        "Per-shard settlement accumulator (zero-copy). Hot-path settles bump the shard",
+        "PDA for the buyer's shard instead of the global `Treasury.total_settled_thbg`, so",
+        "settles on distinct shards don't write-lock a single account. PDA seeds:",
+        "`[b\"settle_shard\", &[shard_id]]`. Global total reconciled via",
+        "`aggregate_settlement_shards`."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "settled_thbg",
+            "type": "u64"
+          },
+          {
+            "name": "settlement_count",
+            "type": "u64"
+          },
+          {
+            "name": "shard_id",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettlementThbgMintSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "thbg_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TariffConfig",
+      "docs": [
+        "Singleton on-chain tariff schedule, seeds = `[b\"tariff_config\"]`. Replaces the former",
+        "caller-supplied `wheeling_charge_val`/`loss_cost_val` settlement args — those let whoever",
+        "signed the settle tx pick any number, with no tie to an actual tariff authority.",
+        "`wheeling_rate_per_kwh` is a flat rate (6-decimal currency units per kWh, same",
+        "representation as `price_per_kwh`) settable only by `wheeling_authority` (MEA/PEA —",
+        "distribution network usage; retail trades stay off EGAT's transmission grid) — flat",
+        "because the physical cost of delivering 1 kWh doesn't scale with the commodity price",
+        "two parties agreed on. `loss_bps` (proportional to trade value, since lost energy is",
+        "re-purchased at the agreed price) only by `loss_authority` (MEA/PEA — distribution line",
+        "loss). Every settlement path (single, batch, atomic) computes its charges from these",
+        "rates instead of trusting the caller."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wheeling_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "loss_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "wheeling_rate_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "loss_bps",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeNullifier",
+      "docs": [
+        "Per-MATCH replay guard. `OrderNullifier` only caps cumulative fill against an order's",
+        "`energy_amount` — it does NOT stop the SAME partial match being settled twice while the",
+        "order still has headroom (the F3c double-settle). This marker PDA is keyed by the unique",
+        "per-match `trade_id` the off-chain matcher assigns, created on first settle and so present",
+        "(program-owned) on any replay. Existence IS the guard — a re-sent match (re-signed with a",
+        "fresh blockhash, defeating the bridge's tx-hash dedup) hits an already-created PDA and",
+        "reverts `MatchAlreadySettled`, regardless of order headroom. Created atomically with the",
+        "settle, so a never-committed match leaves no marker and a genuine retry still proceeds."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeRecord",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "sell_order",
+            "type": "pubkey"
+          },
+          {
+            "name": "buy_order",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "price_per_kwh",
+            "type": "u64"
+          },
+          {
+            "name": "total_value",
+            "type": "u64"
+          },
+          {
+            "name": "fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "executed_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Treasury",
+      "docs": [
+        "Global treasury configuration + accounting (zero-copy, single PDA `[b\"treasury\"]`).",
+        "",
+        "Layout is hand-padded for `bytemuck` Pod (no implicit padding). `u128` forces",
+        "16-byte struct alignment, so it leads the struct and the tail is padded to a",
+        "multiple of 16. Recount by hand when adding fields."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "acc_reward_per_share",
+            "docs": [
+              "Staking reward accumulator: cumulative GRX reward per staked GRX, scaled by ACC_PRECISION."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "attestor",
+            "type": "pubkey"
+          },
+          {
+            "name": "grx_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "thbg_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "settlement_recorder",
+            "type": "pubkey"
+          },
+          {
+            "name": "attested_reserve",
+            "type": "u64"
+          },
+          {
+            "name": "attestation_ts",
+            "type": "i64"
+          },
+          {
+            "name": "attestation_ttl",
+            "type": "i64"
+          },
+          {
+            "name": "thbg_supply",
+            "type": "u64"
+          },
+          {
+            "name": "grx_per_thbg_rate",
+            "type": "u64"
+          },
+          {
+            "name": "total_staked",
+            "type": "u64"
+          },
+          {
+            "name": "reward_pool",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "total_settled_thbg",
+            "type": "u64"
+          },
+          {
+            "name": "swap_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "paused",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "thbg_mint_bump",
+            "type": "u8"
+          },
+          {
+            "name": "swap_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "stake_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "reward_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "rebate_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                15
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ZoneCapacity",
+      "docs": [
+        "Sharded zone market statistics for reduced contention",
+        "Tracks volume and trades on a per-shard basis within a zone",
+        "Per-zone transmission-capacity counter, split OUT of `ZoneMarket` so the hot settle",
+        "path can keep `ZoneMarket` read-only (no write-lock) on the common intra-zone case.",
+        "Only cross-zone (wheeling) settlements — which actually consume inter-zone capacity —",
+        "pass this account `mut` and bump `committed_flow`; intra-zone settles omit it entirely",
+        "and so don't serialize on `ZoneMarket`. The hard ceiling (`ZoneMarket.capacity`) stays",
+        "read-only config on `ZoneMarket`."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "zone_market",
+            "type": "pubkey"
+          },
+          {
+            "name": "committed_flow",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "_padding",
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ZoneConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "zone_id",
+            "type": "u32"
+          },
+          {
+            "name": "incentive_multiplier_bps",
+            "type": "u64"
+          },
+          {
+            "name": "wheeling_charge_bps",
+            "type": "u64"
+          },
+          {
+            "name": "maintenance_mode",
+            "type": "u8"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "last_updated",
+            "type": "i64"
+          },
+          {
+            "name": "reserved1",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "reserved2",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ZoneMarket",
+      "docs": [
+        "Zone Market account for tracking order book depth in a specific geographic zone.",
+        "This allows order book depth mapping to be sharded out of the main Market account,",
+        "preventing write lock contention on the global state when different zones are trading."
+      ],
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "zone_id",
+            "type": "u32"
+          },
+          {
+            "name": "num_shards",
+            "type": "u8"
+          },
+          {
+            "name": "segment",
+            "docs": [
+              "Market segment (role-map.md fix #6): 0 = Retail (MEA/PEA), 1 = Wholesale (EGAT).",
+              "Consumes one byte of what was `_padding1`; struct size unchanged. Gates which",
+              "aggregators (by their own `AggregatorEntry.segment`) may settle in this zone —",
+              "see `require_admitted_aggregator` in `settle_offchain.rs`."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "_padding1",
+            "type": {
+              "array": [
+                "u8",
+                2
+              ]
+            }
+          },
+          {
+            "name": "total_volume",
+            "type": "u64"
+          },
+          {
+            "name": "active_orders",
+            "type": "u32"
+          },
+          {
+            "name": "total_trades",
+            "type": "u32"
+          },
+          {
+            "name": "buy_side_depth_count",
+            "type": "u8"
+          },
+          {
+            "name": "sell_side_depth_count",
+            "type": "u8"
+          },
+          {
+            "name": "_padding2",
+            "type": {
+              "array": [
+                "u8",
+                6
+              ]
+            }
+          },
+          {
+            "name": "last_clearing_price",
+            "type": "u64"
+          },
+          {
+            "name": "capacity",
+            "type": "u64"
+          },
+          {
+            "name": "committed_flow",
+            "type": "u64"
+          },
+          {
+            "name": "buy_side_depth",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "PriceLevel"
+                  }
+                },
+                10
+              ]
+            }
+          },
+          {
+            "name": "sell_side_depth",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "PriceLevel"
+                  }
+                },
+                10
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ZoneMarketShard",
+      "serialization": "bytemuck",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "shard_id",
+            "type": "u8"
+          },
+          {
+            "name": "_padding1",
+            "type": {
+              "array": [
+                "u8",
+                7
+              ]
+            }
+          },
+          {
+            "name": "zone_market",
+            "type": "pubkey"
+          },
+          {
+            "name": "volume_accumulated",
+            "type": "u64"
+          },
+          {
+            "name": "trade_count",
+            "type": "u32"
+          },
+          {
+            "name": "_padding2",
+            "type": {
+              "array": [
+                "u8",
+                4
+              ]
+            }
+          },
+          {
+            "name": "last_clearing_price",
+            "type": "u64"
+          },
+          {
+            "name": "last_update",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}
