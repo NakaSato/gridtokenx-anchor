@@ -116,6 +116,8 @@ Full detail in [`SKILL.md`](SKILL.md); architecture in [`ARCHITECTURE.md`](ARCHI
 
 ## Documentation
 
+- [`ADOPTION.md`](ADOPTION.md) — deploy / integrate / extend guide for teams adopting the
+  programs (paths, init sequence, cross-program policy, pre-adoption checklist).
 - [`SKILL.md`](SKILL.md) — authoritative deep-dive on program invariants (zero-copy layouts,
   sharding, CPI, compute profiling).
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — component map for this repo.
