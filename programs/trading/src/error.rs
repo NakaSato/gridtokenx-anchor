@@ -98,4 +98,8 @@ pub enum TradingError {
     AggregatorSegmentMismatch,
     #[msg("Aggregator entry account is not the canonical PDA / malformed")]
     InvalidAggregatorEntry,
+    #[msg("Shielded transfer proof failed verification (conservation or balance PoK)")]
+    InvalidBalanceProof,
+    #[msg("Shielded transfer recipient must differ from the sender (self-transfer would double-credit)")]
+    SelfTransferNotAllowed,
 }

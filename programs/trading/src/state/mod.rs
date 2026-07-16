@@ -7,6 +7,8 @@ pub mod zone_market;
 pub mod nullifier;
 pub mod zone_config;
 pub mod tariff_config;
+#[cfg(feature = "privacy")]
+pub mod private_balance;
 
 pub use market::*;
 pub use order::*;
@@ -14,3 +16,5 @@ pub use zone_market::*;
 pub use nullifier::*;
 pub use zone_config::*;
 pub use tariff_config::*;
+#[cfg(feature = "privacy")]
+pub use private_balance::*;

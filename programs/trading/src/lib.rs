@@ -5,6 +5,8 @@ pub mod events;
 pub mod instructions;
 pub mod state;
 pub mod utils;
+#[cfg(feature = "privacy")]
+pub mod zk_verify;
 
 // Re-export core types for submodules
 pub use crate::error::TradingError;
@@ -203,6 +205,41 @@ pub mod trading {
         compute_fn!("cancel_order" => {
             instructions::cancel_order(ctx)
         })
+    }
+
+    /// Move public tokens INTO a shielded balance (amount is public).
+    /// FEATURE-GATED (`privacy`).
+    #[cfg(feature = "privacy")]
+    pub fn shield(ctx: Context<ShieldContext>, amount: u64) -> Result<()> {
+        instructions::shield(ctx, amount)
+    }
+
+    /// Move tokens OUT of a shielded balance back to public (amount is public).
+    /// FEATURE-GATED (`privacy`) — underflow-unsound without Phase-2 range
+    /// proofs; see instructions/private_shield.rs.
+    #[cfg(feature = "privacy")]
+    pub fn unshield(ctx: Context<UnshieldContext>, amount: u64) -> Result<()> {
+        instructions::unshield(ctx, amount)
+    }
+
+    /// Shielded transfer of a hidden amount between private balances.
+    /// FEATURE-GATED (`privacy`) — Phase 1 verifies conservation + balance PoK
+    /// but NOT range proofs; not mainnet-sound yet (see zk_verify.rs).
+    #[cfg(feature = "privacy")]
+    pub fn private_transfer(
+        ctx: Context<PrivateTransferContext>,
+        nullifier: [u8; 32],
+        amount_commitment: [u8; 32],
+        sender_new_commitment: [u8; 32],
+        balance_proof: BalanceProof,
+    ) -> Result<()> {
+        instructions::private_transfer(
+            ctx,
+            nullifier,
+            amount_commitment,
+            sender_new_commitment,
+            balance_proof,
+        )
     }
 
     pub fn batch_settle_offchain_match<'info>(
