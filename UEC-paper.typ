@@ -938,6 +938,52 @@ Network charges (market fee, wheeling, and loss, §11.3) are levied on top of th
 execution price and are bounded by the 20% cap of @eq-cap, so the effective
 delivered price a buyer faces is $p^*$ plus a capped, auditable surcharge.
 
+*Surplus allocation across price rules.* The three market rules above — and a
+non-market feed-in baseline — divide the same bid–ask spread $Delta = p_b - p_s$
+differently, while the settlement arithmetic of §11.3 applies identically on top
+of whichever $p^*$ each rule selects. Writing the seller's spread share as
+$(p^* - p_s) \/ Delta$ and the buyer's as its complement $(p_b - p^*) \/ Delta$,
+the rules span the full range from buyer-favourable to even-split, and a feed-in
+tariff removes the bilateral trade entirely — paying the seller an exogenous rate
+$p_"fit"$ regardless of any bid, so the surplus $q Delta$ accrues to the single
+off-taker rather than the counterparties. Table 6 states each rule and works a
+representative intra-zone match at $p_s = 3.00$, $p_b = 4.00$ THBG/kWh
+($Delta = 1.00$), with an illustrative $p_"fit" = 2.20$ THBG/kWh — a reference
+export rate, not a measured value.
+
+#figure(
+  caption: [Execution price and bid–ask-spread allocation under each price rule,
+    for a representative match ($p_s = 3.00$, $p_b = 4.00$ THBG/kWh,
+    $Delta = 1.00$). Network charges (§11.3) apply identically on top of $p^*$ and
+    are omitted here to isolate the spread split. All three market rules keep
+    $p^*$ inside the counterparties' signed limits (@eq-bounds); the feed-in row
+    is a non-market baseline (no bilateral match) and $p_"fit"$ is illustrative.],
+  table(
+    columns: (auto, auto, auto, auto, auto),
+    align: (left, center, right, right, left),
+    table.header([*Price rule*], [*$p^*$*], [*Seller*], [*Buyer*], [*Source*]),
+    [CDA on-chain (immediate)], [$p_s = 3.00$], [0%], [100%],
+      [`lib.rs:462`; `sharded_match_orders.rs:40`],
+    [Off-chain midpoint (ref. engine)], [$3.50$], [50%], [50%],
+      [`simulate-market-clearing.ts:131`],
+    [Uniform-price epoch ($p_c = 3.40$)], [$3.40$], [40%], [60%],
+      [`lib.rs:494`; oracle `lib.rs:202`–`212`],
+    [Feed-in tariff (non-market)], [$p_"fit" = 2.20$], [—], [—],
+      [exogenous off-taker; no @eq-bounds match],
+  ),
+) <tab-price-rules>
+
+Relative to the 2.20 THBG/kWh feed-in baseline, even the most buyer-favourable
+market rule — CDA on-chain, $p^* = p_s$ — already lifts the seller to 3.00
+THBG/kWh (a 36% premium) before charges, and the midpoint rule to 3.50 (+59%);
+the surplus a feed-in tariff would transfer wholesale to the single off-taker is
+instead divided between the two P2P counterparties. Because every market rule
+constrains $p^*$ to the signed interval $[p_s, p_b]$ (@eq-bounds), the choice of
+rule only *redistributes* the fixed gains-from-trade $q Delta$ between buyer and
+seller; it never settles either side outside the price they authorised, and a
+head-to-head welfare measurement of the three rules on matched trade data is left
+to future work.
+
 == 11.3 Trade settlement
 
 Gross value — rescale the $10^15$-scaled product (9-dec energy $times$ 6-dec
