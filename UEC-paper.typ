@@ -382,10 +382,19 @@ over-filled or replayed.
 
 GRID tokens represent physical energy (1 kWh = 1 GRID), so minting is gated
 behind registered REC validators in energy-token. Validators are added/removed by
-the admin (`programs/energy-token/src/lib.rs:280`, `lib.rs:313`); when any
-validator is registered (`rec_validators_count > 0`, `lib.rs:119`), mint paths
-require the signing key to appear in the validator set (`lib.rs:127`–`128`), with
-the same gate on the generation-mint path (`lib.rs:203`).
+the admin (`programs/energy-token/src/lib.rs:280`, `lib.rs:313`). The gate is
+*two-tier*. The attested-issuance paths — `mint_to_wallet` and the generation
+mint `mint_generation` (§11.7) — require a REC co-signer *unconditionally*: the
+signing key must appear in the validator set (`lib.rs:127`–`128`, `lib.rs:203`)
+and an empty set rejects every such mint, with no opt-out. `mint_generation`
+tightens this to a *2-of-2*, additionally requiring the REC co-signer to differ
+from the program authority (`lib.rs:146`–`149`), so no single key can both
+authorise and attest a generation mint. Only the low-privilege registry-grant
+path `mint_tokens_direct` (the 10-GRX registration grant of §5.1) is
+*conditionally* gated — it enforces membership only once at least one validator
+is registered (`rec_validators_count > 0`, `lib.rs:119`, `lib.rs:240`) — so
+bootstrap registrations proceed before the REC set is populated while every
+energy-backed issuance stays gated.
 
 == 6.5 Trust boundary summary
 
