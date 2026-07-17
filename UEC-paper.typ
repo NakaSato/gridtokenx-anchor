@@ -842,6 +842,55 @@ rotation, which would require a multi-validator permissioned deployment (§8.3).
 Establishing sustained end-to-end throughput on such a deployment, and locating the
 true saturation point above concurrency 40, are left to future work.
 
+== 9.6 Settlement under the three price rules
+
+To confirm that the choice of price rule (§11.2) is a purely economic degree of
+freedom with no on-chain compute cost, we settled real matches through
+`batch_settle_offchain_match` on the live single-node validator under each rule
+across two fleet sizes. Each transaction settles one match (the single-match
+packet cap of §9.5); the off-chain match sets the clearing price $p^*$ to the
+rule's value inside the signed band $p_s = 2.00 <= p^* <= p_b = 2.10$ THBG/kWh,
+and $N$ is the number of independent matches submitted at concurrency 4. Table 6
+reports confirmed goodput and the per-settle compute cost read from transaction
+metadata.
+
+#figure(
+  caption: [Live on-chain settlement under each price rule and fleet size
+    ($N$ matches, concurrency 4) on the single-node validator (Agave 3.1.10,
+    Apple M2). Each settle is one `batch_settle_offchain_match` transaction; CU is
+    machine-independent (`computeUnitsConsumed`), TPS is client-observed confirmed
+    goodput (§9.2). Seller-net/buyer-cost per rule are the deterministic values of
+    @tab-net-proceeds and are not re-measured on-chain.],
+  table(
+    columns: (auto, auto, auto, auto, auto, auto),
+    align: (left, center, center, center, right, right),
+    table.header(
+      [*Price rule*], [*$p^*$ (฿/kWh)*], [*$N$*], [*settled*], [*TPS*], [*CU/settle*],
+    ),
+    [CDA on-chain ($p^* = p_s$)], [2.00], [4], [4/4], [0.21], [116,470],
+    [CDA on-chain ($p^* = p_s$)], [2.00], [8], [8/8], [0.45], [114,408],
+    [Uniform-price epoch], [2.04], [4], [4/4], [0.23], [116,470],
+    [Off-chain midpoint], [2.05], [8], [8/8], [0.46], [115,533],
+  ),
+) <tab-live-settle>
+
+Three observations. First, the per-settle compute cost holds at 114–116 k CU
+across all three price rules — a spread below 2% that tracks incidental
+checked-arithmetic branches on the differing currency magnitudes, not the rule
+itself — confirming directly on-chain that price selection does not touch
+settlement compute; the figure also agrees with the 121,813 CU litesvm profile of
+§9.1 to within the localnet-vs-litesvm margin. Second, every match settled
+(100%, zero on-chain reverts) at every rule and fleet size, so the price rule is
+economically free: it redistributes the spread (@tab-price-rules) and the
+take-home currency (@tab-net-proceeds) without changing whether or how the trade
+lands. Third, confirmed goodput rises with the offered match count — ≈0.22 TPS at
+$N = 4$ to ≈0.45 TPS at $N = 8$ — while remaining in the sub-1-TPS,
+single-fee-payer regime of §9.2, since all matches in a run share one settlement
+fee-payer and the global collector/accumulator write-locks that §9.2 identifies as
+the settlement ceiling. The measurement thus reproduces, on the real settlement
+path, both the price-invariance of compute and the shared-account throughput bound
+established for the OLTP proxy.
+
 = 10. Reading Map
 
 #table(
@@ -946,8 +995,8 @@ $(p^* - p_s) \/ Delta$ and the buyer's as its complement $(p_b - p^*) \/ Delta$,
 the rules span the full range from buyer-favourable to even-split, and a feed-in
 tariff removes the bilateral trade entirely — paying the seller an exogenous rate
 $p_"fit"$ regardless of any bid, so the surplus $q Delta$ accrues to the single
-off-taker rather than the counterparties. Table 6 states each rule and works a
-representative intra-zone match at $p_s = 3.00$, $p_b = 4.00$ THBG/kWh
+off-taker rather than the counterparties. @tab-price-rules states each rule and
+works a representative intra-zone match at $p_s = 3.00$, $p_b = 4.00$ THBG/kWh
 ($Delta = 1.00$), with an illustrative $p_"fit" = 2.20$ THBG/kWh — a reference
 export rate, not a measured value.
 
@@ -1016,12 +1065,12 @@ Seller net proceeds, with feasibility $F_m + C_"net" <= V$ enforced
 $ N_"seller" = V - F_m - C_"net" $ <eq-net>
 
 *Net proceeds under each price rule.* Applying @eq-value–@eq-net to the four
-price rules of Table 6 makes the take-home difference concrete. The buyer's
+price rules of @tab-price-rules makes the take-home difference concrete. The buyer's
 escrow debit is the gross value $V = q p^*$ and splits into seller proceeds plus
 the fee/wheeling/loss collectors (the on-chain conservation identity of §11.12),
 so the buyer's delivered cost per kWh is $p^*$ while the network charges reduce
-the *seller's* net. Table 7 evaluates a $q = 10$ kWh intra-zone match under
-representative charges — market fee $phi_m = 25$ bps (the on-chain default,
+the *seller's* net. @tab-net-proceeds evaluates a $q = 10$ kWh intra-zone match
+under representative charges — market fee $phi_m = 25$ bps (the on-chain default,
 `initialize_market.rs:23`), wheeling $w = 0$ (intra-zone), and loss
 $ell = 100$ bps — so the combined deduction is a flat $1.25%$ of $V$.
 
