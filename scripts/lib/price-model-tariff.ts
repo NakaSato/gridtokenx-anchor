@@ -167,18 +167,97 @@ export interface SchemeResult {
 const netPerKwh = (net: bigint, volKwh: number) =>
   volKwh === 0 ? 0 : Number(net) / 1e6 / volKwh;
 
+/** One cumulative point on a supply/demand curve, matching on-chain `CurvePoint`
+ *  (programs/trading/src/lib.rs): price in 6-dec micros, volume in atomic (9-dec) kWh. */
+export interface CurvePoint {
+  price: bigint;
+  cumAtomic: bigint;
+}
+
+/** Cumulative curve from a tranche ladder. Supply sorts ASC by price, demand DESC —
+ *  the exact order on-chain clear_auction imposes before building the curves. */
+function cumulativeCurve(tranches: Tranche[], desc: boolean): CurvePoint[] {
+  const cmp = (a: Tranche, b: Tranche) => {
+    if (a.priceMicros === b.priceMicros) return 0;
+    const lt = a.priceMicros < b.priceMicros;
+    return (desc ? !lt : lt) ? -1 : 1;
+  };
+  let cum = 0n;
+  return [...tranches].sort(cmp).map((tr) => {
+    cum += toAtomic(tr.kwh);
+    return { price: tr.priceMicros, cumAtomic: cum };
+  });
+}
+
 /**
- * Uniform-price auction: whole book clears at the marginal (top) ladder ask.
- *
- * GUARD: this clears at MAX ask UNCONDITIONALLY — it never inspects a demand curve.
- * It matches on-chain trading.clear_auction / find_clearing_point ONLY because the
- * driver (price-models-onchain.ts) pins every bid at the top ask, forcing the whole
- * book to cross so the marginal ask == the max ask. If bids ever go data-driven
- * (some below the top ask), on-chain clearing falls below MAX ask and this function
- * over-predicts. Making the ladder data-driven REQUIRES rewriting this to consume the
- * real demand curve (mirror find_clearing_point), not just changing the driver.
+ * Faithful TS port of on-chain `find_clearing_point` (programs/trading/src/lib.rs:1048).
+ * Scans every (supply, demand) pair where ask <= bid and keeps the crossing with the
+ * MAX volume; the clearing price is that crossing's marginal ASK price (supply side),
+ * volume = min(cum_supply, cum_demand). Ties keep the earliest (lowest ask), since
+ * supply is ASC and the comparison is strict `>` — identical to the Rust loop.
+ * Returns null when no ask crosses any bid (on-chain: InvalidPrice / InvalidAmount).
  */
-export function evalUniform(tranches: Tranche[], t: Tariff = DEFAULT_TARIFF): SchemeResult {
+export function findClearingPoint(
+  supply: CurvePoint[],
+  demand: CurvePoint[],
+): { price: bigint; volumeAtomic: bigint } | null {
+  let bestPrice = 0n;
+  let bestVolume = 0n;
+  for (const s of supply) {
+    for (const d of demand) {
+      if (s.price <= d.price) {
+        const vol = s.cumAtomic < d.cumAtomic ? s.cumAtomic : d.cumAtomic;
+        if (vol > bestVolume) {
+          bestVolume = vol;
+          bestPrice = s.price;
+        }
+      }
+    }
+  }
+  if (bestPrice === 0n || bestVolume === 0n) return null;
+  return { price: bestPrice, volumeAtomic: bestVolume };
+}
+
+/**
+ * General uniform-price auction — mirrors on-chain clear_auction against an ARBITRARY
+ * bid ladder: clears the max-volume crossing at the single marginal ask price, then
+ * applies the tariff to the CLEARED volume only (a partial cross settles less than the
+ * full book). Use this whenever bids are data-driven; `evalUniform` is the flat-top
+ * special case. No cross -> zero-volume, zero-charge result.
+ */
+export function evalUniformAuction(
+  asks: Tranche[],
+  bids: Tranche[],
+  t: Tariff = DEFAULT_TARIFF,
+): SchemeResult {
+  const cp = findClearingPoint(cumulativeCurve(asks, false), cumulativeCurve(bids, true));
+  if (!cp) {
+    return {
+      scheme: "uniform",
+      volKwh: 0,
+      charge: { gross: 0n, fee: 0n, wheeling: 0n, loss: 0n, net: 0n },
+      netPerKwh: 0,
+    };
+  }
+  const volKwh = Number(cp.volumeAtomic) / 1e9;
+  const charge = chargeFill(cp.volumeAtomic, cp.price, t);
+  return { scheme: "uniform", volKwh, charge, netPerKwh: netPerKwh(charge.net, volKwh) };
+}
+
+/**
+ * Uniform-price auction. With no `bids`, this is the flat-top special case the §4.7
+ * driver uses: every bid pinned at the top ask, so the whole book crosses and clears
+ * at the marginal == max ask. Kept as a bit-exact fast path so committed §4.7 numbers
+ * are unchanged. Pass a real `bids` ladder to model data-driven demand — it delegates
+ * to `evalUniformAuction` (a faithful find_clearing_point port), so the on-chain /
+ * off-chain equivalence then holds for ANY bid ladder, not just flat-top.
+ */
+export function evalUniform(
+  tranches: Tranche[],
+  t: Tariff = DEFAULT_TARIFF,
+  bids?: Tranche[],
+): SchemeResult {
+  if (bids) return evalUniformAuction(tranches, bids, t);
   const volKwh = tranches.reduce((a, tr) => a + tr.kwh, 0);
   const clearing = tranches.reduce((mx, tr) => (tr.priceMicros > mx ? tr.priceMicros : mx), 0n);
   const charge = chargeFill(toAtomic(volKwh), clearing, t);

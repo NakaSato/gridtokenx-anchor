@@ -13,7 +13,12 @@ import {
   chargeFill,
   toAtomic,
   priceMicros,
+  buildTranches,
+  evalUniform,
+  evalUniformAuction,
+  findClearingPoint,
   DEFAULT_TARIFF,
+  type Tranche,
 } from "./price-model-tariff";
 
 const DS_DIR = path.resolve(
@@ -59,6 +64,75 @@ describe("price-model-tariff (§4.7 core, validator-free)", () => {
     // break-even discovered price separating market schemes from buyback
     const breakeven = (2.2 + 1.15) / (1 - 0.003);
     assert.ok(Math.abs(breakeven - 3.36) < 0.02, "break-even ~3.36/kWh");
+  });
+
+  it("findClearingPoint matches the on-chain Rust unit test", () => {
+    // Same fixture as programs/trading/src/lib.rs test_find_clearing_point_basic:
+    // supply ASC by price, demand DESC, cumulative volumes in atomic kWh.
+    const supply = [
+      { price: 3_200_000n, cumAtomic: 50_000_000_000n },
+      { price: 3_400_000n, cumAtomic: 130_000_000_000n },
+      { price: 3_600_000n, cumAtomic: 170_000_000_000n },
+    ];
+    const demand = [
+      { price: 3_800_000n, cumAtomic: 30_000_000_000n },
+      { price: 3_600_000n, cumAtomic: 90_000_000_000n },
+      { price: 3_400_000n, cumAtomic: 140_000_000_000n },
+    ];
+    const cp = findClearingPoint(supply, demand);
+    assert.ok(cp, "should find a crossing");
+    assert.equal(cp!.price, 3_400_000n); // marginal ask at the max-volume crossing
+    assert.equal(cp!.volumeAtomic, 130_000_000_000n);
+    // no intersection -> null (on-chain: InvalidPrice)
+    assert.equal(
+      findClearingPoint(
+        [{ price: 5_000_000n, cumAtomic: 100_000_000_000n }],
+        [{ price: 3_000_000n, cumAtomic: 50_000_000_000n }],
+      ),
+      null,
+    );
+  });
+
+  it("evalUniformAuction with flat-top bids == evalUniform fast path", () => {
+    // The driver pins every bid at the top ask. The general port must reproduce the
+    // flat-top special case: whole book crosses, clears at the marginal == max ask.
+    const asks: Tranche[] = buildTranches(400); // 4 rungs 3.00–3.45, 100 kWh each
+    const topAsk = asks.reduce((mx, a) => (a.priceMicros > mx ? a.priceMicros : mx), 0n);
+    const flatBids: Tranche[] = asks.map((a) => ({ kwh: a.kwh, priceMicros: topAsk }));
+
+    const fast = evalUniform(asks);
+    const general = evalUniformAuction(asks, flatBids);
+    // Full book settles at 3.45; rates identical up to sub-micro integer-floor rounding.
+    assert.ok(Math.abs(general.volKwh - fast.volKwh) < 1e-6, "same cleared volume");
+    assert.ok(Math.abs(general.netPerKwh - fast.netPerKwh) < 1e-6, "same net/kWh");
+    assert.equal(fast.charge.net, evalUniform(asks, DEFAULT_TARIFF, flatBids).charge.net);
+  });
+
+  it("data-driven bids clear BELOW the top ask (find_clearing_point port)", () => {
+    // asks 3.00/3.15/3.30/3.45 @100 kWh; all bids at 3.20 -> only the 3.00 and 3.15
+    // rungs are eligible. Max-volume crossing: ask 3.15, cum supply 200 kWh <= bid
+    // cum 400. Clears at 3.15 for 200 kWh — NOT the 3.45 the flat-top path would give.
+    const asks: Tranche[] = buildTranches(400);
+    const bids: Tranche[] = asks.map((a) => ({ kwh: a.kwh, priceMicros: priceMicros(3.2) }));
+
+    const r = evalUniformAuction(asks, bids);
+    assert.ok(Math.abs(r.volKwh - 200) < 1e-6, `cleared 200 kWh, got ${r.volKwh}`);
+    // gross = 200 * 3.15 * 1e6 ; net = gross - fee(25bps) - loss(5bps) - wheeling(1.15*200)
+    assert.equal(r.charge.gross, 630_000_000n);
+    assert.equal(r.charge.fee, 1_575_000n);
+    assert.equal(r.charge.loss, 315_000n);
+    assert.equal(r.charge.wheeling, 230_000_000n);
+    assert.equal(r.charge.net, 630_000_000n - 1_575_000n - 315_000n - 230_000_000n);
+    // clears strictly below the flat-top result
+    assert.ok(r.netPerKwh < evalUniform(asks).netPerKwh, "data-driven clears below flat-top");
+  });
+
+  it("no cross -> zero-volume result", () => {
+    const asks: Tranche[] = [{ kwh: 100, priceMicros: priceMicros(5.0) }];
+    const bids: Tranche[] = [{ kwh: 100, priceMicros: priceMicros(3.0) }];
+    const r = evalUniformAuction(asks, bids);
+    assert.equal(r.volKwh, 0);
+    assert.equal(r.charge.net, 0n);
   });
 
   it("net-per-kWh is scale/horizon invariant (rate, not volume)", () => {
