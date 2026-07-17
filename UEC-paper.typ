@@ -892,7 +892,7 @@ path, both the price-invariance of compute and the shared-account throughput bou
 established for the OLTP proxy.
 
 To trace the throughput ceiling of the settlement path directly, we then swept the
-fleet from 80 to 720 prosumer meters (each match pairs two meters, so $N = $ 40–360
+fleet from 80 to 360 prosumer meters (each match pairs two meters, so $N = $ 40–180
 matches) at the CDA rule, holding concurrency at 4. @tab-fleet-scale reports
 confirmed goodput, burst wall time, and per-settle compute.
 
@@ -926,6 +926,15 @@ fleet-invariant ≈115 k CU — confirming once more that the ceiling is lock
 serialisation, not execution. The remedy is again the sharded-collector plus
 pooled-fee-payer design of §9.2/§9.5, which this single-fee-payer sweep
 deliberately does not apply.
+
+A 720-meter (360-match) point was attempted but not obtained: the benchmark
+seeds every match up front with its own funded buyer, seller, escrows, and
+address-lookup table (§9.5), and at 360 matches this sequential per-match seeding
+exhausts the harness's time and funding budget before the timed settle phase
+begins. The limit is a property of the test harness's setup path, not of the
+settlement path under measurement — the confirmed rows already isolate the
+settlement ceiling as shared-account serialisation, which a larger fleet only
+approaches more slowly, not differently.
 
 = 10. Reading Map
 
