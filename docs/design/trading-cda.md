@@ -10,7 +10,7 @@ This document specifies the trading program's market model: how orders are submi
 
 The trading program deliberately supports **two matching models** that converge on the same on-chain settlement primitives:
 
-1. **On-chain immediate / batch matching** — orders are stored on-chain (`Order` PDA) and matched synchronously (`match_orders`, `lib.rs:328`) or in batches (`execute_batch`, `lib.rs:528`); a uniform-price batch auction is also available (`clear_auction`, `lib.rs:933` → `execute_auction_matches`, `lib.rs:1088`).
+1. **On-chain immediate / batch matching** — orders are stored on-chain (`Order` PDA) and matched synchronously (`match_orders`, `lib.rs:328`) or in batches (`execute_batch`, `lib.rs:528`); a uniform-price batch auction is also available (`clear_auction`, `lib.rs:933` → `execute_auction_matches`, `lib.rs:1088`, which emits match bookkeeping only — it moves no tokens; settlement itself still routes through the offchain settlement primitives below).
 2. **Off-chain CDA matching** — limit/market orders are submitted as intent (`submit_limit_order`, `lib.rs:591`; `submit_market_order`, `lib.rs:697`); the actual order book lives off-chain in matching agents, and only the **settlement** is proved on-chain (`settle_offchain_match`, `lib.rs:1371` → `instructions/settle_offchain.rs`).
 
 The off-chain path is the scalable one: there is **no on-chain order book** to contend on; the chain stores only nullifiers and the settlement result. The on-chain path exists for simpler/auditable flows and for the batch uniform-price auction used by zone clearing.
