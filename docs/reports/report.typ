@@ -572,14 +572,17 @@ each dataset reproducible, and the telemetry outcome (confirmed versus
 anomaly-rejected reading counts) reproduces bit-identically across runs. To
 separate signal from host noise, each scenario is executed $N = 3$ times and
 throughput is reported as the median with observed range; compute-unit costs are
-medians, scale-invariant per operation and robust to load. The full matrix is one
-command — `CASES="160:24 380:57 760:114" DAYS=7 bash scripts/run-scale-sweep.sh`
-— which per case exports the physics dataset, provisions a fresh validator,
-deploys the five programs, runs the lifecycle, and audits against chain state.
-The §4.7 price-model comparison is likewise one command
-(`scripts/run-price-models-onchain.sh`), with its seven-check verifier
-(`scripts/verify-price-models-onchain.ts`) re-run against the *persisted*
-ledger after the run, so the checks read state the runner can no longer touch.
+medians, scale-invariant per operation and robust to load. The full matrix was
+produced by a per-case harness that exports the physics dataset, provisions a
+fresh validator, deploys the five programs, runs the lifecycle, and audits
+against chain state; that scale-sweep orchestrator is archived outside this
+repository, but every case's dataset, per-case artifacts, and audit logs are
+retained under `test-results/`, which is what the reported figures are drawn
+from. The §4.7 price-model comparison, by contrast, is reproducible in-repo as
+one command (`scripts/run-price-models-onchain.sh`), with its seven-check
+verifier (`scripts/verify-price-models-onchain.ts`) re-run against the
+*persisted* ledger after the run, so the checks read state the runner can no
+longer touch.
 
 *4.9 Deriving each reported quantity.* Every headline number is a closed-form
 function of stated inputs, so a reader can reproduce it by hand rather than trust
