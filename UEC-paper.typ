@@ -891,6 +891,42 @@ the settlement ceiling. The measurement thus reproduces, on the real settlement
 path, both the price-invariance of compute and the shared-account throughput bound
 established for the OLTP proxy.
 
+To trace the throughput ceiling of the settlement path directly, we then swept the
+fleet from 80 to 720 prosumer meters (each match pairs two meters, so $N = $ 40–360
+matches) at the CDA rule, holding concurrency at 4. @tab-fleet-scale reports
+confirmed goodput, burst wall time, and per-settle compute.
+
+#figure(
+  caption: [Live settlement goodput versus fleet size (CDA rule, concurrency 4,
+    single-node validator). Each match pairs two meters; every match is one
+    settle transaction. Goodput is confirmed settles over the burst wall time;
+    CU is machine-independent. All settles confirmed (0 reverts) at every size.],
+  table(
+    columns: (auto, auto, auto, auto, auto, auto),
+    align: (right, right, center, right, right, right),
+    table.header(
+      [*Meters*], [*Matches $N$*], [*settled*], [*wall (s)*], [*TPS*], [*CU/settle*],
+    ),
+    [80],  [40],  [40/40],   [17.3], [2.31], [115,008],
+    [160], [80],  [80/80],   [18.8], [4.26], [117,258],
+    [360], [180], [180/180], [31.0], [5.81], [115,053],
+  ),
+) <tab-fleet-scale>
+
+Goodput rises monotonically with fleet — 2.31 TPS at 80 meters to 5.81 TPS at
+360 — but *sublinearly*, and the burst wall time is the tell: it holds near 17–19 s
+while the fleet doubles from 80 to 160 (goodput scales almost linearly, 2.31 →
+4.26), then stretches to 31 s at 360 meters, so a 2.25× larger fleet yields only a
+1.36× goodput gain. The knee is the shared settlement state of §9.2: every settle
+write-locks the global collector and `treasury_state` accumulator, so past a few
+hundred in-flight matches the validator can no longer pack proportionally more
+settles per slot and the burst simply lengthens. Compute is flat throughout —
+115.0, 117.3, 115.1 k CU across the three sizes, the same price- and now
+fleet-invariant ≈115 k CU — confirming once more that the ceiling is lock
+serialisation, not execution. The remedy is again the sharded-collector plus
+pooled-fee-payer design of §9.2/§9.5, which this single-fee-payer sweep
+deliberately does not apply.
+
 = 10. Reading Map
 
 #table(
