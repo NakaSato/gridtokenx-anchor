@@ -70,7 +70,12 @@
       bottleneck as contention-driven rather than a protocol defect, and
       demonstrates that the on-chain auditor reliably detects the resulting
       state divergence. Total wall-clock compression of a simulated week
-      ranges from 993× to 510×.
+      ranges from 993× to 510×. Open-loop load ramps place the ceilings
+      precisely — order entry sustains 1,600 transactions per second at a
+      two-second latency target while settlement holds near one — and a
+      centralized-database baseline quantifies the cost of decentralization at
+      roughly 20× for order entry and 1,500× for settlement, both systems
+      bottlenecking on the same shared collector accounts.
     ]
   ]
   #v(0.4em)
@@ -495,7 +500,11 @@ surplus buy-back rate of 2.20 per kilowatt-hour as baseline. Unlike §4.6, this
 experiment applies a realistic peer-to-peer tariff — 25 basis-point fee, 5
 basis-point loss, and a flat wheeling rate of *1.15 per kilowatt-hour* —
 to the two market schemes only; the buy-back baseline is a utility feed-in
-with no third-party delivery, so it bears no wheeling or market fee. Gross,
+with no third-party delivery, so it bears no wheeling or market fee. The
+market instructions establish only the *gross* value and volume on-chain —
+they move no tokens and levy no tariff; the net of @eq-net is applied once,
+off-chain, to that chain-read gross and re-verified by independent
+recomputation, so no charge is counted twice. Gross,
 both market schemes dominate the baseline decisively: +57% (uniform) and +47%
 (CDA) over buy-back. *Net of the tariff the ranking inverts around the
 wheeling charge* (@tbl-price): the 1.15/kWh wheeling consumes 454.2 units —
@@ -511,11 +520,13 @@ volume delta, and the recomputed baseline — seven checks per case, all exact.
 
 The result is invariant in both community size and horizon (@tbl-price-scale).
 Repeating the experiment at 160, 380, and 760 meters and again over 30-day
-datasets — sixteen run-and-verify cases in all, 112 checks — reproduces the
-per-kilowatt-hour economics exactly: the uniform auction clears at 3.45 (the
-marginal tranche ask) at every scale, so its net rate is 2.290 everywhere by
-construction, while the discriminatory CDA's volume-weighted rate wobbles only
-with each fleet's surplus distribution (2.068–2.087). Because every charge is
+datasets — eight run-and-verify cases (four fleets × two horizons), 56 on-chain
+checks — reproduces the per-kilowatt-hour economics exactly: the uniform auction
+clears at 3.45 (the marginal tranche ask) at every scale, so its net rate is
+2.290 everywhere; and because the reduced book aggregates each fleet's surplus
+into the same four equal-volume ask tranches, the discriminatory CDA's
+volume-weighted net rate is likewise invariant at 2.065. Both rates are fixed by
+construction, independent of fleet size and horizon. Because every charge is
 per kilowatt-hour or proportional to value, fleet size and horizon scale
 *volume*, never the rate — the break-even discovered price
 $approx (2.20 + 1.15) slash 0.997 approx 3.36$ per kilowatt-hour separates the
@@ -529,7 +540,7 @@ seeded telemetry reproducibility in §4.8.
   table.header[*Scheme*][*Vol (kWh)*][*Gross*][*Net*][*Net /kWh*][*vs buy-back*],
   (
     [Uniform-price auction], [394.9], [1,362.5], [904.2], [2.290], [+4%],
-    [Continuous double auction], [394.9], [1,278.6], [820.6], [2.078], [−6%],
+    [Continuous double auction], [394.9], [1,273.6], [815.6], [2.065], [−6%],
     [Buy-back 2.20 (baseline)], [394.9], [868.8], [868.8], [2.200], [—],
   ),
   [Three settlement schemes on the identical 394.9 kWh order book
@@ -543,14 +554,14 @@ seeded telemetry reproducibility in §4.8.
   (left, right, right, right, right, right),
   table.header[*Fleet*][*7-d kWh*][*30-d kWh*][*Uniform net/kWh*][*CDA net/kWh*][*Buy-back*],
   (
-    [80 m / 12 p], [394.9], [1,671.8], [2.290], [2.078 / 2.076], [2.200],
-    [160 m / 24 p], [727.9], [3,114.2], [2.290], [2.087 / 2.084], [2.200],
-    [380 m / 57 p], [1,765.6], [7,546.1], [2.290], [2.072 / 2.068], [2.200],
-    [760 m / 114 p], [3,464.9], [14,873.4], [2.290], [2.082 / 2.078], [2.200],
+    [80 m / 12 p], [394.9], [1,671.8], [2.290], [2.065 / 2.065], [2.200],
+    [160 m / 24 p], [727.9], [3,114.2], [2.290], [2.065 / 2.065], [2.200],
+    [380 m / 57 p], [1,765.6], [7,546.1], [2.290], [2.065 / 2.065], [2.200],
+    [760 m / 114 p], [3,464.9], [14,873.4], [2.290], [2.065 / 2.065], [2.200],
   ),
   [Scale and horizon invariance of the three-scheme comparison (CDA shown as
   7-day / 30-day rate). Per-kilowatt-hour economics are identical at every
-  fleet size and horizon; only settled volume scales. Each of the sixteen
+  fleet size and horizon; only settled volume scales. Each of the eight
   cases passes its seven on-chain checks.],
 ) <tbl-price-scale>
 
@@ -592,7 +603,73 @@ Certificate base units $10^3 times 6804.2$ = 6,804,214,000, matching the audited
 REC supply. Compression (7 × 86,400) ÷ 766.5 = 789× (§4.5). Each equals its
 independently audited on-chain value.
 
-*4.10 Threats to validity.* Three limits bound the claims. (i) *Deployment* —
+*4.10 Open-loop saturation and a centralized baseline.* The scaling runs above
+are closed-loop — each phase awaits confirmation before offering more load — so
+they measure latency-bounded throughput, not a saturation point. To locate the
+actual ceiling we additionally drive each hot path *open-loop*: fixing an arrival
+rate $lambda$ (transactions per second), pre-signing the whole per-level pool, and
+firing on a token-bucket schedule with no confirm barrier, so offered load is
+decoupled from completion. Ramping $lambda$ reveals the knee and the
+service-level-agreement (SLA) collapse (@tbl-ramp). Order entry sustains
+*1,600 transactions per second* at a 99th-percentile latency under two seconds
+with zero loss; latency stays flat (approximately 0.6 s) through 800, first rises
+at 1,600, and the system saturates at $lambda = 3200$ — goodput plateaus near
+2,075 transactions per second while 35% of offers are shed and the SLA breaks —
+then collapses to total loss at 6,400. Settlement, fired the same way, confirms
+the closed-loop figure of §4.3: approximately one settlement per second
+(0.61 at four in-flight, 1.04 at eight), fleet-independent because it is bounded
+by the fixed global write-lock, not by fleet size. That ceiling is low in
+absolute terms yet ample against the deadline it must meet — one settlement per
+second clears roughly 936 matches within a 900-second market-clearing epoch,
+against a community-month demand of 353 matches, an $approx 8000 times$ headroom.
+
+#restab(
+  (auto, auto, auto, auto, auto, auto),
+  (left, right, right, right, right, center),
+  table.header[*λ (tx/s)*][*Offered*][*Confirmed*][*TPS*][*p99 (ms)*][*SLA*],
+  (
+    [800], [4,000], [4,000], [800], [667], [#ok],
+    [1,600], [8,000], [8,000], [1,600], [1,124], [#ok],
+    [3,200], [16,000], [10,378], [2,075], [4,705], [#no],
+    [6,400], [32,000], [0], [0], [—], [#no],
+  ),
+  [Open-loop order-entry ramp (single node, single authority, 6 s per level,
+  SLA p99 < 2 s). Peak sustainable 1,600 TPS; saturation knee at $lambda = 3200$
+  (max goodput 2,075 TPS, 35% shed); collapse at 6,400.],
+) <tbl-ramp>
+
+To place these ceilings against a non-blockchain reference, we mirror the two hot
+paths in a single trusted relational database (PostgreSQL) — the identical logical
+work (order insert; and an atomic settlement transaction that debits the buyer,
+credits the seller net, credits the three fee/wheeling/loss collectors, records the
+trade, and inserts a replay-guard row) with no consensus, no signature
+verification, and no account rent. The collector rows are updated by every
+settlement, so the baseline reproduces the *same* global-write contention the chain
+serialises on — here through cheap multi-version row locks — which isolates the
+gap to the consensus and cryptography cost rather than an unfair absence of
+contention. Measured by `pgbench` on the same host (@tbl-baseline), order entry
+runs at approximately 33,000 transactions per second and settlement peaks near
+1,400 before *declining* under collector contention beyond four clients — the same
+qualitative bottleneck as on chain. The centralized cost of the same operation is
+therefore roughly *20–30×* lower for order entry and *1,400–2,000×* lower for
+settlement: order entry is already inexpensive on chain, whereas settlement is
+where decentralization is paid, and both systems bottleneck on the identical
+collector accounts.
+
+#restab(
+  (auto, auto, auto, auto),
+  (left, right, right, right),
+  table.header[*Workload*][*On-chain TPS*][*Postgres TPS*][*Ratio*],
+  (
+    [Order entry], [1,600], [$approx 33{,}000$], [$approx 20text("–")30 times$],
+    [Settlement], [$approx 1$], [$approx 1{,}400$], [$approx 1400text("–")2000 times$],
+  ),
+  [Centralized-Postgres baseline (peak), same host. The ratio is the cost of
+  decentralization for the same operation; both systems serialise on the shared
+  fee/wheeling/loss collectors.],
+) <tbl-baseline>
+
+*4.11 Threats to validity.* Three limits bound the claims. (i) *Deployment* —
 results are single-host and single-validator; a multi-node permissioned cluster
 would shift the fee-payer and lock ceilings, so the throughput figures are a
 floor for that topology, not a projection to production. (ii) *Host sensitivity*
@@ -625,10 +702,15 @@ price (§4.6); §4.7 evaluates discovered prices on an aggregated tranche book.
 Exercising the continuous double auction for settlement per order, at fleet
 scale — rather than on the reduced book a single `clear_auction` transaction
 admits — is the natural next study, as is sharding the auction book itself.
-*Multi-node and compliant feeder.* Repeating the matrix on a multi-node
-permissioned cluster would lift the single-fee-payer and single-validator
-ceilings, and right-sizing the distribution feeder would bring the grid-physics
-outputs within IEEE operating bounds (§4.10). Finally, aggregating sub-unit fees
+*Peer-system comparison.* §4.10 establishes the centralized-database upper bound;
+comparing against a permissioned-blockchain peer (Hyperledger Fabric, the dominant
+platform in the peer-to-peer-energy literature) would place the on-chain ceilings
+between the two references rather than against one. *Multi-node and compliant
+feeder.* Repeating the matrix on a multi-node permissioned cluster would lift the
+single-fee-payer and single-validator ceilings — turning the open-loop peak of
+§4.10 from a single-node floor into a consensus-cost measurement — and right-sizing
+the distribution feeder would bring the grid-physics outputs within IEEE operating
+bounds (§4.11). Finally, aggregating sub-unit fees
 would recover the fee and loss revenue that per-match flooring currently discards.
 
 = 6. Conclusion
@@ -637,7 +719,12 @@ Across a 4.75× range in community size, the GridTokenX settlement layer sustain
 super-linearly scaling telemetry, conserves traded energy value to the atomic
 watt-hour, and remains fully auditable from chain state. Its dominant scaling
 limit is a contention-sensitive global settlement lock, beneath which a
-sub-1% trading-layer order-drop resides. Both are localised and addressable, and
+sub-1% trading-layer order-drop resides. Open-loop, order entry sustains 1,600
+transactions per second while settlement is bounded near one per second — low in
+absolute terms yet an $approx 8000 times$ headroom against the community's
+per-epoch demand, and, against a centralized-database baseline, roughly $20 times$
+(entry) and $1500 times$ (settlement) is the measured cost of decentralization for
+the same operation. Both limits are localised and addressable, and
 neither compromises the conservation guarantee on a quiescent host. The
 physics-grounded harness and per-fleet auditor introduced here provide a
 repeatable basis for evaluating the next architectural iteration.
