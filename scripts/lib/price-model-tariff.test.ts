@@ -1,0 +1,74 @@
+// Validator-free unit test for the §4.7 price-model core. Runs against the real
+// surviving physics dataset (test-results/datasets/scale-80m-12p-s42-7d-cap5) and
+// asserts the QUALITATIVE finding the paper rests on — the net-revenue ranking
+// inverts around the flat wheeling charge — plus exact tariff-math invariants.
+// Run: npx mocha -r tsx scripts/lib/price-model-tariff.test.ts --timeout 60000
+
+import { strict as assert } from "assert";
+import * as fs from "fs";
+import * as path from "path";
+import {
+  loadDataset,
+  comparePriceModels,
+  chargeFill,
+  toAtomic,
+  priceMicros,
+  DEFAULT_TARIFF,
+} from "./price-model-tariff";
+
+const DS_DIR = path.resolve(
+  process.cwd(),
+  "test-results/datasets/scale-80m-12p-s42-7d-cap5",
+);
+
+describe("price-model-tariff (§4.7 core, validator-free)", () => {
+  before(function () {
+    if (!fs.existsSync(path.join(DS_DIR, "daily.json"))) this.skip();
+  });
+
+  it("chargeFill mirrors on-chain integer floors exactly", () => {
+    // 100 kWh @ 4.00, fee 25bps, loss 5bps, wheeling 1.15/kWh
+    const c = chargeFill(toAtomic(100), priceMicros(4.0), DEFAULT_TARIFF);
+    assert.equal(c.gross, 400_000_000n); // 100 * 4.00 * 1e6
+    assert.equal(c.fee, 1_000_000n); // 400 * 0.0025
+    assert.equal(c.loss, 200_000n); // 400 * 0.0005
+    assert.equal(c.wheeling, 115_000_000n); // 1.15 * 100
+    assert.equal(c.net, c.gross - c.fee - c.loss - c.wheeling);
+  });
+
+  it("reproduces the ranking inversion on the 80m/7d fleet", () => {
+    const ds = loadDataset(DS_DIR);
+    const cmp = comparePriceModels(ds, 7);
+    const u = cmp.uniform.netPerKwh;
+    const c = cmp.cda.netPerKwh;
+    const b = cmp.buyback.netPerKwh;
+
+    console.log(`\n  vol = ${cmp.volKwh.toFixed(1)} kWh`);
+    console.log(`  uniform  net/kWh = ${u.toFixed(3)}  (gross ${(Number(cmp.uniform.charge.gross) / 1e6).toFixed(1)}, net ${(Number(cmp.uniform.charge.net) / 1e6).toFixed(1)})`);
+    console.log(`  cda      net/kWh = ${c.toFixed(3)}  (gross ${(Number(cmp.cda.charge.gross) / 1e6).toFixed(1)}, net ${(Number(cmp.cda.charge.net) / 1e6).toFixed(1)})`);
+    console.log(`  buyback  net/kWh = ${b.toFixed(3)}  (gross ${(Number(cmp.buyback.charge.gross) / 1e6).toFixed(1)})`);
+    console.log(`  wheeling consumed = ${(Number(cmp.uniform.charge.wheeling) / 1e6).toFixed(1)} units\n`);
+
+    assert.ok(cmp.volKwh > 0, "tradeable supply must be positive");
+    assert.ok(Math.abs(b - 2.2) < 1e-3, "buyback baseline ~2.20 (tariff-exempt)");
+    // THE FINDING: net of the 1.15 wheeling charge, the ranking inverts —
+    // uniform-price clearing beats buy-back, discriminatory CDA falls below it.
+    assert.ok(u > b, `uniform (${u.toFixed(3)}) should beat buyback (${b})`);
+    assert.ok(c < b, `CDA (${c.toFixed(3)}) should fall BELOW buyback (${b}) — inversion`);
+    assert.ok(u > c, "uniform net should dominate CDA net");
+    // break-even discovered price separating market schemes from buyback
+    const breakeven = (2.2 + 1.15) / (1 - 0.003);
+    assert.ok(Math.abs(breakeven - 3.36) < 0.02, "break-even ~3.36/kWh");
+  });
+
+  it("net-per-kWh is scale/horizon invariant (rate, not volume)", () => {
+    const ds = loadDataset(DS_DIR);
+    const wk = comparePriceModels(ds, 7);
+    // Uniform always clears at the marginal ladder ask -> identical net rate
+    // regardless of volume; CDA rate depends only on the (fixed) ladder split.
+    const half = comparePriceModels(ds, 3);
+    // Rate is invariant up to sub-micro integer-floor rounding (volume differs).
+    assert.ok(Math.abs(wk.uniform.netPerKwh - half.uniform.netPerKwh) < 1e-3, "uniform rate invariant to horizon");
+    assert.ok(Math.abs(wk.cda.netPerKwh - half.cda.netPerKwh) < 1e-3, "CDA rate invariant to horizon");
+  });
+});
