@@ -102,4 +102,8 @@ pub enum TradingError {
     InvalidBalanceProof,
     #[msg("Shielded transfer recipient must differ from the sender (self-transfer would double-credit)")]
     SelfTransferNotAllowed,
+    #[msg("Shard passed more than once to aggregate_shards (would double-drain totals)")]
+    DuplicateShard,
+    #[msg("Shard does not belong to the given zone market")]
+    ShardZoneMismatch,
 }

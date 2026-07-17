@@ -97,6 +97,15 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
 
   const decodeShard = () =>
     trading.coder.accounts.decode("zoneMarketShard", Buffer.from(svm.getAccount(zoneShardPda)!.data));
+  const decodeZoneMarket = () =>
+    trading.coder.accounts.decode("zoneMarket", Buffer.from(svm.getAccount(zoneMarketPda)!.data));
+
+  const aggregateIx = (shards: PublicKey[]) =>
+    trading.methods.aggregateShards().accounts({
+      market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey,
+    } as any).remainingAccounts(
+      shards.map((pubkey) => ({ pubkey, isWritable: true, isSigner: false }))
+    ).instruction();
   const decodeOrder = (id: number) =>
     trading.coder.accounts.decode("order", Buffer.from(svm.getAccount(orderPda(id))!.data));
   const decodeTrade = (tr: PublicKey) =>
@@ -226,5 +235,56 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
     // Both orders fully filled → Completed (status 2).
     expect(decodeOrder(BUY.id).status).to.eq(2);
     expect(decodeOrder(SELL.id).status).to.eq(2);
+  });
+
+  it("aggregate_shards drains shard staging counters into ZoneMarket (idempotent)", async () => {
+    const zmBefore = decodeZoneMarket();
+    // Sharded path left ZoneMarket totals stale on purpose.
+    expect(zmBefore.totalVolume.toNumber()).to.eq(0);
+    expect(zmBefore.totalTrades).to.eq(0);
+
+    const meta = send([await aggregateIx([zoneShardPda])]);
+    console.log(`\n  [CU] aggregate_shards (1 shard) = ${Number(meta!.computeUnitsConsumed()).toLocaleString()} CU`);
+
+    // DRAIN semantics: deltas added to zone totals, shard counters zeroed.
+    const zm = decodeZoneMarket();
+    expect(zm.totalVolume.toNumber()).to.eq(SELL.amt);
+    expect(zm.totalTrades).to.eq(1);
+    expect(zm.lastClearingPrice.toNumber()).to.eq(SELL.price);
+    const shard = decodeShard();
+    expect(shard.volumeAccumulated.toNumber()).to.eq(0);
+    expect(shard.tradeCount).to.eq(0);
+    // Informational fields survive the drain.
+    expect(shard.lastClearingPrice.toNumber()).to.eq(SELL.price);
+
+    // Re-run after drain adds nothing (idempotent per drain).
+    send([await aggregateIx([zoneShardPda])]);
+    const zm2 = decodeZoneMarket();
+    expect(zm2.totalVolume.toNumber()).to.eq(SELL.amt);
+    expect(zm2.totalTrades).to.eq(1);
+  });
+
+  it("aggregate_shards rejects a shard passed twice (DuplicateShard) and a non-authority caller", async () => {
+    const dup = sendRaw([await aggregateIx([zoneShardPda, zoneShardPda])]);
+    expect(dup instanceof FailedTransactionMetadata, "duplicate shard must fail").to.be.true;
+    expect((dup as FailedTransactionMetadata).meta().logs().join("\n")).to.include("DuplicateShard");
+
+    // Non-authority signer rejected by the market.authority gate.
+    const rando = Keypair.generate();
+    svm.airdrop(rando.publicKey, BigInt(1_000_000_000));
+    const ix = await trading.methods.aggregateShards().accounts({
+      market: marketPda, zoneMarket: zoneMarketPda, authority: rando.publicKey,
+    } as any).remainingAccounts(
+      [{ pubkey: zoneShardPda, isWritable: true, isSigner: false }]
+    ).instruction();
+    const tx = new Transaction();
+    tx.recentBlockhash = svm.latestBlockhash();
+    tx.feePayer = rando.publicKey;
+    tx.add(ix);
+    tx.sign(rando);
+    const res = svm.sendTransaction(tx);
+    svm.expireBlockhash();
+    expect(res instanceof FailedTransactionMetadata, "non-authority must fail").to.be.true;
+    expect((res as FailedTransactionMetadata).meta().logs().join("\n")).to.include("UnauthorizedAuthority");
   });
 });

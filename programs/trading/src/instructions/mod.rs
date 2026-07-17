@@ -1,3 +1,4 @@
+pub mod aggregate_shards;
 pub mod cancel_order;
 pub mod create_buy_order;
 pub mod create_sell_order;
@@ -26,6 +27,7 @@ pub mod update_depth;
 pub mod update_market_params;
 pub mod update_price_history;
 
+pub use aggregate_shards::*;
 pub use cancel_order::*;
 pub use create_buy_order::*;
 pub use create_sell_order::*;

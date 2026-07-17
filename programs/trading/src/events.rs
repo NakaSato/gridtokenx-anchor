@@ -136,3 +136,14 @@ pub struct EscrowWithdrawn {
     pub amount: u64,
     pub timestamp: i64,
 }
+
+/// Emitted by `aggregate_shards` when per-shard staging counters are drained
+/// back into `ZoneMarket` totals (see instructions/aggregate_shards.rs).
+#[event]
+pub struct ShardsAggregated {
+    pub zone_id: u32,
+    pub volume_added: u64,
+    pub trades_added: u32,
+    pub shards_drained: u32,
+    pub timestamp: i64,
+}

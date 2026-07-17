@@ -925,6 +925,15 @@ pub mod trading {
     }
 
     /// Consolidate a shard's fee/wheeling/loss balances into the canonical collectors.
+    /// Drain per-shard `ZoneMarketShard` staging counters back into `ZoneMarket`
+    /// totals. Shards passed via `remaining_accounts` (writable). Admin-gated
+    /// (market authority). See instructions/aggregate_shards.rs for semantics.
+    pub fn aggregate_shards<'info>(
+        ctx: Context<'info, AggregateShardsContext<'info>>,
+    ) -> Result<()> {
+        instructions::aggregate_shards(ctx)
+    }
+
     pub fn sweep_collectors(ctx: Context<SweepCollectorsContext>, shard_id: u8) -> Result<()> {
         instructions::sweep_collectors(ctx, shard_id)
     }
@@ -1035,21 +1044,6 @@ pub mod trading {
 
         pub governance_config: Account<'info, GovernanceConfig>,
     }
-}
-
-// ============================================================================
-// UNUSED CONTEXT — parked at crate root
-// ============================================================================
-// TODO: `AggregateShardsContext` has no corresponding instruction (dead). Kept
-// verbatim rather than deleted to preserve the type; wire up or remove in a
-// separate, explicit change.
-#[derive(Accounts)]
-pub struct AggregateShardsContext<'info> {
-    #[account(mut)]
-    pub market: AccountLoader<'info, Market>,
-    #[account(mut)]
-    pub zone_market: AccountLoader<'info, ZoneMarket>,
-    pub authority: Signer<'info>,
 }
 
 // ============================================================================
