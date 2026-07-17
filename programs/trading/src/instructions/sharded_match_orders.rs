@@ -98,6 +98,7 @@ pub fn sharded_match_orders(ctx: Context<ShardedMatchOrdersContext>, match_amoun
         seller: sell_order.seller,
         amount: actual_match_amount,
         price: clearing_price,
+        // Discovery-path raw amount·price (NO /1e9), informational — see events.rs::OrderMatched.
         total_value: actual_match_amount.saturating_mul(clearing_price),
         fee_amount: 0,
         timestamp: clock.unix_timestamp,

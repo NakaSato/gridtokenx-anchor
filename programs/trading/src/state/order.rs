@@ -28,6 +28,10 @@ pub struct TradeRecord {
     pub buyer: Pubkey,
     pub amount: u64,
     pub price_per_kwh: u64,
+    // Written by match_orders / sharded_match_orders as raw `amount * price` (NO /1e9) — a discovery-path
+    // TradeRecord, informational only (no tokens moved here; real charges land in the settle path). The CDA
+    // verifier (scripts/verify-price-models-onchain.ts:80) asserts `total_value == amount * price`, so this
+    // raw scale is load-bearing for §9.6 — do not normalize it to 6-dec currency. See events.rs::OrderMatched.
     pub total_value: u64,
     pub fee_amount: u64,
     pub executed_at: i64,

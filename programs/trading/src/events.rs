@@ -34,6 +34,15 @@ pub struct OrderMatched {
     pub buyer: Pubkey,
     pub amount: u64,
     pub price: u64,
+    // DUAL-SCALE — read the emitting instruction before summing this field.
+    //   settle path (settle_offchain_match / batch_settle):    total_value = amount * price / 1e9
+    //     -> real 6-dec settlement currency (THBG minor units); money actually moves; treasury reconciles.
+    //   discovery path (match_orders / sharded_match_orders / clear_auction / execute_auction_matches):
+    //     total_value = amount * price  (NO /1e9) -> raw atomic·micros product, 1e9x larger, INFORMATIONAL
+    //     ONLY (no token transfer). The CDA verifier (scripts/verify-price-models-onchain.ts) asserts this
+    //     raw form; §9.6 paper results depend on it. Do NOT "normalize" the discovery producers to /1e9 —
+    //     it moves no money, breaks the verifier, and invalidates committed results.
+    // External indexers/explorers MUST NOT sum total_value across paths without rescaling by path.
     pub total_value: u64,
     pub fee_amount: u64,
     pub timestamp: i64,

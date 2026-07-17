@@ -444,6 +444,7 @@ pub mod trading {
                     buyer: buy_order.user,
                     amount: match_amount,
                     price: clearing_price,
+                    // Discovery-path raw amount·price (NO /1e9), informational — see events.rs::OrderMatched.
                     total_value: match_amount.saturating_mul(clearing_price),
                     fee_amount: 0,
                     timestamp: clock.unix_timestamp,
@@ -519,6 +520,8 @@ pub mod trading {
         let mut total_volume = 0u64;
 
         for auction_match in &matches {
+            // Discovery-path raw amount·price (NO /1e9); this ix moves NO tokens — trade_value + market_fee
+            // below are informational event fields only. See events.rs::OrderMatched for the dual-scale contract.
             let trade_value = auction_match.amount.saturating_mul(clearing_price);
             let market_fee = trade_value
                 .checked_mul(market_fee_bps)

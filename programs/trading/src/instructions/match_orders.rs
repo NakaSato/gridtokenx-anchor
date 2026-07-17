@@ -54,6 +54,8 @@ pub fn match_orders(ctx: Context<MatchOrdersContext>, match_amount: u64) -> Resu
     let actual_match_amount = match_amount.min(buy_remaining).min(sell_remaining);
 
     let clearing_price = sell_order.price_per_kwh;
+    // Discovery-path total_value: raw amount·price (NO /1e9), informational only — the verifier depends on
+    // this scale. See events.rs::OrderMatched for the dual-scale contract; do not normalize here.
     let total_value = actual_match_amount.saturating_mul(clearing_price);
 
     buy_order.filled_amount += actual_match_amount;
