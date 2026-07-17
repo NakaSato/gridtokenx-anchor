@@ -3,6 +3,11 @@ use crate::error::TradingError;
 use crate::state::*;
 use crate::utils::get_governance_config;
 
+#[cfg(feature = "localnet")]
+use compute_debug::compute_fn;
+#[cfg(not(feature = "localnet"))]
+use crate::compute_fn;
+
 #[derive(Accounts)]
 pub struct MatchOrdersContext<'info> {
     pub market: AccountLoader<'info, Market>,
@@ -22,6 +27,7 @@ pub struct MatchOrdersContext<'info> {
 }
 
 pub fn match_orders(ctx: Context<MatchOrdersContext>, match_amount: u64) -> Result<()> {
+    compute_fn!("match_orders" => {
     require!(
         get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
         TradingError::MaintenanceMode
@@ -99,6 +105,7 @@ pub fn match_orders(ctx: Context<MatchOrdersContext>, match_amount: u64) -> Resu
         total_value,
         fee_amount: 0,
         timestamp: clock.unix_timestamp,
+    });
     });
 
     Ok(())

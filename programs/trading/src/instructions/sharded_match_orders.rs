@@ -36,6 +36,9 @@ pub fn sharded_match_orders(ctx: Context<ShardedMatchOrdersContext>, match_amoun
         get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
         crate::error::TradingError::MaintenanceMode
     );
+    // Same guard as match_orders: a zero-amount call must not init a zero-trade
+    // TradeRecord, bump trade_count, or flip an Active order to PartiallyFilled.
+    require!(match_amount > 0, crate::error::TradingError::InvalidAmount);
 
     let mut buy_order = ctx.accounts.buy_order.load_mut()?;
     let mut sell_order = ctx.accounts.sell_order.load_mut()?;
@@ -87,8 +90,14 @@ pub fn sharded_match_orders(ctx: Context<ShardedMatchOrdersContext>, match_amoun
 
     trade_record.buy_order = ctx.accounts.buy_order.key();
     trade_record.sell_order = ctx.accounts.sell_order.key();
+    trade_record.seller = sell_order.seller;
+    trade_record.buyer = buy_order.buyer;
     trade_record.amount = actual_match_amount;
     trade_record.price_per_kwh = clearing_price;
+    // Discovery-path total_value: raw amount·price (NO /1e9), informational only —
+    // same scale as match_orders. See events.rs::OrderMatched for the dual-scale contract.
+    trade_record.total_value = actual_match_amount.saturating_mul(clearing_price);
+    trade_record.fee_amount = 0;
     trade_record.executed_at = clock.unix_timestamp;
 
     emit!(crate::events::OrderMatched {
