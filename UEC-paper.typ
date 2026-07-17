@@ -1015,6 +1015,48 @@ Seller net proceeds, with feasibility $F_m + C_"net" <= V$ enforced
 
 $ N_"seller" = V - F_m - C_"net" $ <eq-net>
 
+*Net proceeds under each price rule.* Applying @eq-value–@eq-net to the four
+price rules of Table 6 makes the take-home difference concrete. The buyer's
+escrow debit is the gross value $V = q p^*$ and splits into seller proceeds plus
+the fee/wheeling/loss collectors (the on-chain conservation identity of §11.12),
+so the buyer's delivered cost per kWh is $p^*$ while the network charges reduce
+the *seller's* net. Table 7 evaluates a $q = 10$ kWh intra-zone match under
+representative charges — market fee $phi_m = 25$ bps (the on-chain default,
+`initialize_market.rs:23`), wheeling $w = 0$ (intra-zone), and loss
+$ell = 100$ bps — so the combined deduction is a flat $1.25%$ of $V$.
+
+#figure(
+  caption: [Seller net proceeds and buyer cost under each price rule, for a
+    $q = 10$ kWh intra-zone match with $phi_m = 25$ bps, $w = 0$, $ell = 100$ bps
+    (deduction $= 1.25%$ of $V$; @eq-value–@eq-net). Buyer cost per kWh is $p^*$
+    (the charges are carved out of the seller side, §11.12). The feed-in row is a
+    non-market baseline: the seller is paid $p_"fit"$ by a single off-taker with
+    no P2P charges. Premium is seller net per kWh over the feed-in rate.],
+  table(
+    columns: (auto, auto, auto, auto, auto, auto),
+    align: (left, center, right, right, right, right),
+    table.header(
+      [*Price rule*], [*$p^*$ (฿/kWh)*], [*$V$ (฿)*], [*fee+loss (฿)*],
+      [*seller net (฿/kWh)*], [*vs feed-in*],
+    ),
+    [CDA on-chain ($p^* = p_s$)], [3.00], [30.00], [0.375], [2.9625], [+34.7%],
+    [Uniform-price epoch ($p_c$)], [3.40], [34.00], [0.425], [3.3575], [+52.6%],
+    [Off-chain midpoint], [3.50], [35.00], [0.4375], [3.4563], [+57.1%],
+    [Feed-in tariff (baseline)], [2.20], [—], [—], [2.2000], [—],
+  ),
+) <tab-net-proceeds>
+
+Two points follow. First, because the deduction is a fixed fraction of $V$ and
+$V$ is monotone in $p^*$, the ranking of seller net across rules is identical to
+the ranking of $p^*$ itself: the price rule chosen sets the seller's take-home,
+and the charges scale it uniformly rather than reordering it. Second, every
+market rule clears the feed-in baseline by a wide margin — the most
+buyer-favourable rule (CDA on-chain) still nets the seller 2.96 ฿/kWh after
+charges, a 34.7% premium over the 2.20 ฿/kWh export rate, and the midpoint rule
+57.1% — so the on-chain charge load (1.25% here, capped at 20% by @eq-cap) is
+small against the gains-from-trade the market unlocks relative to selling to a
+single off-taker.
+
 == 11.4 Treasury peg (GRX $arrow.l.r$ THBG)
 
 Swap GRX $arrow.r$ THBG, divisor $D_G = 10^9$ atoms/whole-GRX
