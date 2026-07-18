@@ -69,22 +69,20 @@ pub fn mint_tokens_direct(ctx: Context<MintTokensDirect>, amount: u64) -> Result
 
     require!(is_admin || is_registry, EnergyTokenError::UnauthorizedAuthority);
 
-    // REC Validator co-signature: when validators are registered, one must sign.
-    // This proves the minted energy has a corresponding Renewable Energy Certificate.
-    if token_info.rec_validators_count > 0 {
+    // REC Validator co-signature: an ADMIN mint must be co-signed by a registered
+    // REC validator — it represents energy provenance, so a human authority can
+    // never mint un-RECed tokens (and cannot mint at all while the validator set
+    // is empty). Registry-program CPIs (claim_airdrop / settle_and_mint_tokens,
+    // which sign as the registry PDA) are exempt: those are protocol mints with
+    // their own on-chain guards (claim flag, settlement validation), not
+    // energy-generation claims, and they pass the registry PDA as a rec_validator
+    // placeholder that can never be in the list.
+    if !is_registry {
         require!(
-            rec_validator_registered(&token_info, &ctx.accounts.rec_validator.key()),
+            token_info.rec_validators_count > 0
+                && rec_validator_registered(&token_info, &ctx.accounts.rec_validator.key()),
             EnergyTokenError::RecValidatorNotFound
         );
-    } else {
-        // No REC validators registered yet — the co-sign gate cannot be satisfied.
-        // This window exists only for the registry's bootstrap mints (claim_airdrop /
-        // settle_and_mint_tokens, which CPI in as the registry PDA). A HUMAN admin must
-        // NOT be able to mint un-RECed tokens just because the validator set happens to
-        // be empty, so restrict the skip to the registry caller. Closes the count==0
-        // REC-bypass on the admin path (unlike mint_to_wallet/mint_generation, which
-        // reject at count==0 outright; this keeps the registry bootstrap path working).
-        require!(is_registry, EnergyTokenError::RecValidatorNotFound);
     }
 
     drop(token_info);
