@@ -13,9 +13,9 @@ pub use crate::error::TradingError;
 #[allow(ambiguous_glob_reexports)]
 pub use crate::instructions::*;
 pub use crate::state::{
-    BatchConfig, BatchInfo, Market, MarketShard, Order, OrderNullifier, OrderStatus, OrderType,
-    PriceLevel, PricePoint, TariffConfig, TradeNullifier, TradeRecord, ZoneCapacity, ZoneMarket,
-    ZoneMarketShard, ZoneConfig, MAX_DEPTH_LEVELS,
+    BalanceProof, BatchConfig, BatchInfo, Market, MarketShard, Order, OrderNullifier, OrderStatus,
+    OrderType, PriceLevel, PricePoint, TariffConfig, TradeNullifier, TradeRecord, ZoneCapacity,
+    ZoneMarket, ZoneMarketShard, ZoneConfig, MAX_DEPTH_LEVELS,
 };
 pub use crate::utils::get_governance_config;
 pub use governance::{ErcCertificate, ErcStatus, GovernanceConfig};

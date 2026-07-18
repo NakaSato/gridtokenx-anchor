@@ -1,17 +1,8 @@
 use crate::error::TradingError;
-use crate::state::{PrivacyNullifier, PrivateBalance};
+use crate::state::{BalanceProof, PrivacyNullifier, PrivateBalance};
 use crate::zk_verify;
 use anchor_lang::prelude::*;
 use solana_curve25519::ristretto::{add_ristretto, PodRistrettoPoint};
-
-/// Okamoto proof of knowledge of the amount commitment's opening.
-/// `challenge` = c, `response` = z_v ‖ z_r. Produced by wasm-zk
-/// `create_transfer_proof`; verified by `zk_verify::verify_balance_proof`.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct BalanceProof {
-    pub challenge: [u8; 32],
-    pub response: [u8; 64],
-}
 
 #[derive(Accounts)]
 #[instruction(nullifier: [u8; 32])]

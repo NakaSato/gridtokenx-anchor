@@ -73,29 +73,29 @@ proof is a single-commitment `BatchedRangeProofU64` over `C_new`, verified via
 
 ## 4. Private Transfer — hidden amount
 
-`private_transfer` (`lib.rs:229` → `instructions/private_transfer.rs:76`) moves a
+`private_transfer` (`lib.rs:229` → `instructions/private_transfer.rs:67`) moves a
 hidden `amount` from sender to recipient. The sender's balance `C_old` splits
 into an amount commitment `C_amt` and the sender's new commitment `C_new`, with
 blindings chosen so `C_old = C_amt + C_new`. The handler enforces three things:
 
-1. **Conservation** — `verify_conservation` (`private_transfer.rs:87`,
+1. **Conservation** — `verify_conservation` (`private_transfer.rs:78`,
    `zk_verify.rs:90`) checks `C_old == C_amt + C_new` as ristretto points (via the
    `sol_curve25519` syscalls). Because Pedersen commitments are additively
    homomorphic and binding, this single identity forces
    `value(C_old) = value(C_amt) + value(C_new)` (mod l): no value is created.
    `C_old` is read from the *current* stored commitment, so a replayed proof fails
    after the first transfer updates it.
-2. **Balance proof** — `verify_balance_proof` (`private_transfer.rs:92`,
+2. **Balance proof** — `verify_balance_proof` (`private_transfer.rs:83`,
    `zk_verify.rs:102`) checks a Fiat–Shamir **Okamoto proof of knowledge** of the
    opening of `C_amt` (challenge domain `GridTokenX_BalanceProof_v1`,
    `okamoto_challenge`, `zk_verify.rs:60`). This is the field that previously
    shipped as all-zeros; a zeroed proof now fails.
-3. **Range proofs** — `verify_range_context` (`private_transfer.rs:111`,
+3. **Range proofs** — `verify_range_context` (`private_transfer.rs:102`,
    `zk_verify.rs:171`) validates a `BatchedRangeProofU128` context (both `C_amt`
    and `C_new` proven to 64-bit range), closing the underflow hole.
 
 The recipient is credited homomorphically (`recipient.commitment += C_amt`). A
-`recipient != sender` constraint (`private_transfer.rs:56`) prevents a
+`recipient != sender` constraint (`private_transfer.rs:47`) prevents a
 self-transfer double-write (Anchor also rejects it via
 `ConstraintDuplicateMutableAccount`; this is defense-in-depth).
 
