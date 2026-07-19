@@ -144,6 +144,13 @@ describe("price models (litesvm) — comparative prosumer economics on one book"
     data.writeBigUInt64LE(BigInt(min), 88);
     data.writeBigUInt64LE(BigInt(max), 96);
     svm.setAccount(marketPda, { ...acc, data } as any);
+    // Guard the blind byte-poke: decode through the IDL and require the patch
+    // to have landed in min/max_price. A Market layout shift would otherwise
+    // corrupt an unrelated field silently while the tests kept passing.
+    const m = trading.coder.accounts.decode(
+      "market", Buffer.from(svm.getAccount(marketPda)!.data));
+    expect(m.minPricePerKwh.toNumber(), "patchBand offset drift (min_price_per_kwh)").to.eq(min);
+    expect(m.maxPricePerKwh.toNumber(), "patchBand offset drift (max_price_per_kwh)").to.eq(max);
   }
 
   async function installConfig(): Promise<PublicKey> {
