@@ -1499,6 +1499,54 @@ client-side wall-clock rate is lower and noisier — 2.3–22.9 TPS over the sam
 runs — because it folds in confirmation-poll latency; the slot-density figure
 is the machine-level throughput and the one reported here.)
 
+*Market-mechanism comparison on physically modelled fleets.* Finally, we drove
+the three price rules as complete market mechanisms — not merely as settlement
+price choices — over the four physically modelled datasets of @sec-datasets
+(80–760 meters, 30 days, 5 kWh/day export cap, schema v2), against the live
+validator (`scripts/run-price-models-onchain.sh`). For each fleet and simulated
+day the capped tradeable surplus is offered as four ask-ladder tranches at
+3.00/3.15/3.30/3.45 THBC/kWh; the uniform rule executes on-chain through
+`clear_auction` (clearing price read back from the zone market), the CDA rule
+through `create_sell_order`/`create_buy_order`/`match_orders` (one
+`TradeRecord` per tranche, each priced at its ask), and the buyback baseline
+pays the flat 2.20 THBC/kWh feed-in rate. Net proceeds apply the experiment
+tariff of @eq-value–@eq-net: market fee 25 bps, loss 5 bps, and a flat
+wheeling charge of 1.15 THBC/kWh. An independent verifier re-reads the chain
+state and recomputes every figure (7 checks per case); all four cases pass
+28/28 checks, and the traded volume equals each dataset's capped surplus
+exactly — 1,734.5, 3,293.3, 7,935.6, and 15,745.8 kWh — confirming the replay
+consumed the attested telemetry, not a synthetic book.
+
+#figure(
+  caption: [Seller net proceeds per kWh under each market mechanism, measured
+    on-chain across all four physically modelled fleets (30 days, 5 kWh/day
+    export cap; experiment tariff $phi_m = 25$ bps, $ell = 5$ bps,
+    $w = 1.15$ ฿/kWh). The per-kWh figures are fleet-size invariant because
+    the ask ladder and tariff are fixed; only volume scales. Verifier: 7
+    checks × 4 cases, 28/28 green.],
+  table(
+    columns: (auto, auto, auto, auto),
+    align: (left, right, right, left),
+    table.header([*Mechanism*], [*Gross ฿/kWh*], [*Net ฿/kWh*], [*Pricing*]),
+    [Uniform-price epoch], [3.450], [2.290], [marginal ask at max crossing],
+    [Buyback (feed-in baseline)], [2.200], [2.200], [flat rate, no P2P charges],
+    [CDA on-chain], [3.225 (avg)], [2.065], [each tranche at its own ask],
+  ),
+) <tab-mechanism-fleets>
+
+The measurement adds one empirical nuance to the analytic ranking of
+@tab-net-proceeds: on *gross* proceeds the market rules dominate as before
+(uniform 3.45 > CDA 3.225 > buyback 2.20 ฿/kWh), but under this tariff's flat
+1.15 ฿/kWh wheeling charge — which the feed-in baseline does not pay — the CDA
+rule's *net* falls below the buyback rate (2.065 < 2.200), while the uniform
+rule stays above it (2.290). The inter-market ordering of @sec-price is
+unaffected (the flat charge shifts every market rule equally), but whether P2P
+trading beats the regulated feed-in rate *net of charges* depends directly on
+the wheeling tariff: the buyer-favourable CDA rule loses to the baseline once
+wheeling exceeds the rule's gross premium over feed-in. Wheeling policy is
+therefore not a neutral cost-recovery knob — it sets the participation
+threshold for the most buyer-favourable market designs.
+
 = Discussion and Limitations <sec-discussion>
 
 The measurements support the central design claim of @sec-exec: partitioning
