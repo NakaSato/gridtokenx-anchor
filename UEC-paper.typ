@@ -730,7 +730,8 @@ month of a physically modelled community against a live validator and drove
 every stage of the token lifecycle from the resulting data
 (`scripts/bench-community-month.ts`). The input is not synthetic in the sense
 of §9.3: it is produced by the platform's smart-meter simulator
-(`gridtokenx-smartmeter-simulator`, seeded solar-irradiance and load models),
+(`gridtokenx-smartmeter-simulator`, seeded solar-irradiance and load models;
+generation pipeline detailed in §11.13),
 which generates an 80-meter fleet containing 12 solar prosumers and 68
 consumers, sampled at the production cadence of 96 fifteen-minute intervals per
 day for 30 days — 230,400 readings totalling 15,868.5 kWh generated, 144,879.8
@@ -1452,7 +1453,60 @@ entirely in the canonical run ($delta = 0$; the only non-confirmed submissions
 are the 919 deliberate anomaly rejections, $nu = 0.40%$).
 
 Harness: `scripts/bench-community-month.ts` (dataset exporter runs against the
-smart-meter simulator's Python API); canonical artifact
+smart-meter simulator's Python API; generation pipeline in §11.13); canonical
+artifact
 `test-results/community-month-80m-12p-2026-07-07T16-45-40-924Z.{json,md}`,
 audited run `…T17-18-23-134Z`, summarised in
 #link("BENCHMARKS.md")[`BENCHMARKS.md`] §11.
+
+== 11.13 Dataset generation: seeded full-physics telemetry export
+
+Every physically modelled dataset consumed by the replay harnesses — the
+community month of §9.4 and the scale-sweep fleets under
+`test-results/datasets/scale-*` — is produced by one offline exporter,
+`experiments/export_bench_dataset.py` in the smart-meter simulator
+(`gridtokenx-smartmeter-simulator/backend`). The exporter runs the simulator's
+`SimulationEngine` at maximum speed against the full GLM grid model
+(`grid_bus_network.glm`): per-meter load and solar device models, AC power
+flow, line losses, transformer tap control, and frequency droop. All telemetry
+egress and persistence sinks (DLMS, InfluxDB, PostGIS) are forced off so the
+loop is pure CPU, and the simulated window is placed wholly in the past so the
+oracle's future-timestamp guard admits a back-to-back replay (§9.4).
+
+*Determinism.* A single `--seed` drives four independent draws, making the
+dataset a pure function of its command line: (i) fleet synthesis — meter UUIDs,
+base load/generation profiles, and solar efficiencies come from the globally
+seeded RNG; (ii) prosumer selection — the generator's stochastic
+type-ratio path is disabled and an *exact* prosumer count $P$ is imposed by a
+seeded sample (`seed ^ 0x50F7`), the remaining $N - P$ meters becoming pure
+consumers; (iii) solar sizing — each prosumer's capacity is drawn uniformly
+from 5–15 kW#sub[p] by a second derived stream (`seed ^ 0x50A2`); and (iv)
+weather — one condition per simulated day from the seeded weighted draw (a
+`--weather` flag can pin every day to one condition to isolate the load/PV
+signal from weather variance). Meters receive deterministic on-chain
+identifiers `SIM<seed>-<i>`, sized to the oracle's 32-byte PDA-seed limit.
+
+*Export cap.* A `--max-daily-export` $c$ (the `-cap`$c$ dataset variants)
+models a regulated feed-in limit: per meter and day, generation is curtailed
+*before* any accumulation so that cumulative feed-in
+$sum max(0, g - c_"cons")$ never exceeds $c$ kWh/day. Because the curtailed
+value is what enters the reading, the daily totals, and the fleet energy sums
+alike, the conservation self-checks of §11.12 hold by construction; the total
+curtailed energy is reported in the dataset metadata. A `--grid-solve-stride`
+knob sets the power-flow cadence (solve every $k$-th tick; $0$ = never solve,
+buses held at nominal 1.0 pu) — device and weather models still drive the
+energy signal, so large fleets can trade voltage fidelity for generation speed.
+
+*Schema.* Each run writes the four-file schema the replayers consume:
+`meters.json` (fleet roster: index, chain id, type, solar capacity);
+`readings.jsonl` (one line per reading `{m, t, g, c}` with energies in integer
+watt-hours — the atomic unit the oracle stores); `daily.json` (per-day,
+per-meter generated/consumed/surplus in kWh); and `meta.json`, which records
+the energy totals, per-day weather, per-day grid-physics aggregates (losses,
+transformer peak loading and tap range, frequency and voltage envelopes), the
+SHA-256 of the readings file, and the exact generating `argv`. The metadata
+therefore makes every dataset self-describing and bit-reproducible: re-running
+the recorded command line regenerates a byte-identical `readings.jsonl`, and
+the embedded hash lets any consumer verify it holds the canonical input. The
+scale family spans 80 meters/12 prosumers through 760 meters/114 prosumers at
+seed 42, in 7- and 30-day horizons, with and without the 5 kWh export cap.
