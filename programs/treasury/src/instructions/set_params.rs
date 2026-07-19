@@ -15,7 +15,7 @@ pub struct SetParams<'info> {
 /// authorized settlement recorder (the trading market_authority PDA).
 pub fn set_params(
     ctx: Context<SetParams>,
-    grx_per_thbg_rate: u64,
+    grx_per_thbc_rate: u64,
     swap_fee_bps: u16,
     attestation_ttl: i64,
     paused: bool,
@@ -25,7 +25,7 @@ pub fn set_params(
     let now = Clock::get()?.unix_timestamp;
     let mut t = ctx.accounts.treasury.load_mut()?;
     require!(t.authority == ctx.accounts.authority.key(), TreasuryError::UnauthorizedAuthority);
-    t.grx_per_thbg_rate = grx_per_thbg_rate;
+    t.grx_per_thbc_rate = grx_per_thbc_rate;
     t.swap_fee_bps = swap_fee_bps;
     t.attestation_ttl = attestation_ttl;
     t.paused = if paused { 1 } else { 0 };
@@ -33,7 +33,7 @@ pub fn set_params(
 
     emit!(ParamsUpdated {
         authority: ctx.accounts.authority.key(),
-        grx_per_thbg_rate,
+        grx_per_thbc_rate,
         swap_fee_bps,
         attestation_ttl,
         paused,

@@ -143,8 +143,8 @@ graph TD
 - **`trading → treasury` (optional, non-custodial)** — `record_settlement` fires **only when
   treasury accounts are passed** to `settle_offchain_match` / `batch_settle_offchain_match`.
   Authorized by the `settlement_recorder` signer = trading's `market_authority` PDA
-  (`invoke_signed`). For THBG markets it's **mandatory** — omitting treasury accounts when a
-  `settlement_thbg_mint` is set → `TreasurySettlementRequired` (no silent skip). Batch records
+  (`invoke_signed`). For THBC markets it's **mandatory** — omitting treasury accounts when a
+  `settlement_thbc_mint` is set → `TreasurySettlementRequired` (no silent skip). Batch records
   the whole batch with **one** CPI.
 - **`oracle → governance` — NOT a CPI invoke.** Oracle imports governance's **types + program
   ID only**; it *validates* an admitted aggregator's `AggregatorEntry` PDA (reads/derives it) to
@@ -166,8 +166,8 @@ graph TD
   the callee's context needs.
 - **CU blowout** → CPI spends the shared budget; batch settlement keeps it to one CPI for the
   whole batch to stay under budget (~80–92k CU/match; batch ≤4 by code, ~1/tx in practice).
-- **Assuming optional CPI is optional everywhere** → THBG markets *require* the treasury CPI;
-  the "optional" only holds for non-THBG currency.
+- **Assuming optional CPI is optional everywhere** → THBC markets *require* the treasury CPI;
+  the "optional" only holds for non-THBC currency.
 - **Confusing dependency with invoke** → `oracle→governance` is types-only. Don't add an
   `invoke` expecting governance to "run" — it doesn't.
 - **Stack/atomicity** → deep contexts + CPI can overflow BPF stack; if a tx fails inside a CPI,
@@ -184,5 +184,5 @@ can't gain signer/writable rights the outer tx didn't grant — depth caps at 4,
 reverts the whole tx on one shared CU budget. Anchor wraps it as `CpiContext::new` (→`invoke`) /
 `new_with_signer` (→`invoke_signed`) over generated `cpi` modules. This repo's acyclic graph:
 `registry→energy-token` (mint), `trading→governance` (authority), `trading→treasury`
-(optional/mandatory-for-THBG `record_settlement`, one CPI per batch), and `oracle→governance`
+(optional/mandatory-for-THBC `record_settlement`, one CPI per batch), and `oracle→governance`
 which is **types-only, not an invoke** — and registry's slash is a token transfer, not a CPI.

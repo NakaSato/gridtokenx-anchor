@@ -1,7 +1,7 @@
 [package]
 name = "treasury"
 version = "0.1.0"
-description = "Treasury program — GRX↔THBG (THB-pegged stablecoin) swap, staking, baht-denominated settlement"
+description = "Treasury program — GRX↔THBC (THB-pegged stablecoin) swap, staking, baht-denominated settlement"
 edition = "2021"
 
 [lib]

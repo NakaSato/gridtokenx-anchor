@@ -3,7 +3,7 @@ import { PublicKey, SystemProgram, SYSVAR_RENT_PUBKEY } from '@solana/web3.js';
 import { TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import BN from 'bn.js';
 
-// Initialize the Treasury program: config PDA, THBG mint, and the swap/stake/reward
+// Initialize the Treasury program: config PDA, THBC mint, and the swap/stake/reward
 // GRX vaults. The `settlement_recorder` is bound to the trading market_authority PDA
 // so only genuine trading settlements can advance the baht-settled counter.
 //
@@ -19,7 +19,7 @@ async function main() {
   const authority = provider.wallet;
 
   console.log('═══════════════════════════════════════════════════════════════');
-  console.log('  Initialize Treasury (GRX↔THBG swap, staking, baht settlement)');
+  console.log('  Initialize Treasury (GRX↔THBC swap, staking, baht settlement)');
   console.log('═══════════════════════════════════════════════════════════════');
 
   // GRX mint = energy-token program's canonical mint PDA ([b"mint_2022"]).
@@ -35,30 +35,30 @@ async function main() {
   );
 
   const [treasuryPda] = PublicKey.findProgramAddressSync([Buffer.from('treasury')], treasuryProgram.programId);
-  const [thbgMint] = PublicKey.findProgramAddressSync([Buffer.from('thbg_mint')], treasuryProgram.programId);
+  const [thbcMint] = PublicKey.findProgramAddressSync([Buffer.from('thbc_mint')], treasuryProgram.programId);
   const [swapVault] = PublicKey.findProgramAddressSync([Buffer.from('swap_vault')], treasuryProgram.programId);
   const [stakeVault] = PublicKey.findProgramAddressSync([Buffer.from('stake_vault')], treasuryProgram.programId);
   const [rewardVault] = PublicKey.findProgramAddressSync([Buffer.from('reward_vault')], treasuryProgram.programId);
   const [rebateVault] = PublicKey.findProgramAddressSync([Buffer.from('rebate_vault')], treasuryProgram.programId);
 
   console.log('  Treasury PDA   :', treasuryPda.toBase58());
-  console.log('  THBG mint      :', thbgMint.toBase58());
+  console.log('  THBC mint      :', thbcMint.toBase58());
   console.log('  GRX mint       :', grxMint.toBase58());
   console.log('  Recorder (PDA) :', marketAuthority.toBase58());
 
-  // Params: attestor = admin for dev; 4 THBG (6dp) per whole GRX; 0.25% fee; 1h TTL.
+  // Params: attestor = admin for dev; 4 THBC (6dp) per whole GRX; 0.25% fee; 1h TTL.
   const attestor = authority.publicKey;
-  const grxPerThbgRate = new BN(4_000_000); // 4.000000 THBG per 1 GRX
+  const grxPerThbcRate = new BN(4_000_000); // 4.000000 THBC per 1 GRX
   const swapFeeBps = 25;
   const attestationTtl = new BN(3600);
 
   try {
     const tx = await treasuryProgram.methods
-      .initialize(attestor, marketAuthority, grxPerThbgRate, swapFeeBps, attestationTtl)
+      .initialize(attestor, marketAuthority, grxPerThbcRate, swapFeeBps, attestationTtl)
       .accounts({
         treasury: treasuryPda,
         grxMint,
-        thbgMint,
+        thbcMint,
         swapVault,
         stakeVault,
         rewardVault,
@@ -123,8 +123,8 @@ async function main() {
     console.error('⚠️  set_slash_destination failed (is registry initialized?):', e.message);
   }
 
-  // Make baht-settlement recording MANDATORY for the THBG-denominated market: once
-  // set, settle_offchain_match / batch_settle_offchain_match reject THBG settlements
+  // Make baht-settlement recording MANDATORY for the THBC-denominated market: once
+  // set, settle_offchain_match / batch_settle_offchain_match reject THBC settlements
   // that don't pass the treasury accounts (no silent skip of the settled-value counter).
   const [marketPda] = PublicKey.findProgramAddressSync(
     [Buffer.from('market')],
@@ -132,19 +132,19 @@ async function main() {
   );
   try {
     const policyTx = await tradingProgram.methods
-      .setSettlementThbgMint(thbgMint)
+      .setSettlementThbcMint(thbcMint)
       .accounts({
         market: marketPda,
         authority: authority.publicKey,
       })
       .rpc();
-    console.log('✅ Market settlement THBG mint set (recording mandatory). TX:', policyTx);
+    console.log('✅ Market settlement THBC mint set (recording mandatory). TX:', policyTx);
   } catch (e: any) {
-    console.error('⚠️  set_settlement_thbg_mint failed (is the market initialized & are you its authority?):', e.message);
+    console.error('⚠️  set_settlement_thbc_mint failed (is the market initialized & are you its authority?):', e.message);
   }
 
   // Create the 16 settlement accumulator shards + per-shard fee/wheeling/loss
-  // collectors for the THBG settlement currency (§2c). The sharded batch-settle path
+  // collectors for the THBC settlement currency (§2c). The sharded batch-settle path
   // (batch_settle_offchain_match → record_settlement_sharded) writes BOTH per shard,
   // so both must exist before any sharded settle runs. Idempotent: each is gated by
   // `init`, so a re-run hits "already in use" per shard and is skipped. The unsharded
@@ -152,7 +152,7 @@ async function main() {
   const NUM_SETTLE_SHARDS = 16;
   const shardedCollectorPda = (prefix: string, shardId: number) =>
     PublicKey.findProgramAddressSync(
-      [Buffer.from(prefix), thbgMint.toBuffer(), Buffer.from([shardId])],
+      [Buffer.from(prefix), thbcMint.toBuffer(), Buffer.from([shardId])],
       tradingProgram.programId,
     )[0];
 
@@ -184,7 +184,7 @@ async function main() {
         .initializeShardedCollectors(s)
         .accounts({
           payer: authority.publicKey,
-          currencyMint: thbgMint,
+          currencyMint: thbcMint,
           feeCollector: shardedCollectorPda('fee_collector', s),
           wheelingCollector: shardedCollectorPda('wheeling_collector', s),
           lossCollector: shardedCollectorPda('loss_collector', s),
@@ -210,7 +210,7 @@ async function main() {
   console.log('   authority         :', t.authority.toBase58());
   console.log('   attestor          :', t.attestor.toBase58());
   console.log('   settlementRecorder:', t.settlementRecorder.toBase58());
-  console.log('   grxPerThbgRate    :', t.grxPerThbgRate.toString());
+  console.log('   grxPerThbcRate    :', t.grxPerThbcRate.toString());
   console.log('   swapFeeBps        :', t.swapFeeBps);
   console.log('   attestationTtl    :', t.attestationTtl.toString());
 }

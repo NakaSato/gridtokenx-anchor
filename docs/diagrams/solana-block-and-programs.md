@@ -71,7 +71,7 @@ graph TD
     GOV["governance<br/>PoA authority, ERC-1155 RECs, 2-step authority xfer"]
     ORA["oracle<br/>AMI gateway, per-meter PDA, 15-min clearing epochs"]
     TRD["trading<br/>order book + CDA, sharded submit, off-chain match settle"]
-    TRE["treasury<br/>GRX↔THBG swap, yield staking, baht settlement"]
+    TRE["treasury<br/>GRX↔THBC swap, yield staking, baht settlement"]
 
     REG -->|CPI| ET
     TRD -->|CPI| GOV

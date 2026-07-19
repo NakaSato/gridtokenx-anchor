@@ -16,9 +16,9 @@ pub enum TreasuryError {
     ZeroAmount,
     #[msg("Arithmetic overflow")]
     MathOverflow,
-    #[msg("Reserve attestation is stale — refresh before minting THBG")]
+    #[msg("Reserve attestation is stale — refresh before minting THBC")]
     StaleAttestation,
-    #[msg("Mint would breach the peg: outstanding THBG must not exceed attested THB reserve")]
+    #[msg("Mint would breach the peg: outstanding THBC must not exceed attested THB reserve")]
     PegBreach,
     #[msg("Swap/redeem rate is not configured")]
     RateNotSet,
@@ -28,7 +28,7 @@ pub enum TreasuryError {
     InsufficientRewardPool,
     #[msg("Swap vault has insufficient GRX collateral to satisfy the redemption")]
     InsufficientVault,
-    #[msg("Redeem amount exceeds outstanding THBG supply")]
+    #[msg("Redeem amount exceeds outstanding THBC supply")]
     SupplyUnderflow,
     #[msg("No stake to fund rewards against")]
     NoStakeToReward,

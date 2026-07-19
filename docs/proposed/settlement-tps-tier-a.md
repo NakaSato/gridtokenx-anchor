@@ -25,7 +25,7 @@ serialization for zero writes.
 | `zone_market` | `[zone_market, zone_id]` | all same-zone | **batch + single** |
 | `fee/wheeling/loss_collector` | `[..collector, mint]` | all same-currency (GLOBAL) | **single only** (`:293/302/311`) |
 | `fee/wheeling/loss_collector` | `[..collector, mint, shard_id]` | per shard | batch (`:394/403/412`) |
-| `treasury_state` (opt) | singleton | global when THBG | both |
+| `treasury_state` (opt) | singleton | global when THBC | both |
 | nullifiers / escrows / `market_shard` / `zone_shard` | per user/order/payer-shard | distinct | both |
 
 **Conclusion:**
@@ -46,7 +46,7 @@ showed `treasury_state` was a **dead write-lock** on the batch path: `SettleOffc
 declared it `#[account(mut)]`, but the batch records via `record_settlement_batch_sharded`, whose
 treasury account is **read-only** (the accumulator lives on the per-shard `settlement_shard`; only the
 recorder gate reads `treasury`). The trading handler only `.load()`s it. So `mut` write-locked the
-treasury singleton on every THBG batch settle with no writer. **Fixed** → `treasury_state` is now
+treasury singleton on every THBC batch settle with no writer. **Fixed** → `treasury_state` is now
 read-only in the batch context (the single `settle_offchain_match` path keeps `mut` — its
 `record_settlement` CPI writes the singleton). litesvm 217 passing. This removes one of the two
 empirical serializers; `zone_market` (below) is the remaining one — so a re-run should still be flat,
@@ -115,7 +115,7 @@ cross-zone up front), or (b) restructure the loop to accumulate the cross-zone f
 apply one write after — (a) is less invasive. Anchor contexts can't be generic, so the two
 instructions need two `#[derive(Accounts)]` structs (mut vs read-only zone_market) both calling
 the shared core fn. Because this rewrites the fund-moving settle loop, it needs VALIDATOR
-integration tests (escrow_settlement.ts / batch_settle_thbg.ts), not just litesvm — and the
+integration tests (escrow_settlement.ts / batch_settle_thbc.ts), not just litesvm — and the
 local validator is unstable under the bootstrap fixture (see settlement-tps memory). Do it as a
 focused task with a stable validator / CI, not as a tail-of-session change.
 
@@ -139,7 +139,7 @@ a free fn with ~15 params is error-prone and hard to verify byte-identical. Pref
   becomes reserved/dead (keep for layout, like the batch-builder fields).
 
 This is one instruction, no fund-loop duplication, and the read-only `zone_market` change is the
-whole win. Still needs validator regression (escrow_settlement.ts / batch_settle_thbg.ts) +
+whole win. Still needs validator regression (escrow_settlement.ts / batch_settle_thbc.ts) +
 the blockchain-core builder edit (intra → read-only zone_market, pass/omit zone_capacity).
 
 ### IMPLEMENTATION CONSTRAINT (proven 2026-06-28, step-2 attempt — reverted)
@@ -181,7 +181,7 @@ so they serialize on a shared-mut account. With shards spread, the only writable
 `zone_market` and `treasury_state`. A parallel path would land ~4×/slot at conc=4. This empirically
 confirms the static analysis: a per-settle shared-mut account is the throughput ceiling.
 
-**Caveat:** the bench settles in THBG, so `treasury_state` is also in the shared-mut set — the run
+**Caveat:** the bench settles in THBC, so `treasury_state` is also in the shared-mut set — the run
 cannot by itself separate `zone_market`'s contribution from `treasury_state`'s. Both are addressed
 by sharding (`treasury_state` recording is sharded via `SettlementShard`/`record_settlement_sharded`
 §2c; `zone_market` is this doc's Tier A). To attribute precisely, run once with treasury wiring
@@ -194,7 +194,7 @@ flat is already conclusive that a serializer binds.)
   not in the tx writable set) — proves the lock is gone.
 - intra variant: a cross-zone match is **rejected** (capacity-bypass guard).
 - existing `batch_settle_offchain_match`: unchanged (regression).
-- validator: extend `escrow_settlement.ts` / `batch_settle_thbg.ts` to exercise the intra path.
+- validator: extend `escrow_settlement.ts` / `batch_settle_thbc.ts` to exercise the intra path.
 
 ## Out of scope (follow-ups)
 - Single `settle_offchain_match` collector sharding (or deprecate in favor of batch).
@@ -205,7 +205,7 @@ flat is already conclusive that a serializer binds.)
 ## CAPSTONE RESULT (2026-06-28) — Tier-A implemented + measured
 Implemented across both repos (anchor PR #3: ZoneCapacity + both settle paths read-only;
 blockchain-core PR #1: builder emits zone_market read-only). Verified: litesvm 219, validator
-escrow_settlement 4/4 + batch_settle_thbg 2/2. TPS bench (fresh ledger, shard-spread):
+escrow_settlement 4/4 + batch_settle_thbc 2/2. TPS bench (fresh ledger, shard-spread):
 
 ```
             pre-Tier-A        post-Tier-A

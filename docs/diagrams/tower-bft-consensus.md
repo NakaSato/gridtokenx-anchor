@@ -131,7 +131,7 @@ The Anchor programs don't implement consensus — they **rely on its commitment 
 
 - **Settlement finality.** `settle_offchain_match` token movements are only safe to treat as
   final at `finalized`/rooted. Off-chain services reading settlement should pick a commitment
-  matching the value at risk (THBG settlement → `finalized`).
+  matching the value at risk (THBC settlement → `finalized`).
 - **`recent_blockhash` + forks.** A tx's blockhash names a slot; if that slot's fork loses, the
   tx may need resubmission. Idempotency (OrderNullifier in `off-chain-settlement.md`) makes retry
   safe.
@@ -150,4 +150,4 @@ fast and, once votes stack high enough, a slot is **rooted** (irreversible). Com
 expose this: `processed` < `confirmed` (optimistic supermajority, ~1-2 slots) < `finalized`
 (rooted, ~32 slots). PoH makes it cheap because validators vote on an already-ordered stream
 instead of negotiating order. This repo trusts those commitment levels — settlement should treat
-THBG value as final only at `finalized`, and OrderNullifier makes fork-loss retries idempotent.
+THBC value as final only at `finalized`, and OrderNullifier makes fork-loss retries idempotent.

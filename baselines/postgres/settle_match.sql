@@ -14,8 +14,8 @@
 \set nf     random(1, 2000000000)
 BEGIN;
 INSERT INTO baseline.nullifiers(id) VALUES (:nf);            -- replay guard (PK abort on reuse)
-UPDATE baseline.accounts SET thbg_balance = thbg_balance - 4000000 WHERE id = :buyer;
-UPDATE baseline.accounts SET thbg_balance = thbg_balance + 2838000 WHERE id = :seller;
+UPDATE baseline.accounts SET thbc_balance = thbc_balance - 4000000 WHERE id = :buyer;
+UPDATE baseline.accounts SET thbc_balance = thbc_balance + 2838000 WHERE id = :seller;
 UPDATE baseline.collectors SET balance = balance + 10000   WHERE kind = 'fee';
 UPDATE baseline.collectors SET balance = balance + 1150000 WHERE kind = 'wheeling';
 UPDATE baseline.collectors SET balance = balance + 2000    WHERE kind = 'loss';

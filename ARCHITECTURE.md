@@ -45,7 +45,7 @@ invariants, CPI, events, errors, testing — all `path:line`-cited):
 | `oracle` | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU` | AMI-gateway bridge; per-meter PDA state; 15-min market-clearing epochs; node-facing instructions accept the chain bridge **or** an admitted aggregator (`AggregatorEntry` validated against governance) |
 | `registry` | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7` | User + meter accounts; 16-shard counter; staking + validator registration + slashing (severity-scaled `slash_bps`, capped victim compensation `min(slash, proven_loss)`, remainder to the configured fund/`slash_destination`, `slash == comp + fund` invariant, partial-slash → `Suspended` / full → `Slashed`, Active validators only); unstake cooldown + validator demote-on-unstake; 10 GRX new-user airdrop |
 | `trading` | `CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX` | Order book + CDA; sharded order submit; off-chain-signed match settlement (`settle_offchain.rs`); batch settle records a per-`(zone,batch)` audit commitment to treasury via CPI; auction clearing |
-| `treasury` | `FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn` | GRX↔THBG (THB-pegged stablecoin, 6dp) swap with reserve-attested peg invariant; redeem bounded by `swap_vault` collateral + tracked supply; GRX staking (MasterChef accumulator); non-custodial baht-settlement accounting — `record_settlement` (single) + `record_settlement_batch` writing a per-`(zone,batch)` `SettlementRecord` (Merkle root + VAT + total) |
+| `treasury` | `FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn` | GRX↔THBC (THB-pegged stablecoin, 6dp) swap with reserve-attested peg invariant; redeem bounded by `swap_vault` collateral + tracked supply; GRX staking (MasterChef accumulator); non-custodial baht-settlement accounting — `record_settlement` (single) + `record_settlement_batch` writing a per-`(zone,batch)` `SettlementRecord` (Merkle root + VAT + total) |
 
 ### Benchmark (not part of the production protocol)
 
@@ -69,7 +69,7 @@ Cross-program invocation via path deps with `features = ["cpi"]`:
 ```
 registry → energy-token        (airdrop / mint on registration)
 trading  → governance          (read PoA config, ERC certificates)
-trading  → treasury            (record_settlement / record_settlement_batch; non-custodial, fires when treasury accounts are passed — mandatory for THBG markets)
+trading  → treasury            (record_settlement / record_settlement_batch; non-custodial, fires when treasury accounts are passed — mandatory for THBC markets)
 oracle   → governance          (types + ID only, no CPI invoke: validate an admitted aggregator's `AggregatorEntry` PDA)
 ```
 
@@ -168,7 +168,7 @@ bootstrap.ts → init-registry.ts → init-oracle.ts → init-market.ts
 | [`docs/design/node-validator.md`](docs/design/node-validator.md) | Off-chain validator/aggregator node design: PoA admission, the governance aggregator allow-list, and how the oracle authorizes admitted nodes |
 | [`docs/design/role-map.md`](docs/design/role-map.md) | **PROPOSED (design correction):** maps the on-chain authority scheme onto Thailand's real institutions (ERC regulator vs EGAT/MEA/PEA operators vs licensed aggregators) — flags where current bindings mis-map and the `path:line` code deltas to fix. Companion to [`node-validator.md`](docs/design/node-validator.md) + [`../proposed/blockchain-node-network.md`](docs/proposed/blockchain-node-network.md) |
 | [`docs/design/audit-remediation.md`](docs/design/audit-remediation.md) | **IN PROGRESS:** security/audit remediation tracker — Wave-0 enforcement fixes (validator bond, slash-escape, settlement gate, charge cap, REC mandatory) + follow-ups, each with verification status, plus remaining structural items and their blast radius. Companion to [`role-map.md`](docs/design/role-map.md) |
-| [`docs/design/trading-cda.md`](docs/design/trading-cda.md) | Trading order book, CDA + off-chain-signed settlement, nullifier replay guard, sharding, THBG settlement policy. Companion to [`docs/programs/trading.md`](docs/programs/trading.md) |
+| [`docs/design/trading-cda.md`](docs/design/trading-cda.md) | Trading order book, CDA + off-chain-signed settlement, nullifier replay guard, sharding, THBC settlement policy. Companion to [`docs/programs/trading.md`](docs/programs/trading.md) |
 | [`docs/design/shielded-transfer.md`](docs/design/shielded-transfer.md) | **🔒 FEATURE-GATED (`privacy`), not enabled:** confidential-balance subsystem — Pedersen-commitment shielded balances, shield/unshield public boundary, hidden-amount `private_transfer` (conservation + Okamoto balance PoK + bulletproof range proofs via the ZK ElGamal Proof Program). Validated end-to-end on localnet. Companion to [`docs/programs/trading.md`](docs/programs/trading.md) |
 | [`docs/design/rec-certificates.md`](docs/design/rec-certificates.md) | REC/ERC certificate lifecycle (issue/validate/transfer/revoke) + energy-token REC-validator mint gating. Companion to [`docs/programs/governance.md`](docs/programs/governance.md) + [`energy-token.md`](docs/programs/energy-token.md) |
 | [`docs/design/dao-governance.md`](docs/design/dao-governance.md) | Generation-weighted DAO (proposal/vote/execute) + PoA 2-step authority transfer. Companion to [`docs/programs/governance.md`](docs/programs/governance.md) |
@@ -180,5 +180,5 @@ bootstrap.ts → init-registry.ts → init-oracle.ts → init-market.ts
 | File | Covers |
 | :--- | :--- |
 | [`docs/proposed/blockchain-node-network.md`](docs/proposed/blockchain-node-network.md) | **Network + audit commitment real, trustless Tier-2 PROPOSED:** permissioned-Solana node taxonomy + two-tier consensus; per-`(zone,batch)` `SettlementRecord` (Merkle root + VAT) is built (commit-only), but on-chain root *verification* / challenge-response is not — see banner |
-| [`docs/proposed/collateral-slashing.md`](docs/proposed/collateral-slashing.md) | **Slash distribution IMPLEMENTED, rest PROPOSED:** severity-scaled slash + capped victim comp + fund + Suspended/Slashed are in code (GRX bond per D1); THBG bond, multi-victim pro-rata, distinct fund PDA, and trustless challenge remain forward design — see banner |
+| [`docs/proposed/collateral-slashing.md`](docs/proposed/collateral-slashing.md) | **Slash distribution IMPLEMENTED, rest PROPOSED:** severity-scaled slash + capped victim comp + fund + Suspended/Slashed are in code (GRX bond per D1); THBC bond, multi-victim pro-rata, distinct fund PDA, and trustless challenge remain forward design — see banner |
 | [`docs/proposed/implementation-plan.md`](docs/proposed/implementation-plan.md) | Phased plan + todo/test lists to close the PROPOSED design→code gap (settlement commitment, challenge-response, slash rework) |

@@ -7,10 +7,10 @@ How price is formed, bounded, and settled across the on-chain programs. Verified
 There are **three independent price surfaces**, and they do **not** feed each other on-chain:
 
 1. **Energy trading price** (`trading`) — a per-kWh limit price discovered by matching bids and asks. This is the actual "market price" of energy.
-2. **Treasury swap rate** (`treasury`) — a fixed, admin-set GRX↔THBG conversion rate that turns settled value into THB-pegged stablecoin. It is a *conversion rate*, not a discovered price.
+2. **Treasury swap rate** (`treasury`) — a fixed, admin-set GRX↔THBC conversion rate that turns settled value into THB-pegged stablecoin. It is a *conversion rate*, not a discovered price.
 3. **Oracle "clearing"** (`oracle`) — despite the name, carries **no price at all**. It validates/accumulates energy quantities and stamps 15-minute epochs. Price discovery is not done here.
 
-The common unit that ties them together: `price_per_kwh` is expressed in **6-decimal currency base units** (e.g. `3_400_000` = 3.40 THB/kWh), and settlement ultimately denominates in **THBG** (THB-pegged, 6 decimals).
+The common unit that ties them together: `price_per_kwh` is expressed in **6-decimal currency base units** (e.g. `3_400_000` = 3.40 THB/kWh), and settlement ultimately denominates in **THBC** (THB-pegged, 6 decimals).
 
 ---
 
@@ -65,22 +65,22 @@ Persisted price state: `Market.last_clearing_price`, `ZoneMarketShard.last_clear
 
 ## 2. Treasury swap rate (value → THB-pegged stablecoin)
 
-This is a **conversion rate, not a discovered price**. GRX = 9 decimals, THBG = 6 decimals. `grx_per_thbg_rate` = THBG minor units per 1 whole GRX (`state.rs:41`).
+This is a **conversion rate, not a discovered price**. GRX = 9 decimals, THBC = 6 decimals. `grx_per_thbc_rate` = THBC minor units per 1 whole GRX (`state.rs:41`).
 
-**Swap** (`compute_swap_grx_for_thbg`, `lib.rs:62-88`):
+**Swap** (`compute_swap_grx_for_thbc`, `lib.rs:62-88`):
 
 ```
 gross = grx_in * rate / 1e9
 fee   = gross * fee_bps / 10_000
-net   = gross - fee                       // thbg_out
-require!(thbg_supply + net <= attested_reserve, PegBreach)
+net   = gross - fee                       // thbc_out
+require!(thbc_supply + net <= attested_reserve, PegBreach)
 ```
 
-**Redeem** (`compute_redeem_thbg_for_grx`, `lib.rs:95-113`) — inverse, no fee, with two collateral guards:
+**Redeem** (`compute_redeem_thbc_for_grx`, `lib.rs:95-113`) — inverse, no fee, with two collateral guards:
 
 ```
-require!(thbg_in <= thbg_supply, SupplyUnderflow)
-grx_out = thbg_in * 1e9 / rate
+require!(thbc_in <= thbc_supply, SupplyUnderflow)
+grx_out = thbc_in * 1e9 / rate
 require!(grx_out <= swap_vault.amount, InsufficientVault)
 ```
 
@@ -88,9 +88,9 @@ The guards guarantee a `set_params` rate change can never let a redeemer drain m
 
 ### The peg is administrative, not market-derived
 
-The rate is a plain field set by the treasury `authority` in `set_params` (`lib.rs:318-348`) — there is no AMM, oracle, or pricing curve. The peg is held by a separate mechanism: an off-chain **custodian** (`attestor`, a distinct key) posts `attested_reserve` via `update_attestation`, and minting is gated by (1) freshness `now − attestation_ts ≤ attestation_ttl` (`StaleAttestation`) and (2) the supply ceiling `thbg_supply + minted ≤ attested_reserve` (`PegBreach`). Staked GRX lives in its own vault and never backs the peg.
+The rate is a plain field set by the treasury `authority` in `set_params` (`lib.rs:318-348`) — there is no AMM, oracle, or pricing curve. The peg is held by a separate mechanism: an off-chain **custodian** (`attestor`, a distinct key) posts `attested_reserve` via `update_attestation`, and minting is gated by (1) freshness `now − attestation_ts ≤ attestation_ttl` (`StaleAttestation`) and (2) the supply ceiling `thbc_supply + minted ≤ attested_reserve` (`PegBreach`). Staked GRX lives in its own vault and never backs the peg.
 
-Fee model: a single `swap_fee_bps` applied only to swap output; not charged on redeem, not routed to any vault — it simply reduces THBG minted, tightening the peg.
+Fee model: a single `swap_fee_bps` applied only to swap output; not charged on redeem, not routed to any vault — it simply reduces THBC minted, tightening the peg.
 
 ---
 
@@ -118,14 +118,14 @@ buyers/sellers ─▶ trading order book
                     │ off-chain matcher picks match_price ∈ [ask, bid]
                     ▼
              settle_offchain_match
-                    │ total_value = match_amount × match_price / 1e9   (6-dec currency = THBG)
-                    ▼ (mandatory CPI when market currency == THBG)
-             treasury::record_settlement   ── bumps total_settled_thbg (accounting only)
+                    │ total_value = match_amount × match_price / 1e9   (6-dec currency = THBC)
+                    ▼ (mandatory CPI when market currency == THBC)
+             treasury::record_settlement   ── bumps total_settled_thbc (accounting only)
 
-GRX holders ─▶ treasury swap/redeem   (fixed admin rate, peg-gated) ─▶ THBG
+GRX holders ─▶ treasury swap/redeem   (fixed admin rate, peg-gated) ─▶ THBC
 ```
 
-Price discovery happens **only** in trading, off-chain, bounded on-chain by signed limit orders. Treasury converts settled value into pegged THBG at an administrative rate. The oracle is a quantity/quality anchor with a misleading "clearing" name.
+Price discovery happens **only** in trading, off-chain, bounded on-chain by signed limit orders. Treasury converts settled value into pegged THBC at an administrative rate. The oracle is a quantity/quality anchor with a misleading "clearing" name.
 
 ## Open questions / risks for whoever owns pricing
 

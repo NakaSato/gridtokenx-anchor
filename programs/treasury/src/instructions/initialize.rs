@@ -20,17 +20,17 @@ pub struct Initialize<'info> {
     /// GRX SPL mint (owned by the energy-token program).
     pub grx_mint: Box<InterfaceAccount<'info, MintInterface>>,
 
-    /// THBG stablecoin mint, created here with the treasury PDA as mint authority.
+    /// THBC stablecoin mint, created here with the treasury PDA as mint authority.
     #[account(
         init,
         payer = authority,
-        seeds = [b"thbg_mint"],
+        seeds = [b"thbc_mint"],
         bump,
-        mint::decimals = THBG_DECIMALS,
+        mint::decimals = THBC_DECIMALS,
         mint::authority = treasury,
         mint::token_program = token_program,
     )]
-    pub thbg_mint: Box<InterfaceAccount<'info, MintInterface>>,
+    pub thbc_mint: Box<InterfaceAccount<'info, MintInterface>>,
 
     /// GRX received from swaps (peg collateral source for redemptions).
     #[account(
@@ -76,13 +76,13 @@ pub struct Initialize<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-/// Bootstrap the treasury: config PDA, the THBG mint (authority = treasury PDA),
+/// Bootstrap the treasury: config PDA, the THBC mint (authority = treasury PDA),
 /// and the three GRX vaults (swap collateral, stake custody, reward pool).
 pub fn initialize(
     ctx: Context<Initialize>,
     attestor: Pubkey,
     settlement_recorder: Pubkey,
-    grx_per_thbg_rate: u64,
+    grx_per_thbc_rate: u64,
     swap_fee_bps: u16,
     attestation_ttl: i64,
 ) -> Result<()> {
@@ -93,21 +93,21 @@ pub fn initialize(
     t.authority = ctx.accounts.authority.key();
     t.attestor = attestor;
     t.grx_mint = ctx.accounts.grx_mint.key();
-    t.thbg_mint = ctx.accounts.thbg_mint.key();
+    t.thbc_mint = ctx.accounts.thbc_mint.key();
     t.settlement_recorder = settlement_recorder;
     t.attested_reserve = 0;
     t.attestation_ts = 0;
     t.attestation_ttl = attestation_ttl;
-    t.thbg_supply = 0;
-    t.grx_per_thbg_rate = grx_per_thbg_rate;
+    t.thbc_supply = 0;
+    t.grx_per_thbc_rate = grx_per_thbc_rate;
     t.total_staked = 0;
     t.reward_pool = 0;
     t.created_at = now;
-    t.total_settled_thbg = 0;
+    t.total_settled_thbc = 0;
     t.swap_fee_bps = swap_fee_bps;
     t.paused = 0;
     t.bump = ctx.bumps.treasury;
-    t.thbg_mint_bump = ctx.bumps.thbg_mint;
+    t.thbc_mint_bump = ctx.bumps.thbc_mint;
     t.swap_vault_bump = ctx.bumps.swap_vault;
     t.stake_vault_bump = ctx.bumps.stake_vault;
     t.reward_vault_bump = ctx.bumps.reward_vault;

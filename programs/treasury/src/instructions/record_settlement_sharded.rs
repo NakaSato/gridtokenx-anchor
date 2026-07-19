@@ -21,7 +21,7 @@ pub struct RecordSettlementSharded<'info> {
 }
 
 /// Parallel-friendly variant of `record_settlement`: bumps the per-shard
-/// accumulator for `shard_id` instead of the global `total_settled_thbg`, so
+/// accumulator for `shard_id` instead of the global `total_settled_thbc`, so
 /// settles whose buyers fall on different shards don't write-lock one account.
 /// `treasury` is read-only here (recorder gate only) — read locks are shared
 /// across parallel txs, so it does not serialize. The shard account is bound to
@@ -43,8 +43,8 @@ pub fn record_settlement_sharded(
         TreasuryError::UnauthorizedRecorder
     );
     let mut shard = ctx.accounts.shard.load_mut()?;
-    shard.settled_thbg = shard
-        .settled_thbg
+    shard.settled_thbc = shard
+        .settled_thbc
         .checked_add(value)
         .ok_or(TreasuryError::MathOverflow)?;
     shard.settlement_count = shard
@@ -55,7 +55,7 @@ pub fn record_settlement_sharded(
         recorder: ctx.accounts.recorder.key(),
         shard_id,
         value,
-        shard_total: shard.settled_thbg,
+        shard_total: shard.settled_thbc,
         timestamp: now,
     });
     Ok(())

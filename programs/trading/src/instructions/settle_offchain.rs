@@ -548,7 +548,7 @@ pub struct SettleOffchainMatchContext<'info> {
     pub system_program: Program<'info, System>,
 
     // --- Optional treasury wiring (baht-denominated settlement) ---
-    // When both are supplied, the settlement currency must be the treasury's THBG
+    // When both are supplied, the settlement currency must be the treasury's THBC
     // mint and the trade value is recorded via a non-custodial CPI (moves no funds,
     // so the escrow / ed25519 / replay-nullifier guarantees are untouched). Omitting
     // them keeps the legacy generic-currency settlement working unchanged.
@@ -643,20 +643,20 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     pub system_program: Program<'info, System>,
 
     // --- Optional treasury wiring (baht-denominated settlement) ---
-    // When supplied, the settlement currency must be the treasury's THBG mint and the
+    // When supplied, the settlement currency must be the treasury's THBC mint and the
     // batch's gross settled value is recorded with a single CPI onto the per-shard
     // accumulator (parallel-friendly) plus the per-(zone,batch) SettlementRecord.
     pub treasury_program: Option<Program<'info, treasury::program::Treasury>>,
     // READ-ONLY: the batch path records via `record_settlement_batch_sharded`, whose treasury
-    // account is read-only (only the recorder gate reads it — no `total_settled_thbg` write;
+    // account is read-only (only the recorder gate reads it — no `total_settled_thbc` write;
     // the accumulator lives on the per-shard `settlement_shard`). The trading handler only
     // `.load()`s treasury_state (currency check). Declaring it `mut` here would write-lock the
-    // treasury singleton on EVERY THBG batch settle — a global serializer with no writer.
+    // treasury singleton on EVERY THBC batch settle — a global serializer with no writer.
     // (The single `settle_offchain_match` path keeps `mut`: its `record_settlement` CPI writes
     // the singleton accumulator.)
     pub treasury_state: Option<AccountLoader<'info, treasury::Treasury>>,
     /// Per-shard settlement accumulator (`[b"settle_shard", &[shard_id]]`), bumped via
-    /// CPI instead of the global `total_settled_thbg`. Required when recording fires.
+    /// CPI instead of the global `total_settled_thbc`. Required when recording fires.
     #[account(mut)]
     pub settlement_shard: Option<AccountLoader<'info, treasury::SettlementShard>>,
     /// Per-`(zone, batch)` treasury `SettlementRecord` PDA, created via CPI when
@@ -895,20 +895,20 @@ pub fn settle_offchain_match<'info>(
     compute_checkpoint!("after_settle_cpis");
 
     // --- 3b. TREASURY: record the baht-denominated settlement (non-custodial) ---
-    // Policy: if this market is configured to settle in THBG and this match uses that
+    // Policy: if this market is configured to settle in THBC and this match uses that
     // currency, recording is MANDATORY — the treasury accounts must be passed.
-    let recording_required = market.has_settlement_thbg_mint == 1
-        && ctx.accounts.currency_mint.key() == market.settlement_thbg_mint;
+    let recording_required = market.has_settlement_thbc_mint == 1
+        && ctx.accounts.currency_mint.key() == market.settlement_thbc_mint;
     match (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state) {
         (Some(treasury_program), Some(treasury_state)) => {
-            // Require the settlement currency IS the THBG mint so this is genuinely a
+            // Require the settlement currency IS the THBC mint so this is genuinely a
             // baht-denominated settlement, not an arbitrary token. Records the GROSS
-            // settled value (total THBG leaving buyer escrow = seller payout + fee +
+            // settled value (total THBC leaving buyer escrow = seller payout + fee +
             // wheeling + loss), so the counter reconciles to on-chain escrow outflow —
             // not the seller's net receipt.
             require_keys_eq!(
                 ctx.accounts.currency_mint.key(),
-                treasury_state.load()?.thbg_mint,
+                treasury_state.load()?.thbc_mint,
                 TradingError::TreasuryCurrencyMismatch
             );
             treasury::cpi::record_settlement(
@@ -1296,22 +1296,22 @@ pub fn batch_settle_offchain_match<'info>(
 
     // --- TREASURY: record the batch's gross baht-denominated settlement value with a
     // single CPI (non-custodial). Mirrors the single-match path. ---
-    // Policy: if this market settles in THBG and the batch currency is that mint,
+    // Policy: if this market settles in THBC and the batch currency is that mint,
     // recording is MANDATORY — the treasury accounts must be passed.
-    let recording_required = market.has_settlement_thbg_mint == 1
-        && currency_mint_key == market.settlement_thbg_mint;
+    let recording_required = market.has_settlement_thbc_mint == 1
+        && currency_mint_key == market.settlement_thbc_mint;
     match (&ctx.accounts.treasury_program, &ctx.accounts.treasury_state) {
         (Some(treasury_program), Some(treasury_state)) => {
             require_keys_eq!(
                 currency_mint_key,
-                treasury_state.load()?.thbg_mint,
+                treasury_state.load()?.thbc_mint,
                 TradingError::TreasuryCurrencyMismatch
             );
             if batch_total_value > 0 {
                 // Per-batch audit commitment: bind the Merkle root + VAT to this zone's
                 // batch via the treasury SettlementRecord (CPI-init), and bump the
                 // per-shard accumulator instead of the global total so concurrent
-                // batches on distinct shards don't serialize on `total_settled_thbg`.
+                // batches on distinct shards don't serialize on `total_settled_thbc`.
                 let settlement_record = ctx
                     .accounts
                     .settlement_record

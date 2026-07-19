@@ -163,7 +163,7 @@ the retail chain and can init in parallel.
    pay-as-bid? Availability/capacity payments (ESB) modeled on-chain or left off-chain? (§ egat doc §5.)
 3. **DR baseline method.** Which baseline (e.g. high-X-of-Y, regression, control-group) is the
    on-chain settlement authority, given the oracle only stores per-meter cumulative readings?
-4. **Collateral asset.** TPA deposits + aggregator bond in GRX, THBG, or mixed — and does the
+4. **Collateral asset.** TPA deposits + aggregator bond in GRX, THBC, or mixed — and does the
    utility custody it, or does it stay in `registry`'s GRX bond vault with the utility only
    gating release?
 5. **Per-territory tariff (Delta B).** Adopt the `[b"tariff_config", territory]` migration, or

@@ -36,7 +36,7 @@ macro_rules! compute_checkpoint {
 
 declare_id!("FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn");
 
-/// GRX has 9 decimals; `grx_per_thbg_rate` is THBG-minor-units per **whole** GRX,
+/// GRX has 9 decimals; `grx_per_thbc_rate` is THBC-minor-units per **whole** GRX,
 /// so converting an atomic GRX amount divides by this.
 const GRX_ATOMS_PER_WHOLE: u128 = 1_000_000_000;
 
@@ -59,16 +59,16 @@ pub(crate) fn reward_debt_for(amount: u64, acc: u128) -> Result<u128> {
         .map_err(Into::into)
 }
 
-/// Swap peg math (extracted from `swap_grx_for_thbg` so it is unit-testable):
+/// Swap peg math (extracted from `swap_grx_for_thbc` so it is unit-testable):
 /// `gross = grx_in * rate / 1e9`, `fee = gross * fee_bps / 1e4`, `net = gross - fee`.
 /// Enforces `net > 0` (ZeroAmount) and the peg invariant
-/// `thbg_supply + net <= attested_reserve` (PegBreach). All products use checked u128
+/// `thbc_supply + net <= attested_reserve` (PegBreach). All products use checked u128
 /// math (MathOverflow on overflow / u64 truncation). Returns `(net, fee, new_supply)`.
-pub(crate) fn compute_swap_grx_for_thbg(
+pub(crate) fn compute_swap_grx_for_thbc(
     grx_in: u64,
     rate: u64,
     fee_bps: u16,
-    thbg_supply: u64,
+    thbc_supply: u64,
     attested_reserve: u64,
 ) -> Result<(u64, u64, u64)> {
     let gross = (grx_in as u128)
@@ -81,7 +81,7 @@ pub(crate) fn compute_swap_grx_for_thbg(
         / 10_000;
     let net = gross.saturating_sub(fee);
     require!(net > 0, TreasuryError::ZeroAmount);
-    let new_supply = (thbg_supply as u128)
+    let new_supply = (thbc_supply as u128)
         .checked_add(net)
         .ok_or(TreasuryError::MathOverflow)?;
     require!(new_supply <= attested_reserve as u128, TreasuryError::PegBreach);
@@ -92,27 +92,27 @@ pub(crate) fn compute_swap_grx_for_thbg(
     ))
 }
 
-/// Redeem peg math (extracted from `redeem_thbg_for_grx` for unit-testing):
-/// `grx_out = thbg_in * 1e9 / rate`. Collateral guards — burning more THBG than the
+/// Redeem peg math (extracted from `redeem_thbc_for_grx` for unit-testing):
+/// `grx_out = thbc_in * 1e9 / rate`. Collateral guards — burning more THBC than the
 /// tracked supply (SupplyUnderflow) or paying out more GRX than the swap vault holds
 /// (InsufficientVault) — so a rate change can never let a redeemer drain the vault.
 /// Returns `(grx_out, new_supply)`.
-pub(crate) fn compute_redeem_thbg_for_grx(
-    thbg_in: u64,
+pub(crate) fn compute_redeem_thbc_for_grx(
+    thbc_in: u64,
     rate: u64,
-    thbg_supply: u64,
+    thbc_supply: u64,
     vault_amount: u64,
 ) -> Result<(u64, u64)> {
-    require!(thbg_in <= thbg_supply, TreasuryError::SupplyUnderflow);
-    let grx_out = (thbg_in as u128)
+    require!(thbc_in <= thbc_supply, TreasuryError::SupplyUnderflow);
+    let grx_out = (thbc_in as u128)
         .checked_mul(GRX_ATOMS_PER_WHOLE)
         .ok_or(TreasuryError::MathOverflow)?
         / (rate as u128);
     require!(grx_out > 0, TreasuryError::ZeroAmount);
     let grx_out = u64::try_from(grx_out).map_err(|_| TreasuryError::MathOverflow)?;
     require!(grx_out <= vault_amount, TreasuryError::InsufficientVault);
-    let new_supply = thbg_supply
-        .checked_sub(thbg_in)
+    let new_supply = thbc_supply
+        .checked_sub(thbc_in)
         .ok_or(TreasuryError::SupplyUnderflow)?;
     Ok((grx_out, new_supply))
 }
@@ -167,22 +167,22 @@ mod tests {
     }
     fn code_of(v: TreasuryError) -> u32 { err_code(v.into()) }
 
-    // Peg arithmetic exercising the REAL handler math: 3 GRX × rate 4_000_000 / 1e9 = 12 THBG
+    // Peg arithmetic exercising the REAL handler math: 3 GRX × rate 4_000_000 / 1e9 = 12 THBC
     // gross; fee 25 bps = 30_000; net 11_970_000; supply 0 -> net, reserve ample.
     #[test]
     fn swap_output_matches_rate_and_fee() {
         let (net, fee, new_supply) =
-            compute_swap_grx_for_thbg(3_000_000_000, 4_000_000, 25, 0, 1_000_000_000).unwrap();
+            compute_swap_grx_for_thbc(3_000_000_000, 4_000_000, 25, 0, 1_000_000_000).unwrap();
         assert_eq!(fee, 30_000);
         assert_eq!(net, 11_970_000);
         assert_eq!(new_supply, 11_970_000);
     }
 
-    // thbg_supply accumulates: existing 1_000_000 + net 11_970_000 = 12_970_000 <= reserve.
+    // thbc_supply accumulates: existing 1_000_000 + net 11_970_000 = 12_970_000 <= reserve.
     #[test]
     fn swap_adds_net_to_existing_supply() {
         let (_net, _fee, new_supply) =
-            compute_swap_grx_for_thbg(3_000_000_000, 4_000_000, 25, 1_000_000, 100_000_000).unwrap();
+            compute_swap_grx_for_thbc(3_000_000_000, 4_000_000, 25, 1_000_000, 100_000_000).unwrap();
         assert_eq!(new_supply, 12_970_000);
     }
 
@@ -190,7 +190,7 @@ mod tests {
     #[test]
     fn swap_zero_net_is_rejected() {
         // grx_in 1 atom * rate 1 / 1e9 = 0 gross -> net 0.
-        let e = compute_swap_grx_for_thbg(1, 1, 0, 0, u64::MAX).unwrap_err();
+        let e = compute_swap_grx_for_thbc(1, 1, 0, 0, u64::MAX).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::ZeroAmount));
     }
 
@@ -199,7 +199,7 @@ mod tests {
     fn swap_peg_ceiling_is_inclusive() {
         // net = 12_000_000 (fee_bps 0), supply 0, reserve exactly 12_000_000.
         let (net, _fee, new_supply) =
-            compute_swap_grx_for_thbg(3_000_000_000, 4_000_000, 0, 0, 12_000_000).unwrap();
+            compute_swap_grx_for_thbc(3_000_000_000, 4_000_000, 0, 0, 12_000_000).unwrap();
         assert_eq!(net, 12_000_000);
         assert_eq!(new_supply, 12_000_000);
     }
@@ -207,7 +207,7 @@ mod tests {
     // One atom over the reserve ceiling -> PegBreach.
     #[test]
     fn swap_over_reserve_breaches_peg() {
-        let e = compute_swap_grx_for_thbg(3_000_000_000, 4_000_000, 0, 0, 11_999_999).unwrap_err();
+        let e = compute_swap_grx_for_thbc(3_000_000_000, 4_000_000, 0, 0, 11_999_999).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::PegBreach));
     }
 
@@ -220,33 +220,33 @@ mod tests {
         // gross = 1e10 * 1.8e19 / 1e9 ~ 1.8e20 (> u64::MAX); fee_bps 9999 -> fee ~1.8e20 (> u64::MAX);
         // net ~1.8e16 (fits u64) and clears the ample reserve.
         let e =
-            compute_swap_grx_for_thbg(10_000_000_000, u64::MAX, 9_999, 0, u64::MAX).unwrap_err();
+            compute_swap_grx_for_thbc(10_000_000_000, u64::MAX, 9_999, 0, u64::MAX).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::MathOverflow));
     }
 
     // --- redeem peg math ---
 
-    // 12 THBG (6dp) at rate 4_000_000 (4 THBG per whole GRX) -> 3 GRX; supply fully burned.
+    // 12 THBC (6dp) at rate 4_000_000 (4 THBC per whole GRX) -> 3 GRX; supply fully burned.
     #[test]
     fn redeem_output_matches_rate() {
         let (grx_out, new_supply) =
-            compute_redeem_thbg_for_grx(12_000_000, 4_000_000, 12_000_000, 1_000_000_000_000).unwrap();
+            compute_redeem_thbc_for_grx(12_000_000, 4_000_000, 12_000_000, 1_000_000_000_000).unwrap();
         assert_eq!(grx_out, 3_000_000_000);
         assert_eq!(new_supply, 0);
     }
 
-    // Burning more THBG than the tracked supply -> SupplyUnderflow (peg ledger guard).
+    // Burning more THBC than the tracked supply -> SupplyUnderflow (peg ledger guard).
     #[test]
     fn redeem_over_supply_rejected() {
-        let e = compute_redeem_thbg_for_grx(12_000_001, 4_000_000, 12_000_000, u64::MAX).unwrap_err();
+        let e = compute_redeem_thbc_for_grx(12_000_001, 4_000_000, 12_000_000, u64::MAX).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::SupplyUnderflow));
     }
 
     // Dust input rounds GRX out to zero -> ZeroAmount (no free burn).
     #[test]
     fn redeem_dust_zero_out_rejected() {
-        // thbg_in 1 * 1e9 / rate 2e9 = 0 grx_out.
-        let e = compute_redeem_thbg_for_grx(1, 2_000_000_000, 100, u64::MAX).unwrap_err();
+        // thbc_in 1 * 1e9 / rate 2e9 = 0 grx_out.
+        let e = compute_redeem_thbc_for_grx(1, 2_000_000_000, 100, u64::MAX).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::ZeroAmount));
     }
 
@@ -254,7 +254,7 @@ mod tests {
     #[test]
     fn redeem_over_vault_rejected() {
         // grx_out = 3e9 but vault holds only 3e9 - 1.
-        let e = compute_redeem_thbg_for_grx(12_000_000, 4_000_000, 12_000_000, 2_999_999_999).unwrap_err();
+        let e = compute_redeem_thbc_for_grx(12_000_000, 4_000_000, 12_000_000, 2_999_999_999).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::InsufficientVault));
     }
 
@@ -262,14 +262,14 @@ mod tests {
     #[test]
     fn redeem_vault_exactly_covers() {
         let (grx_out, _) =
-            compute_redeem_thbg_for_grx(12_000_000, 4_000_000, 12_000_000, 3_000_000_000).unwrap();
+            compute_redeem_thbc_for_grx(12_000_000, 4_000_000, 12_000_000, 3_000_000_000).unwrap();
         assert_eq!(grx_out, 3_000_000_000);
     }
 
-    // grx_out overflowing the u64 cast (rate 1 -> grx_out = thbg_in * 1e9) -> MathOverflow.
+    // grx_out overflowing the u64 cast (rate 1 -> grx_out = thbc_in * 1e9) -> MathOverflow.
     #[test]
     fn redeem_grx_out_overflow_rejected() {
-        let e = compute_redeem_thbg_for_grx(u64::MAX, 1, u64::MAX, u64::MAX).unwrap_err();
+        let e = compute_redeem_thbc_for_grx(u64::MAX, 1, u64::MAX, u64::MAX).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::MathOverflow));
     }
 }
@@ -278,13 +278,13 @@ mod tests {
 pub mod treasury {
     use super::*;
 
-    /// Bootstrap the treasury: config PDA, the THBG mint (authority = treasury PDA),
+    /// Bootstrap the treasury: config PDA, the THBC mint (authority = treasury PDA),
     /// and the three GRX vaults (swap collateral, stake custody, reward pool).
     pub fn initialize(
         ctx: Context<Initialize>,
         attestor: Pubkey,
         settlement_recorder: Pubkey,
-        grx_per_thbg_rate: u64,
+        grx_per_thbc_rate: u64,
         swap_fee_bps: u16,
         attestation_ttl: i64,
     ) -> Result<()> {
@@ -293,7 +293,7 @@ pub mod treasury {
                 ctx,
                 attestor,
                 settlement_recorder,
-                grx_per_thbg_rate,
+                grx_per_thbc_rate,
                 swap_fee_bps,
                 attestation_ttl,
             )
@@ -304,7 +304,7 @@ pub mod treasury {
     /// authorized settlement recorder (the trading market_authority PDA).
     pub fn set_params(
         ctx: Context<SetParams>,
-        grx_per_thbg_rate: u64,
+        grx_per_thbc_rate: u64,
         swap_fee_bps: u16,
         attestation_ttl: i64,
         paused: bool,
@@ -313,7 +313,7 @@ pub mod treasury {
         compute_fn!("set_params" => {
             instructions::set_params(
                 ctx,
-                grx_per_thbg_rate,
+                grx_per_thbc_rate,
                 swap_fee_bps,
                 attestation_ttl,
                 paused,
@@ -323,7 +323,7 @@ pub mod treasury {
     }
 
     /// Record a baht-denominated trade settlement. Called via CPI by the trading
-    /// program after it pays a seller in THBG; bumps the cumulative settled total.
+    /// program after it pays a seller in THBC; bumps the cumulative settled total.
     /// Non-custodial — moves no funds. Authorized by the `settlement_recorder`
     /// signer (the trading market_authority PDA), so only genuine trading
     /// settlements can advance the counter.
@@ -392,7 +392,7 @@ pub mod treasury {
     }
 
     /// Parallel-friendly variant of `record_settlement`: bumps the per-shard
-    /// accumulator for `shard_id` instead of the global `total_settled_thbg`, so
+    /// accumulator for `shard_id` instead of the global `total_settled_thbc`, so
     /// settles whose buyers fall on different shards don't write-lock one account.
     /// `treasury` is read-only here (recorder gate only) — read locks are shared
     /// across parallel txs, so it does not serialize. The shard account is bound to
@@ -411,14 +411,14 @@ pub mod treasury {
         })
     }
 
-    /// Reconcile the global `total_settled_thbg` from the per-shard accumulators.
+    /// Reconcile the global `total_settled_thbc` from the per-shard accumulators.
     /// Admin-only.
     ///
     /// **Drain-and-fold:** each `SettlementShard` passed in `remaining_accounts`
     /// (validated by program owner + stored-bump PDA, deduped by a shard-id bitmask)
-    /// has its `settled_thbg` ADDED to the running global and then ZEROED. Folding
+    /// has its `settled_thbc` ADDED to the running global and then ZEROED. Folding
     /// into — instead of overwriting — the live global is deliberate: the single-match
-    /// settle path (`record_settlement`) bumps `total_settled_thbg` directly, while the
+    /// settle path (`record_settlement`) bumps `total_settled_thbc` directly, while the
     /// batch path bumps shards. Overwriting `global = sum(shards)` (the previous
     /// behaviour) silently wiped every single-match contribution on each reconcile.
     /// Folding preserves both; zeroing the shard makes it a delta-since-last-aggregate,
@@ -431,7 +431,7 @@ pub mod treasury {
     }
 
     /// Parallel-friendly variant of `record_settlement_batch`: bumps the per-shard
-    /// accumulator for `shard_id` instead of the global `total_settled_thbg`, while
+    /// accumulator for `shard_id` instead of the global `total_settled_thbc`, while
     /// still writing the per-`(zone, batch)` `SettlementRecord` audit commitment (which
     /// is already non-global — unique per batch). Treasury is read-only here (recorder
     /// gate only), so parallel batch settles on distinct shards don't serialize on it.
@@ -461,7 +461,7 @@ pub mod treasury {
         })
     }
 
-    /// Custodian: refresh the off-chain THB reserve figure that caps THBG supply.
+    /// Custodian: refresh the off-chain THB reserve figure that caps THBC supply.
     /// This is the peg's source of truth — mints are blocked once it goes stale.
     pub fn update_attestation(ctx: Context<UpdateAttestation>, attested_reserve: u64) -> Result<()> {
         compute_fn!("update_attestation" => {
@@ -469,24 +469,24 @@ pub mod treasury {
         })
     }
 
-    /// Swap GRX → THBG. This is the baht-denominated settlement primitive: a
-    /// producer's GRX is converted to THB-pegged value at `grx_per_thbg_rate`.
+    /// Swap GRX → THBC. This is the baht-denominated settlement primitive: a
+    /// producer's GRX is converted to THB-pegged value at `grx_per_thbc_rate`.
     ///
     /// Peg invariants enforced here:
     ///   1. The reserve attestation must be fresh (`now - attestation_ts <= ttl`).
-    ///   2. Outstanding `thbg_supply + minted` must never exceed `attested_reserve`.
+    ///   2. Outstanding `thbc_supply + minted` must never exceed `attested_reserve`.
     /// Staked GRX is held in a separate vault and never backs the peg.
-    pub fn swap_grx_for_thbg(ctx: Context<SwapGrxForThbg>, grx_in: u64) -> Result<()> {
-        compute_fn!("swap_grx_for_thbg" => {
-            instructions::swap_grx_for_thbg(ctx, grx_in)
+    pub fn swap_grx_for_thbc(ctx: Context<SwapGrxForThbc>, grx_in: u64) -> Result<()> {
+        compute_fn!("swap_grx_for_thbc" => {
+            instructions::swap_grx_for_thbc(ctx, grx_in)
         })
     }
 
-    /// Redeem THBG → GRX from the swap vault. Burns the user's THBG (shrinking the
+    /// Redeem THBC → GRX from the swap vault. Burns the user's THBC (shrinking the
     /// peg liability) and returns GRX at the configured rate.
-    pub fn redeem_thbg_for_grx(ctx: Context<RedeemThbgForGrx>, thbg_in: u64) -> Result<()> {
-        compute_fn!("redeem_thbg_for_grx" => {
-            instructions::redeem_thbg_for_grx(ctx, thbg_in)
+    pub fn redeem_thbc_for_grx(ctx: Context<RedeemThbcForGrx>, thbc_in: u64) -> Result<()> {
+        compute_fn!("redeem_thbc_for_grx" => {
+            instructions::redeem_thbc_for_grx(ctx, thbc_in)
         })
     }
 

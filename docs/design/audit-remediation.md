@@ -41,7 +41,7 @@ registers no REC validator and admits no aggregator, so each test self-provision
 
 - `tests/staking.ts` (0.1 — admit + `aggregatorEntry`)
 - `tests/escrow_settlement.ts` (0.3 gov remaining acct + 0.5 REC)
-- `tests/batch_settle_thbg.ts` — **verified live** (self-documented "RUNTIME-VERIFIED on a live
+- `tests/batch_settle_thbc.ts` — **verified live** (self-documented "RUNTIME-VERIFIED on a live
   validator", 1/1 green), not actually pending despite this table's original framing.
 - `tests/batch_settle_tps.ts` (0.3 trailing gov acct + 0.5 REC)
 - `tests/generation_mint_idempotency.ts` (0.5 REC)

@@ -57,7 +57,7 @@ repo tie-in (what in `programs/` exists *because* of that mechanism).
 
 18. **[spl-token-2022.md](spl-token-2022.md)** — energy mint is Token-2022; ATA, mint-authority
     PDA, REC-gating.
-19. **[treasury-peg-mechanics.md](treasury-peg-mechanics.md)** — THBG swap/redeem math,
+19. **[treasury-peg-mechanics.md](treasury-peg-mechanics.md)** — THBC swap/redeem math,
     attestation, MasterChef staking, 3 vaults.
 20. **[oracle-epochs.md](oracle-epochs.md)** — AMI bridge, per-meter PDA, 15-min clearing,
     AggregatorEntry validation (no CPI).
@@ -84,5 +84,5 @@ hot-path config, acyclic CPI graph — falls directly out of these five mechanis
 
 - `SKILL.md` invariants: #3 (Sealevel sharding), #4 (compute-debug CU), #5 (hoist `Clock::get`).
 - CPI graph: `registry→energy-token`, `trading→governance`, `trading→treasury` (optional /
-  THBG-mandatory), `oracle→governance` (**types-only, not invoke**).
+  THBC-mandatory), `oracle→governance` (**types-only, not invoke**).
 - Program IDs: `Anchor.toml [programs.localnet]` (source of truth, not SKILL's stale table).

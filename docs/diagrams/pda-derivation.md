@@ -143,7 +143,7 @@ From `SKILL.md` invariant #3 + the program map:
   `OrderNullifier`, `*Shard`. Deterministic address per meter/order ⇒ no global index, and
   separate addresses ⇒ Sealevel parallelism (different PDAs don't conflict).
 - **Program-controlled vaults** — treasury's **three** GRX vaults (`swap_vault`, `stake_vault`,
-  `reward_vault`) + THBG mint authority = `[b"treasury"]` PDA. Registry's `grx_vault`
+  `reward_vault`) + THBC mint authority = `[b"treasury"]` PDA. Registry's `grx_vault`
   (`[b"grx_vault"]`) for validator bonds. All moved via `invoke_signed`, no custodial key.
 - **Config singletons** — e.g. governance `[b"governance_config"]` (PDA seed kept even after the
   `PoAConfig→GovernanceConfig` type rename, per memory). One canonical address per program.

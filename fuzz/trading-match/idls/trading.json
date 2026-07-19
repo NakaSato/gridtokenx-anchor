@@ -84,7 +84,7 @@
           "name": "settlement_shard",
           "docs": [
             "Per-shard settlement accumulator (`[b\"settle_shard\", &[shard_id]]`), bumped via",
-            "CPI instead of the global `total_settled_thbg`. Required when recording fires."
+            "CPI instead of the global `total_settled_thbc`. Required when recording fires."
           ],
           "writable": true,
           "optional": true
@@ -187,7 +187,7 @@
         "4. Find clearing price where supply = demand",
         "5. Match all compatible orders at uniform clearing price",
         "",
-        "Time Complexity: O(n log n) for sorting + O(m × k) for clearing point",
+        "Time Complexity: O(n log n) for sorting + O(m \u00d7 k) for clearing point",
         "Space Complexity: O(n) for order vectors"
       ],
       "discriminator": [
@@ -811,7 +811,7 @@
       "name": "initialize_sharded_collectors",
       "docs": [
         "One-time creation of the SHARDED collector PDAs for a currency mint + shard",
-        "(§2c Part B). Run once per shard (0..NUM_SETTLE_SHARDS)."
+        "(\u00a72c Part B). Run once per shard (0..NUM_SETTLE_SHARDS)."
       ],
       "discriminator": [
         43,
@@ -864,7 +864,7 @@
     {
       "name": "initialize_tariff_config",
       "docs": [
-        "One-time init of the on-chain tariff schedule (§role-map.md fix #7b): wheeling/loss",
+        "One-time init of the on-chain tariff schedule (\u00a7role-map.md fix #7b): wheeling/loss",
         "charges are no longer caller-supplied settlement args, they're computed from this",
         "config, which only `wheeling_authority` / `loss_authority` (both MEA-PEA) can move."
       ],
@@ -1218,23 +1218,23 @@
       ]
     },
     {
-      "name": "set_settlement_thbg_mint",
+      "name": "set_settlement_thbc_mint",
       "docs": [
-        "Configure the settlement THBG mint for this market (admin only). Once set,",
+        "Configure the settlement THBC mint for this market (admin only). Once set,",
         "any match that settles in this mint MUST pass the treasury accounts so the",
-        "baht-denominated settlement is recorded — recording is no longer optional for",
-        "THBG-denominated trades. Pass `Pubkey::default()` is not allowed (use the real",
-        "THBG mint); to disable, this could be extended with a clear flag if ever needed."
+        "baht-denominated settlement is recorded \u2014 recording is no longer optional for",
+        "THBC-denominated trades. Pass `Pubkey::default()` is not allowed (use the real",
+        "THBC mint); to disable, this could be extended with a clear flag if ever needed."
       ],
       "discriminator": [
-        3,
-        243,
+        93,
         227,
-        136,
-        118,
-        246,
-        158,
-        162
+        244,
+        50,
+        152,
+        249,
+        58,
+        21
       ],
       "accounts": [
         {
@@ -1248,7 +1248,7 @@
       ],
       "args": [
         {
-          "name": "thbg_mint",
+          "name": "thbc_mint",
           "type": "pubkey"
         }
       ]
@@ -2248,16 +2248,16 @@
       ]
     },
     {
-      "name": "SettlementThbgMintSet",
+      "name": "SettlementThbcMintSet",
       "discriminator": [
-        30,
-        253,
-        168,
+        55,
+        241,
+        239,
         138,
-        37,
-        8,
-        161,
-        27
+        96,
+        16,
+        236,
+        96
       ]
     }
   ],
@@ -2425,12 +2425,12 @@
     {
       "code": 6032,
       "name": "TreasuryCurrencyMismatch",
-      "msg": "Settlement currency mint is not the treasury THBG mint"
+      "msg": "Settlement currency mint is not the treasury THBC mint"
     },
     {
       "code": 6033,
       "name": "TreasurySettlementRequired",
-      "msg": "This market settles in THBG: the treasury accounts are required to record the settlement"
+      "msg": "This market settles in THBC: the treasury accounts are required to record the settlement"
     },
     {
       "code": 6034,
@@ -3425,11 +3425,11 @@
             }
           },
           {
-            "name": "settlement_thbg_mint",
+            "name": "settlement_thbc_mint",
             "type": "pubkey"
           },
           {
-            "name": "has_settlement_thbg_mint",
+            "name": "has_settlement_thbc_mint",
             "type": "u8"
           },
           {
@@ -3931,7 +3931,7 @@
       "name": "SettlementShard",
       "docs": [
         "Per-shard settlement accumulator (zero-copy). Hot-path settles bump the shard",
-        "PDA for the buyer's shard instead of the global `Treasury.total_settled_thbg`, so",
+        "PDA for the buyer's shard instead of the global `Treasury.total_settled_thbc`, so",
         "settles on distinct shards don't write-lock a single account. PDA seeds:",
         "`[b\"settle_shard\", &[shard_id]]`. Global total reconciled via",
         "`aggregate_settlement_shards`."
@@ -3944,7 +3944,7 @@
         "kind": "struct",
         "fields": [
           {
-            "name": "settled_thbg",
+            "name": "settled_thbc",
             "type": "u64"
           },
           {
@@ -3972,7 +3972,7 @@
       }
     },
     {
-      "name": "SettlementThbgMintSet",
+      "name": "SettlementThbcMintSet",
       "type": {
         "kind": "struct",
         "fields": [
@@ -3981,7 +3981,7 @@
             "type": "pubkey"
           },
           {
-            "name": "thbg_mint",
+            "name": "thbc_mint",
             "type": "pubkey"
           },
           {
@@ -3995,14 +3995,14 @@
       "name": "TariffConfig",
       "docs": [
         "Singleton on-chain tariff schedule, seeds = `[b\"tariff_config\"]`. Replaces the former",
-        "caller-supplied `wheeling_charge_val`/`loss_cost_val` settlement args — those let whoever",
+        "caller-supplied `wheeling_charge_val`/`loss_cost_val` settlement args \u2014 those let whoever",
         "signed the settle tx pick any number, with no tie to an actual tariff authority.",
         "`wheeling_rate_per_kwh` is a flat rate (6-decimal currency units per kWh, same",
-        "representation as `price_per_kwh`) settable only by `wheeling_authority` (MEA/PEA —",
-        "distribution network usage; retail trades stay off EGAT's transmission grid) — flat",
+        "representation as `price_per_kwh`) settable only by `wheeling_authority` (MEA/PEA \u2014",
+        "distribution network usage; retail trades stay off EGAT's transmission grid) \u2014 flat",
         "because the physical cost of delivering 1 kWh doesn't scale with the commodity price",
         "two parties agreed on. `loss_bps` (proportional to trade value, since lost energy is",
-        "re-purchased at the agreed price) only by `loss_authority` (MEA/PEA — distribution line",
+        "re-purchased at the agreed price) only by `loss_authority` (MEA/PEA \u2014 distribution line",
         "loss). Every settlement path (single, batch, atomic) computes its charges from these",
         "rates instead of trusting the caller."
       ],
@@ -4036,10 +4036,10 @@
       "name": "TradeNullifier",
       "docs": [
         "Per-MATCH replay guard. `OrderNullifier` only caps cumulative fill against an order's",
-        "`energy_amount` — it does NOT stop the SAME partial match being settled twice while the",
+        "`energy_amount` \u2014 it does NOT stop the SAME partial match being settled twice while the",
         "order still has headroom (the F3c double-settle). This marker PDA is keyed by the unique",
         "per-match `trade_id` the off-chain matcher assigns, created on first settle and so present",
-        "(program-owned) on any replay. Existence IS the guard — a re-sent match (re-signed with a",
+        "(program-owned) on any replay. Existence IS the guard \u2014 a re-sent match (re-signed with a",
         "fresh blockhash, defeating the bridge's tx-hash dedup) hits an already-created PDA and",
         "reverts `MatchAlreadySettled`, regardless of order headroom. Created atomically with the",
         "settle, so a never-committed match leaves no marker and a genuine retry still proceeds."
@@ -4138,7 +4138,7 @@
             "type": "pubkey"
           },
           {
-            "name": "thbg_mint",
+            "name": "thbc_mint",
             "type": "pubkey"
           },
           {
@@ -4158,11 +4158,11 @@
             "type": "i64"
           },
           {
-            "name": "thbg_supply",
+            "name": "thbc_supply",
             "type": "u64"
           },
           {
-            "name": "grx_per_thbg_rate",
+            "name": "grx_per_thbc_rate",
             "type": "u64"
           },
           {
@@ -4178,7 +4178,7 @@
             "type": "i64"
           },
           {
-            "name": "total_settled_thbg",
+            "name": "total_settled_thbc",
             "type": "u64"
           },
           {
@@ -4194,7 +4194,7 @@
             "type": "u8"
           },
           {
-            "name": "thbg_mint_bump",
+            "name": "thbc_mint_bump",
             "type": "u8"
           },
           {
@@ -4232,7 +4232,7 @@
         "Tracks volume and trades on a per-shard basis within a zone",
         "Per-zone transmission-capacity counter, split OUT of `ZoneMarket` so the hot settle",
         "path can keep `ZoneMarket` read-only (no write-lock) on the common intra-zone case.",
-        "Only cross-zone (wheeling) settlements — which actually consume inter-zone capacity —",
+        "Only cross-zone (wheeling) settlements \u2014 which actually consume inter-zone capacity \u2014",
         "pass this account `mut` and bump `committed_flow`; intra-zone settles omit it entirely",
         "and so don't serialize on `ZoneMarket`. The hard ceiling (`ZoneMarket.capacity`) stays",
         "read-only config on `ZoneMarket`."
@@ -4349,7 +4349,7 @@
             "docs": [
               "Market segment (role-map.md fix #6): 0 = Retail (MEA/PEA), 1 = Wholesale (EGAT).",
               "Consumes one byte of what was `_padding1`; struct size unchanged. Gates which",
-              "aggregators (by their own `AggregatorEntry.segment`) may settle in this zone —",
+              "aggregators (by their own `AggregatorEntry.segment`) may settle in this zone \u2014",
               "see `require_admitted_aggregator` in `settle_offchain.rs`."
             ],
             "type": "u8"

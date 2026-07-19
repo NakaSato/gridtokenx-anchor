@@ -88,7 +88,7 @@ per-order replay nullifiers, so the chain never holds custody of the matching
 engine yet still enforces authorisation and single-use settlement. Token minting
 is gated behind a registered set of Renewable Energy Certificate (REC) validators,
 binding issuance to attested generation. An accompanying treasury program provides
-a Thai-baht-pegged stablecoin (THBG) with reserve-attested peg invariants and a
+a Thai-baht-pegged stablecoin (THBC) with reserve-attested peg invariants and a
 MasterChef-style staking accumulator, giving the market a baht-denominated
 settlement unit.
 
@@ -849,7 +849,7 @@ freedom with no on-chain compute cost, we settled real matches through
 `batch_settle_offchain_match` on the live single-node validator under each rule
 across two fleet sizes. Each transaction settles one match (the single-match
 packet cap of §9.5); the off-chain match sets the clearing price $p^*$ to the
-rule's value inside the signed band $p_s = 2.00 <= p^* <= p_b = 2.10$ THBG/kWh,
+rule's value inside the signed band $p_s = 2.00 <= p^* <= p_b = 2.10$ THBC/kWh,
 and $N$ is the number of independent matches submitted at concurrency 4. Table 6
 reports confirmed goodput and the per-settle compute cost read from transaction
 metadata.
@@ -966,12 +966,12 @@ integer floor division the SBF program performs.
   align: (left, left, left),
   table.header([*Symbol*], [*Meaning*], [*Scale*]),
   [$q$],        [matched energy quantity (`match_amount`)], [9-dec, $1 "kWh" = 10^9$],
-  [$p$],        [clearing price (`match_price`)],           [6-dec THBG/kWh],
-  [$V$],        [trade gross value],                        [6-dec THBG],
+  [$p$],        [clearing price (`match_price`)],           [6-dec THBC/kWh],
+  [$V$],        [trade gross value],                        [6-dec THBC],
   [$phi_m$],    [market fee (`market_fee_bps`)],            [bps],
-  [$w$],        [wheeling rate (`wheeling_rate_per_kwh`)],  [6-dec THBG/kWh],
+  [$w$],        [wheeling rate (`wheeling_rate_per_kwh`)],  [6-dec THBC/kWh],
   [$ell$],      [loss rate (`loss_bps`)],                   [bps],
-  [$r$],        [peg rate (`grx_per_thbg_rate`)],           [THBG-minor / whole GRX],
+  [$r$],        [peg rate (`grx_per_thbc_rate`)],           [THBC-minor / whole GRX],
   [$phi_s$],    [swap fee (`swap_fee_bps`)],                [bps],
   [$A$],        [staking accumulator (`acc_reward_per_share`)], [$times 10^12$],
   [$T$],        [total staked GRX (`total_staked`)],        [atoms],
@@ -979,7 +979,7 @@ integer floor division the SBF program performs.
 
 == 11.2 Price formation
 
-Prices are limit prices quoted in THBG per kilowatt-hour (6-decimal fixed point).
+Prices are limit prices quoted in THBC per kilowatt-hour (6-decimal fixed point).
 The market operates two coordinated mechanisms — a continuous double auction for
 immediate execution and a uniform-price auction over 15-minute epochs — and both
 resolve to the same settlement arithmetic of §11.3.
@@ -1043,13 +1043,13 @@ the rules span the full range from buyer-favourable to even-split, and a feed-in
 tariff removes the bilateral trade entirely — paying the seller an exogenous rate
 $p_"fit"$ regardless of any bid, so the surplus $q Delta$ accrues to the single
 off-taker rather than the counterparties. @tab-price-rules states each rule and
-works a representative intra-zone match at $p_s = 3.00$, $p_b = 4.00$ THBG/kWh
-($Delta = 1.00$), with an illustrative $p_"fit" = 2.20$ THBG/kWh — a reference
+works a representative intra-zone match at $p_s = 3.00$, $p_b = 4.00$ THBC/kWh
+($Delta = 1.00$), with an illustrative $p_"fit" = 2.20$ THBC/kWh — a reference
 export rate, not a measured value.
 
 #figure(
   caption: [Execution price and bid–ask-spread allocation under each price rule,
-    for a representative match ($p_s = 3.00$, $p_b = 4.00$ THBG/kWh,
+    for a representative match ($p_s = 3.00$, $p_b = 4.00$ THBC/kWh,
     $Delta = 1.00$). Network charges (§11.3) apply identically on top of $p^*$ and
     are omitted here to isolate the spread split. All three market rules keep
     $p^*$ inside the counterparties' signed limits (@eq-bounds); the feed-in row
@@ -1069,9 +1069,9 @@ export rate, not a measured value.
   ),
 ) <tab-price-rules>
 
-Relative to the 2.20 THBG/kWh feed-in baseline, even the most buyer-favourable
+Relative to the 2.20 THBC/kWh feed-in baseline, even the most buyer-favourable
 market rule — CDA on-chain, $p^* = p_s$ — already lifts the seller to 3.00
-THBG/kWh (a 36% premium) before charges, and the midpoint rule to 3.50 (+59%);
+THBC/kWh (a 36% premium) before charges, and the midpoint rule to 3.50 (+59%);
 the surplus a feed-in tariff would transfer wholesale to the single off-taker is
 instead divided between the two P2P counterparties. Because every market rule
 constrains $p^*$ to the signed interval $[p_s, p_b]$ (@eq-bounds), the choice of
@@ -1153,9 +1153,9 @@ charges, a 34.7% premium over the 2.20 ฿/kWh export rate, and the midpoint rul
 small against the gains-from-trade the market unlocks relative to selling to a
 single off-taker.
 
-== 11.4 Treasury peg (GRX $arrow.l.r$ THBG)
+== 11.4 Treasury peg (GRX $arrow.l.r$ THBC)
 
-Swap GRX $arrow.r$ THBG, divisor $D_G = 10^9$ atoms/whole-GRX
+Swap GRX $arrow.r$ THBC, divisor $D_G = 10^9$ atoms/whole-GRX
 (`treasury/src/lib.rs:58`):
 
 $ G = floor(frac(g_"in" dot r, 10^9)), quad
@@ -1165,9 +1165,9 @@ $ G = floor(frac(g_"in" dot r, 10^9)), quad
 Peg invariants — reserve attestation freshness and full backing
 (`PegBreach`, `treasury/src/lib.rs:70`):
 
-$ t_"now" - t_"att" <= tau_"ttl", quad S_"thbg" + n <= R_"att" $ <eq-peg>
+$ t_"now" - t_"att" <= tau_"ttl", quad S_"thbc" + n <= R_"att" $ <eq-peg>
 
-Redeem THBG $arrow.r$ GRX with collateral guards $a_"in" <= S_"thbg"$
+Redeem THBC $arrow.r$ GRX with collateral guards $a_"in" <= S_"thbc"$
 (`SupplyUnderflow`) and $g_"out" <= V_"swap"$ (`InsufficientVault`)
 (`treasury/src/lib.rs:91`):
 
@@ -1263,7 +1263,7 @@ $ "active" <==> s_"grx" >= beta_"min" $ <eq-active>
   [epoch],        [$900$ s],      [oracle market-clearing window],
   [$E_max$],      [$10^6$ kWh],   [max single generation mint (@eq-mint-scale)],
   [GRID/GRX dec], [$9$],          [$1 "kWh" = 10^9$ atoms],
-  [THBG dec],     [$6$],          [$1 "THB" = 10^6$ minor],
+  [THBC dec],     [$6$],          [$1 "THB" = 10^6$ minor],
   [REC dec],      [$6$],          [$1$ token $= 1 "MWh"$],
 )
 
@@ -1345,7 +1345,7 @@ $ s(i) = i mod 2, quad
   p(i) = 3 dot 10^6 + (i mod 100) dot 10^4 $ <eq-order-workload>
 
 alternating buy/sell side $s$, energy amount $q$ sweeping 1–50 kWh in
-9-decimal atoms, and limit price $p$ sweeping 3.00–3.99 THBG/kWh in 6-decimal
+9-decimal atoms, and limit price $p$ sweeping 3.00–3.99 THBC/kWh in 6-decimal
 minor units. Every price lies inside the admission band of @eq-band, so —
 unlike the meter workload, which deliberately trips the anomaly gate — no order
 is validation-rejected by design and the expected on-chain error rate is

@@ -19,7 +19,7 @@ programs/
 ├── oracle/                 # AMI-gateway bridge; per-meter PDA state; market-clearing epochs
 ├── registry/               # user + meter accounts; 16-shard counter; staking + validator registration
 ├── trading/                # order book, CDA; sharded order submit; off-chain-signed match settlement (instructions/, state/)
-├── treasury/               # GRX↔THBG swap, GRX yield-staking, baht settlement accounting + per-(zone,batch) SettlementRecord
+├── treasury/               # GRX↔THBC swap, GRX yield-staking, baht settlement accounting + per-(zone,batch) SettlementRecord
 ├── blockbench/             # BlockBench OLTP/SmallBank benchmark crate (source in src/)
 └── tpc-benchmark/          # TPC-C stress benchmark crate (source in src/)
 shared/

@@ -25,7 +25,7 @@ The program declares two intra-repository path dependencies, both with the `cpi`
 | Dependency | Declaration | Purpose |
 | --- | --- | --- |
 | `governance` | `governance = { path = "../governance", features = ["cpi"] }` (`Cargo.toml:35`) | Supplies `GovernanceConfig` and `ErcCertificate`/`ErcStatus` types re-exported at `lib.rs:19`; operational-mode, ERC certificate, and admitted-aggregator checks. |
-| `treasury` | `treasury = { path = "../treasury", features = ["cpi"] }` (`Cargo.toml:36`) | Optional `record_settlement` CPI for baht-denominated (THBG) settlement recording. |
+| `treasury` | `treasury = { path = "../treasury", features = ["cpi"] }` (`Cargo.toml:36`) | Optional `record_settlement` CPI for baht-denominated (THBC) settlement recording. |
 
 The `cpi` feature of the `trading` crate itself implies `no-entrypoint` (`Cargo.toml:12`). Other relevant features: `localnet` enables the `compute-debug` compute-unit profiling crate (`Cargo.toml:20,34`); when `localnet` is disabled, crate-local no-op `compute_fn!` / `compute_checkpoint!` macros are defined instead (`lib.rs:81-90`).
 
@@ -83,8 +83,8 @@ Defined at `market.rs:6-62`. PDA seed: `[b"market"]` (`lib.rs:1543`). There is a
 | `has_current_batch` | `u8` | Whether a batch is open. | `market.rs:35` |
 | `_padding_batch` | `[u8; 7]` | Alignment. | `market.rs:36` |
 | `_padding_depth_1..3` | `[u8;512]`,`[u8;256]`,`[u8;128]` | Reserved (depth moved to `ZoneMarket`). | `market.rs:39-41` |
-| `settlement_thbg_mint` | `Pubkey` | THBG settlement mint for the recording policy. | `market.rs:47` |
-| `has_settlement_thbg_mint` | `u8` | Policy flag; 1 = THBG recording mandatory. | `market.rs:48` |
+| `settlement_thbc_mint` | `Pubkey` | THBC settlement mint for the recording policy. | `market.rs:47` |
+| `has_settlement_thbc_mint` | `u8` | Policy flag; 1 = THBC recording mandatory. | `market.rs:48` |
 | `_padding_depth_4` | `[u8; 31]` | Carved from former depth padding. | `market.rs:49` |
 | `_padding_depth_5` | `[u8; 6]` | Alignment. | `market.rs:50` |
 | `price_history_count` | `u8` | Valid ring-buffer entries (0..=24). | `market.rs:51` |
@@ -95,7 +95,7 @@ Defined at `market.rs:6-62`. PDA seed: `[b"market"]` (`lib.rs:1543`). There is a
 | `num_shards` | `u8` | Active shard count. | `market.rs:60` |
 | `_padding_sharding` | `[u8; 3]` | Alignment. | `market.rs:61` |
 
-**Settlement-recording policy.** The `settlement_thbg_mint` / `has_settlement_thbg_mint` pair encodes a per-market policy: once set via `set_settlement_thbg_mint` (`lib.rs:1404`), any off-chain settlement in that currency MUST pass the treasury accounts (see §4 and §5). The fields were carved from former depth padding so the account size is unchanged and accounts predating the field read it as 0, i.e. policy off (`market.rs:42-49`).
+**Settlement-recording policy.** The `settlement_thbc_mint` / `has_settlement_thbc_mint` pair encodes a per-market policy: once set via `set_settlement_thbc_mint` (`lib.rs:1404`), any off-chain settlement in that currency MUST pass the treasury accounts (see §4 and §5). The fields were carved from former depth padding so the account size is unchanged and accounts predating the field read it as 0, i.e. policy off (`market.rs:42-49`).
 
 **Embedded Pod sub-structs** (all `#[repr(C)]`, `bytemuck::Pod`): `BatchConfig` (`market.rs:69-77`), `BatchInfo` with `order_ids: [Pubkey; 32]` reduced from 50 for Pod support (`market.rs:84-92`), `PriceLevel` (`market.rs:119-124`), `PricePoint` (`market.rs:137-141`).
 
@@ -273,7 +273,7 @@ Effects: `total_currency_value = match_amount × match_price / 1e9` — a u128 `
 
 **`withdraw_escrow`** (`lib.rs:1507` → `escrow.rs:198`, arg `amount`). Signer: `user`. Requires `amount <= escrow.amount` (`InsufficientEscrowBalance`, `escrow.rs:201-204`); transfers from the escrow PDA back to the user wallet, signed by `market_authority`; emits `EscrowWithdrawn`. The escrow seed includes `user.key()`, so a signer can only address their own escrow (`escrow.rs:172-175`).
 
-**`set_settlement_thbg_mint`** (`lib.rs:1404`, arg `thbg_mint: Pubkey`). Signer: market `authority` (`has_one`, `lib.rs:1744`). Rejects `Pubkey::default()` (`TreasuryCurrencyMismatch`, `lib.rs:1409`); sets `settlement_thbg_mint` and `has_settlement_thbg_mint = 1`; emits `SettlementThbgMintSet` (`lib.rs:1399-1421`). After this, THBG-denominated off-chain settlements require the treasury accounts (see §5).
+**`set_settlement_thbc_mint`** (`lib.rs:1404`, arg `thbc_mint: Pubkey`). Signer: market `authority` (`has_one`, `lib.rs:1744`). Rejects `Pubkey::default()` (`TreasuryCurrencyMismatch`, `lib.rs:1409`); sets `settlement_thbc_mint` and `has_settlement_thbc_mint = 1`; emits `SettlementThbcMintSet` (`lib.rs:1399-1421`). After this, THBC-denominated off-chain settlements require the treasury accounts (see §5).
 
 **`update_market_params`** (`lib.rs:1362`, args `fee_bps, clearing, min_price, max_price`). Signer: market `authority`. Updates fee, clearing flag, and price bounds; emits `MarketParamsUpdated` (`lib.rs:1362-1397`).
 
@@ -311,7 +311,7 @@ To settle, the matching agent constructs a transaction whose instructions are `[
 
 5. **Singleton-market binding.** `settle_offchain_match` binds `market` to the canonical `[b"market"]` PDA, blocking substitution of a fee-zero market, and constrains `zone_market` to belong to that market, blocking a zero-capacity or wrong-zone book (`settle_offchain.rs:416-425`).
 
-6. **Mandatory THBG settlement recording.** When `market.has_settlement_thbg_mint == 1` and the settlement `currency_mint` equals `market.settlement_thbg_mint`, recording is mandatory: `recording_required` is computed, and if the treasury accounts are absent the instruction fails with `TreasurySettlementRequired` (`settle_offchain.rs:897-929` single path; `settle_offchain.rs:1297-1354` batch path). When the treasury accounts *are* supplied, the settlement currency must equal `treasury_state.thbg_mint` (`TreasuryCurrencyMismatch`, `settle_offchain.rs:909-913`, `1305-1309`), preventing an arbitrary token from being recorded as a baht settlement.
+6. **Mandatory THBC settlement recording.** When `market.has_settlement_thbc_mint == 1` and the settlement `currency_mint` equals `market.settlement_thbc_mint`, recording is mandatory: `recording_required` is computed, and if the treasury accounts are absent the instruction fails with `TreasurySettlementRequired` (`settle_offchain.rs:897-929` single path; `settle_offchain.rs:1297-1354` batch path). When the treasury accounts *are* supplied, the settlement currency must equal `treasury_state.thbc_mint` (`TreasuryCurrencyMismatch`, `settle_offchain.rs:909-913`, `1305-1309`), preventing an arbitrary token from being recorded as a baht settlement.
 
 7. **`market_authority` PDA as escrow signer / settlement recorder.** All escrow transfers and the treasury recording CPIs are signed by the `market_authority` PDA (seed `[b"market_authority"]`, `settle_offchain.rs:454`, `914-924`, `1068`), which is also the on-chain identity the treasury program expects as `recorder`/`settlement_recorder` (§6).
 
@@ -341,14 +341,14 @@ The `governance` program supplies `GovernanceConfig`, `ErcCertificate`, and `Erc
 
 ### 6.2 trading → treasury (settlement recording, optional and non-custodial)
 
-The off-chain settlement instructions accept optional `treasury_program: Option<Program<Treasury>>` and `treasury_state: Option<AccountLoader<Treasury>>` accounts (`settle_offchain.rs:555-557`, `649-657`); the batch context also takes an optional per-shard `settlement_shard` accumulator and per-`(zone, batch)` `settlement_record` (`settle_offchain.rs:658-666`). When the treasury accounts are present, the single path performs `treasury::cpi::record_settlement` with `RecordSettlement { treasury, recorder }`, signed by the `market_authority` PDA (`settle_offchain.rs:914-924`); the batch path performs `treasury::cpi::record_settlement_batch_sharded`, which bumps the per-shard `SettlementShard` (keeping `treasury_state` read-only so THBG batches don't serialize on the singleton) and CPI-inits a `SettlementRecord` binding the batch's `merkle_root`, VAT figures, `zone_id`, and `batch_id` (`settle_offchain.rs:1297-1354`, read-only rationale `settle_offchain.rs:650-657`). Properties:
+The off-chain settlement instructions accept optional `treasury_program: Option<Program<Treasury>>` and `treasury_state: Option<AccountLoader<Treasury>>` accounts (`settle_offchain.rs:555-557`, `649-657`); the batch context also takes an optional per-shard `settlement_shard` accumulator and per-`(zone, batch)` `settlement_record` (`settle_offchain.rs:658-666`). When the treasury accounts are present, the single path performs `treasury::cpi::record_settlement` with `RecordSettlement { treasury, recorder }`, signed by the `market_authority` PDA (`settle_offchain.rs:914-924`); the batch path performs `treasury::cpi::record_settlement_batch_sharded`, which bumps the per-shard `SettlementShard` (keeping `treasury_state` read-only so THBC batches don't serialize on the singleton) and CPI-inits a `SettlementRecord` binding the batch's `merkle_root`, VAT figures, `zone_id`, and `batch_id` (`settle_offchain.rs:1297-1354`, read-only rationale `settle_offchain.rs:650-657`). Properties:
 
 - **Non-custodial.** The CPI moves no funds; it only records settled value. The escrow, Ed25519, and replay-nullifier guarantees are therefore untouched (`settle_offchain.rs:550-554`).
-- **Records the GROSS settled value.** The single-match path passes `total_currency_value` (seller payout + fee + wheeling + loss), which reconciles to the total THBG leaving the buyer escrow rather than the seller's net receipt (`settle_offchain.rs:900-923`). The batch path accumulates `batch_total_value` across all matches and records it with one CPI after the loop (`settle_offchain.rs:1071-1073`, `1191`, `1297-1354`).
+- **Records the GROSS settled value.** The single-match path passes `total_currency_value` (seller payout + fee + wheeling + loss), which reconciles to the total THBC leaving the buyer escrow rather than the seller's net receipt (`settle_offchain.rs:900-923`). The batch path accumulates `batch_total_value` across all matches and records it with one CPI after the loop (`settle_offchain.rs:1071-1073`, `1191`, `1297-1354`).
 - **Wired into both settlement instructions.** Both `settle_offchain_match` and `batch_settle_offchain_match` contain the recording block (`settle_offchain.rs:897`, `1297`).
 - **Recorder identity.** `recorder` is the `market_authority` PDA, which the treasury program authorizes as its `settlement_recorder` (the trading `market_authority`).
 
-The currency-mint equality check against `treasury_state.thbg_mint` (`TreasuryCurrencyMismatch`) ensures recording is genuine baht-denominated settlement (`settle_offchain.rs:909-913`, `1305-1309`).
+The currency-mint equality check against `treasury_state.thbc_mint` (`TreasuryCurrencyMismatch`) ensures recording is genuine baht-denominated settlement (`settle_offchain.rs:909-913`, `1305-1309`).
 
 ---
 
@@ -364,7 +364,7 @@ All events are defined in `events.rs`.
 | `OrderMatched` | sell_order, buy_order, seller, buyer, amount, price, total_value, fee_amount, timestamp | `match_orders`, `sharded_match_orders`, `clear_auction`, `execute_auction_matches`, `execute_atomic_settlement`, `settle_offchain_match`, `batch_settle_offchain_match` | `events.rs:29-40` |
 | `OrderCancelled` | order_id, user, timestamp | `cancel_order` | `events.rs:42-47` |
 | `MarketParamsUpdated` | authority, market_fee_bps, clearing_enabled, min/max_price_per_kwh, timestamp | `update_market_params` | `events.rs:49-57` |
-| `SettlementThbgMintSet` | authority, thbg_mint, timestamp | `set_settlement_thbg_mint` | `events.rs:59-64` |
+| `SettlementThbcMintSet` | authority, thbc_mint, timestamp | `set_settlement_thbc_mint` | `events.rs:59-64` |
 | `MaintenanceModeChanged` | authority, maintenance_mode, timestamp | (defined; no in-program emit) | `events.rs:66-71` |
 | `LimitOrderSubmitted` | order_id, side, price, amount, timestamp | `submit_limit_order`, `submit_limit_order_sharded` | `events.rs:73-80` |
 | `MarketOrderSubmitted` | user, side, amount, timestamp | `submit_market_order` | `events.rs:82-88` |
@@ -416,8 +416,8 @@ All variants are defined in `error.rs` under `#[error_code] enum TradingError`.
 | `InvalidEscrow` | Escrow account does not match the expected per-user PDA | `error.rs:65-66` |
 | `InvalidNullifier` | Nullifier account does not match the expected per-order PDA | `error.rs:67-68` |
 | `NullifierUserMismatch` | Nullifier authority does not match the signed order owner | `error.rs:69-70` |
-| `TreasuryCurrencyMismatch` | Settlement currency mint is not the treasury THBG mint | `error.rs:71-72` |
-| `TreasurySettlementRequired` | This market settles in THBG: the treasury accounts are required to record the settlement | `error.rs:73-74` |
+| `TreasuryCurrencyMismatch` | Settlement currency mint is not the treasury THBC mint | `error.rs:71-72` |
+| `TreasurySettlementRequired` | This market settles in THBC: the treasury accounts are required to record the settlement | `error.rs:73-74` |
 | `InvalidShardId` | Settlement collector shard id out of range (must be < NUM_SETTLE_SHARDS) | `error.rs:75-76` |
 | `ZoneCapacityRequired` | Cross-zone settlement requires the ZoneCapacity account (committed_flow ceiling) | `error.rs:79-80` |
 | `MatchAlreadySettled` | This match (trade_id) has already been settled on-chain (replay rejected) | `error.rs:81-82` |

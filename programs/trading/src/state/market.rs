@@ -39,13 +39,13 @@ pub struct Market {
     pub _padding_depth_1: [u8; 512],
     pub _padding_depth_2: [u8; 256],
     pub _padding_depth_3: [u8; 128],
-    // Settlement recording policy: when `has_settlement_thbg_mint == 1` and a match
-    // settles in `settlement_thbg_mint`, the treasury accounts MUST be passed to the
-    // settle instruction (recording is no longer optional for THBG-denominated trades).
+    // Settlement recording policy: when `has_settlement_thbc_mint == 1` and a match
+    // settles in `settlement_thbc_mint`, the treasury accounts MUST be passed to the
+    // settle instruction (recording is no longer optional for THBC-denominated trades).
     // Carved from the former depth padding; existing accounts read these as 0 (policy
     // off) so the layout/size is unchanged and backward compatible.
-    pub settlement_thbg_mint: Pubkey,  // 32
-    pub has_settlement_thbg_mint: u8,  // 1
+    pub settlement_thbc_mint: Pubkey,  // 32
+    pub has_settlement_thbc_mint: u8,  // 1
     pub _padding_depth_4: [u8; 31],    // 32 + 1 + 31 = 64 (was [u8; 64])
     pub _padding_depth_5: [u8; 6], // 512+256+128+64+6 = 966
     pub price_history_count: u8,   // 1 — number of valid entries (0..=24)

@@ -2,7 +2,7 @@
 
 ## Abstract
 
-The `treasury` program is the on-chain monetary and settlement-accounting component of the GridTokenX P2P energy-trading platform. It issues THBG, a Thai-baht-pegged stablecoin (six decimals) whose mint authority is the treasury program-derived address (PDA), and provides the baht-denominated settlement primitive by which producer GRX is converted to peg-collateralised value. The program enforces a two-part peg invariant — attestation freshness and a supply ceiling derived from an off-chain reserve attestation — and operates a GRX yield-staking facility that distributes rewards through a MasterChef-style accumulator. Four segregated GRX vaults isolate redemption collateral, staker custody, the reward pool, and the regulator / consumer-rebate pool; staked GRX never participates in peg collateralisation. The program holds no business logic in handlers beyond the necessary token-program cross-program invocations (CPIs) and the accounting updates that back each token movement.
+The `treasury` program is the on-chain monetary and settlement-accounting component of the GridTokenX P2P energy-trading platform. It issues THBC, a Thai-baht-pegged stablecoin (six decimals) whose mint authority is the treasury program-derived address (PDA), and provides the baht-denominated settlement primitive by which producer GRX is converted to peg-collateralised value. The program enforces a two-part peg invariant — attestation freshness and a supply ceiling derived from an off-chain reserve attestation — and operates a GRX yield-staking facility that distributes rewards through a MasterChef-style accumulator. Four segregated GRX vaults isolate redemption collateral, staker custody, the reward pool, and the regulator / consumer-rebate pool; staked GRX never participates in peg collateralisation. The program holds no business logic in handlers beyond the necessary token-program cross-program invocations (CPIs) and the accounting updates that back each token movement.
 
 ---
 
@@ -37,11 +37,11 @@ The token interface is imported from `anchor_spl::token_interface` (`lib.rs:4`),
 
 The treasury program serves three distinct functions within the platform.
 
-**THBG stablecoin issuance.** THBG is a THB-pegged stablecoin with six decimals, so one whole baht equals 1,000,000 minor units (`state.rs:9-10`, constant `THBG_DECIMALS`). The THBG mint is created during initialisation with its mint authority set to the treasury PDA derived from the seed `[b"treasury"]` (`lib.rs:1095-1104`, `lib.rs:1086`). No external account can mint THBG; issuance occurs solely through `swap_grx_for_thbg`, signed by the treasury PDA (`lib.rs:710-723`).
+**THBC stablecoin issuance.** THBC is a THB-pegged stablecoin with six decimals, so one whole baht equals 1,000,000 minor units (`state.rs:9-10`, constant `THBC_DECIMALS`). The THBC mint is created during initialisation with its mint authority set to the treasury PDA derived from the seed `[b"treasury"]` (`lib.rs:1095-1104`, `lib.rs:1086`). No external account can mint THBC; issuance occurs solely through `swap_grx_for_thbc`, signed by the treasury PDA (`lib.rs:710-723`).
 
-**Baht-denominated settlement accounting.** The program maintains a cumulative `total_settled_thbg` counter (`state.rs:45`) advanced by the trading program through the `record_settlement` CPI after a trade is paid in THBG (`lib.rs:360-381`). On the batch path the trading program records into per-shard accumulators instead (`record_settlement_batch_sharded`, §4.3b), and the global counter is reconciled by `aggregate_settlement_shards`. This counter is the on-chain record of total baht value settled; the operation moves no funds.
+**Baht-denominated settlement accounting.** The program maintains a cumulative `total_settled_thbc` counter (`state.rs:45`) advanced by the trading program through the `record_settlement` CPI after a trade is paid in THBC (`lib.rs:360-381`). On the batch path the trading program records into per-shard accumulators instead (`record_settlement_batch_sharded`, §4.3b), and the global counter is reconciled by `aggregate_settlement_shards`. This counter is the on-chain record of total baht value settled; the operation moves no funds.
 
-**GRX↔THBG swap and GRX yield staking.** The `swap_grx_for_thbg` and `redeem_thbg_for_grx` instructions implement bidirectional conversion between GRX and THBG (`lib.rs:670`, `lib.rs:741`). The staking facility (`stake_grx`, `unstake_grx`, `claim_rewards`, `fund_rewards`) lets GRX holders earn GRX-denominated yield (`lib.rs:804`, `lib.rs:852`, `lib.rs:903`, `lib.rs:953`).
+**GRX↔THBC swap and GRX yield staking.** The `swap_grx_for_thbc` and `redeem_thbc_for_grx` instructions implement bidirectional conversion between GRX and THBC (`lib.rs:670`, `lib.rs:741`). The staking facility (`stake_grx`, `unstake_grx`, `claim_rewards`, `fund_rewards`) lets GRX holders earn GRX-denominated yield (`lib.rs:804`, `lib.rs:852`, `lib.rs:903`, `lib.rs:953`).
 
 ### The four GRX vaults
 
@@ -70,21 +70,21 @@ The segregation is structural: GRX deposited as swap collateral, GRX held in sta
 | `authority` | `Pubkey` | 32 | Admin for `set_params` and pause (`state.rs:31`) |
 | `attestor` | `Pubkey` | 32 | Off-chain custodian authorised to attest the THB reserve (`state.rs:32`) |
 | `grx_mint` | `Pubkey` | 32 | GRX SPL mint (energy-token program) (`state.rs:33`) |
-| `thbg_mint` | `Pubkey` | 32 | THBG stablecoin mint; authority is this PDA (`state.rs:34`) |
+| `thbc_mint` | `Pubkey` | 32 | THBC stablecoin mint; authority is this PDA (`state.rs:34`) |
 | `settlement_recorder` | `Pubkey` | 32 | PDA authorised to call `record_settlement` (trading `market_authority`) (`state.rs:35`) |
-| `attested_reserve` | `u64` | 8 | Off-chain THB reserve in THBG minor units; the peg ceiling (`state.rs:37`) |
+| `attested_reserve` | `u64` | 8 | Off-chain THB reserve in THBC minor units; the peg ceiling (`state.rs:37`) |
 | `attestation_ts` | `i64` | 8 | Unix timestamp of the last reserve attestation (`state.rs:38`) |
 | `attestation_ttl` | `i64` | 8 | Maximum attestation age in seconds before mints are blocked (`state.rs:39`) |
-| `thbg_supply` | `u64` | 8 | THBG minted by the treasury; must stay ≤ `attested_reserve` (`state.rs:40`) |
-| `grx_per_thbg_rate` | `u64` | 8 | THBG minor units issued per one whole GRX (settlement price) (`state.rs:41`) |
+| `thbc_supply` | `u64` | 8 | THBC minted by the treasury; must stay ≤ `attested_reserve` (`state.rs:40`) |
+| `grx_per_thbc_rate` | `u64` | 8 | THBC minor units issued per one whole GRX (settlement price) (`state.rs:41`) |
 | `total_staked` | `u64` | 8 | GRX currently staked; never counted toward the peg (`state.rs:42`) |
 | `reward_pool` | `u64` | 8 | GRX available to pay staking rewards (`state.rs:43`) |
 | `created_at` | `i64` | 8 | Initialisation timestamp (`state.rs:44`) |
-| `total_settled_thbg` | `u64` | 8 | Cumulative baht value settled via trading CPI (`state.rs:45`) |
+| `total_settled_thbc` | `u64` | 8 | Cumulative baht value settled via trading CPI (`state.rs:45`) |
 | `swap_fee_bps` | `u16` | 2 | Fee on swap output, basis points; capped at 10,000 (`state.rs:47`) |
 | `paused` | `u8` | 1 | `1` = swaps and redeems halted (`state.rs:49`) |
 | `bump` | `u8` | 1 | Treasury PDA bump; also the mint/transfer signer seed (`state.rs:50`) |
-| `thbg_mint_bump` | `u8` | 1 | Stored canonical bump for the THBG mint PDA (`state.rs:55`) |
+| `thbc_mint_bump` | `u8` | 1 | Stored canonical bump for the THBC mint PDA (`state.rs:55`) |
 | `swap_vault_bump` | `u8` | 1 | Stored canonical bump for `swap_vault` (`state.rs:56`) |
 | `stake_vault_bump` | `u8` | 1 | Stored canonical bump for `stake_vault` (`state.rs:57`) |
 | `reward_vault_bump` | `u8` | 1 | Stored canonical bump for `reward_vault` (`state.rs:58`) |
@@ -122,7 +122,7 @@ Either way the record is created on first record for the batch with space `8 + s
 | --- | --- | --- | --- |
 | `merkle_root` | `[u8; 32]` | 32 | Root over the batch's match leaves (`state.rs:120`) |
 | `recorder` | `Pubkey` | 32 | `settlement_recorder` that committed the batch (`state.rs:121`) |
-| `total_value` | `u64` | 8 | Gross baht (THBG minor units) in the batch (`state.rs:122`) |
+| `total_value` | `u64` | 8 | Gross baht (THBC minor units) in the batch (`state.rs:122`) |
 | `vat_amount` | `u64` | 8 | VAT on the energy value, for audit / e-Tax (`state.rs:123`) |
 | `committed_ts` | `i64` | 8 | Unix timestamp of the commit (`state.rs:124`) |
 | `batch_id` | `u64` | 8 | Settlement batch id within the zone (`state.rs:125`) |
@@ -138,7 +138,7 @@ Total size: 112 bytes (`state.rs:130`).
 | Constant | Value | Purpose |
 | --- | --- | --- |
 | `ACC_PRECISION` | `1_000_000_000_000` (1e12) | Fixed-point precision for the reward accumulator (`state.rs:7`) |
-| `THBG_DECIMALS` | `6` | THBG decimals (`state.rs:10`) |
+| `THBC_DECIMALS` | `6` | THBC decimals (`state.rs:10`) |
 | `NUM_SETTLE_SHARDS` | `16` | Number of per-shard settlement accumulator PDAs (`state.rs:18`) |
 | `GRX_ATOMS_PER_WHOLE` | `1_000_000_000` (1e9) | GRX atomic units per whole GRX; the swap divisor (`lib.rs:36`) |
 
@@ -153,10 +153,10 @@ This section documents each instruction defined in the `#[program]` module (`lib
 Bootstraps the treasury (`lib.rs:278-314`).
 
 - **Signers:** `authority` (also the rent payer) (`lib.rs:1142-1143`).
-- **Accounts:** `treasury` (init, `[b"treasury"]`), `grx_mint`, `thbg_mint` (init, `[b"thbg_mint"]`, `THBG_DECIMALS` decimals, authority = treasury), `swap_vault`, `stake_vault`, `reward_vault` (all init, authority = treasury), `token_program`, `system_program`, `rent` (`lib.rs:1081-1148`).
-- **Parameters:** `attestor`, `settlement_recorder`, `grx_per_thbg_rate`, `swap_fee_bps`, `attestation_ttl` (`lib.rs:278-285`).
+- **Accounts:** `treasury` (init, `[b"treasury"]`), `grx_mint`, `thbc_mint` (init, `[b"thbc_mint"]`, `THBC_DECIMALS` decimals, authority = treasury), `swap_vault`, `stake_vault`, `reward_vault` (all init, authority = treasury), `token_program`, `system_program`, `rent` (`lib.rs:1081-1148`).
+- **Parameters:** `attestor`, `settlement_recorder`, `grx_per_thbc_rate`, `swap_fee_bps`, `attestation_ttl` (`lib.rs:278-285`).
 - **Preconditions:** `swap_fee_bps ≤ 10_000`, else `InvalidFeeBps` — an unbounded fee could otherwise zero every swap's output platform-wide (`lib.rs:287`).
-- **Effects:** writes all configuration fields via `load_init`, sets counters to zero, records `created_at`, and persists all PDA bumps (`lib.rs:288-311`). `attested_reserve`, `attestation_ts`, `thbg_supply`, `total_staked`, `reward_pool`, `total_settled_thbg`, and `acc_reward_per_share` all start at zero, and `paused` starts at `0` (`lib.rs:289-311`).
+- **Effects:** writes all configuration fields via `load_init`, sets counters to zero, records `created_at`, and persists all PDA bumps (`lib.rs:288-311`). `attested_reserve`, `attestation_ts`, `thbc_supply`, `total_staked`, `reward_pool`, `total_settled_thbc`, and `acc_reward_per_share` all start at zero, and `paused` starts at `0` (`lib.rs:289-311`).
 - **Events / errors:** none emitted; `InvalidFeeBps` on an out-of-range fee.
 
 ### 4.2 `set_params`
@@ -165,7 +165,7 @@ Admin update of swap rate, fee, attestation TTL, pause flag, and settlement reco
 
 - **Signers:** `authority` (`lib.rs:1154`).
 - **Preconditions:** `swap_fee_bps ≤ 10_000`, else `InvalidFeeBps` (`lib.rs:327`); `treasury.authority == authority.key()`, else `UnauthorizedAuthority` (`lib.rs:330`).
-- **Effects:** overwrites `grx_per_thbg_rate`, `swap_fee_bps`, `attestation_ttl`, `paused`, and `settlement_recorder` (`lib.rs:331-335`).
+- **Effects:** overwrites `grx_per_thbc_rate`, `swap_fee_bps`, `attestation_ttl`, `paused`, and `settlement_recorder` (`lib.rs:331-335`).
 - **Events / errors:** emits `ParamsUpdated` with the full new parameter set (`lib.rs:337-345`); `InvalidFeeBps`, `UnauthorizedAuthority` on failure.
 
 ### 4.3 `record_settlement`
@@ -174,7 +174,7 @@ Records a baht-denominated trade settlement; non-custodial (`lib.rs:360-381`).
 
 - **Signers:** `recorder` (`lib.rs:1336`).
 - **Preconditions:** `value > 0`, else `ZeroAmount` (`lib.rs:362`); `treasury.settlement_recorder == recorder.key()`, else `UnauthorizedRecorder` (`lib.rs:365-368`).
-- **Effects:** `total_settled_thbg += value` with checked addition (`lib.rs:369-372`).
+- **Effects:** `total_settled_thbc += value` with checked addition (`lib.rs:369-372`).
 - **Events:** `SettlementRecorded` (`lib.rs:373-378`).
 - **Errors:** `ZeroAmount`, `UnauthorizedRecorder`, `MathOverflow`.
 - **Replay safety:** not independently replay-safe — the instruction has no per-call nullifier of its own and relies on the caller (trading's per-match `TradeNullifier` in `settle_offchain.rs`) to guarantee it is never invoked twice for the same match (`lib.rs:356-359`).
@@ -187,18 +187,18 @@ Records a per-batch baht settlement with an on-chain audit commitment; non-custo
 - **Accounts:** `treasury` (`[b"treasury"]`), `settlement_record` (init, per-`(zone, batch)` PDA, seeds `[b"settlement_batch", zone_id, batch_id]` — deliberately distinct from the sharded variant's `[b"settlement", ...]` so the two can never `init` the same PDA for the same `(zone, batch)`), `recorder`, `payer`, `system_program` (`lib.rs:1341-1365`). The `SettlementRecord` is created on first record for the batch (`lib.rs:1345-1356`).
 - **Parameters:** `value`, `merkle_root: [u8; 32]`, `vat_amount`, `vat_rate_bps`, `zone_id`, `batch_id` (`lib.rs:389-397`).
 - **Preconditions:** `value > 0`, else `ZeroAmount` — also closes a PDA-orphan path where a zero-value call would consume the batch's `SettlementRecord` address (`lib.rs:399`); `treasury.settlement_recorder == recorder.key()`, else `UnauthorizedRecorder` (`lib.rs:403-406`).
-- **Effects:** bumps `total_settled_thbg` by the gross batch `value` with checked addition (`lib.rs:407-412`); writes the per-`(zone, batch)` `SettlementRecord` carrying `merkle_root`, `recorder`, `total_value`, `vat_amount`, `committed_ts`, `batch_id`, `zone_id`, `vat_rate_bps`, and `bump` (`lib.rs:414-423`). Commit-only — no on-chain verification of the Merkle root; off-chain verifiers recompute it and e-Tax issuance consumes the VAT fields.
+- **Effects:** bumps `total_settled_thbc` by the gross batch `value` with checked addition (`lib.rs:407-412`); writes the per-`(zone, batch)` `SettlementRecord` carrying `merkle_root`, `recorder`, `total_value`, `vat_amount`, `committed_ts`, `batch_id`, `zone_id`, `vat_rate_bps`, and `bump` (`lib.rs:414-423`). Commit-only — no on-chain verification of the Merkle root; off-chain verifiers recompute it and e-Tax issuance consumes the VAT fields.
 - **Events:** `SettlementBatchRecorded` (`lib.rs:425-435`).
 - **Errors:** `ZeroAmount`, `UnauthorizedRecorder`, `MathOverflow`.
 
 ### 4.3b Sharded settlement recording (`initialize_settlement_shard`, `record_settlement_sharded`, `record_settlement_batch_sharded`, `aggregate_settlement_shards`)
 
-Settlement recording into the single `Treasury` PDA write-locks it under Sealevel, serialising every settle. The sharded path spreads the counter across `NUM_SETTLE_SHARDS = 16` per-shard `SettlementShard` PDAs (`[b"settle_shard", &[shard_id]]`, `state.rs:80-94`), keeping `treasury` **read-only** on the hot path (recorder gate only) so parallel settles on distinct shards do not serialise (`lib.rs:1425-1426`, `lib.rs:1449-1450`). The global `total_settled_thbg` is stale on purpose and reconciled by aggregation.
+Settlement recording into the single `Treasury` PDA write-locks it under Sealevel, serialising every settle. The sharded path spreads the counter across `NUM_SETTLE_SHARDS = 16` per-shard `SettlementShard` PDAs (`[b"settle_shard", &[shard_id]]`, `state.rs:80-94`), keeping `treasury` **read-only** on the hot path (recorder gate only) so parallel settles on distinct shards do not serialise (`lib.rs:1425-1426`, `lib.rs:1449-1450`). The global `total_settled_thbc` is stale on purpose and reconciled by aggregation.
 
 - **`initialize_settlement_shard(shard_id)`** (`lib.rs:443-460`): admin-only; creates one shard PDA per `shard_id < NUM_SETTLE_SHARDS`, storing its canonical bump (`lib.rs:1367-1386`). Errors: `InvalidShardId`, `UnauthorizedAuthority`.
-- **`record_settlement_sharded(value, shard_id)`** (`lib.rs:488-519`): parallel-friendly `record_settlement` — requires `value > 0` (`ZeroAmount`) and `shard_id < NUM_SETTLE_SHARDS` (`InvalidShardId`), gates on `settlement_recorder`, then bumps the shard's `settled_thbg` and `settlement_count` with checked addition (`lib.rs:494-509`). Emits `SettlementShardRecorded` (`lib.rs:510-516`). Same replay-safety caveat as `record_settlement`: relies on trading's per-match `TradeNullifier` (`lib.rs:486-487`).
+- **`record_settlement_sharded(value, shard_id)`** (`lib.rs:488-519`): parallel-friendly `record_settlement` — requires `value > 0` (`ZeroAmount`) and `shard_id < NUM_SETTLE_SHARDS` (`InvalidShardId`), gates on `settlement_recorder`, then bumps the shard's `settled_thbc` and `settlement_count` with checked addition (`lib.rs:494-509`). Emits `SettlementShardRecorded` (`lib.rs:510-516`). Same replay-safety caveat as `record_settlement`: relies on trading's per-match `TradeNullifier` (`lib.rs:486-487`).
 - **`record_settlement_batch_sharded(value, merkle_root, vat_amount, vat_rate_bps, zone_id, batch_id, shard_id)`** (`lib.rs:586-643`): the **live trading batch CPI path**. Requires `value > 0` and a valid `shard_id`, gates on `settlement_recorder`, bumps the shard accumulator, and writes the per-`(zone, batch)` `SettlementRecord` under `[b"settlement", zone_id, batch_id]` (`lib.rs:597-627`, `lib.rs:1457-1464`). Emits `SettlementBatchShardRecorded`, carrying the full audit fields (Merkle root, VAT amount/rate, batch identity) plus the shard's running total (`lib.rs:629-640`).
-- **`aggregate_settlement_shards`** (`lib.rs:534-577`): admin-only drain-and-fold reconcile. Each `SettlementShard` passed via `remaining_accounts` is validated — program ownership, minimum data length (`InvalidShardAccount`, a hard failure: malformed accounts are rejected, never silently skipped), `shard_id` range, stored-bump PDA re-derivation via `create_program_address`, a shard-id bitmask against duplicates (`DuplicateShard`), and writability (`ShardNotWritable`) — then its `settled_thbg` is **added** to the live global and zeroed (`lib.rs:547-574`). Folding (rather than overwriting) preserves single-match `record_settlement` contributions; zeroing makes each shard a delta-since-last-aggregate, so re-running with no new settles is a no-op. `settlement_count` stays cumulative.
+- **`aggregate_settlement_shards`** (`lib.rs:534-577`): admin-only drain-and-fold reconcile. Each `SettlementShard` passed via `remaining_accounts` is validated — program ownership, minimum data length (`InvalidShardAccount`, a hard failure: malformed accounts are rejected, never silently skipped), `shard_id` range, stored-bump PDA re-derivation via `create_program_address`, a shard-id bitmask against duplicates (`DuplicateShard`), and writability (`ShardNotWritable`) — then its `settled_thbc` is **added** to the live global and zeroed (`lib.rs:547-574`). Folding (rather than overwriting) preserves single-match `record_settlement` contributions; zeroing makes each shard a delta-since-last-aggregate, so re-running with no new settles is a no-op. `settlement_count` stays cumulative.
 
 ### 4.4 `update_attestation`
 
@@ -210,36 +210,36 @@ Custodian refresh of the off-chain THB reserve figure (`lib.rs:647-661`).
 - **Events:** `ReserveAttested` (`lib.rs:654-658`).
 - **Errors:** `UnauthorizedAttestor`.
 
-### 4.5 `swap_grx_for_thbg`
+### 4.5 `swap_grx_for_thbc`
 
-The baht-denominated settlement primitive: converts GRX to THBG (`lib.rs:670-737`). The peg math is extracted into the unit-testable helper `compute_swap_grx_for_thbg` (`lib.rs:62-88`).
+The baht-denominated settlement primitive: converts GRX to THBC (`lib.rs:670-737`). The peg math is extracted into the unit-testable helper `compute_swap_grx_for_thbc` (`lib.rs:62-88`).
 
 - **Signers:** `user` (`lib.rs:1188`).
-- **Accounts:** `treasury`, `grx_mint`, `thbg_mint`, `swap_vault`, `user_grx_ata`, `user_thbg_ata`, `token_program` (`lib.rs:1165-1190`). The treasury constraints assert `grx_mint` and `thbg_mint` match the stored mints (`lib.rs:1170-1171`).
-- **Preconditions:** `grx_in > 0` (`ZeroAmount`); `paused == 0` (`Paused`); `grx_per_thbg_rate > 0` (`RateNotSet`); attestation freshness `now − attestation_ts ≤ attestation_ttl` (`StaleAttestation`) (`lib.rs:672-682`); inside the helper, net output `> 0` (`ZeroAmount`, `lib.rs:78`) and peg ceiling `thbg_supply + net ≤ attested_reserve` (`PegBreach`, `lib.rs:82`).
-- **Swap formula:** the gross THBG output is
+- **Accounts:** `treasury`, `grx_mint`, `thbc_mint`, `swap_vault`, `user_grx_ata`, `user_thbc_ata`, `token_program` (`lib.rs:1165-1190`). The treasury constraints assert `grx_mint` and `thbc_mint` match the stored mints (`lib.rs:1170-1171`).
+- **Preconditions:** `grx_in > 0` (`ZeroAmount`); `paused == 0` (`Paused`); `grx_per_thbc_rate > 0` (`RateNotSet`); attestation freshness `now − attestation_ts ≤ attestation_ttl` (`StaleAttestation`) (`lib.rs:672-682`); inside the helper, net output `> 0` (`ZeroAmount`, `lib.rs:78`) and peg ceiling `thbc_supply + net ≤ attested_reserve` (`PegBreach`, `lib.rs:82`).
+- **Swap formula:** the gross THBC output is
 
   ```
-  gross    = grx_in × grx_per_thbg_rate / 1e9      (1e9 = GRX_ATOMS_PER_WHOLE)
+  gross    = grx_in × grx_per_thbc_rate / 1e9      (1e9 = GRX_ATOMS_PER_WHOLE)
   fee      = gross × swap_fee_bps / 10_000
-  thbg_out = gross − fee
+  thbc_out = gross − fee
   ```
 
-  computed in `u128` to avoid intermediate overflow (`lib.rs:69-77`). The division by `GRX_ATOMS_PER_WHOLE` converts an atomic GRX amount through the rate expressed in THBG minor units per whole GRX.
-- **Effects:** transfers `grx_in` GRX from `user_grx_ata` into `swap_vault` (authority = user) via `transfer_checked` (`lib.rs:696-708`); mints `thbg_out` THBG to `user_thbg_ata`, signed by the treasury PDA seeds `[b"treasury", bump]` (`lib.rs:710-723`); sets `thbg_supply = new_supply` (`lib.rs:725`).
-- **Events:** `SwappedGrxForThbg` (`lib.rs:727-734`).
+  computed in `u128` to avoid intermediate overflow (`lib.rs:69-77`). The division by `GRX_ATOMS_PER_WHOLE` converts an atomic GRX amount through the rate expressed in THBC minor units per whole GRX.
+- **Effects:** transfers `grx_in` GRX from `user_grx_ata` into `swap_vault` (authority = user) via `transfer_checked` (`lib.rs:696-708`); mints `thbc_out` THBC to `user_thbc_ata`, signed by the treasury PDA seeds `[b"treasury", bump]` (`lib.rs:710-723`); sets `thbc_supply = new_supply` (`lib.rs:725`).
+- **Events:** `SwappedGrxForThbc` (`lib.rs:727-734`).
 - **Errors:** `ZeroAmount`, `Paused`, `RateNotSet`, `StaleAttestation`, `PegBreach`, `MathOverflow`.
 
-### 4.6 `redeem_thbg_for_grx`
+### 4.6 `redeem_thbc_for_grx`
 
-Redeems THBG back into GRX from the swap vault (`lib.rs:741-799`). The peg math is extracted into the unit-testable helper `compute_redeem_thbg_for_grx` (`lib.rs:95-113`).
+Redeems THBC back into GRX from the swap vault (`lib.rs:741-799`). The peg math is extracted into the unit-testable helper `compute_redeem_thbc_for_grx` (`lib.rs:95-113`).
 
 - **Signers:** `user` (`lib.rs:1216`).
 - **Accounts:** same shape as the swap (`lib.rs:1193-1218`).
-- **Preconditions:** `thbg_in > 0` (`ZeroAmount`); `paused == 0` (`Paused`); `grx_per_thbg_rate > 0` (`RateNotSet`) (`lib.rs:743-749`); inside the helper, `thbg_in ≤ thbg_supply` (`SupplyUnderflow`, `lib.rs:101`); computed `grx_out > 0` (`ZeroAmount`, `lib.rs:106`); `grx_out ≤ swap_vault.amount` (`InsufficientVault`, `lib.rs:108`).
-- **Formula:** `grx_out = thbg_in × 1e9 / grx_per_thbg_rate`, the inverse of the swap rate (`lib.rs:102-105`).
-- **Effects:** burns `thbg_in` THBG from `user_thbg_ata` (authority = user) (`lib.rs:764-772`); transfers `grx_out` GRX from `swap_vault` to `user_grx_ata`, signed by the treasury PDA (`lib.rs:774-787`); sets `thbg_supply = thbg_supply − thbg_in` (`lib.rs:109-111`, `lib.rs:789`).
-- **Events:** `RedeemedThbgForGrx` (`lib.rs:791-797`).
+- **Preconditions:** `thbc_in > 0` (`ZeroAmount`); `paused == 0` (`Paused`); `grx_per_thbc_rate > 0` (`RateNotSet`) (`lib.rs:743-749`); inside the helper, `thbc_in ≤ thbc_supply` (`SupplyUnderflow`, `lib.rs:101`); computed `grx_out > 0` (`ZeroAmount`, `lib.rs:106`); `grx_out ≤ swap_vault.amount` (`InsufficientVault`, `lib.rs:108`).
+- **Formula:** `grx_out = thbc_in × 1e9 / grx_per_thbc_rate`, the inverse of the swap rate (`lib.rs:102-105`).
+- **Effects:** burns `thbc_in` THBC from `user_thbc_ata` (authority = user) (`lib.rs:764-772`); transfers `grx_out` GRX from `swap_vault` to `user_grx_ata`, signed by the treasury PDA (`lib.rs:774-787`); sets `thbc_supply = thbc_supply − thbc_in` (`lib.rs:109-111`, `lib.rs:789`).
+- **Events:** `RedeemedThbcForGrx` (`lib.rs:791-797`).
 - **Errors:** `ZeroAmount`, `Paused`, `RateNotSet`, `SupplyUnderflow`, `InsufficientVault`, `MathOverflow`.
 
 ### 4.7 `stake_grx`
@@ -324,25 +324,25 @@ One-time creation of the fourth GRX vault — the regulator / consumer-rebate po
 
 ### 5.1 Peg invariants (minting)
 
-Two conditions, both enforced in `swap_grx_for_thbg`, govern THBG issuance:
+Two conditions, both enforced in `swap_grx_for_thbc`, govern THBC issuance:
 
 1. **Attestation freshness.** A mint is permitted only when `now − attestation_ts ≤ attestation_ttl`; a stale attestation yields `StaleAttestation` (`lib.rs:679-682`). The attestation is the peg's source of truth and is refreshed solely by the custodian through `update_attestation` (`lib.rs:647-661`).
-2. **Supply ceiling.** Outstanding `thbg_supply + minted` must never exceed `attested_reserve`; a breach yields `PegBreach` (`lib.rs:79-82`, in the `compute_swap_grx_for_thbg` helper). Thus the total THBG in circulation can never exceed the attested off-chain THB reserve.
+2. **Supply ceiling.** Outstanding `thbc_supply + minted` must never exceed `attested_reserve`; a breach yields `PegBreach` (`lib.rs:79-82`, in the `compute_swap_grx_for_thbc` helper). Thus the total THBC in circulation can never exceed the attested off-chain THB reserve.
 
 ### 5.2 Redemption collateral guards
 
-`redeem_thbg_for_grx` enforces two guards, both in the `compute_redeem_thbg_for_grx` helper (`lib.rs:95-113`, called at `lib.rs:754-759`), that keep the ledger and the vault consistent:
+`redeem_thbc_for_grx` enforces two guards, both in the `compute_redeem_thbc_for_grx` helper (`lib.rs:95-113`, called at `lib.rs:754-759`), that keep the ledger and the vault consistent:
 
-1. **Supply underflow.** Burning more THBG than the tracked supply would desynchronise the peg ledger, so `thbg_in ≤ thbg_supply` is required, yielding `SupplyUnderflow` otherwise (`lib.rs:101`; also enforced on the subtraction at `lib.rs:109-111`).
+1. **Supply underflow.** Burning more THBC than the tracked supply would desynchronise the peg ledger, so `thbc_in ≤ thbc_supply` is required, yielding `SupplyUnderflow` otherwise (`lib.rs:101`; also enforced on the subtraction at `lib.rs:109-111`).
 2. **Vault sufficiency.** The payout `grx_out` must not exceed the physical GRX held in `swap_vault.amount`, yielding `InsufficientVault` otherwise (`lib.rs:108`). This guard prevents a rate change via `set_params` from decoupling the payout from deposited collateral and draining other swappers' GRX.
 
 ### 5.3 Staked GRX never backs the peg
 
-Staked principal is held in `stake_vault` (`lib.rs:1119-1128`), separate from `swap_vault`, which is the only redemption-collateral source (`lib.rs:1106`, `lib.rs:777-782`). The `total_staked` field is documented as never counted toward the peg (`state.rs:42`), and the peg ceiling is computed solely against `thbg_supply` and `attested_reserve` (`lib.rs:79-82`). Consequently, the peg's solvency arithmetic is independent of staking activity.
+Staked principal is held in `stake_vault` (`lib.rs:1119-1128`), separate from `swap_vault`, which is the only redemption-collateral source (`lib.rs:1106`, `lib.rs:777-782`). The `total_staked` field is documented as never counted toward the peg (`state.rs:42`), and the peg ceiling is computed solely against `thbc_supply` and `attested_reserve` (`lib.rs:79-82`). Consequently, the peg's solvency arithmetic is independent of staking activity.
 
 ### 5.4 Settlement recording authorisation
 
-`record_settlement` advances `total_settled_thbg` only when the signing `recorder` equals the stored `settlement_recorder` (`lib.rs:365-368`), which is the trading `market_authority` PDA passed via `invoke_signed` from the trading program (`lib.rs:1334-1336`). All four recording instructions additionally require `value > 0` (`ZeroAmount`), so a zero-value call can neither emit a misleading event nor orphan a batch's `SettlementRecord` PDA (`lib.rs:362`, `lib.rs:399`, `lib.rs:494`, `lib.rs:597`). The operation moves no funds and increments the counter by the **gross** settled value supplied by the caller (`lib.rs:369-372`). Because only the configured recorder can advance the counter, only genuine trading settlements can do so. Recording is, however, **not independently replay-safe**: no recording instruction has a per-call nullifier, so the treasury relies on trading's per-match `TradeNullifier` to guarantee a match is never recorded twice (`lib.rs:356-359`).
+`record_settlement` advances `total_settled_thbc` only when the signing `recorder` equals the stored `settlement_recorder` (`lib.rs:365-368`), which is the trading `market_authority` PDA passed via `invoke_signed` from the trading program (`lib.rs:1334-1336`). All four recording instructions additionally require `value > 0` (`ZeroAmount`), so a zero-value call can neither emit a misleading event nor orphan a batch's `SettlementRecord` PDA (`lib.rs:362`, `lib.rs:399`, `lib.rs:494`, `lib.rs:597`). The operation moves no funds and increments the counter by the **gross** settled value supplied by the caller (`lib.rs:369-372`). Because only the configured recorder can advance the counter, only genuine trading settlements can do so. Recording is, however, **not independently replay-safe**: no recording instruction has a per-call nullifier, so the treasury relies on trading's per-match `TradeNullifier` to guarantee a match is never recorded twice (`lib.rs:356-359`).
 
 ### 5.5 Two distinct GRX staking systems
 
@@ -358,13 +358,13 @@ The release profile sets `overflow-checks = true` (`Cargo.toml:32-33`), because 
 
 ### 6.1 Trading → Treasury (`record_settlement`)
 
-The trading program's single-match settle invokes `record_settlement` as a non-custodial CPI after settling a trade paid in THBG (`lib.rs:350-381`; trading side `programs/trading/src/instructions/settle_offchain.rs:914`). The trading `market_authority` PDA is passed as the `recorder` signer through `invoke_signed` (`lib.rs:1334-1336`), matched against `treasury.settlement_recorder`. The treasury moves no funds; it only advances `total_settled_thbg` by the gross settled value (`lib.rs:369-372`). The `settlement_recorder` is configured at initialisation and may be updated through `set_params` (`lib.rs:295`, `lib.rs:335`).
+The trading program's single-match settle invokes `record_settlement` as a non-custodial CPI after settling a trade paid in THBC (`lib.rs:350-381`; trading side `programs/trading/src/instructions/settle_offchain.rs:914`). The trading `market_authority` PDA is passed as the `recorder` signer through `invoke_signed` (`lib.rs:1334-1336`), matched against `treasury.settlement_recorder`. The treasury moves no funds; it only advances `total_settled_thbc` by the gross settled value (`lib.rs:369-372`). The `settlement_recorder` is configured at initialisation and may be updated through `set_params` (`lib.rs:295`, `lib.rs:335`).
 
-The trading program's batch-settlement path drives the `record_settlement_batch_sharded` CPI (`lib.rs:586-643`; trading side `programs/trading/src/instructions/settle_offchain.rs:1328`), which records the whole batch with one call: it bumps the caller-selected per-shard accumulator (keeping the treasury PDA read-only so parallel batches on distinct shards don't serialise) and writes a per-`(zone, batch)` `SettlementRecord` audit commitment (`lib.rs:605-627`); the global `total_settled_thbg` is reconciled later via `aggregate_settlement_shards` (§4.3b). The non-sharded `record_settlement_batch` is a standalone variant that is not on this CPI path. Recording is **mandatory for THBG markets** — once the trading-program THBG settlement policy is set on a market, any batch match in that currency that omits the treasury accounts is rejected, so the audit commitment cannot be silently skipped.
+The trading program's batch-settlement path drives the `record_settlement_batch_sharded` CPI (`lib.rs:586-643`; trading side `programs/trading/src/instructions/settle_offchain.rs:1328`), which records the whole batch with one call: it bumps the caller-selected per-shard accumulator (keeping the treasury PDA read-only so parallel batches on distinct shards don't serialise) and writes a per-`(zone, batch)` `SettlementRecord` audit commitment (`lib.rs:605-627`); the global `total_settled_thbc` is reconciled later via `aggregate_settlement_shards` (§4.3b). The non-sharded `record_settlement_batch` is a standalone variant that is not on this CPI path. Recording is **mandatory for THBC markets** — once the trading-program THBC settlement policy is set on a market, any batch match in that currency that omits the treasury accounts is rejected, so the audit commitment cannot be silently skipped.
 
 ### 6.2 Registry slash routing → Treasury rebate vault
 
-The registry program's validator-slashing path routes slashed validator bonds to a configured slash destination. As of role-map.md fix #10 this is pointed at the treasury `rebate_vault` (`initialize_rebate_vault`, `lib.rs:469-476`, PDA `seeds = [b"rebate_vault"]`, `lib.rs:1402-1411`) — a regulator / consumer-rebate pool — **not** the `reward_vault`. This is a plain SPL token transfer, not a CPI into the treasury program, and the treasury takes no part in the registry's slashing decision. A slashed bond is a penalty for the harmed side, not staker yield, so it deliberately does **not** flow into `fund_rewards`/`reward_vault` (which remains yield-staking-only, funded manually through `fund_rewards` deposits; the swap fee is simply un-minted THBG — it reduces `thbg_out` and is never routed to any vault, `lib.rs:73-77`). (The treasury program's own `slash_stake` instruction at `lib.rs:1001-1073` is a separate facility that slashes treasury yield-staking positions, not registry validator bonds, and is unaffected by this change.)
+The registry program's validator-slashing path routes slashed validator bonds to a configured slash destination. As of role-map.md fix #10 this is pointed at the treasury `rebate_vault` (`initialize_rebate_vault`, `lib.rs:469-476`, PDA `seeds = [b"rebate_vault"]`, `lib.rs:1402-1411`) — a regulator / consumer-rebate pool — **not** the `reward_vault`. This is a plain SPL token transfer, not a CPI into the treasury program, and the treasury takes no part in the registry's slashing decision. A slashed bond is a penalty for the harmed side, not staker yield, so it deliberately does **not** flow into `fund_rewards`/`reward_vault` (which remains yield-staking-only, funded manually through `fund_rewards` deposits; the swap fee is simply un-minted THBC — it reduces `thbc_out` and is never routed to any vault, `lib.rs:73-77`). (The treasury program's own `slash_stake` instruction at `lib.rs:1001-1073` is a separate facility that slashes treasury yield-staking positions, not registry validator bonds, and is unaffected by this change.)
 
 ---
 
@@ -375,17 +375,17 @@ All events are defined in `events.rs`.
 | Event | Fields | Emitted by | Source |
 | --- | --- | --- | --- |
 | `ReserveAttested` | `attestor`, `attested_reserve`, `timestamp` | `update_attestation` | `events.rs:6-11`, emit `lib.rs:654` |
-| `SwappedGrxForThbg` | `user`, `grx_in`, `thbg_out`, `fee`, `thbg_supply`, `timestamp` | `swap_grx_for_thbg` | `events.rs:14-22`, emit `lib.rs:727` |
-| `RedeemedThbgForGrx` | `user`, `thbg_in`, `grx_out`, `thbg_supply`, `timestamp` | `redeem_thbg_for_grx` | `events.rs:25-32`, emit `lib.rs:791` |
+| `SwappedGrxForThbc` | `user`, `grx_in`, `thbc_out`, `fee`, `thbc_supply`, `timestamp` | `swap_grx_for_thbc` | `events.rs:14-22`, emit `lib.rs:727` |
+| `RedeemedThbcForGrx` | `user`, `thbc_in`, `grx_out`, `thbc_supply`, `timestamp` | `redeem_thbc_for_grx` | `events.rs:25-32`, emit `lib.rs:791` |
 | `Staked` | `user`, `amount`, `total_staked`, `timestamp` | `stake_grx` | `events.rs:34-40`, emit `lib.rs:841` |
 | `Unstaked` | `user`, `amount`, `total_staked`, `timestamp` | `unstake_grx` | `events.rs:42-48`, emit `lib.rs:892` |
 | `RewardsClaimed` | `user`, `amount`, `timestamp` | `claim_rewards` | `events.rs:50-55`, emit `lib.rs:942` |
 | `RewardsFunded` | `funder`, `amount`, `timestamp` | `fund_rewards` | `events.rs:57-62`, emit `lib.rs:984` |
-| `SettlementRecorded` | `recorder`, `value`, `total_settled_thbg`, `timestamp` | `record_settlement` | `events.rs:64-71`, emit `lib.rs:373` |
+| `SettlementRecorded` | `recorder`, `value`, `total_settled_thbc`, `timestamp` | `record_settlement` | `events.rs:64-71`, emit `lib.rs:373` |
 | `SettlementShardRecorded` | `recorder`, `shard_id`, `value`, `shard_total`, `timestamp` | `record_settlement_sharded` | `events.rs:76-83`, emit `lib.rs:510` |
-| `SettlementBatchRecorded` | `recorder`, `zone_id`, `batch_id`, `total_value`, `vat_amount`, `vat_rate_bps`, `merkle_root`, `total_settled_thbg`, `timestamp` | `record_settlement_batch` | `events.rs:86-97`, emit `lib.rs:425` |
+| `SettlementBatchRecorded` | `recorder`, `zone_id`, `batch_id`, `total_value`, `vat_amount`, `vat_rate_bps`, `merkle_root`, `total_settled_thbc`, `timestamp` | `record_settlement_batch` | `events.rs:86-97`, emit `lib.rs:425` |
 | `SettlementBatchShardRecorded` | `recorder`, `shard_id`, `zone_id`, `batch_id`, `value`, `shard_total`, `vat_amount`, `vat_rate_bps`, `merkle_root`, `timestamp` | `record_settlement_batch_sharded` | `events.rs:103-115`, emit `lib.rs:629` |
-| `ParamsUpdated` | `authority`, `grx_per_thbg_rate`, `swap_fee_bps`, `attestation_ttl`, `paused`, `settlement_recorder`, `timestamp` | `set_params` | `events.rs:119-128`, emit `lib.rs:337` |
+| `ParamsUpdated` | `authority`, `grx_per_thbc_rate`, `swap_fee_bps`, `attestation_ttl`, `paused`, `settlement_recorder`, `timestamp` | `set_params` | `events.rs:119-128`, emit `lib.rs:337` |
 | `StakeSlashed` | `authority`, `owner`, `slashed_amount`, `total_staked`, `timestamp` | `slash_stake` | `events.rs:131-138`, emit `lib.rs:1064` |
 
 ---
@@ -402,13 +402,13 @@ All errors are defined in `error.rs` as `TreasuryError`.
 | `Paused` | Treasury is paused | `error.rs:13-14` |
 | `ZeroAmount` | Amount must be greater than zero | `error.rs:15-16` |
 | `MathOverflow` | Arithmetic overflow | `error.rs:17-18` |
-| `StaleAttestation` | Reserve attestation is stale — refresh before minting THBG | `error.rs:19-20` |
-| `PegBreach` | Mint would breach the peg: outstanding THBG must not exceed attested THB reserve | `error.rs:21-22` |
+| `StaleAttestation` | Reserve attestation is stale — refresh before minting THBC | `error.rs:19-20` |
+| `PegBreach` | Mint would breach the peg: outstanding THBC must not exceed attested THB reserve | `error.rs:21-22` |
 | `RateNotSet` | Swap/redeem rate is not configured | `error.rs:23-24` |
 | `InsufficientStake` | Insufficient staked balance | `error.rs:25-26` |
 | `InsufficientRewardPool` | Insufficient reward pool to pay the claim | `error.rs:27-28` |
 | `InsufficientVault` | Swap vault has insufficient GRX collateral to satisfy the redemption | `error.rs:29-30` |
-| `SupplyUnderflow` | Redeem amount exceeds outstanding THBG supply | `error.rs:31-32` |
+| `SupplyUnderflow` | Redeem amount exceeds outstanding THBC supply | `error.rs:31-32` |
 | `NoStakeToReward` | No stake to fund rewards against | `error.rs:33-34` |
 | `InvalidShardId` | Settlement shard id out of range (must be < NUM_SETTLE_SHARDS) | `error.rs:35-36` |
 | `DuplicateShard` | Settlement shard passed more than once in aggregation | `error.rs:37-38` |
@@ -423,5 +423,5 @@ All errors are defined in `error.rs` as `TreasuryError`.
 The treasury program is exercised by an integration suite and an initialisation script.
 
 - **Integration tests:** `tests/treasury.ts`, run with `npm run test:treasury`, which resolves to `anchor test tests/treasury.ts` (`package.json:28`).
-- **Initialisation script:** `scripts/init-treasury.ts` bootstraps the treasury, configures the `settlement_recorder` to the trading `market_authority` PDA, wires the trading-program THBG settlement policy, creates the `rebate_vault`, and points the registry slash destination at it (not `reward_vault` — see §6.2).
-- **In-source unit tests:** the `#[cfg(test)] mod tests` block (`lib.rs:115-270`) validates the reward accumulator and the swap/redeem peg math in pure arithmetic, against the extracted helpers `compute_swap_grx_for_thbg` / `compute_redeem_thbg_for_grx` (`lib.rs:57-113`).
+- **Initialisation script:** `scripts/init-treasury.ts` bootstraps the treasury, configures the `settlement_recorder` to the trading `market_authority` PDA, wires the trading-program THBC settlement policy, creates the `rebate_vault`, and points the registry slash destination at it (not `reward_vault` — see §6.2).
+- **In-source unit tests:** the `#[cfg(test)] mod tests` block (`lib.rs:115-270`) validates the reward accumulator and the swap/redeem peg math in pure arithmetic, against the extracted helpers `compute_swap_grx_for_thbc` / `compute_redeem_thbc_for_grx` (`lib.rs:57-113`).

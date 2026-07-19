@@ -83,7 +83,7 @@ PDA seed `[b"mea_utility"]`. Read-only on hot paths.
 | `governance` | `Pubkey` | Bound `governance_config` for maintenance + delegated-admit checks. |
 | `territory_code` | `u8` | `1` = MEA metro. |
 | `tariff_authority` | `Pubkey` | Key/PDA permitted to set the territory tariff (may equal `authority`). |
-| `collateral_mint` | `Pubkey` | Asset held for TPA deposits + bond custody (GRX or THBG). |
+| `collateral_mint` | `Pubkey` | Asset held for TPA deposits + bond custody (GRX or THBC). |
 | `min_collateral` | `u64` | Deposit required before an aggregator can be endorsed. |
 | `licensed_count` | `u32` | Stale-on-purpose stat. |
 | `allocated_capacity` | `u64` | Σ ATC allocated across zones (reconciled by admin). |

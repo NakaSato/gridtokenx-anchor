@@ -16,7 +16,7 @@ from each program's `Cargo.toml`.
 | Oracle | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU` | AMI-gateway bridge; per-meter PDAs; 15-min clearing epochs | [oracle.md](oracle.md) |
 | Registry | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7` | User/meter accounts; 16-shard counter; validator staking bond | [registry.md](registry.md) |
 | Trading | `CnWDEUhTvSixeLSyViWgAnnu9YouBAYVGcrrFm1s9WcX` | Order book + CDA; sharded submit; off-chain-signed settlement | [trading.md](trading.md) |
-| Treasury | `FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn` | GRX↔THBG swap; yield staking; baht settlement accounting | [treasury.md](treasury.md) |
+| Treasury | `FfxSQYKUmx9NGdCC9TDPmZSYjWYE1h4ruu3JatzHN5Tn` | GRX↔THBC swap; yield staking; baht settlement accounting | [treasury.md](treasury.md) |
 
 ## Benchmark programs
 
@@ -33,7 +33,7 @@ CPI edges (path dependencies with `features = ["cpi"]`) among the core programs:
 registry  → energy-token   (mint on registration / airdrop)
 registry  → treasury        (slash routing: token transfer to reward_vault, not a CPI invoke)
 trading   → governance      (authority / policy validation)
-trading   → treasury        (record_settlement, non-custodial; mandatory for THBG markets)
+trading   → treasury        (record_settlement, non-custodial; mandatory for THBC markets)
 oracle    → governance      (validates AggregatorEntry PDA; types + ID only, no CPI invoke)
 governance → registry       (mark_erc_claimed; closes ERC double-claim window)
 ```

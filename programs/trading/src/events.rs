@@ -36,7 +36,7 @@ pub struct OrderMatched {
     pub price: u64,
     // DUAL-SCALE — read the emitting instruction before summing this field.
     //   settle path (settle_offchain_match / batch_settle):    total_value = amount * price / 1e9
-    //     -> real 6-dec settlement currency (THBG minor units); money actually moves; treasury reconciles.
+    //     -> real 6-dec settlement currency (THBC minor units); money actually moves; treasury reconciles.
     //   discovery path (match_orders / sharded_match_orders / clear_auction / execute_auction_matches):
     //     total_value = amount * price  (NO /1e9) -> raw atomic·micros product, 1e9x larger, INFORMATIONAL
     //     ONLY (no token transfer). The CDA verifier (scripts/verify-price-models-onchain.ts) asserts this
@@ -66,9 +66,9 @@ pub struct MarketParamsUpdated {
 }
 
 #[event]
-pub struct SettlementThbgMintSet {
+pub struct SettlementThbcMintSet {
     pub authority: Pubkey,
-    pub thbg_mint: Pubkey,
+    pub thbc_mint: Pubkey,
     pub timestamp: i64,
 }
 

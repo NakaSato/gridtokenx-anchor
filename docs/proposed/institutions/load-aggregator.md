@@ -79,7 +79,7 @@ PDA seed `[b"dr_program"]`. Read-only on hot dispatch paths.
 | --- | --- | --- |
 | `authority` | `Pubkey` | Program admin (platform / ERC-sandbox operator). |
 | `governance` | `Pubkey` | Bound `governance_config` for the maintenance gate. |
-| `settlement_mint` | `Pubkey` | THBG mint for DR payouts. |
+| `settlement_mint` | `Pubkey` | THBC mint for DR payouts. |
 | `baseline_method` | `u8` | 0 = high-X-of-Y, 1 = regression, 2 = control-group (default policy). |
 | `max_event_seconds` | `u32` | Ceiling on a single DR event window. |
 | `penalty_bps` | `u16` | Under-delivery penalty rate (bps of shortfall value). |

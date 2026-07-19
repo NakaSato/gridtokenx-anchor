@@ -3,7 +3,7 @@
 // Derives the treasury `SettlementRecord` PDA that
 // `trading::batch_settle_offchain_match` creates (via CPI) and that
 // `treasury::record_settlement_batch` writes. The batch caller MUST pass this
-// account whenever treasury recording fires for a THBG market, otherwise the
+// account whenever treasury recording fires for a THBC market, otherwise the
 // settlement is rejected (`TreasurySettlementRequired`).
 //
 // Seeds (must match treasury on-chain exactly):

@@ -20,7 +20,7 @@ registry.
 | `oracle`       | AMI-gateway bridge; per-meter PDA state; 15-minute market-clearing epochs.            |
 | `registry`     | User + meter accounts; 16-shard counter; validator staking + registration.           |
 | `trading`      | Order book + CDA (Continuous Double Auction); sharded order submit; off-chain-signed match settlement. |
-| `treasury`     | GRX↔THBG (THB-pegged stablecoin) swap, GRX yield-staking, baht-denominated settlement accounting. |
+| `treasury`     | GRX↔THBC (THB-pegged stablecoin) swap, GRX yield-staking, baht-denominated settlement accounting. |
 | `blockbench`   | BlockBench OLTP / SmallBank benchmark harness.                                        |
 | `tpc-benchmark`| TPC-C stress benchmark harness.                                                      |
 
@@ -32,7 +32,7 @@ registry.
 ```
 registry → energy-token          (settle_and_mint_tokens, airdrop)
 trading  → governance            (GovernanceConfig operational guard, ErcCertificate)
-trading  → treasury              (record_settlement — non-custodial, THBG markets)
+trading  → treasury              (record_settlement — non-custodial, THBC markets)
 oracle   → governance            (AggregatorEntry PDA validation; types/ID only, no CPI invoke)
 ```
 

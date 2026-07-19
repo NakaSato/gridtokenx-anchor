@@ -5,7 +5,7 @@
 > signer is MEA/PEA alone, not a separate EGAT signer. See `role-map.md`'s 2026-07-04
 > 2nd-pass revision.
 
-> **⚠️ STATUS: MIXED — network/account layout + settlement audit commitment implemented; trustless adjudication PROPOSED (updated 2026-06-21).** The permissioned-Solana model, the treasury program, the PDA/vault layout (§5), and the non-custodial settlement call are real. The **Merkle/VAT audit commitment** part of the Tier-2 layer is now in code: `treasury::record_settlement_batch` (`programs/treasury/src/lib.rs:210`) writes a **per-`(zone, batch)` `SettlementRecord` PDA holding `merkle_root`, `vat_amount`/`vat_rate_bps`, `total_value`, zone & batch ids** and bumps the global `total_settled_thbg`; the trading batch path records it via CPI (on-chain verified, `tests/batch_settle_thbg.ts`). The legacy single-match `treasury::record_settlement(ctx, value)` (value-only) still backs `settle_offchain_match`. **Still PROPOSED:** the **trustless settlement-validity layer** (§3.2, §6, §7) — on-chain Merkle-root *verification*, challenge-response, and fraud proofs. The commitment above is **commit-only** (off-chain verifiers consume the root); the §3 feasibility spike found the on-chain exclusion-proof verify cheap (~3.6k CU) but it is gated on a settlement-finality / challenge-window redesign, since current settlement is immediate and non-reversible. **Collateral conflict resolved:** decision D1 keeps the **GRX** validator bond (`registry::stake_grx` / `MIN_VALIDATOR_STAKE`); the THBG-denominated bond in the slashing doc is deferred — §2's GRX collateral is the decided design, not a conflict.
+> **⚠️ STATUS: MIXED — network/account layout + settlement audit commitment implemented; trustless adjudication PROPOSED (updated 2026-06-21).** The permissioned-Solana model, the treasury program, the PDA/vault layout (§5), and the non-custodial settlement call are real. The **Merkle/VAT audit commitment** part of the Tier-2 layer is now in code: `treasury::record_settlement_batch` (`programs/treasury/src/lib.rs:210`) writes a **per-`(zone, batch)` `SettlementRecord` PDA holding `merkle_root`, `vat_amount`/`vat_rate_bps`, `total_value`, zone & batch ids** and bumps the global `total_settled_thbc`; the trading batch path records it via CPI (on-chain verified, `tests/batch_settle_thbc.ts`). The legacy single-match `treasury::record_settlement(ctx, value)` (value-only) still backs `settle_offchain_match`. **Still PROPOSED:** the **trustless settlement-validity layer** (§3.2, §6, §7) — on-chain Merkle-root *verification*, challenge-response, and fraud proofs. The commitment above is **commit-only** (off-chain verifiers consume the root); the §3 feasibility spike found the on-chain exclusion-proof verify cheap (~3.6k CU) but it is gated on a settlement-finality / challenge-window redesign, since current settlement is immediate and non-reversible. **Collateral conflict resolved:** decision D1 keeps the **GRX** validator bond (`registry::stake_grx` / `MIN_VALIDATOR_STAKE`); the THBC-denominated bond in the slashing doc is deferred — §2's GRX collateral is the decided design, not a conflict.
 
 This document specifies the design of the blockchain node network underlying GridTokenX, a peer-to-peer renewable energy trading platform for the Thai electricity market. It consolidates the network model, the node taxonomy, the two-tier consensus design, and the mapping of nodes onto Thailand's wholesale and retail market structure. The document is organized into eight sections: (1) network model overview, (2) node taxonomy, (3) the two-tier consensus design, (4) market-layer mapping, (5) the on-chain program and account layout, (6) the settlement data flow, (7) trust and verification, and (8) design rationale and limitations.
 
@@ -45,12 +45,12 @@ This document specifies the design of the blockchain node network underlying Gri
                                |
   +----------------------------v----------------------------+
   | LAYER 4: Vault Accounts (PDA authority)                 |
-  |   swap vault | stake vault | reward vault | THBG mint    |
+  |   swap vault | stake vault | reward vault | THBC mint    |
   +----------------------------+----------------------------+
                                |
   +----------------------------v----------------------------+
   | LAYER 5: Dual-Token (SPL)                               |
-  |   THBG (6 dec, peg, settlement)                         |
+  |   THBC (6 dec, peg, settlement)                         |
   |   GRX  (9 dec, collateral + incentive)                  |
   +---------------------------------------------------------+
 
@@ -67,7 +67,7 @@ GridTokenX operates on a permissioned deployment of the Solana Virtual Machine (
 
 The permissioned model has three defining properties. First, the consensus node set is closed: only the Electricity Generating Authority of Thailand (EGAT), the Metropolitan Electricity Authority (MEA), and the Provincial Electricity Authority (PEA) operate consensus nodes. Second, there is no volatile public gas market; transaction fees are controlled internally, which is important because the system's economic viability depends on low settlement overhead. Third, transaction data is not publicly visible, which suits the privacy requirements of electricity-usage and tax data while still requiring a designed audit-access mechanism so that regulators can inspect the ledger.
 
-A crucial point for understanding the design is the separation between what changes and what does not when moving from public to private Solana. The entire application layer is unchanged: the treasury program, the THBG and GRX tokens, the vault and program-derived-address structure, and all enforced invariants run without modification because the private network uses the same SVM and Anchor framework. What changes is confined to the network and consensus layer: the validator set is closed and controlled by the utilities, fees are internally governed, and data is private. One consequence that must be emphasized is that state-contention limits are a property of the SVM runtime, not of the public network, so they persist under the private deployment; the per-zone account-isolation design described in Section 5 remains necessary.
+A crucial point for understanding the design is the separation between what changes and what does not when moving from public to private Solana. The entire application layer is unchanged: the treasury program, the THBC and GRX tokens, the vault and program-derived-address structure, and all enforced invariants run without modification because the private network uses the same SVM and Anchor framework. What changes is confined to the network and consensus layer: the validator set is closed and controlled by the utilities, fees are internally governed, and data is private. One consequence that must be emphasized is that state-contention limits are a property of the SVM runtime, not of the public network, so they persist under the private deployment; the per-zone account-isolation design described in Section 5 remains necessary.
 
 ---
 
@@ -103,7 +103,7 @@ An **aggregator node** (also called an aggregator validator in the application s
 
 A **governance authority** is the holder of the on-chain authority account. EGAT, MEA, and PEA act in this role to admit aggregators, revoke them, slash their collateral, and set system parameters. The governance authority is not in the main data path; it governs through a separate admit/slash channel.
 
-Finally, ordinary **client participants** — prosumers and consumers — interact with the network by submitting bids and offers to their zone's aggregator and by swapping or redeeming tokens. They do not run nodes and, under the institutional-collateral model, cannot stake; their only token path is swapping GRX to THBG for settlement.
+Finally, ordinary **client participants** — prosumers and consumers — interact with the network by submitting bids and offers to their zone's aggregator and by swapping or redeeming tokens. They do not run nodes and, under the institutional-collateral model, cannot stake; their only token path is swapping GRX to THBC for settlement.
 
 ---
 
@@ -250,7 +250,7 @@ The market-layer mapping clarifies that EGAT, MEA, and PEA do not govern identic
 
 ### 5.1 The Treasury Program
 
-The on-chain logic is concentrated in a single Anchor program, the treasury program. It exposes instruction handlers in four groups: swap and redeem (which mint and burn THBG), stake and slash (which manage aggregator collateral), record-settlement (which receives the settlement value and Merkle root), and administrative instructions (which set parameters). Every handler enforces account constraints and uses checked arithmetic to prevent overflow conditions that could violate an invariant.
+The on-chain logic is concentrated in a single Anchor program, the treasury program. It exposes instruction handlers in four groups: swap and redeem (which mint and burn THBC), stake and slash (which manage aggregator collateral), record-settlement (which receives the settlement value and Merkle root), and administrative instructions (which set parameters). Every handler enforces account constraints and uses checked arithmetic to prevent overflow conditions that could violate an invariant.
 
 ### 5.2 Program-Derived Addresses
 
@@ -260,7 +260,7 @@ The decision to isolate settlement and stake records per zone and per aggregator
 
 ### 5.3 Vault Accounts
 
-The program controls four separated token accounts, each with a PDA as its authority so that only the program, via signed cross-program invocation, can move tokens. The swap vault backs THBG redemption. The stake vault holds aggregator collateral. The reward vault holds redistributed value from slashing. The THBG mint authority is also a PDA, ensuring that minting occurs only under the peg-ceiling check. The separation of these accounts mechanically enforces the vault-separation invariant: staked GRX never backs the THBG peg because it resides in a distinct account.
+The program controls four separated token accounts, each with a PDA as its authority so that only the program, via signed cross-program invocation, can move tokens. The swap vault backs THBC redemption. The stake vault holds aggregator collateral. The reward vault holds redistributed value from slashing. The THBC mint authority is also a PDA, ensuring that minting occurs only under the peg-ceiling check. The separation of these accounts mechanically enforces the vault-separation invariant: staked GRX never backs the THBC peg because it resides in a distinct account.
 
 ---
 
@@ -284,10 +284,10 @@ The settlement flow proceeds through the node network as follows. First, prosume
                       signed by market_authority PDA  total_settled += value
 
   Non-custodial: aggregator submits value + root only; never holds funds.
-  Payment occurs via user-initiated GRX -> THBG swap.
+  Payment occurs via user-initiated GRX -> THBC swap.
 ```
 
-Importantly, the settlement is non-custodial: the aggregator submits only the value and the Merkle root and never holds user funds. Actual payment occurs through users swapping GRX for THBG, which they perform themselves. This structure reduces custodial risk and positions the aggregator as a data processor rather than a custodian.
+Importantly, the settlement is non-custodial: the aggregator submits only the value and the Merkle root and never holds user funds. Actual payment occurs through users swapping GRX for THBC, which they perform themselves. This structure reduces custodial risk and positions the aggregator as a data processor rather than a custodian.
 
 ---
 

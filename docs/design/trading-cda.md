@@ -59,15 +59,15 @@ Hot-path writes never touch the global `Market` account. Shard select is `get_sh
 
 ---
 
-## 6. THBG Settlement Policy & Treasury Recording
+## 6. THBC Settlement Policy & Treasury Recording
 
-A market may pin its settlement currency to THBG via `set_settlement_thbg_mint` (`lib.rs:1352`), setting `has_settlement_thbg_mint = 1`. Then, for any match whose `currency_mint == settlement_thbg_mint`, recording to the treasury is **mandatory**:
+A market may pin its settlement currency to THBC via `set_settlement_thbc_mint` (`lib.rs:1352`), setting `has_settlement_thbc_mint = 1`. Then, for any match whose `currency_mint == settlement_thbc_mint`, recording to the treasury is **mandatory**:
 
 - The settlement CPIs into `treasury::record_settlement(value)` with the gross settled value (`settle_offchain.rs:445`), authorized by the `market_authority` PDA (= treasury's `settlement_recorder`).
-- The currency must equal `treasury_state.thbg_mint` or `TreasuryCurrencyMismatch`.
+- The currency must equal `treasury_state.thbc_mint` or `TreasuryCurrencyMismatch`.
 - If the treasury accounts are omitted while recording is required → `TreasurySettlementRequired` (no silent skip, `settle_offchain.rs:475`).
 
-This reconciles `treasury.total_settled_thbg` to the THBG actually leaving buyer escrow.
+This reconciles `treasury.total_settled_thbc` to the THBC actually leaving buyer escrow.
 
 ---
 

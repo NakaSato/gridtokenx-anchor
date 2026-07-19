@@ -86,7 +86,7 @@ bootstrap.ts → init-registry.ts → init-oracle.ts → init-market.ts
 
 - Points `registry::set_slash_destination` at the treasury `rebate_vault` (slashed
   validator bonds are a penalty, not staker yield — they must not route to `reward_vault`).
-- Sets `trading::set_settlement_thbg_mint` so THBG-currency matches **require** the treasury
+- Sets `trading::set_settlement_thbc_mint` so THBC-currency matches **require** the treasury
   `record_settlement` CPI (a match that omits treasury accounts is rejected with
   `TreasurySettlementRequired` — no silent skip).
 
@@ -100,7 +100,7 @@ After `init-governance.ts`, **you** hold the PoA authority key. Adoption checkli
 - Rotate the authority to your operator key (2-step transfer — governance supports it).
 - Decide your validator/aggregator admission policy (registry staking is a security bond
   gated by `MIN_VALIDATOR_STAKE`; slashing is real).
-- Custody the mint authorities: energy-token mint (REC-validator gated) and treasury THBG
+- Custody the mint authorities: energy-token mint (REC-validator gated) and treasury THBC
   mint (mint authority = treasury PDA `[b"treasury"]`).
 
 ---
@@ -168,7 +168,7 @@ oracle   → governance   (validation only, no CPI invoke)
 - [ ] Run the full init sequence — **including** the `init-treasury.ts` cross-program policy.
 - [ ] Rotate the governance authority to your operator key; define admission + slashing policy.
 - [ ] Deploy Chain Bridge and route all service ↔ chain traffic through it (no direct RPC).
-- [ ] Custody mint authorities (energy-token, treasury THBG) deliberately.
+- [ ] Custody mint authorities (energy-token, treasury THBC) deliberately.
 - [ ] Plan throughput around 1-match-per-tx settlement, not naive batching.
 - [ ] Pin your Anchor CLI to match the 1.0.0 on-chain crate; validate builds reproduce.
 

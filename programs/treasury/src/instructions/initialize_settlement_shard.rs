@@ -39,7 +39,7 @@ pub fn initialize_settlement_shard(
     let mut shard = ctx.accounts.shard.load_init()?;
     shard.shard_id = shard_id;
     shard.bump = ctx.bumps.shard;
-    shard.settled_thbg = 0;
+    shard.settled_thbc = 0;
     shard.settlement_count = 0;
     Ok(())
 }

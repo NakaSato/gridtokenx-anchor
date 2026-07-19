@@ -78,7 +78,7 @@ const envInt = (k: string, d: number) => {
 
 interface PreparedTx { edIxs: any[]; settleIx: any; alt: any; payer: Keypair; }
 
-describe("batch_settle THBG — TPS sweep (§2b)", () => {
+describe("batch_settle THBC — TPS sweep (§2b)", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
@@ -126,7 +126,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   const energyMintPda = tpda(energy, "mint_2022");
   const energyInfoPda = tpda(energy, "token_info_2022");
   const treasuryPda = tpda(treasury, "treasury");
-  const thbgMint = tpda(treasury, "thbg_mint");
+  const thbcMint = tpda(treasury, "thbc_mint");
   const swapVault = tpda(treasury, "swap_vault");
   const zoneMarketPda = PublicKey.findProgramAddressSync(
     [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, "le", 4)],
@@ -136,12 +136,12 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   const escrowPda = (user: PublicKey, mint: PublicKey) =>
     PublicKey.findProgramAddressSync([Buffer.from("escrow"), user.toBuffer(), mint.toBuffer()], trading.programId)[0];
   const collectorPda = (label: string) =>
-    PublicKey.findProgramAddressSync([Buffer.from(label), thbgMint.toBuffer()], trading.programId)[0];
+    PublicKey.findProgramAddressSync([Buffer.from(label), thbcMint.toBuffer()], trading.programId)[0];
   // §2c Part B: sharded collectors + treasury accumulator, keyed by a caller-chosen
   // settle shard (the matcher rotates it to spread settles off the global write-lock).
   const NUM_SETTLE_SHARDS = 16;
   const shardedCollectorPda = (label: string, shard: number) =>
-    PublicKey.findProgramAddressSync([Buffer.from(label), thbgMint.toBuffer(), Buffer.from([shard])], trading.programId)[0];
+    PublicKey.findProgramAddressSync([Buffer.from(label), thbcMint.toBuffer(), Buffer.from([shard])], trading.programId)[0];
   const settleShardPda = (shard: number) =>
     PublicKey.findProgramAddressSync([Buffer.from("settle_shard"), Buffer.from([shard])], treasury.programId)[0];
   const nullifierPda = (user: PublicKey, orderId: Buffer) =>
@@ -176,16 +176,16 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
       marketAuthority: marketAuthorityPda, tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
     } as any).signers([kp]).rpc();
   }
-  async function fundThbg(kp: Keypair, thbgTarget: number): Promise<PublicKey> {
-    const grx = thbgTarget * 300;
+  async function fundThbc(kp: Keypair, thbcTarget: number): Promise<PublicKey> {
+    const grx = thbcTarget * 300;
     const grxAta = await createAtaFor(energyMintPda, kp.publicKey);
     await mintEnergyTo(grxAta, kp.publicKey, grx);
-    const thbgAta = await createAtaFor(thbgMint, kp.publicKey);
-    await treasury.methods.swapGrxForThbg(new BN(grx)).accounts({
-      treasury: treasuryPda, grxMint: energyMintPda, thbgMint, swapVault,
-      userGrxAta: grxAta, userThbgAta: thbgAta, user: kp.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
+    const thbcAta = await createAtaFor(thbcMint, kp.publicKey);
+    await treasury.methods.swapGrxForThbc(new BN(grx)).accounts({
+      treasury: treasuryPda, grxMint: energyMintPda, thbcMint, swapVault,
+      userGrxAta: grxAta, userThbcAta: thbcAta, user: kp.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
     } as any).signers([kp]).rpc();
-    return thbgAta;
+    return thbcAta;
   }
 
   // Energy 9-dec atomic (100 kWh = 100 * 1e9). Currency leg divides by 1e9
@@ -197,7 +197,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   // wheeling_charge_val = matchAmount * wheeling_rate / 1e9 = 100 * 100_000 =
   // 10_000_000, a fixed absolute cost independent of price. The old toy price (50)
   // made total_value = 5000 — wheeling alone was ~2000x that, tripping
-  // ChargesExceedCap. See tests/batch_settle_thbg.ts for the same fix.
+  // ChargesExceedCap.
   // matchPrice = on-chain clearing price p* (must satisfy p_s=2_000_000 ≤ p* ≤ p_b=2_100_000,
   // the signed order limits below). Env-driven to sweep the 3 price rules:
   //   BENCH_TPS_PRICE=2000000 → CDA on-chain (p*=p_s), 2040000 → uniform p_c, 2050000 → midpoint.
@@ -211,15 +211,15 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
   async function seedPair(): Promise<{ buyer: Keypair; seller: Keypair }> {
     const buyer = await freshUser();
     const seller = await freshUser();
-    const buyerThbgAta = await fundThbg(buyer, currencyValue);
+    const buyerThbcAta = await fundThbc(buyer, currencyValue);
     const sellerEnergyAta = await createAtaFor(energyMintPda, seller.publicKey);
     // Energy leg transfers the full atomic amount (now 100e9) — fund the escrow to match.
     await mintEnergyTo(sellerEnergyAta, seller.publicKey, matchAmount);
-    await deposit(buyer, buyerThbgAta, thbgMint, currencyValue);
+    await deposit(buyer, buyerThbcAta, thbcMint, currencyValue);
     await deposit(seller, sellerEnergyAta, energyMintPda, matchAmount);
     // Receiving escrows (seller currency, buyer energy) must exist before settle.
-    const sellerThbgAta = await fundThbg(seller, 10);
-    await deposit(seller, sellerThbgAta, thbgMint, 1);
+    const sellerThbcAta = await fundThbc(seller, 10);
+    await deposit(seller, sellerThbcAta, thbcMint, 1);
     const buyerEnergyAta = await createAtaFor(energyMintPda, buyer.publicKey);
     await mintEnergyTo(buyerEnergyAta, buyer.publicKey, 1);
     await deposit(buyer, buyerEnergyAta, energyMintPda, 1);
@@ -264,8 +264,8 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     const remaining = [
       nullifierPda(buyer.publicKey, buyerOrderId),
       nullifierPda(seller.publicKey, sellerOrderId),
-      escrowPda(buyer.publicKey, thbgMint),
-      escrowPda(seller.publicKey, thbgMint),
+      escrowPda(buyer.publicKey, thbcMint),
+      escrowPda(seller.publicKey, thbcMint),
       escrowPda(seller.publicKey, energyMintPda),
       escrowPda(buyer.publicKey, energyMintPda),
       tradeNullifier, // per-match replay guard (7th per-pair account)
@@ -303,7 +303,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     const settleIx = await trading.methods
       .batchSettleOffchainMatch([matchPair] as any, merkleRoot, vatAmount, 700, thisBatchId, settleShardByte)
       .accounts({
-        market: marketPda, zoneMarket: zoneMarketPda, currencyMint: thbgMint, energyMint: energyMintPda,
+        market: marketPda, zoneMarket: zoneMarketPda, currencyMint: thbcMint, energyMint: energyMintPda,
         marketAuthority: marketAuthorityPda, marketShard: marketShardPda, zoneShard: zoneShardPda,
         feeCollector: shardedCollectorPda("fee_collector", settleShardByte),
         wheelingCollector: shardedCollectorPda("wheeling_collector", settleShardByte),
@@ -382,13 +382,16 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     while (performance.now() - start < deadlineMs) {
       const live = sigs.map((s, i) => ({ s, i })).filter((x) => x.s && out[x.i] === "missing");
       if (live.length === 0) break;
-      // getSignatureStatuses caps at 256 sigs/call; our N stays well under that.
-      const res = await provider.connection.getSignatureStatuses(live.map((x) => x.s as string));
-      res.value.forEach((st, k) => {
-        if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) {
-          out[live[k].i] = st.err ?? null;
-        }
-      });
+      // getSignatureStatuses caps at 256 sigs/call — chunk for large fleets (N>256).
+      for (let off = 0; off < live.length; off += 256) {
+        const batch = live.slice(off, off + 256);
+        const res = await provider.connection.getSignatureStatuses(batch.map((x) => x.s as string));
+        res.value.forEach((st, k) => {
+          if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) {
+            out[batch[k].i] = st.err ?? null;
+          }
+        });
+      }
       if (out.every((e) => e !== "missing")) break;
       await new Promise((r) => setTimeout(r, 250));
     }
@@ -405,7 +408,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     // mid-seed. Bump ttl to 24h (set_params, authority = attestor keypair) so one
     // attestation covers the whole seed+settle window. Preserve other params.
     const tcur: any = await treasury.account.treasury.fetch(treasuryPda);
-    await treasury.methods.setParams(tcur.grxPerThbgRate, tcur.swapFeeBps, new BN(86400), tcur.paused, tcur.settlementRecorder)
+    await treasury.methods.setParams(tcur.grxPerThbcRate, tcur.swapFeeBps, new BN(86400), tcur.paused, tcur.settlementRecorder)
       .accounts({ treasury: treasuryPda, authority: attestorKp.publicKey } as any).signers([attestorKp]).rpc();
     await treasury.methods.updateAttestation(new BN("1000000000000000")).accounts({
       treasury: treasuryPda, attestor: attestorKp.publicKey,
@@ -418,7 +421,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     } catch { /* already registered */ }
     try {
       await trading.methods.initializeCollectors().accounts({
-        payer: authority, currencyMint: thbgMint,
+        payer: authority, currencyMint: thbcMint,
         feeCollector: collectorPda("fee_collector"), wheelingCollector: collectorPda("wheeling_collector"),
         lossCollector: collectorPda("loss_collector"), marketAuthority: marketAuthorityPda,
         tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
@@ -430,7 +433,7 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
     for (let s = 0; s < NUM_SETTLE_SHARDS; s++) {
       try {
         await trading.methods.initializeShardedCollectors(s).accounts({
-          payer: authority, currencyMint: thbgMint,
+          payer: authority, currencyMint: thbcMint,
           feeCollector: shardedCollectorPda("fee_collector", s), wheelingCollector: shardedCollectorPda("wheeling_collector", s),
           lossCollector: shardedCollectorPda("loss_collector", s), marketAuthority: marketAuthorityPda,
           tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
@@ -453,12 +456,24 @@ describe("batch_settle THBG — TPS sweep (§2b)", () => {
 
     const rows: { conc: number; tps: number; wallMs: number; ok: number; fail: number; cuMean: number; rounds: number; dropped: number; reverted: number }[] = [];
     for (const conc of CONC) {
-      // Pre-seed + pre-build N single-use settle txs for THIS level.
-      const prepared: PreparedTx[] = [];
-      for (let i = 0; i < N; i++) {
-        const { buyer, seller } = await seedPair();
-        prepared.push(await prepareOne(buyer, seller, i + conc * 1000));
+      // Pre-seed + pre-build N single-use settle txs for THIS level. Each pair is
+      // independent, so seed with a bounded worker pool (BENCH_TPS_SEED_CONC, default
+      // 12) to overlap the ~0.5s confirm round-trips — sequential seeding of large
+      // fleets (N=360) otherwise runs >1h and dominates wall time.
+      const SEED_CONC = envInt("BENCH_TPS_SEED_CONC", 12);
+      const seedSlots: (PreparedTx | null)[] = new Array(N).fill(null);
+      let seedCursor = 0;
+      async function seedWorker() {
+        while (true) {
+          const i = seedCursor++;
+          if (i >= N) return;
+          const { buyer, seller } = await seedPair();
+          seedSlots[i] = await prepareOne(buyer, seller, i + conc * 1000);
+        }
       }
+      await Promise.all(Array.from({ length: Math.min(SEED_CONC, N) }, () => seedWorker()));
+      const prepared: PreparedTx[] = seedSlots.filter((p): p is PreparedTx => p !== null);
+      if (prepared.length !== N) throw new Error(`seed incomplete: ${prepared.length}/${N} prepared`);
 
       // Timed phase: open-loop submission. A worker pool of size `conc` keeps that
       // many sends in flight (each send is fire-and-forget, no per-tx confirm

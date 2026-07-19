@@ -15,7 +15,7 @@ pub struct RecordSettlement<'info> {
 }
 
 /// Record a baht-denominated trade settlement. Called via CPI by the trading
-/// program after it pays a seller in THBG; bumps the cumulative settled total.
+/// program after it pays a seller in THBC; bumps the cumulative settled total.
 /// Non-custodial — moves no funds. Authorized by the `settlement_recorder`
 /// signer (the trading market_authority PDA), so only genuine trading
 /// settlements can advance the counter.
@@ -32,14 +32,14 @@ pub fn record_settlement(ctx: Context<RecordSettlement>, value: u64) -> Result<(
         t.settlement_recorder == ctx.accounts.recorder.key(),
         TreasuryError::UnauthorizedRecorder
     );
-    t.total_settled_thbg = t
-        .total_settled_thbg
+    t.total_settled_thbc = t
+        .total_settled_thbc
         .checked_add(value)
         .ok_or(TreasuryError::MathOverflow)?;
     emit!(SettlementRecorded {
         recorder: ctx.accounts.recorder.key(),
         value,
-        total_settled_thbg: t.total_settled_thbg,
+        total_settled_thbc: t.total_settled_thbc,
         timestamp: now,
     });
     Ok(())

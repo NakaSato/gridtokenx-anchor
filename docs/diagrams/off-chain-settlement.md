@@ -85,7 +85,7 @@ through **`remaining_accounts`** positionally, not new named fields:
 
 - governance **`governance_config`** is the **first** remaining account (`:148`, accessed `:392`) — not a
   named field, precisely because the named context is full.
-- treasury CPI accounts (for optional/THBG-mandatory `record_settlement`) likewise ride
+- treasury CPI accounts (for optional/THBC-mandatory `record_settlement`) likewise ride
   `remaining_accounts`; recording is gated on their presence.
 
 ---
@@ -109,7 +109,7 @@ CPI (gross batch value), even though token settlement is per-match. Cost: **~80-
 batch_settle_offchain_match (match_count ≤ 4 by code; ~1 fits per tx):
   for each match in this tx:
      verify ed25519 → check/accumulate nullifier → transfer tokens
-  record_settlement CPI once (batch gross → treasury.total_settled_thbg)
+  record_settlement CPI once (batch gross → treasury.total_settled_thbc)
 ```
 
 ---
@@ -118,11 +118,11 @@ batch_settle_offchain_match (match_count ≤ 4 by code; ~1 fits per tx):
 
 (From `cpi-flow.md` + CLAUDE.md treasury section.)
 
-- **Non-custodial:** `record_settlement` only bumps treasury accounting (`total_settled_thbg` by
+- **Non-custodial:** `record_settlement` only bumps treasury accounting (`total_settled_thbc` by
   GROSS settled value); it does **not** custody trade funds.
 - **Optional in general:** fires only when treasury accounts are passed to settle.
-- **Mandatory for THBG markets:** if a Market has `settlement_thbg_mint` set
-  (`set_settlement_thbg_mint`), a match in that currency that **omits** treasury accounts is
+- **Mandatory for THBC markets:** if a Market has `settlement_thbc_mint` set
+  (`set_settlement_thbc_mint`), a match in that currency that **omits** treasury accounts is
   rejected → `TreasurySettlementRequired`. No silent skip.
 - Authorized by `settlement_recorder` signer = trading's `market_authority` PDA (`invoke_signed`).
 
@@ -148,7 +148,7 @@ shard, error 6030 fires pre-CPI.
 - **Adding named account to settle context** → stack overflow; use `remaining_accounts`.
 - **Expecting batch to pack 4 matches** → code allows ≤4, but ALT-uncompressible sig data + 1232B
   tx limit → ~1/tx in practice.
-- **Omitting treasury accounts on THBG market** → `TreasurySettlementRequired`, not skip.
+- **Omitting treasury accounts on THBC market** → `TreasurySettlementRequired`, not skip.
 - **Assuming sharding fixes TPS** → `zone_market` lock is the serializer; latency-bound.
 
 ---
@@ -158,7 +158,7 @@ shard, error 6030 fires pre-CPI.
 Matching is off-chain (CDA engine); the chain only **settles** an authorized matcher's
 **Ed25519-signed** match — verify the signature (via the ed25519 precompile + instructions
 sysvar, binding the offset to avoid the redirection bypass), consume a per-order **OrderNullifier**
-PDA for anti-replay, transfer tokens, and optionally (mandatory for THBG) CPI treasury
+PDA for anti-replay, transfer tokens, and optionally (mandatory for THBC) CPI treasury
 `record_settlement`. Batch caps at **≤4 in code** (`BatchTooLarge`) but per-match Ed25519 data
 can't be ALT-compressed, so the 1232-byte tx limit makes it **~1 match/tx in practice**
 (~80-92k CU/match); the real throughput limiter is the `zone_market` mut lock, not the sharded

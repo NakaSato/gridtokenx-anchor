@@ -34,11 +34,11 @@ const ZONE = 0;
 const NOW = 1_000_000;
 const FUTURE = 9_000_000;
 
-// Wide band so every model price fits (2.00–5.00 THBG/kWh, 6-dec).
+// Wide band so every model price fits (2.00–5.00 THBC/kWh, 6-dec).
 const P_MIN = 2_000_000;
 const P_MAX = 5_000_000;
 
-// Shared order book (6-dec THBG/kWh, amount in kWh). Equal 100-kWh lots so the
+// Shared order book (6-dec THBC/kWh, amount in kWh). Equal 100-kWh lots so the
 // three mechanisms pair cleanly and the arithmetic is auditable by hand. 4+4
 // orders keeps clear_auction's whole legacy tx under the 1232-byte wire limit
 // (each AuctionOrder = 89 B). All four pairs cross, so every model moves the

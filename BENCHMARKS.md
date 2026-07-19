@@ -200,8 +200,8 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 | Instruction | CU |
 | ----------- | --: |
 | `treasury.initialize` | 42 277 |
-| `treasury.swap_grx_for_thbg` | 21 509 |
-| `treasury.redeem_thbg_for_grx` | 21 328 |
+| `treasury.swap_grx_for_thbc` | 21 509 |
+| `treasury.redeem_thbc_for_grx` | 21 328 |
 | `treasury.stake_grx` (first — inits position) | 19 538 |
 | `treasury.set_params` | 3 404 |
 | `treasury.update_attestation` | 3 303 |
@@ -209,7 +209,7 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 
 **Reading:** the swap/redeem/stake hot paths cluster at **~19.5–21.5k CU**, driven
 by the Token-2022 transfer + mint/burn CPIs (one-time `stake` adds a position-PDA
-init). `initialize` is the heaviest at 42k — a one-off that creates the THBG mint
+init). `initialize` is the heaviest at 42k — a one-off that creates the THBC mint
 plus the three GRX vaults (swap/stake/reward). Pure-state admin instructions
 (`update_attestation`, `record_settlement`, `set_params`) are ~3.3–3.4k. All sit
 well inside the 200k budget — the baht-settlement primitive (swap) costs ~1/5 of
@@ -221,7 +221,7 @@ the §1 `settle_offchain_match` figure.
 
 The §2c parallel-settlement reconciliation layer (separate from the §5 swap/stake
 hot paths). `record_settlement_sharded` bumps a per-shard PDA instead of the global
-`total_settled_thbg` (no write-lock under concurrent settles); `aggregate_settlement_shards`
+`total_settled_thbc` (no write-lock under concurrent settles); `aggregate_settlement_shards`
 reconciles the global total off the hot path; `record_settlement_batch` writes a
 per-`(zone,batch)` audit commitment. Same method as §4-8; wiring mirrors
 `tests/settle_shard_litesvm.ts`.
@@ -574,7 +574,7 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   transfers + escrow/nullifier writes dominate, so the generic-OLTP figure
   materially *understates* per-trade compute. The §2b **batch** path
   (`batch_settle_offchain_match` → treasury `record_settlement_batch`) is also
-  on-chain verified now (`tests/batch_settle_thbg.ts`). **Batch CU, 1 match =
+  on-chain verified now (`tests/batch_settle_thbc.ts`). **Batch CU, 1 match =
   101 470 CU** (`BENCH_BATCH_SETTLE_CU` probe, both mints Token-2022, +
   `record_settlement_batch` CPI + 2 in-loop nullifier creates), captured against
   the same validator (was ~80–92k on `58cfc79`). Lower than the 121 813
@@ -606,7 +606,7 @@ defensible as a *P2P energy-trading* benchmark, the gaps below remain. Tags:
   seeds constraint — `settle_offchain.rs:260` — so the client picks the shard)
   gave the *same* numbers (0.59 / 0.57 TPS, still 2 rounds). The serialization is
   the set of **global writable accounts every settle touches regardless of shard**:
-  `treasury_state` (the `total_settled_thbg` accumulator bumped by
+  `treasury_state` (the `total_settled_thbc` accumulator bumped by
   `record_settlement_batch`) and the three fixed `fee`/`wheeling`/`loss` collector
   token accounts (one PDA each per currency). Settlement is therefore
   global-write-bound by design — sharding parallelizes *order submission* (per-

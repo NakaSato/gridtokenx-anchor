@@ -35,7 +35,7 @@ pub struct RecordSettlementBatchSharded<'info> {
 }
 
 /// Parallel-friendly variant of `record_settlement_batch`: bumps the per-shard
-/// accumulator for `shard_id` instead of the global `total_settled_thbg`, while
+/// accumulator for `shard_id` instead of the global `total_settled_thbc`, while
 /// still writing the per-`(zone, batch)` `SettlementRecord` audit commitment (which
 /// is already non-global — unique per batch). Treasury is read-only here (recorder
 /// gate only), so parallel batch settles on distinct shards don't serialize on it.
@@ -61,15 +61,15 @@ pub fn record_settlement_batch_sharded(
 
     let shard_total = {
         let mut shard = ctx.accounts.shard.load_mut()?;
-        shard.settled_thbg = shard
-            .settled_thbg
+        shard.settled_thbc = shard
+            .settled_thbc
             .checked_add(value)
             .ok_or(TreasuryError::MathOverflow)?;
         shard.settlement_count = shard
             .settlement_count
             .checked_add(1)
             .ok_or(TreasuryError::MathOverflow)?;
-        shard.settled_thbg
+        shard.settled_thbc
     };
 
     let mut rec = ctx.accounts.settlement_record.load_init()?;

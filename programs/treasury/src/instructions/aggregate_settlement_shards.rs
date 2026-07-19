@@ -12,14 +12,14 @@ pub struct AggregateSettlementShards<'info> {
     // Shards passed via remaining_accounts.
 }
 
-/// Reconcile the global `total_settled_thbg` from the per-shard accumulators.
+/// Reconcile the global `total_settled_thbc` from the per-shard accumulators.
 /// Admin-only.
 ///
 /// **Drain-and-fold:** each `SettlementShard` passed in `remaining_accounts`
 /// (validated by program owner + stored-bump PDA, deduped by a shard-id bitmask)
-/// has its `settled_thbg` ADDED to the running global and then ZEROED. Folding
+/// has its `settled_thbc` ADDED to the running global and then ZEROED. Folding
 /// into — instead of overwriting — the live global is deliberate: the single-match
-/// settle path (`record_settlement`) bumps `total_settled_thbg` directly, while the
+/// settle path (`record_settlement`) bumps `total_settled_thbc` directly, while the
 /// batch path bumps shards. Overwriting `global = sum(shards)` (the previous
 /// behaviour) silently wiped every single-match contribution on each reconcile.
 /// Folding preserves both; zeroing the shard makes it a delta-since-last-aggregate,
@@ -31,7 +31,7 @@ pub fn aggregate_settlement_shards(ctx: Context<AggregateSettlementShards>) -> R
 
     // Start from the live global so single-match `record_settlement` writes are
     // preserved across reconciles.
-    let mut running: u64 = t.total_settled_thbg;
+    let mut running: u64 = t.total_settled_thbc;
     // Bitmask of shard_ids already counted — reject duplicates so a shard
     // passed twice cannot inflate the total.
     let mut seen: u16 = 0;
@@ -59,11 +59,11 @@ pub fn aggregate_settlement_shards(ctx: Context<AggregateSettlementShards>) -> R
         require!(account_info.is_writable, TreasuryError::ShardNotWritable);
 
         running = running
-            .checked_add(shard.settled_thbg)
+            .checked_add(shard.settled_thbc)
             .ok_or(TreasuryError::MathOverflow)?;
-        shard.settled_thbg = 0; // drain — shard now holds the next delta window
+        shard.settled_thbc = 0; // drain — shard now holds the next delta window
     }
 
-    t.total_settled_thbg = running;
+    t.total_settled_thbc = running;
     Ok(())
 }

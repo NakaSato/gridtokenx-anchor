@@ -838,17 +838,17 @@ pub mod trading {
         })
     }
 
-    /// Configure the settlement THBG mint for this market (admin only). Once set,
+    /// Configure the settlement THBC mint for this market (admin only). Once set,
     /// any match that settles in this mint MUST pass the treasury accounts so the
     /// baht-denominated settlement is recorded — recording is no longer optional for
-    /// THBG-denominated trades. Pass `Pubkey::default()` is not allowed (use the real
-    /// THBG mint); to disable, this could be extended with a clear flag if ever needed.
-    pub fn set_settlement_thbg_mint(
-        ctx: Context<SetSettlementThbgMintContext>,
-        thbg_mint: Pubkey,
+    /// THBC-denominated trades. Pass `Pubkey::default()` is not allowed (use the real
+    /// THBC mint); to disable, this could be extended with a clear flag if ever needed.
+    pub fn set_settlement_thbc_mint(
+        ctx: Context<SetSettlementThbcMintContext>,
+        thbc_mint: Pubkey,
     ) -> Result<()> {
-        compute_fn!("set_settlement_thbg_mint" => {
-            instructions::set_settlement_thbg_mint(ctx, thbg_mint)
+        compute_fn!("set_settlement_thbc_mint" => {
+            instructions::set_settlement_thbc_mint(ctx, thbc_mint)
         })
     }
 

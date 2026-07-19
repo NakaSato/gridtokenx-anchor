@@ -4,13 +4,13 @@ Recommended track to close the highest-value part of the PROPOSED design→code 
 **without** the high-risk trustless Tier-2 machinery. See the design review below for why.
 
 Source design docs (banner-flagged PROPOSED):
-- [`collateral-slashing.md`](collateral-slashing.md) — THBG bond, partial slash, capped victim compensation, fund
+- [`collateral-slashing.md`](collateral-slashing.md) — THBC bond, partial slash, capped victim compensation, fund
 - [`blockchain-node-network.md`](blockchain-node-network.md) — Tier-2 settlement validity (Merkle commit + challenge-response)
 - [`../design/cost-fee-structure.md`](../design/cost-fee-structure.md) — on-chain VAT recording, Merkle-batched settlement
 - [`../design/wallet-authority.md`](../design/wallet-authority.md) — authority map (mostly already implemented)
 
 Current code baseline (verified):
-- `treasury::record_settlement(ctx, value: u64)` → bumps one global `total_settled_thbg`. No root/VAT/zone.
+- `treasury::record_settlement(ctx, value: u64)` → bumps one global `total_settled_thbc`. No root/VAT/zone.
 - Bond = **GRX** (`registry::stake_grx`, `MIN_VALIDATOR_STAKE`; treasury GRX yield staking, separate product).
 - Slash = GRX → single `slash_destination` (registry `slash_validator@827`), redistributed via `fund_rewards`.
 - No Merkle / challenge-window / fraud-proof / per-zone settlement record anywhere.
@@ -19,7 +19,7 @@ Current code baseline (verified):
 
 ## Decisions (DECIDED — recommended track)
 
-- **D1. Collateral asset = GRX.** Keep the existing registry GRX validator bond; change only the *distribution* of a slash. THBG bond + migration is deferred (complexity, third collateral concept).
+- **D1. Collateral asset = GRX.** Keep the existing registry GRX validator bond; change only the *distribution* of a slash. THBC bond + migration is deferred (complexity, third collateral concept).
 - **D2. Bond reward = unchanged.** Registry bond stays no-yield security bond; treasury GRX yield-staking stays a separate product. Do not merge.
 - **D3. Adjudication = governance-attested (off-chain).** Governance decides fraud and triggers the slash; this matches the permissioned PoA trust model. **Trustless on-chain Merkle fraud proof is DEFERRED** behind a feasibility spike (§3) — a vanilla Merkle root cannot prove a *dropped* match (needs a sparse/indexed tree) and on-chain Ed25519+proof CU is unproven.
 - **D4. VAT = data-only.** Record VAT amount/rate as audit/e-Tax data; no on-chain VAT arithmetic enforcement.
@@ -65,7 +65,7 @@ Goal: enrich settlement recording with a tamper-evidence root + VAT audit data. 
 ### §2a — treasury commitment instruction — DONE (commit 930bf52)
 
 - [x] T2a.1 `SettlementRecord` zero-copy PDA (112B, hand-padded), seeds `[b"settlement", zone_id, batch_id]`: `merkle_root[32]`, `recorder`, `total_value`, `vat_amount`, `committed_ts`, `batch_id`, `zone_id`, `vat_rate_bps`, `bump`, `_padding`.
-- [x] T2a.2 `record_settlement_batch(value, merkle_root, vat_amount, vat_rate_bps, zone_id, batch_id)` — bumps `total_settled_thbg`, inits the per-batch `SettlementRecord`, authorized by `settlement_recorder`. VAT rate per-batch (no Treasury-struct change). `compute_fn!` + Clock hoisted.
+- [x] T2a.2 `record_settlement_batch(value, merkle_root, vat_amount, vat_rate_bps, zone_id, batch_id)` — bumps `total_settled_thbc`, inits the per-batch `SettlementRecord`, authorized by `settlement_recorder`. VAT rate per-batch (no Treasury-struct change). `compute_fn!` + Clock hoisted.
 - [x] T2a.3 `SettlementBatchRecorded` event (value/VAT/rate/root/total).
 - [x] Tests (`tests/settlement_commitment_litesvm.ts`, litesvm, 3 passing): commit+total bump; recorder gate; duplicate-`(zone,batch)` rejected.
 
@@ -77,9 +77,9 @@ Goal: enrich settlement recording with a tamper-evidence root + VAT audit data. 
 - [x] T2b.2 Added `settlement_record: Option<UncheckedAccount>` (mut) to `SettleOffchainMatchBatchContext` (`payer`/`system_program`/`treasury_*` already present). **(compile-verified)**
 - [x] T2b.3 Post-loop treasury block now calls `treasury::cpi::record_settlement_batch(value, merkle_root, vat_amount, vat_rate_bps, zone_market.zone_id, batch_id)` with `RecordSettlementBatch { treasury, settlement_record, recorder: market_authority, payer, system_program }`, `new_with_signer`. `TreasurySettlementRequired`/`TreasuryCurrencyMismatch` preserved; `settlement_record` required when recording fires. **(compile-verified; IDL confirms args + account)**
 - [x] T2b.4 Single `settle_offchain_match` left on `record_settlement` (per-batch commitment only).
-- [x] T2b.5 Client PDA helper `settlementRecordPda(zoneId, batchId)` derives `[b"settlement", zone_id_le(u32), batch_id_le(u64)]` under the treasury program — now inlined directly in `tests/batch_settle_tps.ts` and `tests/batch_settle_thbg.ts`. **Verified** it matches the litesvm test's on-chain-confirmed derivation (`HHYQ…` for zone 301/batch 42). Wiring it into an actual batch-settle caller still needs the off-chain match flow (validator-bound).
+- [x] T2b.5 Client PDA helper `settlementRecordPda(zoneId, batchId)` derives `[b"settlement", zone_id_le(u32), batch_id_le(u64)]` under the treasury program — now inlined directly in `tests/batch_settle_tps.ts` and `tests/batch_settle_thbc.ts`. **Verified** it matches the litesvm test's on-chain-confirmed derivation (`HHYQ…` for zone 301/batch 42). Wiring it into an actual batch-settle caller still needs the off-chain match flow (validator-bound).
 
-> **Verification status:** §2b is **on-chain verified, both paths.** The **single** `settle_offchain_match` path (incl. the `record_settlement` treasury CPI) passes via `tests/escrow_settlement.ts` (4/4). The **batch** path (`batch_settle_offchain_match` → `record_settlement_batch` + per-batch `SettlementRecord`) now passes via `tests/batch_settle_thbg.ts` (1/1). Getting the batch path green required a **program fix**: the batch handler read each `OrderNullifier` via `Account::try_from` and only updated `filled_amount` — it never created the PDA (the single path uses `init_if_needed`, which the `remaining_accounts` batch path can't). It now creates+seeds a fresh nullifier in-loop via a signed `system::create_account` CPI (`ensure_nullifier_initialized`), so fresh off-chain matches settle (previously failed `AccountNotInitialized`/3012). Remaining batch TODOs (negative cases, CU, root-rebuild) below.
+> **Verification status:** §2b is **on-chain verified, both paths.** The **single** `settle_offchain_match` path (incl. the `record_settlement` treasury CPI) passes via `tests/escrow_settlement.ts` (4/4). The **batch** path (`batch_settle_offchain_match` → `record_settlement_batch` + per-batch `SettlementRecord`) now passes via `tests/batch_settle_thbc.ts` (1/1). Getting the batch path green required a **program fix**: the batch handler read each `OrderNullifier` via `Account::try_from` and only updated `filled_amount` — it never created the PDA (the single path uses `init_if_needed`, which the `remaining_accounts` batch path can't). It now creates+seeds a fresh nullifier in-loop via a signed `system::create_account` CPI (`ensure_nullifier_initialized`), so fresh off-chain matches settle (previously failed `AccountNotInitialized`/3012). Remaining batch TODOs (negative cases, CU, root-rebuild) below.
 
 ### On-chain test recipe (reproducible — this is how A2 was run)
 
@@ -90,7 +90,7 @@ SOLANA_VALIDATOR_TTL=0 just solana-up          # fresh validator, no auto-kill (
 export ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=$HOME/.config/solana/id.json
 anchor deploy --provider.cluster http://localhost:8899   # my wallet = upgrade authority (fresh chain)
 npx tsx scripts/bootstrap.ts                    # creates the Token-2022 energy mint (mint_2022) + base state
-# for THBG-market tests also: npx tsx scripts/init-treasury.ts
+# for THBC-market tests also: npx tsx scripts/init-treasury.ts
 npx mocha -r tsx tests/<suite>.ts --timeout 1000000
 ```
 
@@ -102,27 +102,27 @@ Gotchas learned: (1) a pre-existing validator deployed by another upgrade author
 - [x] `tests/staking.ts` — 7/7 (§1 slash: reject non-auth + full slash → fund → Slashed; outdated tests fixed in `f06ee5d`)
 - [x] `tests/escrow_settlement.ts` — 4/4 across runs (token-program + optional-account fixes in `7cfb5e0`/`62aad8a`; the signed off-chain **settle passes**, proving the `record_settlement` CPI on-chain)
 
-### §2b batch runtime — happy + total_settled_thbg + TreasurySettlementRequired DONE (on-chain)
+### §2b batch runtime — happy + total_settled_thbc + TreasurySettlementRequired DONE (on-chain)
 
-`tests/batch_settle_thbg.ts` — 2/2 on a live validator. Required the
+`tests/batch_settle_thbc.ts` — 2/2 on a live validator. Required the
 `ensure_nullifier_initialized` program fix (see verification status above) +
-three test-setup fixes (THBG funding vs swap rate, idempotent ATA, tx
+three test-setup fixes (THBC funding vs swap rate, idempotent ATA, tx
 `recentBlockhash`). **Rebuild + redeploy current `trading.so` before running** —
 a stale binary resurfaces the `remaining_accounts.len()` mismatch.
 Note: `batchId` is now per-run (`Date.now()`) — the validator ledger persists
 across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run.
 
-- [x] Setup: `init-treasury.ts` (sets `settlement_thbg_mint`), attest reserve, users swap GRX→THBG, deposit THBG + energy escrows.
-- [x] Batch THBG settle writes the `SettlementRecord` (root/VAT/zone/batch, via the `settlementRecordPda` helper inlined in `tests/batch_settle_thbg.ts`).
-- [x] `TreasurySettlementRequired` (6031) fires when treasury/settlement_record omitted on a THBG market — asserted via send + `conf.value.err` `Custom:6031`.
-- [x] Assert `total_settled_thbg` bumped by gross — happy-path captures the cumulative pre/post settle and asserts the delta == `total_value` (= `matchAmount*matchPrice`), not the VAT-adjusted/escrow-net figure. 2/2 on-chain.
+- [x] Setup: `init-treasury.ts` (sets `settlement_thbc_mint`), attest reserve, users swap GRX→THBC, deposit THBC + energy escrows.
+- [x] Batch THBC settle writes the `SettlementRecord` (root/VAT/zone/batch, via the `settlementRecordPda` helper inlined in `tests/batch_settle_thbc.ts`).
+- [x] `TreasurySettlementRequired` (6031) fires when treasury/settlement_record omitted on a THBC market — asserted via send + `conf.value.err` `Custom:6031`.
+- [x] Assert `total_settled_thbc` bumped by gross — happy-path captures the cumulative pre/post settle and asserts the delta == `total_value` (= `matchAmount*matchPrice`), not the VAT-adjusted/escrow-net figure. 2/2 on-chain.
 - [x] **Settle-path validation guards — DONE** via a new in-process litesvm full-match harness
   (`tests/settle_offchain_guards_litesvm.ts`, **9/9**). First harness that boots trading
   market+zone+shards+collectors, the energy Token-2022 mint, and the treasury in-process; signs a match
   with two Ed25519 precompile ixs; compresses the ~23-account settle through a hand-built ALT installed
   via `setAccount`. One valid-match template drives a positive control + every guard via field overrides
   (Ed25519 msgs regenerate from payloads → sigs stay valid). Guards asserted, all previously untested:
-  - `TreasuryCurrencyMismatch` (6030): treasury passed but `thbg_mint` ≠ settlement currency → reverts at
+  - `TreasuryCurrencyMismatch` (6030): treasury passed but `thbc_mint` ≠ settlement currency → reverts at
     `require_keys_eq!` (`settle_offchain.rs:474`) **before** any `record_settlement` CPI. Lighter than the
     deferred live-validator 2nd-mint/market-reconfig route — the trigger is a mismatched-mint treasury,
     not an alt-currency market. Positive control (treasury omitted) settles the same match end-to-end.
@@ -151,12 +151,12 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
   (`tests/treasury_redeem_guards_litesvm.ts`, **5/5**). Boots the treasury + an external GRX mint in-process,
   attests a reserve, and drives real swap/redeem flows. Guards asserted, all previously untested (the
   swap-side `StaleAttestation`/`PegBreach` were already covered by `tests/treasury.ts`):
-  - `SupplyUnderflow`: redeem `thbg_in` > tracked `thbg_supply` (trivial on a fresh treasury, supply 0).
+  - `SupplyUnderflow`: redeem `thbc_in` > tracked `thbc_supply` (trivial on a fresh treasury, supply 0).
   - `InsufficientVault`: **the headline invariant** (CLAUDE.md) — build vault collateral via a swap, drop
-    `grx_per_thbg_rate` via `set_params`, then a tiny redeem computes `grx_out > swap_vault.amount` and is
+    `grx_per_thbc_rate` via `set_params`, then a tiny redeem computes `grx_out > swap_vault.amount` and is
     rejected. Proves a rate change can never let a redeemer drain more GRX than the vault physically holds.
   - `Paused` (`set_params` paused → swap rejected), `ZeroAmount` (zero redeem).
-  - Positive control: swap 2 GRX → redeem 4 THBG within collateral → succeeds, exercising the real math.
+  - Positive control: swap 2 GRX → redeem 4 THBC within collateral → succeeds, exercising the real math.
 - [x] **Registry slash/stake gating guards — DONE** via a fourth litesvm harness
   (`tests/registry_slash_gating_litesvm.ts`, **3/3**). Boots a registry + an Active staked validator;
   every slash attempt reverts so the validator stays Active and the guards are isolated (the slash *math*
@@ -191,7 +191,7 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
 - [x] CU under budget (batch + CPI-init) — 1-match batch settle ≈ **80–92k CU** (`BENCH_BATCH_SETTLE_CU`), asserted < 1.4M; recorded in `BENCHMARKS.md`. ~12k spread is `find_program_address` bump-seek noise on fresh keypairs, not ledger drift. Off-chain rebuilt-root == on-chain root still moot (the test root is synthetic `1..32`, not a real Merkle tree).
 - [x] Batch-CU curve at >1 match — **single-tx cap = 1 match** (per-match inline Ed25519 verify ix data can't go in an ALT; 2 matches overrun the 1232-byte packet). A real marginal curve needs reworked sig packaging — documented in `BENCHMARKS.md`.
 - [x] TPS sweep over the batch settle path (`tests/batch_settle_tps.ts`) — open-loop goodput: **~0.5–0.6 TPS, flat** (conc 5→0.51, 10→0.58; N=10, 100% goodput, 0 reverts, CU ≈86–89k). Recorded in `BENCHMARKS.md`.
-- [x] Root-caused the contention: **NOT the shard.** Spreading across all 16 shards (`BENCH_TPS_SHARD_SPREAD=1`) gave identical numbers (0.59/0.57, still 2 rounds). Serialization is the global writable accounts every settle touches — `treasury_state` (`total_settled_thbg` accumulator) + the 3 fixed fee/wheeling/loss collectors. Settlement is global-write-bound by design; sharding parallelizes order submission, not settlement.
+- [x] Root-caused the contention: **NOT the shard.** Spreading across all 16 shards (`BENCH_TPS_SHARD_SPREAD=1`) gave identical numbers (0.59/0.57, still 2 rounds). Serialization is the global writable accounts every settle touches — `treasury_state` (`total_settled_thbc` accumulator) + the 3 fixed fee/wheeling/loss collectors. Settlement is global-write-bound by design; sharding parallelizes order submission, not settlement.
 - [ ] True open-loop (no per-round barrier) for peak TPS; shard the treasury accumulator/collectors (or amortize more matches per CPI, blocked by 1-match cap) to parallelize settlement; per-match marginal CU once sig packaging reworked.
 
 ## §2c — Shard the settlement write set (throughput) — DONE (Part A+B + Tier-A, ~2.7-3x measured)
@@ -200,7 +200,7 @@ Goal: lift settle TPS off the ~0.5 TPS floor. §2b root-caused the ceiling (line
 settlement is **global-write-bound** — every settle write-locks the same accounts, so
 Sealevel serializes them regardless of order/shard. Two write sets to shard:
 
-1. **`treasury_state.total_settled_thbg`** accumulator (CPI `record_settlement*`).
+1. **`treasury_state.total_settled_thbc`** accumulator (CPI `record_settlement*`).
 2. **`fee_collector` / `wheeling_collector` / `loss_collector`** ATAs (token-transfer
    destinations in `settle_offchain.rs`).
 
@@ -211,7 +211,7 @@ Sharding only one leaves the other serializing — both must shard to move TPS.
 Self-contained, CPI-only, no fund movement. Mirrors the registry 16-shard counter.
 
 - [x] `SettlementShard` zero-copy PDA (24B, hand-padded), seeds `[b"settle_shard", &[shard_id]]`:
-  `settled_thbg`, `settlement_count`, `shard_id`, `bump`, `_padding` (`state.rs`). `NUM_SETTLE_SHARDS = 16`,
+  `settled_thbc`, `settlement_count`, `shard_id`, `bump`, `_padding` (`state.rs`). `NUM_SETTLE_SHARDS = 16`,
   `settle_shard_for(key) = key[0] % 16`.
 - [x] `initialize_settlement_shard(shard_id)` — admin-gated, one PDA per shard (`lib.rs`).
 - [x] `record_settlement_sharded(value, shard_id)` — bumps the shard PDA, **not** the global.
@@ -219,7 +219,7 @@ Self-contained, CPI-only, no fund movement. Mirrors the registry 16-shard counte
   parallel settles, unlike the `mut` treasury in `record_settlement`. Shard bound to `shard_id`
   by PDA seeds (no scatter). `compute_fn!` + Clock hoisted + `checked_*`.
 - [x] `aggregate_settlement_shards` — admin; sums shards from `remaining_accounts`
-  (program-owner + stored-bump-PDA validation, `u16` shard-id dedup bitmask) → `total_settled_thbg`.
+  (program-owner + stored-bump-PDA validation, `u16` shard-id dedup bitmask) → `total_settled_thbc`.
   Global total stale-on-purpose, same trade-off as registry `aggregate_shards`.
 - [x] Errors `InvalidShardId` / `DuplicateShard`; event `SettlementShardRecorded` (shard total, not global).
 - [x] Tests `tests/settle_shard_litesvm.ts` **5/5**: per-shard accumulation + count, global stays 0
@@ -242,11 +242,11 @@ under a live validator (Solana 3.1.10), not litesvm.
   wallet pays every settle, pinning all to one shard. The off-chain matcher rotates `settle_shard_id` to
   spread load. Validated `< NUM_SETTLE_SHARDS` in the handler.
 - [x] T2c.3 Treasury CPI routed through new `record_settlement_batch_sharded(...,shard_id)` (Part A's shard
-  + the per-(zone,batch) `SettlementRecord`), dropping the global `total_settled_thbg` write off the hot path.
+  + the per-(zone,batch) `SettlementRecord`), dropping the global `total_settled_thbc` write off the hot path.
 - [x] T2c.4 `sweep_collectors(shard_id)` — permissionless consolidation of a shard's 3 ATAs into the
   canonical (unsharded) collectors (both `market_authority`-owned → can't exfiltrate).
-- [x] T2c.6 CU under budget: batch settle (sharded) ≈ **87k CU** (`tests/batch_settle_thbg.ts`), < 1.4M.
-- [x] Correctness verified on-chain (`tests/batch_settle_thbg.ts` 2/2): the per-shard accumulator advances by
+- [x] T2c.6 CU under budget: batch settle (sharded) ≈ **87k CU** (`tests/batch_settle_thbc.ts`), < 1.4M.
+- [x] Correctness verified on-chain (`tests/batch_settle_thbc.ts` 2/2): the per-shard accumulator advances by
   the gross value, the **global total stays flat** (reconciled only via aggregation), buyer receives energy,
   `TreasurySettlementRequired` (6031) still fires. Sharded litesvm accumulator (`settle_shard_litesvm.ts`) 5/5.
 - [~] **T2c.5 TPS win NOT demonstrated — confirmed unmeasurable at localnet scale.** Sweep
@@ -276,7 +276,7 @@ slot-density measurement) that isolates true validator packing rate from client 
 (full design + empirical A/B in [`settlement-tps-tier-a.md`](settlement-tps-tier-a.md)) moved `zone_market` to
 read-only (committed_flow lives on the per-zone `ZoneCapacity` PDA instead) in both settle paths. Measured
 result at N=40: **writable ~1/slot vs read-only 3/slot — ~2.7-3x** wall-clock-independent throughput, litesvm
-219 + on-chain `escrow_settlement`/`batch_settle_thbg` green. Remaining ceiling (~3 settles/slot, single node)
+219 + on-chain `escrow_settlement`/`batch_settle_thbc` green. Remaining ceiling (~3 settles/slot, single node)
 is the validator's per-tx packing rate for a ~102k-CU settlement, not a write-lock — further gains would need a
 multi-node cluster or amortizing more matches per tx (blocked on the existing single-tx batch cap, see
 `batch-settle-single-tx-cap` note elsewhere), a separate and much larger lever than this section's scope.
@@ -300,7 +300,7 @@ Tests / exit criteria:
 
 ## Deferred (only if §3 passes — current recommendation NO-GO, see [`tier2-go-no-go.md`](tier2-go-no-go.md))
 - Trustless on-chain Merkle fraud proof + challenge-response — **gated on a settlement-finality/challenge-window redesign** (the proof verify itself is done + cheap). Re-open only if the trust model leaves permissioned PoA.
-- THBG-denominated bond + migration of live GRX bonds.
+- THBC-denominated bond + migration of live GRX bonds.
 
 ## Cross-cutting
 - Zero-copy + manual padding recounted; `Space = 8 + size_of::<T>()`; no `String` in zero-copy.

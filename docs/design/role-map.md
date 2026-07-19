@@ -51,7 +51,7 @@ renewable attribute," on top of its existing regulator/governance role.
 | **MEA / กฟน**, **PEA / กฟภ** | Distribution utilities (metro / provinces) | **Retail-market validators** (consensus nodes, metro/provincial distribution-level settlement) + **per-territory aggregator admission & collateral custody** + distribution **wheeling and loss**-tariff signer (retail trades never leave the local distribution grid) | Solana cluster (retail segment); delegated `admit_aggregator`; `trading` wheeling + loss cost |
 | **Licensed aggregator** (private, per zone) | Off-chain market-clearing operator | **Bonded validator** — staked, slashable; must be admitted *and* bonded | `registry::register_validator`/`stake_grx` ↔ `governance::AdmittedAggregator` |
 | **Prosumer / consumer** | Market participant | **Client** — no stake; swap/redeem only | `treasury` swap/redeem; `trading` orders |
-| **Independent reserve custodian / auditor** (bank under BoT alignment) | THBG fiat-reserve attestation | **Attestor** — distinct from param admin | `treasury::update_attestation` |
+| **Independent reserve custodian / auditor** (bank under BoT alignment) | THBC fiat-reserve attestation | **Attestor** — distinct from param admin | `treasury::update_attestation` |
 | **Regulator / consumer-rebate pool** | Penalty beneficiary | **Slash destination** | `registry::slash_destination` |
 
 > **Open question carried over from the 2026-07-04 revision:** the consensus set is now
@@ -134,7 +134,7 @@ prosumer/consumer ── clients (no stake) ── swap/redeem ── orders ─
 - **Does ERC run a key, or delegate?** ERC may delegate day-to-day admission to a
   secretariat or to EGAT-as-registrar while retaining a slash/param **veto**. If so, model
   ERC = slash/param veto, secretariat = day-to-day admit.
-- **THBG issuer** — modelled here as "licensed bank / BoT-aligned custodian." Bind to a
+- **THBC issuer** — modelled here as "licensed bank / BoT-aligned custodian." Bind to a
   named partner once chosen.
 - **Consensus k, n** — fixed at deployment per the network doc; this map only asserts
   n ≥ 4 for liveness.

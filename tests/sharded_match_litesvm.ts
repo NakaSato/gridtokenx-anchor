@@ -31,7 +31,7 @@ const SHARD_ID = 0;
 const NOW = 1_000_000;
 const FUTURE = 9_000_000;
 
-// Wide band so the test prices fit (2.00–5.00 THBG/kWh, 6-dec).
+// Wide band so the test prices fit (2.00–5.00 THBC/kWh, 6-dec).
 const P_MIN = 2_000_000;
 const P_MAX = 5_000_000;
 

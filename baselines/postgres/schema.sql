@@ -8,11 +8,11 @@
 DROP SCHEMA IF EXISTS baseline CASCADE;
 CREATE SCHEMA baseline;
 
--- Per-user escrow balances (THBG currency + energy), the analog of the on-chain
+-- Per-user escrow balances (THBC currency + energy), the analog of the on-chain
 -- per-user escrow PDAs the settlement debits/credits.
 CREATE TABLE baseline.accounts (
   id            integer PRIMARY KEY,
-  thbg_balance  bigint NOT NULL,   -- 6-dec currency base units
+  thbc_balance  bigint NOT NULL,   -- 6-dec currency base units
   energy_balance bigint NOT NULL   -- 9-dec atomic kWh
 );
 
@@ -57,6 +57,6 @@ CREATE TABLE baseline.nullifiers (
 
 -- Seed N accounts with astronomically high balances so a multi-second run never
 -- underflows (throughput measurement, not solvency). :naccounts passed by runner.
-INSERT INTO baseline.accounts(id, thbg_balance, energy_balance)
+INSERT INTO baseline.accounts(id, thbc_balance, energy_balance)
 SELECT g, 1000000000000000000, 1000000000000000000
 FROM generate_series(1, :naccounts) AS g;

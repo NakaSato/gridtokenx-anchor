@@ -91,7 +91,7 @@ PDA seed `[b"wholesale_market"]`. Read-only on the hot offer-submission path (Se
 | `price_floor` | `u64` | Min offer price (6-dp THB/kWh, matches `price_per_kwh`). |
 | `price_cap` | `u64` | Max offer/clearing price; 0 = uncapped. |
 | `current_session` | `u64` | Monotonic session counter. |
-| `settlement_thbg_mint` | `Pubkey` | THBG mint used for `treasury::record_settlement`. |
+| `settlement_thbc_mint` | `Pubkey` | THBC mint used for `treasury::record_settlement`. |
 | `total_sessions_cleared` | `u64` | Stale-on-purpose global stat. |
 | `total_wholesale_volume` | `u64` | Cumulative cleared energy. |
 | `active` | `u8` | 1 = accepting sessions. |
@@ -166,7 +166,7 @@ Fields: `session_id`, `generator`, `period`, `cleared_quantity`, `clearing_price
 Every state-mutating instruction gates on `governance::is_operational()` → `MaintenanceMode`,
 wraps its body in `compute_fn!`, and hoists `Clock::get()` before `emit!`.
 
-**`initialize_wholesale_market(clearing_rule, num_periods, price_floor, price_cap, settlement_thbg_mint)`**
+**`initialize_wholesale_market(clearing_rule, num_periods, price_floor, price_cap, settlement_thbc_mint)`**
 — Signer: `authority` (becomes `WholesaleMarket.authority`). `init` the singleton.
 
 **`register_generator(generator, licensed_capacity, fuel_type, node_zone, rec_eligible)`** —
@@ -203,7 +203,7 @@ or leave per-step for pay-as-bid, set `cleared_volume[period]`. Requires session
 **`execute_wholesale_awards(session_id, period, awards: Vec<AwardPair>)`** — Signer:
 `authority`. For each cleared (generator, period): `init` the `AwardRecord` PDA
 (replay-guarded), set `cleared_quantity`/`clearing_price`. Then, when the settlement currency
-is THBG, CPI `treasury::record_settlement`
+is THBC, CPI `treasury::record_settlement`
 ([`treasury/src/lib.rs:360`](../../../programs/treasury/src/lib.rs)) with the period's cleared
 value, signed by the wholesale-market authority PDA. Optionally open/feed a `trading`
 wholesale-segment (`segment == 1`) zone so downstream reporting is unified. Emits

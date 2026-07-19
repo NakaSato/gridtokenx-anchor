@@ -165,7 +165,7 @@ async function main() {
       const orderId = new BN((ORDER_ID_BASE + BigInt(i)).toString());
       const side = i % 2; // alternate buy/sell
       const amount = new BN((1 + (i % 50)) * 1_000_000_000); // 1..50 kWh, 9-dec
-      const price = new BN(3_000_000 + (i % 100) * 10_000);  // 3.0..4.0 THBG/kWh, 6-dec
+      const price = new BN(3_000_000 + (i % 100) * 10_000);  // 3.0..4.0 THBC/kWh, 6-dec
       const shard = i % SHARDS;
       const [orderPda] = PublicKey.findProgramAddressSync(
         [Buffer.from("order"), payer.publicKey.toBuffer(), orderId.toArrayLike(Buffer, "le", 8)],

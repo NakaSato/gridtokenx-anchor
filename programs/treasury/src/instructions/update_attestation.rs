@@ -11,7 +11,7 @@ pub struct UpdateAttestation<'info> {
     pub attestor: Signer<'info>,
 }
 
-/// Custodian: refresh the off-chain THB reserve figure that caps THBG supply.
+/// Custodian: refresh the off-chain THB reserve figure that caps THBC supply.
 /// This is the peg's source of truth — mints are blocked once it goes stale.
 pub fn update_attestation(ctx: Context<UpdateAttestation>, attested_reserve: u64) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;

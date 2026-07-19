@@ -55,11 +55,11 @@ pub fn record_settlement_batch(
             t.settlement_recorder == ctx.accounts.recorder.key(),
             TreasuryError::UnauthorizedRecorder
         );
-        t.total_settled_thbg = t
-            .total_settled_thbg
+        t.total_settled_thbc = t
+            .total_settled_thbc
             .checked_add(value)
             .ok_or(TreasuryError::MathOverflow)?;
-        t.total_settled_thbg
+        t.total_settled_thbc
     };
 
     let mut rec = ctx.accounts.settlement_record.load_init()?;
@@ -81,7 +81,7 @@ pub fn record_settlement_batch(
         vat_amount,
         vat_rate_bps,
         merkle_root,
-        total_settled_thbg: total,
+        total_settled_thbc: total,
         timestamp: now,
     });
     Ok(())

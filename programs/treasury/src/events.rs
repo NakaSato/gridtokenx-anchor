@@ -10,24 +10,24 @@ pub struct ReserveAttested {
     pub timestamp: i64,
 }
 
-/// GRX swapped into THBG — the baht-denominated settlement primitive.
+/// GRX swapped into THBC — the baht-denominated settlement primitive.
 #[event]
-pub struct SwappedGrxForThbg {
+pub struct SwappedGrxForThbc {
     pub user: Pubkey,
     pub grx_in: u64,
-    pub thbg_out: u64,
+    pub thbc_out: u64,
     pub fee: u64,
-    pub thbg_supply: u64,
+    pub thbc_supply: u64,
     pub timestamp: i64,
 }
 
-/// THBG redeemed back into GRX held by the treasury swap vault.
+/// THBC redeemed back into GRX held by the treasury swap vault.
 #[event]
-pub struct RedeemedThbgForGrx {
+pub struct RedeemedThbcForGrx {
     pub user: Pubkey,
-    pub thbg_in: u64,
+    pub thbc_in: u64,
     pub grx_out: u64,
-    pub thbg_supply: u64,
+    pub thbc_supply: u64,
     pub timestamp: i64,
 }
 
@@ -66,7 +66,7 @@ pub struct RewardsFunded {
 pub struct SettlementRecorded {
     pub recorder: Pubkey,
     pub value: u64,
-    pub total_settled_thbg: u64,
+    pub total_settled_thbc: u64,
     pub timestamp: i64,
 }
 
@@ -92,7 +92,7 @@ pub struct SettlementBatchRecorded {
     pub vat_amount: u64,
     pub vat_rate_bps: u16,
     pub merkle_root: [u8; 32],
-    pub total_settled_thbg: u64,
+    pub total_settled_thbc: u64,
     pub timestamp: i64,
 }
 
@@ -119,7 +119,7 @@ pub struct SettlementBatchShardRecorded {
 #[event]
 pub struct ParamsUpdated {
     pub authority: Pubkey,
-    pub grx_per_thbg_rate: u64,
+    pub grx_per_thbc_rate: u64,
     pub swap_fee_bps: u16,
     pub attestation_ttl: i64,
     pub paused: bool,

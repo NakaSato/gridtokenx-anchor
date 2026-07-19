@@ -1,6 +1,6 @@
-# Treasury Peg Mechanics — THBG Swap, Redeem, Staking
+# Treasury Peg Mechanics — THBC Swap, Redeem, Staking
 
-> Deep-dive. THBG stablecoin peg invariants, swap/redeem math, reserve attestation, MasterChef
+> Deep-dive. THBC stablecoin peg invariants, swap/redeem math, reserve attestation, MasterChef
 > staking accumulator, the three GRX vaults. Source: CLAUDE.md treasury section.
 > (Verify formulas in `programs/treasury/src/`.)
 
@@ -8,19 +8,19 @@
 
 ## 0. TL;DR
 
-**THBG** = THB-pegged stablecoin (6 decimals), mint authority = `[b"treasury"]` PDA. **Swap**
-turns GRX into THBG at an attested rate, guarded so minted THBG never exceeds attested reserve.
-**Redeem** burns THBG for GRX from the `swap_vault`, guarded so a rate change can't drain more GRX
+**THBC** = THB-pegged stablecoin (6 decimals), mint authority = `[b"treasury"]` PDA. **Swap**
+turns GRX into THBC at an attested rate, guarded so minted THBC never exceeds attested reserve.
+**Redeem** burns THBC for GRX from the `swap_vault`, guarded so a rate change can't drain more GRX
 than the vault holds. **Staking** is a separate MasterChef-style yield system (its own vault,
 funded by swap fees) — distinct from registry's validator bond. **Three separate GRX vaults**:
 swap (collateral), stake (custody), reward (pool).
 
 ---
 
-## 1. The peg primitive: swap_grx_for_thbg
+## 1. The peg primitive: swap_grx_for_thbc
 
 ```text
-thbg_out = grx_in × grx_per_thbg_rate / 1e9 − fee
+thbc_out = grx_in × grx_per_thbc_rate / 1e9 − fee
 ```
 
 Two **peg invariants** enforced on every swap:
@@ -28,27 +28,27 @@ Two **peg invariants** enforced on every swap:
 1. **Reserve freshness:** `now − attestation_ts ≤ attestation_ttl`. The reserve attestation
    (off-chain custodian's proof of THB reserve) must be recent, or swap halts. Stale attestation
    → no minting.
-2. **Reserve coverage:** `thbg_supply + minted ≤ attested_reserve`. Never mint more THBG than the
+2. **Reserve coverage:** `thbc_supply + minted ≤ attested_reserve`. Never mint more THBC than the
    attested real-world reserve backs. This is the 1:1 peg guarantee.
 
 The custodian refreshes via **`update_attestation`** (sets `attested_reserve`, `attestation_ts`).
 
 ```mermaid
 graph TD
-    SWAP["swap_grx_for_thbg(grx_in)"] --> F1{"now − attestation_ts ≤ ttl?"}
+    SWAP["swap_grx_for_thbc(grx_in)"] --> F1{"now − attestation_ts ≤ ttl?"}
     F1 -- no --> HALT1["reject: stale attestation"]
-    F1 -- yes --> F2{"thbg_supply + minted ≤ attested_reserve?"}
+    F1 -- yes --> F2{"thbc_supply + minted ≤ attested_reserve?"}
     F2 -- no --> HALT2["reject: would exceed reserve"]
-    F2 -- yes --> MINT["mint thbg_out, take fee"]
+    F2 -- yes --> MINT["mint thbc_out, take fee"]
 ```
 
 ---
 
-## 2. The redeem path: redeem_thbg_for_grx
+## 2. The redeem path: redeem_thbc_for_grx
 
-Burns THBG, returns GRX from `swap_vault` at the current rate. Two **collateral guards**:
+Burns THBC, returns GRX from `swap_vault` at the current rate. Two **collateral guards**:
 
-1. `thbg_in ≤ thbg_supply` → `SupplyUnderflow` (can't burn more than exists).
+1. `thbc_in ≤ thbc_supply` → `SupplyUnderflow` (can't burn more than exists).
 2. `grx_out ≤ swap_vault.amount` → `InsufficientVault` (can't withdraw more GRX than the vault
    holds).
 
@@ -62,7 +62,7 @@ holdings → a rate change can **never** over-drain. Peg safety under parameter 
 
 | Vault | PDA | Purpose |
 |-------|-----|---------|
-| `swap_vault` | redemption collateral | backs THBG→GRX redeem |
+| `swap_vault` | redemption collateral | backs THBC→GRX redeem |
 | `stake_vault` | staker custody | holds staked GRX (yield staking) |
 | `reward_vault` | reward pool | pays GRX staking rewards |
 | `rebate_vault` | regulator / consumer-rebate pool | destination for slashed validator bonds (`registry::slash_destination`, role-map.md fix #10) — never staker yield |
@@ -119,8 +119,8 @@ vault or position; not reconciled.** (See `registry-staking-slash.md`.)
 ## 6. record_settlement — accounting hook
 
 (Cross-ref `off-chain-settlement.md` / `cpi-flow.md`.) Trading CPIs `record_settlement` to bump
-`total_settled_thbg` by the **gross** settled value — non-custodial accounting, authorized by the
-`settlement_recorder` signer (= trading `market_authority` PDA). Mandatory for THBG markets. The
+`total_settled_thbc` by the **gross** settled value — non-custodial accounting, authorized by the
+`settlement_recorder` signer (= trading `market_authority` PDA). Mandatory for THBC markets. The
 slash redistribution path points registry's `slash_destination` at the treasury `rebate_vault`
 (regulator / consumer-rebate pool, role-map.md fix #10 — kept separate from `reward_vault` so a
 slashing penalty never funds staker yield).
@@ -130,7 +130,7 @@ slashing penalty never funds staker yield).
 ## 7. Pitfalls
 
 - **Stale attestation** → swap halts; custodian must `update_attestation` within the TTL.
-- **Over-minting THBG** → blocked by `thbg_supply + minted ≤ attested_reserve`.
+- **Over-minting THBC** → blocked by `thbc_supply + minted ≤ attested_reserve`.
 - **Rate-change drain** → blocked by `grx_out ≤ swap_vault.amount` (`InsufficientVault`).
 - **Mixing vaults** → staked GRX must not count as peg reserve; four vaults stay separate.
 - **Merging the two staking systems** → they're different products; never reconcile yield staking
@@ -141,10 +141,10 @@ slashing penalty never funds staker yield).
 
 ## 8. One-paragraph recall
 
-**THBG** (6-dec, THB-pegged, mint authority `[b"treasury"]` PDA) swaps from GRX via
-`thbg_out = grx_in × rate / 1e9 − fee`, guarded by **attestation freshness**
-(`now − attestation_ts ≤ ttl`) and **reserve coverage** (`thbg_supply + minted ≤ attested_reserve`);
-redeem burns THBG for GRX from `swap_vault` with `SupplyUnderflow` / `InsufficientVault` guards so
+**THBC** (6-dec, THB-pegged, mint authority `[b"treasury"]` PDA) swaps from GRX via
+`thbc_out = grx_in × rate / 1e9 − fee`, guarded by **attestation freshness**
+(`now − attestation_ts ≤ ttl`) and **reserve coverage** (`thbc_supply + minted ≤ attested_reserve`);
+redeem burns THBC for GRX from `swap_vault` with `SupplyUnderflow` / `InsufficientVault` guards so
 a `set_params` rate change can't over-drain. Yield **staking** is a separate MasterChef
 accumulator (`acc_reward_per_share ×1e12`, funded by swap fees, `stake_vault` + `reward_vault`,
 tracked on `StakePosition`) — distinct from registry's slashed validator bond, never merged.

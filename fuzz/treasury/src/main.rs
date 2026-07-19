@@ -1,17 +1,17 @@
 //! Crucible invariant-fuzzing harness for the `treasury` program.
 //!
-//! Fuzzes the GRX↔THBG swap/redeem peg primitive plus GRX yield-staking, driving
+//! Fuzzes the GRX↔THBC swap/redeem peg primitive plus GRX yield-staking, driving
 //! random sequences of the public instructions against a LiteSVM instance and
 //! asserting the program's load-bearing accounting invariants after every action.
 //!
 //! Invariants checked (see `invariant_test` below):
-//!   I1  THBG accounting: on-chain THBG mint supply == treasury.thbg_supply counter.
-//!   I2  Peg solvency:    treasury.thbg_supply <= treasury.attested_reserve.
+//!   I1  THBC accounting: on-chain THBC mint supply == treasury.thbc_supply counter.
+//!   I2  Peg solvency:    treasury.thbc_supply <= treasury.attested_reserve.
 //!   I3  Stake custody:   stake_vault balance == total_staked == Σ position.amount.
 //!   I4  Reward pool:     reward_vault balance == treasury.reward_pool.
 //!   I5  GRX conservation: total GRX across every account the treasury touches is
 //!                         constant (the treasury never mints/burns GRX).
-//!   I6  Settlement conservation: global total_settled_thbg + Σ undrained shard
+//!   I6  Settlement conservation: global total_settled_thbc + Σ undrained shard
 //!                         balances == the exact sum of every value recorded (global
 //!                         + sharded). The sharded record + drain-and-fold aggregate
 //!                         must never create, lose, or double-count settled value.
@@ -38,17 +38,17 @@ const USER_GRX: u64 = 1_000_000_000_000_000; // 1e6 GRX (9 dec) per user
 const FUNDER_GRX: u64 = 1_000_000_000_000_000; // 1e6 GRX for reward funding
 const GRX_DECIMALS: u8 = 9;
 
-const INIT_RATE: u64 = 1_000_000; // THBG minor units per whole GRX
+const INIT_RATE: u64 = 1_000_000; // THBC minor units per whole GRX
 const INIT_FEE_BPS: u16 = 30;
 const HUGE_TTL: i64 = i64::MAX; // freshness gate always passes; we don't fuzz staleness
-const INIT_RESERVE: u64 = 1_000_000_000_000_000_000; // 1e18 THBG headroom
+const INIT_RESERVE: u64 = 1_000_000_000_000_000_000; // 1e18 THBC headroom
 const NUM_SHARDS: u8 = 16; // treasury::state::NUM_SETTLE_SHARDS
 
 #[derive(Clone)]
 struct UserAcct {
     kp: Rc<Keypair>,
     grx_ata: Pubkey,
-    thbg_ata: Pubkey,
+    thbc_ata: Pubkey,
     stake_pos: Pubkey,
 }
 
@@ -60,7 +60,7 @@ struct TreasuryFixture {
     funder: Rc<Keypair>,
     funder_grx_ata: Pubkey,
     treasury_pda: Pubkey,
-    thbg_mint: Pubkey,
+    thbc_mint: Pubkey,
     swap_vault: Pubkey,
     stake_vault: Pubkey,
     reward_vault: Pubkey,
@@ -129,7 +129,7 @@ impl TreasuryFixture {
 
         // --- PDAs ---
         let (treasury_pda, _) = Pubkey::find_program_address(&[b"treasury"], &program_id);
-        let (thbg_mint, _) = Pubkey::find_program_address(&[b"thbg_mint"], &program_id);
+        let (thbc_mint, _) = Pubkey::find_program_address(&[b"thbc_mint"], &program_id);
         let (swap_vault, _) = Pubkey::find_program_address(&[b"swap_vault"], &program_id);
         let (stake_vault, _) = Pubkey::find_program_address(&[b"stake_vault"], &program_id);
         let (reward_vault, _) = Pubkey::find_program_address(&[b"reward_vault"], &program_id);
@@ -146,7 +146,7 @@ impl TreasuryFixture {
 
         let mut grx_total: u64 = FUNDER_GRX;
 
-        // --- users: SOL + pre-funded GRX ATA + empty THBG ATA ---
+        // --- users: SOL + pre-funded GRX ATA + empty THBC ATA ---
         let mut users = Vec::new();
         for _ in 0..N_USERS {
             let kp = Rc::new(Keypair::new());
@@ -167,10 +167,10 @@ impl TreasuryFixture {
                 .unwrap();
             grx_total += USER_GRX;
 
-            let thbg_ata = Keypair::new().pubkey();
+            let thbc_ata = Keypair::new().pubkey();
             ctx.create_token_account()
-                .pubkey(thbg_ata)
-                .mint(thbg_mint)
+                .pubkey(thbc_ata)
+                .mint(thbc_mint)
                 .token_owner(kp.pubkey())
                 .amount(0)
                 .create()
@@ -179,22 +179,22 @@ impl TreasuryFixture {
             let (stake_pos, _) =
                 Pubkey::find_program_address(&[b"stake", kp.pubkey().as_ref()], &program_id);
 
-            users.push(UserAcct { kp, grx_ata, thbg_ata, stake_pos });
+            users.push(UserAcct { kp, grx_ata, thbc_ata, stake_pos });
         }
 
-        // --- initialize treasury (creates thbg_mint + 3 vaults) ---
+        // --- initialize treasury (creates thbc_mint + 3 vaults) ---
         ctx.program(program_id)
             .call(instruction::Initialize {
                 attestor: admin.pubkey(),
                 settlement_recorder: admin.pubkey(),
-                grx_per_thbg_rate: INIT_RATE,
+                grx_per_thbc_rate: INIT_RATE,
                 swap_fee_bps: INIT_FEE_BPS,
                 attestation_ttl: HUGE_TTL,
             })
             .accounts(accounts::Initialize {
                 treasury: treasury_pda,
                 grx_mint,
-                thbg_mint,
+                thbc_mint,
                 swap_vault,
                 stake_vault,
                 reward_vault,
@@ -241,7 +241,7 @@ impl TreasuryFixture {
             funder,
             funder_grx_ata,
             treasury_pda,
-            thbg_mint,
+            thbc_mint,
             swap_vault,
             stake_vault,
             reward_vault,
@@ -306,7 +306,7 @@ impl TreasuryFixture {
     // Actions
     // --------------------------------------------------------------------- //
 
-    /// Swap GRX → THBG (mints THBG, pulls GRX collateral into swap_vault).
+    /// Swap GRX → THBC (mints THBC, pulls GRX collateral into swap_vault).
     pub fn action_swap(&mut self, #[range(0..2)] uidx: usize, grx_in: u64) -> bool {
         let u = &self.users[uidx];
         let bal = self.token_amount(&u.grx_ata);
@@ -317,14 +317,14 @@ impl TreasuryFixture {
         let ok = self
             .ctx
             .program(self.program_id)
-            .call(instruction::SwapGrxForThbg { grx_in: amt })
-            .accounts(accounts::SwapGrxForThbg {
+            .call(instruction::SwapGrxForThbc { grx_in: amt })
+            .accounts(accounts::SwapGrxForThbc {
                 treasury: self.treasury_pda,
                 grx_mint: self.grx_mint,
-                thbg_mint: self.thbg_mint,
+                thbc_mint: self.thbc_mint,
                 swap_vault: self.swap_vault,
                 user_grx_ata: u.grx_ata,
-                user_thbg_ata: u.thbg_ata,
+                user_thbc_ata: u.thbc_ata,
                 user: u.kp.pubkey(),
                 token_program: spl_token_id(),
             })
@@ -338,25 +338,25 @@ impl TreasuryFixture {
         ok
     }
 
-    /// Redeem THBG → GRX (burns THBG, returns GRX from swap_vault).
-    pub fn action_redeem(&mut self, #[range(0..2)] uidx: usize, thbg_in: u64) -> bool {
+    /// Redeem THBC → GRX (burns THBC, returns GRX from swap_vault).
+    pub fn action_redeem(&mut self, #[range(0..2)] uidx: usize, thbc_in: u64) -> bool {
         let u = &self.users[uidx];
-        let bal = self.token_amount(&u.thbg_ata);
+        let bal = self.token_amount(&u.thbc_ata);
         if bal == 0 {
             return false;
         }
-        let amt = (thbg_in % bal).max(1);
+        let amt = (thbc_in % bal).max(1);
         let ok = self
             .ctx
             .program(self.program_id)
-            .call(instruction::RedeemThbgForGrx { thbg_in: amt })
-            .accounts(accounts::RedeemThbgForGrx {
+            .call(instruction::RedeemThbcForGrx { thbc_in: amt })
+            .accounts(accounts::RedeemThbcForGrx {
                 treasury: self.treasury_pda,
                 grx_mint: self.grx_mint,
-                thbg_mint: self.thbg_mint,
+                thbc_mint: self.thbc_mint,
                 swap_vault: self.swap_vault,
                 user_grx_ata: u.grx_ata,
-                user_thbg_ata: u.thbg_ata,
+                user_thbc_ata: u.thbc_ata,
                 user: u.kp.pubkey(),
                 token_program: spl_token_id(),
             })
@@ -373,7 +373,7 @@ impl TreasuryFixture {
     /// Attest a fresh reserve. Kept >= current supply so I2 stays a meaningful
     /// regression guard on the swap over-mint check (never a spurious failure).
     pub fn action_attest(&mut self, headroom: u64) -> bool {
-        let supply = self.treasury().thbg_supply;
+        let supply = self.treasury().thbc_supply;
         let reserve = supply.saturating_add(headroom);
         self.ctx
             .program(self.program_id)
@@ -399,7 +399,7 @@ impl TreasuryFixture {
             .ctx
             .program(self.program_id)
             .call(instruction::SetParams {
-                grx_per_thbg_rate: rate,
+                grx_per_thbc_rate: rate,
                 swap_fee_bps: fee_bps,
                 attestation_ttl: HUGE_TTL,
                 paused: false,
@@ -419,15 +419,15 @@ impl TreasuryFixture {
         ok
     }
 
-    /// Toggle the pause flag via set_params. When paused, swap_grx_for_thbg and
-    /// redeem_thbg_for_grx must halt (TreasuryError::Paused) — the pause-violation
+    /// Toggle the pause flag via set_params. When paused, swap_grx_for_thbc and
+    /// redeem_thbc_for_grx must halt (TreasuryError::Paused) — the pause-violation
     /// invariant (I9) checks no swap/redeem lands while `self.paused`.
     pub fn action_set_pause(&mut self, paused: bool) -> bool {
         let ok = self
             .ctx
             .program(self.program_id)
             .call(instruction::SetParams {
-                grx_per_thbg_rate: INIT_RATE,
+                grx_per_thbc_rate: INIT_RATE,
                 swap_fee_bps: INIT_FEE_BPS,
                 attestation_ttl: HUGE_TTL,
                 paused,
@@ -572,7 +572,7 @@ impl TreasuryFixture {
 
     // ------------------- settlement-shard accounting path ------------------ //
 
-    /// Record a single-match settlement against the GLOBAL total_settled_thbg
+    /// Record a single-match settlement against the GLOBAL total_settled_thbc
     /// (record_settlement) — the recorder is the treasury's settlement_recorder (admin).
     pub fn action_record_settlement(&mut self, value: u64) -> bool {
         let v = (value % 1_000_000_000) + 1; // >0 (ZeroAmount), bounded so no overflow
@@ -775,22 +775,22 @@ impl TreasuryFixture {
 fn invariant_test(fixture: &mut TreasuryFixture) {
     let t = fixture.treasury();
 
-    // I1 — THBG accounting integrity: minted supply must equal the tracked counter.
-    let onchain_thbg = fixture.mint_supply(&fixture.thbg_mint);
+    // I1 — THBC accounting integrity: minted supply must equal the tracked counter.
+    let onchain_thbc = fixture.mint_supply(&fixture.thbc_mint);
     fuzz_assert_eq!(
-        onchain_thbg,
-        t.thbg_supply,
-        "THBG mint supply {} != treasury.thbg_supply {}",
-        onchain_thbg,
-        t.thbg_supply
+        onchain_thbc,
+        t.thbc_supply,
+        "THBC mint supply {} != treasury.thbc_supply {}",
+        onchain_thbc,
+        t.thbc_supply
     );
 
-    // I2 — Peg solvency: outstanding THBG never exceeds the attested reserve.
+    // I2 — Peg solvency: outstanding THBC never exceeds the attested reserve.
     fuzz_assert_le!(
-        t.thbg_supply,
+        t.thbc_supply,
         t.attested_reserve,
-        "peg breach: thbg_supply {} > attested_reserve {}",
-        t.thbg_supply,
+        "peg breach: thbc_supply {} > attested_reserve {}",
+        t.thbc_supply,
         t.attested_reserve
     );
 
@@ -848,18 +848,18 @@ fn invariant_test(fixture: &mut TreasuryFixture) {
     // Every recorded value lands either in a shard (undrained) or already folded into the
     // global; the two together must always equal the exact sum recorded. A lost/duplicated
     // shard fold, a misrouted shard, or a double-drain would break this.
-    let shard_sum: u64 = fixture.shards.iter().map(|s| fixture.shard(s).settled_thbg).sum();
-    let settled_total = t.total_settled_thbg.wrapping_add(shard_sum);
+    let shard_sum: u64 = fixture.shards.iter().map(|s| fixture.shard(s).settled_thbc).sum();
+    let settled_total = t.total_settled_thbc.wrapping_add(shard_sum);
     fuzz_assert_eq!(
         settled_total,
         fixture.settle_expected,
         "settlement conservation: global {} + shards {} != recorded {}",
-        t.total_settled_thbg,
+        t.total_settled_thbc,
         shard_sum,
         fixture.settle_expected
     );
 
-    // I7 — Shard settlement_count is cumulative (aggregate zeroes settled_thbg but NEVER
+    // I7 — Shard settlement_count is cumulative (aggregate zeroes settled_thbc but NEVER
     // the count), so Σ count == number of successful sharded records.
     let count_sum: u64 = fixture.shards.iter().map(|s| fixture.shard(s).settlement_count).sum();
     fuzz_assert_eq!(
@@ -879,7 +879,7 @@ fn invariant_test(fixture: &mut TreasuryFixture) {
         !fixture.double_record_detected,
         "double-record succeeded: a re-recorded (zone,batch) bypassed the init guard"
     );
-    // I9 — pause safety: swap_grx_for_thbg / redeem_thbg_for_grx must halt while paused.
+    // I9 — pause safety: swap_grx_for_thbc / redeem_thbc_for_grx must halt while paused.
     // Any that landed while the mirror said paused bypassed the TreasuryError::Paused gate.
     fuzz_assert!(
         !fixture.pause_violation,

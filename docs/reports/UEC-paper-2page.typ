@@ -105,7 +105,7 @@ All value-bearing arithmetic uses checked integer operations over 128-bit
 intermediates with compiler-enforced overflow checks: overflow aborts the
 transaction rather than wrapping silently. Throughout, $floor(dot)$ denotes integer floor division. Energy
 quantities carry nine decimal places ($1 "kWh" = 10^9$ atomic units), while
-prices and the baht-pegged settlement currency (THBG) carry six.
+prices and the baht-pegged settlement currency (THBC) carry six.
 
 *Minting (surplus tokenisation).* A validated surplus of $E$ kWh, aggregated
 over one fifteen-minute metering window, mints $A$ atomic units. The
@@ -162,13 +162,13 @@ fill partially but never over-fill or replay.
 
 *Burning.* Three burn paths close the lifecycle. First, a holder burns its
 own balance, $S arrow.l S - a$, with supply reconciled off the hot path. Second,
-stablecoin redemption burns $a_"in"$ THBG and returns GRX at the prevailing
+stablecoin redemption burns $a_"in"$ THBC and returns GRX at the prevailing
 peg rate $r$, subject to collateral guards which ensure that redemption can
 neither exceed the outstanding supply nor drain more collateral than the vault
 holds, and that dust inputs cannot be burned for nothing:
 
 $ g_"out" = floor(frac(10^9 a_"in", r)) quad "s.t." quad
-  a_"in" <= S_"thbg", quad 1 <= g_"out" <= V_"swap" $ <eq-redeem>
+  a_"in" <= S_"thbc", quad 1 <= g_"out" <= V_"swap" $ <eq-redeem>
 
 Third, certificate retirement burns $a > 0$ REC base units ($10^3$ per
 kilowatt-hour), permanently extinguishing the claim and preventing

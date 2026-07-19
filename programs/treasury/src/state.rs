@@ -6,11 +6,11 @@ use anchor_lang::prelude::*;
 /// `acc_reward_per_share` is GRX-reward-per-staked-GRX scaled by this factor.
 pub const ACC_PRECISION: u128 = 1_000_000_000_000; // 1e12
 
-/// THBG is a THB-pegged stablecoin: 6 decimals, so 1 THB = 1_000_000 minor units.
-pub const THBG_DECIMALS: u8 = 6;
+/// THBC is a THB-pegged stablecoin: 6 decimals, so 1 THB = 1_000_000 minor units.
+pub const THBC_DECIMALS: u8 = 6;
 
 /// Number of settlement accumulator shards. Settlement recording is otherwise a
-/// global-write hot path (`Treasury.total_settled_thbg`), which serializes every
+/// global-write hot path (`Treasury.total_settled_thbc`), which serializes every
 /// trade settle under Sealevel. Spreading the counter across N per-shard PDAs lets
 /// settles whose buyers fall on different shards land in parallel; the global total
 /// is stale-on-purpose and reconciled by `aggregate_settlement_shards`. Same pattern
@@ -31,18 +31,18 @@ pub struct Treasury {
     pub authority: Pubkey,           // 32 — admin (params, pause)
     pub attestor: Pubkey,            // 32 — off-chain custodian that attests the THB reserve
     pub grx_mint: Pubkey,            // 32 — GRX SPL mint (energy-token program)
-    pub thbg_mint: Pubkey,           // 32 — THBG stablecoin mint, authority = this PDA
+    pub thbc_mint: Pubkey,           // 32 — THBC stablecoin mint, authority = this PDA
     pub settlement_recorder: Pubkey, // 32 — PDA allowed to call record_settlement (trading market_authority)
 
-    pub attested_reserve: u64,    // 8 — off-chain THB reserve, in THBG minor units (the peg ceiling)
+    pub attested_reserve: u64,    // 8 — off-chain THB reserve, in THBC minor units (the peg ceiling)
     pub attestation_ts: i64,      // 8 — unix ts of the last reserve attestation
     pub attestation_ttl: i64,     // 8 — max attestation age (seconds) before mints are blocked
-    pub thbg_supply: u64,         // 8 — THBG minted by the treasury (must stay <= attested_reserve)
-    pub grx_per_thbg_rate: u64,   // 8 — THBG minor units issued per 1 whole GRX (settlement price P*)
+    pub thbc_supply: u64,         // 8 — THBC minted by the treasury (must stay <= attested_reserve)
+    pub grx_per_thbc_rate: u64,   // 8 — THBC minor units issued per 1 whole GRX (settlement price P*)
     pub total_staked: u64,        // 8 — GRX currently staked (NEVER counted toward the peg)
     pub reward_pool: u64,         // 8 — GRX available to pay staking rewards
     pub created_at: i64,          // 8
-    pub total_settled_thbg: u64,  // 8 — cumulative baht value settled via trading CPI
+    pub total_settled_thbc: u64,  // 8 — cumulative baht value settled via trading CPI
 
     pub swap_fee_bps: u16, // 2 — fee on swap output, basis points
 
@@ -52,7 +52,7 @@ pub struct Treasury {
     // constraints validate via `bump = treasury.X_bump` (create_program_address,
     // ~1 hash) instead of bare `bump` (find_program_address bump search, ~12k CU)
     // on the swap/stake/redeem hot paths. Same convention as registry's stored bumps.
-    pub thbg_mint_bump: u8,    // 1
+    pub thbc_mint_bump: u8,    // 1
     pub swap_vault_bump: u8,   // 1
     pub stake_vault_bump: u8,  // 1
     pub reward_vault_bump: u8, // 1
@@ -78,14 +78,14 @@ impl StakePosition {
 }
 
 /// Per-shard settlement accumulator (zero-copy). Hot-path settles bump the shard
-/// PDA for the buyer's shard instead of the global `Treasury.total_settled_thbg`, so
+/// PDA for the buyer's shard instead of the global `Treasury.total_settled_thbc`, so
 /// settles on distinct shards don't write-lock a single account. PDA seeds:
 /// `[b"settle_shard", &[shard_id]]`. Global total reconciled via
 /// `aggregate_settlement_shards`.
 #[account(zero_copy)]
 #[repr(C)]
 pub struct SettlementShard {
-    pub settled_thbg: u64,     // 8 — cumulative baht (THBG minor units) settled on this shard
+    pub settled_thbc: u64,     // 8 — cumulative baht (THBC minor units) settled on this shard
     pub settlement_count: u64, // 8 — number of settlements recorded on this shard
     pub shard_id: u8,          // 1
     pub bump: u8,              // 1 — canonical PDA bump, stored to avoid find_program_address re-derivation
@@ -95,7 +95,7 @@ pub struct SettlementShard {
 
 impl SettlementShard {
     /// Mutable view for the drain-and-fold reconcile in `aggregate_settlement_shards`,
-    /// which zeroes each shard's `settled_thbg` after folding it into the global total.
+    /// which zeroes each shard's `settled_thbc` after folding it into the global total.
     pub fn load_mut_from_bytes(data: &mut [u8]) -> Result<&mut Self> {
         Ok(bytemuck::from_bytes_mut(data))
     }
@@ -119,7 +119,7 @@ impl SettlementShard {
 pub struct SettlementRecord {
     pub merkle_root: [u8; 32],  // 32 — root over the batch's match leaves        @0
     pub recorder: Pubkey,       // 32 — settlement_recorder that committed         @32
-    pub total_value: u64,       // 8  — gross baht (THBG minor units) in the batch @64
+    pub total_value: u64,       // 8  — gross baht (THBC minor units) in the batch @64
     pub vat_amount: u64,        // 8  — VAT on the energy value (audit/e-Tax)      @72
     pub committed_ts: i64,      // 8  — unix ts of the commit                      @80
     pub batch_id: u64,          // 8  — settlement batch id within the zone        @88

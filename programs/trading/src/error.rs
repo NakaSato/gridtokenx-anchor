@@ -68,9 +68,9 @@ pub enum TradingError {
     InvalidNullifier,
     #[msg("Nullifier authority does not match the signed order owner")]
     NullifierUserMismatch,
-    #[msg("Settlement currency mint is not the treasury THBG mint")]
+    #[msg("Settlement currency mint is not the treasury THBC mint")]
     TreasuryCurrencyMismatch,
-    #[msg("This market settles in THBG: the treasury accounts are required to record the settlement")]
+    #[msg("This market settles in THBC: the treasury accounts are required to record the settlement")]
     TreasurySettlementRequired,
     #[msg("Settlement collector shard id out of range (must be < NUM_SETTLE_SHARDS)")]
     InvalidShardId,
