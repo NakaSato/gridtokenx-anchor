@@ -989,15 +989,34 @@ fidelity for generation speed.
 `readings.jsonl` (one line per reading `{m, t, g, c}` with energies in integer
 watt-hours — the atomic unit the oracle stores); `daily.json` (per-day,
 per-meter generated/consumed/surplus in kWh); and `meta.json`, which records
-the energy totals, per-day weather, per-day grid-physics aggregates (losses,
-transformer peak loading and tap range, frequency and voltage envelopes), the
-SHA-256 of the readings file, and the exact generating `argv`. The metadata
-therefore makes every dataset self-describing and bit-reproducible: re-running
-the recorded command line regenerates a byte-identical `readings.jsonl`, and
-the embedded hash lets any consumer verify it holds the canonical input. The
+the energy totals, per-day weather, per-day grid-physics aggregates, the exact
+generating `argv`, and — as of schema v2 — a chunked SHA-256 of *all three*
+data files, so a corrupted or tampered daily/roster file is detectable, not
+only the readings. Exact totals are computed by error-free summation
+(`math.fsum`) over the daily matrix, and honesty is enforced in the physics
+fields: at stride 0 the quantities the power flow never computed (losses,
+transformer loading, tap range, voltages) are recorded as *null* with an
+explicit `power_flow_solved: false` flag, never as a measured-looking 0.0 —
+only the device-driven frequency envelope is retained. The metadata therefore
+makes every dataset self-describing and bit-reproducible: re-running the
+recorded command line regenerates a byte-identical `readings.jsonl`, and the
+embedded hashes let any consumer verify it holds the canonical input. The
 curated scale family spans 80 meters/12 prosumers through 760 meters/114
 prosumers at seed 42, in 1-, 7-, and 30-day horizons, each under the 5 kWh
 export cap.
+
+*Fleet-coupled physics and parallel export.* One coupling in the simulator is
+easy to miss and matters for reproducibility: the frequency-watt droop derives
+grid frequency from the *whole fleet's* supply/demand balance each tick and
+feeds it back into every meter's next-tick generation, so a meter's output is
+not independent of which other meters are simulated. A parallel (sharded)
+export therefore does not reproduce a full-fleet run — we measured prosumer
+midday generation diverging by 0.1–3% between a shard and the full fleet —
+and the exporter now *rejects* sharded runs unless frequency coupling is
+explicitly disabled (`--no-freq-droop`, recorded in the metadata), in which
+case a dedicated merge tool reproduces the unsharded byte order exactly; the
+shard-equals-full contract is pinned by a byte-identity test. The canonical
+datasets used in this paper are unsharded, full-physics (droop-on) exports.
 
 == Environment and threats to validity <sec-env>
 
@@ -1547,6 +1566,39 @@ wheeling exceeds the rule's gross premium over feed-in. Wheeling policy is
 therefore not a neutral cost-recovery knob — it sets the participation
 threshold for the most buyer-favourable market designs.
 
+*Endogenous demand.* The comparison above prices a fixed ask ladder against
+saturating demand, which is what makes its per-kWh outcomes fleet-size
+invariant. To let the *fleet itself* move the price, we derive the demand side
+from each fleet's own consumption data
+(`scripts/price-models-endog.ts`; `buildDemandTranches` in the shared core): a
+fleet's consumers are ranked by horizon consumption and split into four
+groups; each group bids quantity $alpha times$ its total consumption at a
+willingness-to-pay mapped from its mean consumption into a stylised band of
+2.60–4.10 THBC/kWh — a proxy for a progressive retail tariff, under which
+heavier consumers face a higher marginal retail rate and thus a higher avoided
+cost. Both bid quantities and bid prices are deterministic functions of the
+dataset. The uniform rule then runs on-chain through `clear_auction` over the
+real (ask × bid) book, and the CDA rule as one `match_orders` round per fill
+of a greedy pay-as-ask sweep; the driver fails unless the on-chain clearing
+price, cleared volume, and every `TradeRecord` equal the prediction of the
+`find_clearing_point` port — all four fleets verified exactly, including
+partial clears.
+
+Two regimes emerge. At a participation share $alpha = 0.02$ demand still
+saturates the ladder (the fleets' surplus-to-consumption ratio is ≈1%), so
+clearing pins at the top ask and the fixed-ladder figures of
+@tab-mechanism-fleets are reproduced. At $alpha = 0.008$ the book only
+partially clears and the outcome becomes genuinely fleet-dependent: clearing
+falls to 3.30 THBC/kWh on both tested fleets, but the cleared fraction differs
+(51.5% of the 80-meter fleet's surplus versus 56.2% of the 760-meter fleet's)
+and the CDA net diverges — 1.922 versus 1.941 ฿/kWh — because each fleet's
+consumption distribution produces a different fill mix. Under this thin-demand
+regime the feed-in baseline (2.200 ฿/kWh on *all* surplus) beats both market
+rules on the cleared volume alone: whether P2P trading dominates the regulated
+rate depends not only on the wheeling tariff but on demand-side participation,
+and the α threshold between the regimes is itself a fleet property. A full α
+sweep with heterogeneous per-prosumer asks is left to future work.
+
 = Discussion and Limitations <sec-discussion>
 
 The measurements support the central design claim of @sec-exec: partitioning
@@ -1579,11 +1631,13 @@ choice, or leader rotation, which would require a multi-validator permissioned
 deployment (@sec-consensus). Establishing sustained end-to-end throughput on
 such a deployment, and locating the true saturation point above concurrency
 40, are left to future work. Two further limitations are economic rather than
-topological: the welfare comparison of the three price rules is analytic
-(@tab-net-proceeds) rather than measured on matched field data, and the
-feed-in baseline rate is illustrative. Finally, the physical datasets, while
-full-physics and bit-reproducible (@sec-datasets), model one distribution
-topology; heterogeneous feeders and larger prosumer shares remain to be swept.
+topological: the mechanism comparison prices a fixed ask ladder — the
+endogenous-demand study of @sec-pricerules relaxes the demand side (bids
+derived from each fleet's consumption) but the supply ladder and the
+willingness-to-pay band remain stylised, and the feed-in baseline rate is
+illustrative. Finally, the physical datasets, while full-physics and
+bit-reproducible (@sec-datasets), model one distribution topology;
+heterogeneous feeders and larger prosumer shares remain to be swept.
 
 = Conclusion <sec-conclusion>
 
