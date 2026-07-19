@@ -1,5 +1,5 @@
 // gridtokenx-anchor — UEC paper (Typst, IEEE-style structure)
-// Compile: typst compile UEC-paper.typ UEC-paper.pdf
+// Compile: cd docs/reports && typst compile UEC-paper.typ UEC-paper.pdf
 // Single-column A4 retained: several result tables are 6 columns wide.
 // TODO: replace the author placeholder before submission.
 
@@ -831,7 +831,7 @@ simulation reproduces a mainnet-like environment without a local validator.
 Throughput and cost under load are characterised with a Criterion
 micro-benchmark of the matching engine and with the BLOCKBENCH-style
 @dinh2017 and TPC-C @tpcc2010 workloads; the canonical results are recorded in
-#link("BENCHMARKS.md")[`BENCHMARKS.md`].
+#link("../../BENCHMARKS.md")[`BENCHMARKS.md`].
 
 == Metric definitions <sec-metrics>
 
@@ -1016,7 +1016,7 @@ table states its harness.
 
 This section reports the principal empirical findings and interprets them
 against the design goals of @sec-exec. All figures are drawn from the
-canonical benchmark report #link("BENCHMARKS.md")[`BENCHMARKS.md`] (`3cb3388`,
+canonical benchmark report #link("../../BENCHMARKS.md")[`BENCHMARKS.md`] (`3cb3388`,
 Solana 3.1.10, Apple M2, 2026-07-06). @tab-headline summarises the headline
 findings; each is developed and cited in the subsections that follow. Two
 throughput limits are reported separately and must not be conflated: the
@@ -1027,7 +1027,7 @@ serialisation, not by execution.
 
 #figure(
   caption: [Headline empirical results. All values are drawn from the canonical
-    benchmark report #link("BENCHMARKS.md")[`BENCHMARKS.md`] (`3cb3388`,
+    benchmark report #link("../../BENCHMARKS.md")[`BENCHMARKS.md`] (`3cb3388`,
     Solana 3.1.10, Apple M2, 2026-07-06). CU figures are machine-independent;
     absolute throughput is qualified by the single-node caveat (@sec-env).],
   table(
@@ -1061,7 +1061,7 @@ verification and instruction-sysvar introspection that authorise the trade
 #figure(
   caption: [Measured compute-unit cost of representative instructions and their
     share of the 200,000-CU default budget. Source:
-    #link("BENCHMARKS.md")[`BENCHMARKS.md`] §1, §4, §5, §5b.],
+    #link("../../BENCHMARKS.md")[`BENCHMARKS.md`] §1, §4, §5, §5b.],
   table(
     columns: (auto, auto, auto),
     align: (left, right, right),
@@ -1137,7 +1137,7 @@ consensus- or network-throughput result (@sec-env).
   caption: [Consolidated measured throughput. All values are client-observed
     confirmed goodput on the single-node validator; harnesses differ per row and
     rows are not mutually comparable. Source:
-    #link("BENCHMARKS.md")[`BENCHMARKS.md`] §3, §9 and the settlement sweeps of
+    #link("../../BENCHMARKS.md")[`BENCHMARKS.md`] §3, §9 and the settlement sweeps of
     @sec-oltp.],
   table(
     columns: (auto, auto, auto),
@@ -1179,7 +1179,7 @@ live single-node validator. @tab-meter-scaling reports the result.
     (@eq-conserve). Validation-rejected = the oracle's anomaly gate firing on
     the synthetic value pattern (@eq-workload); delivery loss = send-rejected +
     expired, with no client retry. Steady-state CU is the recurring per-meter
-    write. Source: #link("BENCHMARKS.md")[`BENCHMARKS.md`] §9.],
+    write. Source: #link("../../BENCHMARKS.md")[`BENCHMARKS.md`] §9.],
   table(
     columns: 6,
     align: (right, right, right, right, right, right),
@@ -1231,7 +1231,7 @@ multiple gateway fee-payers so ingress is not funnelled through one signer.
 #figure(
   caption: [Order-entry benchmark outcome ($N = 10^4$, zone 701, 16
     pre-initialised shards; transport as @sec-metrics). Source:
-    #link("BENCHMARKS.md")[`BENCHMARKS.md`] §10; run artifact
+    #link("../../BENCHMARKS.md")[`BENCHMARKS.md`] §10; run artifact
     `test-results/trading-order-entry-10000o-2026-07-07T12-58-45-123Z.{json,md}`.],
   table(
     columns: (auto, auto, auto),
@@ -1302,7 +1302,7 @@ lifecycle stages of the canonical run.
     2026-07-07): 353 prosumer-days cleared the 0.1 kWh dust floor and completed
     the full mint→deposit→settle→burn chain; 12 month-end REC issuances. No
     stage recorded a failure. Latency is send→confirmed, poll-quantised
-    (±1.5 s). Source: #link("BENCHMARKS.md")[`BENCHMARKS.md`] §11.],
+    (±1.5 s). Source: #link("../../BENCHMARKS.md")[`BENCHMARKS.md`] §11.],
   table(
     columns: 5,
     align: (left, right, right, right, right),
