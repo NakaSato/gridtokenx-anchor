@@ -1498,7 +1498,7 @@ buses held at nominal 1.0 pu) — device and weather models still drive the
 energy signal, so large fleets can trade voltage fidelity for generation speed.
 
 *Schema.* Each run writes the four-file schema the replayers consume:
-`meters.json` (fleet roster: index, chain id, type, solar capacity);
+`meters.json` (fleet roster: index, chain id, meter type, solar flag);
 `readings.jsonl` (one line per reading `{m, t, g, c}` with energies in integer
 watt-hours — the atomic unit the oracle stores); `daily.json` (per-day,
 per-meter generated/consumed/surplus in kWh); and `meta.json`, which records
@@ -1508,5 +1508,6 @@ SHA-256 of the readings file, and the exact generating `argv`. The metadata
 therefore makes every dataset self-describing and bit-reproducible: re-running
 the recorded command line regenerates a byte-identical `readings.jsonl`, and
 the embedded hash lets any consumer verify it holds the canonical input. The
-scale family spans 80 meters/12 prosumers through 760 meters/114 prosumers at
-seed 42, in 7- and 30-day horizons, with and without the 5 kWh export cap.
+curated scale family spans 80 meters/12 prosumers through 760 meters/114
+prosumers at seed 42, in 1-, 7-, and 30-day horizons, each under the 5 kWh
+export cap.
