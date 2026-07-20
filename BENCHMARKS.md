@@ -619,10 +619,21 @@ The uniform run is chain-audited by RPC reads alone
 (`scripts/audit-lifecycle.ts`, 11/11): reading counters sum to 53,760;
 order/trade-nullifier/order-nullifier counts 559/83/166; GRID supply after
 burns = 68 seed units; currency conserves exactly (buyer outflow 1,369 =
-seller proceeds 1,369 + collectors 0/0/0). A rerun reproduced conservation and
-volume bit-identically (settle CU med 99,045 vs 100,545 — poll-sampling
-jitter). Artifacts:
+seller proceeds 1,369 + collectors 0/0/0). Artifacts:
 `test-results/community-month-80m-12p-{uniform,cda,buyback}-*.json`.
+
+**Reproducibility (2026-07-20, 3× replication):** the full sweep was repeated
+three times per rule — 9 fresh-validator runs. Economics are bit-identical in
+all 9: conservation 403.319 kWh, currency volume 1,369/1,260/852, telemetry
+53,760/0-reject, 83/83 settles, zero failures in any stage of any run. The
+only run-to-run variance anywhere is compute-unit jitter, and it is quantised
+at exactly 1,500 CU — one `create_program_address` bump-search iteration —
+because each run's random keypairs need a different number of bump candidates
+(settle CU median takes exactly two values, 97,545/99,045; litesvm
+sharded-match likewise 12,211/15,211). Derivation-cost jitter only; zero
+effect on state or economics. In-process suites (23 tests) pass 3/3 reps with
+numerically identical output. Log: 3× driver over
+`scripts/run-lifecycle-price-models.sh`'s per-model recipe.
 
 ---
 

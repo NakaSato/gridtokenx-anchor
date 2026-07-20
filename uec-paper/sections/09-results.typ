@@ -715,7 +715,15 @@ counts are 559, 83, and 166; the registry's `settled_net_generation` equals
 the minted energy; the GRID supply after burns collapses to the 68
 escrow-seed units; and the settlement currency conserves exactly — buyer
 escrow outflow 1,369 units equals seller proceeds plus the (zero) collector
-balances.
+balances. The entire sweep was then replicated three times per rule — nine
+fresh-validator runs — with bit-identical economics in every run
+(conservation, volumes, settle counts, zero failures); the only
+run-to-run variance observed anywhere is per-instruction compute jitter
+quantised at exactly 1,500 CU, one `create_program_address` bump-search
+iteration, arising because each run's randomly generated keypairs require a
+different number of bump candidates. Measured compute is therefore
+reproducible up to a small integer multiple of the derivation-syscall cost,
+and program state is reproducible exactly.
 Second, settlement compute remains price-invariant on the real lifecycle
 path (97.6–100.5 k CU median), reproducing the @tab-live-settle result
 under full mint-escrow-settle-burn load. Third, the two tariff points now
