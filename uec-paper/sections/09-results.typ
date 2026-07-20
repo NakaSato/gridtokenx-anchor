@@ -717,13 +717,18 @@ escrow-seed units; and the settlement currency conserves exactly — buyer
 escrow outflow 1,369 units equals seller proceeds plus the (zero) collector
 balances. The entire sweep was then replicated three times per rule — nine
 fresh-validator runs — with bit-identical economics in every run
-(conservation, volumes, settle counts, zero failures); the only
-run-to-run variance observed anywhere is per-instruction compute jitter
-quantised at exactly 1,500 CU, one `create_program_address` bump-search
-iteration, arising because each run's randomly generated keypairs require a
-different number of bump candidates. Measured compute is therefore
-reproducible up to a small integer multiple of the derivation-syscall cost,
-and program state is reproducible exactly.
+(conservation, volumes, settle counts, zero failures); the only variance
+across the nine runs is per-instruction compute jitter quantised at exactly
+1,500 CU — one `create_program_address` bump-search iteration — because each
+run's randomly generated keypairs require a different number of bump
+candidates (the settle median takes exactly two values, 97,545 and 99,045).
+Against the first-run figures of @tab-lifecycle-rules a second, far smaller
+residue is also visible (e.g. the CDA median 97,577, $+32$ CU): the
+checked-arithmetic branch spread on differing currency magnitudes already
+noted for @tab-live-settle, sampled at a different median point. Program
+state is therefore reproducible exactly, and measured compute is
+reproducible up to integer multiples of the derivation-syscall cost plus a
+few tens of CU of data-dependent branching.
 Second, settlement compute remains price-invariant on the real lifecycle
 path (97.6–100.5 k CU median), reproducing the @tab-live-settle result
 under full mint-escrow-settle-burn load. Third, the two tariff points now

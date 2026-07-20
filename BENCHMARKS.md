@@ -626,13 +626,16 @@ seller proceeds 1,369 + collectors 0/0/0). Artifacts:
 three times per rule — 9 fresh-validator runs. Economics are bit-identical in
 all 9: conservation 403.319 kWh, currency volume 1,369/1,260/852, telemetry
 53,760/0-reject, 83/83 settles, zero failures in any stage of any run. The
-only run-to-run variance anywhere is compute-unit jitter, and it is quantised
-at exactly 1,500 CU — one `create_program_address` bump-search iteration —
+only variance across the nine runs is compute-unit jitter quantised at
+exactly 1,500 CU — one `create_program_address` bump-search iteration —
 because each run's random keypairs need a different number of bump candidates
 (settle CU median takes exactly two values, 97,545/99,045; litesvm
-sharded-match likewise 12,211/15,211). Derivation-cost jitter only; zero
-effect on state or economics. In-process suites (23 tests) pass 3/3 reps with
-numerically identical output. Log: 3× driver over
+sharded-match likewise 12,211/15,211; the earlier 100,545 sits in the same
+family at +2×1,500). A second, far smaller residue exists against the 07-19
+runs (CDA median 97,577, +32 CU): the checked-arithmetic branch spread on
+differing currency magnitudes, sampled at a different median point. Zero
+effect on state or economics either way. In-process suites (23 tests) pass
+3/3 reps with numerically identical output. Log: 3× driver over
 `scripts/run-lifecycle-price-models.sh`'s per-model recipe.
 
 ---
