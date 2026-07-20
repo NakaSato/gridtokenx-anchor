@@ -24,25 +24,22 @@ anchor build                      # build all programs (Anchor 1.0 emits program
 anchor test                       # build, spin up validator, deploy, run mocha suite
                                   #   NOTE: Anchor 1.0 spawns `surfpool` as the test validator — if it's not
                                   #   installed, start a local solana-test-validator yourself and run the raw
-                                  #   mocha suite (below) or the per-suite `npm run test:*` recipes instead
+                                  #   mocha suite (below)
 anchor keys sync                  # regenerate program IDs (then update declare_id! in each lib.rs)
 
-# Per-suite (each spins its own validator via anchor test):
-npm run test:oracle               # tests/oracle.ts
-npm run test:registry             # tests/registry_sharding.ts
-npm run test:governance           # tests/governance.ts
-npm run test:blockbench           # tests/blockbench.ts  (BlockBench OLTP benchmark)
-npm run test:smallbank            # tests/smallbank.ts
-npm run test:tpc-stress           # tests/tpc_stress_test.ts  (TPC-C, needs tpc_benchmark .so)
-npm run test:all                  # oracle+registry+governance+blockbench+smallbank+tpc
+# NOTE: there are NO `npm run test:*` scripts (the old per-suite recipes and their
+# tests/*.ts files were removed in b2021fb). tests/ now holds exactly:
+#   3 in-process litesvm suites + batch_settle_tps.ts (validator-gated TPS sweep).
+# The lib-level price-model unit suite lives at scripts/lib/price-model-tariff.test.ts.
 
-# Raw mocha (validator must already be running — Anchor.toml [scripts] test):
-npx mocha -r tsx 'tests/**/*.ts' --timeout 1000000
-npx mocha -r tsx tests/oracle.ts --timeout 1000000   # single file
+# In-process litesvm suites (no validator needed) — run directly with mocha:
+npx mocha -r tsx tests/price_models_litesvm.ts tests/rec_gate_litesvm.ts tests/sharded_match_litesvm.ts --timeout 1000000
 
-# In-process litesvm suites (no validator): guard tests + CU profiles.
-npm run test:litesvm        # every tests/*_litesvm.ts
-npm run test:cu-profile     # tests/cu_profile_*_litesvm.ts (each asserts < 200k CU)
+# Validator-gated (start solana-test-validator + deploy + init first):
+npx mocha -r tsx tests/batch_settle_tps.ts --timeout 1000000
+
+# Price-model core unit tests (validator-free, uses the committed physics dataset):
+npx mocha -r tsx scripts/lib/price-model-tariff.test.ts --timeout 60000
 # The litesvm suites load target/deploy/<p>.so; Anchor 1.0 emits per-program binaries under
 # programs/<p>/target/deploy, so a stale root copy makes tests run the WRONG binary — after
 # editing a program, rebuild (cargo build-sbf) and copy the fresh .so into root target/deploy
@@ -77,8 +74,8 @@ programs/
 ├── registry/       user + meter accounts; 16-shard counter; staking + validator registration
 ├── trading/        order book + CDA; sharded order submit; off-chain-signed match settlement (settle_offchain.rs)
 ├── treasury/      GRX↔THBC (THB-pegged stablecoin) swap, GRX staking, baht-denominated settlement accounting
-├── blockbench/     benchmark harness (BlockBench OLTP/smallbank — npm run test:blockbench / test:smallbank)
-└── tpc-benchmark/  benchmark harness (TPC-C stress — npm run test:tpc-stress)
+├── blockbench/     benchmark harness (BlockBench OLTP/smallbank — driver suites removed in b2021fb; results in BENCHMARKS.md)
+└── tpc-benchmark/  benchmark harness (TPC-C stress — driver suite removed in b2021fb; results in BENCHMARKS.md)
 shared/
 ├── core/           shared on-chain types/version
 └── compute-debug/  compute-unit profiling macros (feature-gated)
