@@ -394,6 +394,91 @@ meter state) incur low compute-unit cost. The cost is manual layout
 discipline: explicit padding fields, no `String` (fixed `[u8; N]` + length
 byte instead).
 
+== Design-decision record <sec-decisions>
+
+The preceding subsections describe the mechanisms; this one records the
+*decisions* — for each, the alternative that was rejected, the invariant the
+decision creates, and the source anchor. The validation matrix
+(@tab-design-map) maps each entry to its measured consequence.
+
++ *Per-entity PDAs, not shared structures.* Rejected: a global order book or
+  reading log (the single-contract-storage shape of EVM designs), which
+  would put one write-lock on every trade. Invariant: no hot-path
+  instruction takes a mutable reference to an account shared between two
+  independent entities — `MeterState` `[b"meter", meter_id]`, `Order`
+  `[b"order", user, order_id]`, `TradeNullifier` `[b"trade", trade_id]`,
+  escrow `[b"escrow", user, mint]`. The exceptions (fee payer, collectors)
+  are exactly where measured throughput collapses, which is the design's own
+  prediction.
+
++ *Stale-by-design global aggregates.* Rejected: transactionally consistent
+  global totals, which would reintroduce the shared lock the PDAs removed.
+  Invariant: `ZoneMarket` totals and registry counters are
+  eventually-consistent; hot writes land in per-shard staging PDAs and an
+  idempotent admin instruction (`aggregate_shards`, ≈5,850 CU,
+  duplicate-shard-guarded) drains them. Anything requiring exactness reads
+  per-entity state, never the aggregate.
+
++ *Static 16-way sharding by key byte.* Shard selection is
+  `key.to_bytes()[0] mod 16` — deterministic, coordinator-free, uniform
+  because public keys are effectively random. Accepted trade-off: the shard
+  count is fixed at initialisation and a hot key cannot be rebalanced;
+  resizing is an explicit migration, not a runtime path.
+
++ *Off-chain matching, on-chain authorisation.* Rejected: an on-chain
+  matching engine — book mutation would serialise on the book account and
+  spend compute on sorting rather than settlement. Invariant: the chain
+  never trusts the matcher; it verifies both counterparties' Ed25519
+  signatures via instruction-sysvar introspection, reading the *declared*
+  offsets of the verify instruction (`settle_offchain.rs:1372`, closing an
+  offset-redirection attack), and enforces two independent replay layers —
+  per-order cumulative-fill nullifiers and per-match single-use nullifiers —
+  because over-filling and duplicate settlement are different attacks.
+
++ *Execution price as a pure parameter.* The settlement path takes the
+  price as an argument bounded by both signed limits and never branches on
+  the market rule that produced it. Invariant: authorisation is the
+  signature over the limits, not the rule; any price inside the signed band
+  is legal. Consequence: changing the market mechanism (uniform, CDA,
+  midpoint) is an economic decision requiring zero protocol change —
+  confirmed by the rule-invariant settlement compute of @sec-pricerules.
+
++ *Integer floors with an exact conservation identity.* All value math is
+  integer-only over `u128` intermediates with explicit floors
+  (@sec-settle-math), and every program pins `overflow-checks = true` in its
+  release profile because `cargo build-sbf` defaults it off. Invariant: the
+  buyer's debit equals seller net plus fees plus network charges *exactly in
+  atoms* for every match — an identity by construction (subtraction of
+  already-floored terms), not an approximation; floor dust never leaves the
+  buyer's escrow.
+
++ *Mint gated on attestation, conservation enforced by CPI.* Rejected: an
+  admin-keyed mint authority, under which token supply floats free of
+  physical energy. Invariant: minting requires a registered REC-validator
+  co-signer, and certificate issuance CPIs the registry so that minted GRID
+  plus certified RECs can never exceed metered generation
+  (@sec-rec, @sec-mint-model).
+
++ *Tariff policy as an explicit protocol parameter.* The 20% ad-valorem
+  network-charge cap plus a total-deduction bound
+  (`ChargesExceedCap` / `ChargesExceedValue`) are enforced on-chain. Because
+  wheeling is flat per kWh while the cap is ad valorem, the cap induces a
+  computable price floor — the protocol surfaces a tariff-policy question as
+  an auditable parameter rather than absorbing it silently (@sec-pricerules).
+
++ *Zero-copy layouts inside fixed runtime budgets.* State access casts
+  bytes in place (@sec-zerocopy); the settlement context sits at the 4 KiB
+  SBF stack ceiling, so interface growth goes through `remaining_accounts`
+  rather than named fields; PDA bumps are stored rather than re-derived
+  (≈1.6 k vs ≈12 k CU). Consequence: the heaviest instruction stays at ≈61%
+  of the default compute budget (@sec-cu).
+
+One meta-rule spans all nine: *renaming an account type never changes its PDA
+seed bytes as a side effect.* The seed literal is the on-chain address;
+changing it orphans every initialised account and breaks every cached
+derivation, so seed migrations happen only as their own explicit,
+planned change.
+
 = Security Model <sec-security>
 
 Solana's runtime gives three primitives: *ownership* (only the owning program
@@ -1066,7 +1151,8 @@ serialisation, not by execution.
 
 Read together, the measurements are not free-standing benchmarks: each one
 tests a specific on-chain design decision from @sec-exec, @sec-security, and
-@sec-econ. @tab-design-map states that correspondence explicitly — the
+@sec-econ (recorded, with each rejected alternative and invariant, in
+@sec-decisions). @tab-design-map states that correspondence explicitly — the
 decision, the measured behaviour that follows from it, and where each side is
 developed — so that the results section can be read as a validation matrix
 for the smart-contract design rather than a throughput report.
