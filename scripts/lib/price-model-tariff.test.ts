@@ -146,3 +146,73 @@ describe("price-model-tariff (§4.7 core, validator-free)", () => {
     assert.ok(Math.abs(wk.cda.netPerKwh - half.cda.netPerKwh) < 1e-3, "CDA rate invariant to horizon");
   });
 });
+
+// ---- Endogenous demand (buildDemandTranches / evalCdaCross / clearing) -----
+
+import {
+  buildDemandTranches,
+  evalCdaCross,
+  predictUniformClearing,
+  evalUniformAuction,
+  DEFAULT_DEMAND,
+  tradeableSupplyKwh,
+  buildTranches,
+} from "./price-model-tariff";
+
+describe("endogenous demand", () => {
+  const DIR = "test-results/datasets/scale-80m-12p-s42-7d-cap5";
+  const ds = loadDataset(DIR);
+
+  it("buildDemandTranches: deterministic, data-derived, conserves alpha share", () => {
+    const b1 = buildDemandTranches(ds);
+    const b2 = buildDemandTranches(ds);
+    assert.deepEqual(
+      b1.map((t) => [t.kwh, t.priceMicros.toString()]),
+      b2.map((t) => [t.kwh, t.priceMicros.toString()]),
+      "deterministic",
+    );
+    assert.equal(b1.length, DEFAULT_DEMAND.buckets);
+    // total bid quantity == alpha × total consumer consumption
+    const pros = new Set(ds.meta.prosumer_idx);
+    let cons = 0;
+    for (let d = 0; d < ds.daily.length; d++)
+      for (let m = 0; m < ds.meta.meters; m++)
+        if (!pros.has(m)) cons += ds.daily[d][m].c;
+    const totalBid = b1.reduce((s, t) => s + t.kwh, 0);
+    assert.ok(Math.abs(totalBid - cons * DEFAULT_DEMAND.alpha) < 1e-6, "alpha share conserved");
+    // heaviest bucket bids exactly bandHi; prices within band and ascending
+    const prices = b1.map((t) => Number(t.priceMicros) / 1e6);
+    assert.equal(Math.max(...prices), DEFAULT_DEMAND.bandHi, "top bucket at bandHi");
+    for (const p of prices) assert.ok(p >= DEFAULT_DEMAND.bandLo - 1e-9 && p <= DEFAULT_DEMAND.bandHi + 1e-9);
+    for (let i = 1; i < prices.length; i++) assert.ok(prices[i] >= prices[i - 1], "ascending with consumption");
+  });
+
+  it("evalCdaCross: partial clearing, pay-as-ask, never over-fills either side", () => {
+    const asks: Tranche[] = [
+      { kwh: 10, priceMicros: priceMicros(3.0) },
+      { kwh: 10, priceMicros: priceMicros(3.5) },
+    ];
+    const bids: Tranche[] = [
+      { kwh: 5, priceMicros: priceMicros(4.0) },
+      { kwh: 8, priceMicros: priceMicros(3.2) },
+    ];
+    const r = evalCdaCross(asks, bids);
+    // best bid 4.0 takes 5 @3.0; next bid 3.2 takes remaining 5 @3.0 then fails vs 3.5
+    assert.equal(r.fills.length, 2);
+    assert.equal(r.fills[0].kwh, 5);
+    assert.equal(r.fills[0].askMicros, priceMicros(3.0));
+    assert.equal(r.fills[1].kwh, 5);
+    assert.equal(r.fills[1].askMicros, priceMicros(3.0));
+    assert.equal(r.volKwh, 10, "3.5 ask never clears against 3.2 bid");
+  });
+
+  it("uniform on endogenous book: clearing matches evalUniformAuction charge exactly", () => {
+    const asks = buildTranches(tradeableSupplyKwh(ds));
+    const bids = buildDemandTranches(ds);
+    const cp = predictUniformClearing(asks, bids);
+    assert.ok(cp, "book must cross under defaults");
+    const r = evalUniformAuction(asks, bids);
+    assert.equal(r.volKwh, Number(cp!.volumeAtomic) / 1e9);
+    assert.equal(r.charge.gross.toString(), chargeFill(cp!.volumeAtomic, cp!.price, { feeBps: 25n, lossBps: 5n, wheelingRateMicros: priceMicros(1.15) }).gross.toString());
+  });
+});

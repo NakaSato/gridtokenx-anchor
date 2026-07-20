@@ -218,6 +218,15 @@ export function findClearingPoint(
   return { price: bestPrice, volumeAtomic: bestVolume };
 }
 
+/** Exact predicted (price, volume) of clear_auction on an arbitrary book —
+ *  the same crossing evalUniformAuction settles, exposed for on-chain verify. */
+export function predictUniformClearing(
+  asks: Tranche[],
+  bids: Tranche[],
+): { price: bigint; volumeAtomic: bigint } | null {
+  return findClearingPoint(cumulativeCurve(asks, false), cumulativeCurve(bids, true));
+}
+
 /**
  * General uniform-price auction — mirrors on-chain clear_auction against an ARBITRARY
  * bid ladder: clears the max-volume crossing at the single marginal ask price, then
@@ -276,6 +285,106 @@ export function evalBuyback(volKwh: number, ratePerKwh = 2.2): SchemeResult {
   const gross = (toAtomic(volKwh) * priceMicros(ratePerKwh)) / ENERGY_DIVISOR;
   const charge: Charge = { gross, fee: 0n, wheeling: 0n, loss: 0n, net: gross };
   return { scheme: "buyback", volKwh, charge, netPerKwh: netPerKwh(gross, volKwh) };
+}
+
+// ---- Endogenous demand (consumer-consumption-derived bid ladder) -----------
+
+export interface DemandParams {
+  /** participation share: fraction of each consumer's consumption offered as a
+   *  P2P bid. Keeps demand on the same scale as the ~1% surplus/consumption
+   *  ratio of the physical fleets so the crossing is non-degenerate. */
+  alpha: number;
+  /** willingness-to-pay band (whole THB/kWh) the consumption ranking is mapped
+   *  into. Proxy for a progressive retail tariff: heavier consumers face a
+   *  higher marginal retail rate, so their avoided cost — and thus WTP — is
+   *  higher. Stylised band, not a measured tariff. */
+  bandLo: number;
+  bandHi: number;
+  /** number of bid tranches (4 keeps clear_auction in one tx, like the asks). */
+  buckets: number;
+}
+
+export const DEFAULT_DEMAND: DemandParams = { alpha: 0.02, bandLo: 2.6, bandHi: 4.1, buckets: 4 };
+
+/**
+ * Build a data-driven bid ladder from the fleet's CONSUMER (non-prosumer) daily
+ * consumption. Deterministic — no RNG:
+ *   1. total each consumer's consumption over the horizon (daily.json `c`);
+ *   2. sort ascending and split into `buckets` equal-count groups
+ *      (last group absorbs the remainder);
+ *   3. bid quantity of a group = alpha × its total consumption;
+ *   4. bid price of a group = bandLo + (bandHi − bandLo) × mean/maxMean —
+ *      groups with heavier mean consumption bid closer to bandHi (progressive-
+ *      retail-tariff proxy), the heaviest group bids exactly bandHi.
+ * Both quantities AND prices are functions of the dataset, so different fleets
+ * (and different horizons) produce genuinely different demand curves.
+ */
+export function buildDemandTranches(
+  ds: Dataset,
+  days?: number,
+  p: DemandParams = DEFAULT_DEMAND,
+): Tranche[] {
+  const D = days ?? ds.daily.length;
+  const pros = new Set(ds.meta.prosumer_idx);
+  const perConsumer: number[] = [];
+  for (let m = 0; m < ds.meta.meters; m++) {
+    if (pros.has(m)) continue;
+    let c = 0;
+    for (let d = 0; d < D && d < ds.daily.length; d++) c += ds.daily[d][m]?.c ?? 0;
+    perConsumer.push(c);
+  }
+  perConsumer.sort((a, b) => a - b);
+  const n = perConsumer.length;
+  const per = Math.floor(n / p.buckets);
+  const groups: number[][] = [];
+  for (let b = 0; b < p.buckets; b++) {
+    const start = b * per;
+    const end = b === p.buckets - 1 ? n : start + per;
+    groups.push(perConsumer.slice(start, end));
+  }
+  const means = groups.map((g) => g.reduce((a, x) => a + x, 0) / Math.max(1, g.length));
+  const maxMean = Math.max(...means);
+  return groups.map((g, i) => ({
+    kwh: g.reduce((a, x) => a + x, 0) * p.alpha,
+    priceMicros: priceMicros(p.bandLo + (p.bandHi - p.bandLo) * (maxMean > 0 ? means[i] / maxMean : 1)),
+  }));
+}
+
+/** One CDA fill: quantity at the SELLER's ask (pay-as-ask, on-chain p* = p_s). */
+export interface CdaFill {
+  kwh: number;
+  askMicros: bigint;
+  bidMicros: bigint;
+}
+
+/**
+ * Greedy CDA sweep over two tranche ladders: asks ascending, bids descending;
+ * while the best bid crosses the best ask, fill min(remaining) at the ASK price
+ * (matching on-chain match_orders, lib.rs:462). Returns the fill list (for
+ * driving the chain) plus the tariffed SchemeResult over the CLEARED volume —
+ * with real bids the book may only partially clear.
+ */
+export function evalCdaCross(
+  asks: Tranche[],
+  bids: Tranche[],
+  t: Tariff = DEFAULT_TARIFF,
+): SchemeResult & { fills: CdaFill[] } {
+  const a = [...asks].sort((x, y) => (x.priceMicros < y.priceMicros ? -1 : 1)).map((x) => ({ ...x }));
+  const b = [...bids].sort((x, y) => (x.priceMicros > y.priceMicros ? -1 : 1)).map((x) => ({ ...x }));
+  const fills: CdaFill[] = [];
+  let ai = 0, bi = 0;
+  while (ai < a.length && bi < b.length) {
+    if (b[bi].priceMicros < a[ai].priceMicros) break; // best bid below best ask: done
+    const kwh = Math.min(a[ai].kwh, b[bi].kwh);
+    if (kwh > 0) fills.push({ kwh, askMicros: a[ai].priceMicros, bidMicros: b[bi].priceMicros });
+    a[ai].kwh -= kwh;
+    b[bi].kwh -= kwh;
+    if (a[ai].kwh <= 1e-12) ai++;
+    if (b[bi].kwh <= 1e-12) bi++;
+  }
+  const volKwh = fills.reduce((s, f) => s + f.kwh, 0);
+  const charge = sumCharges(fills.map((f) => chargeFill(toAtomic(f.kwh), f.askMicros, t)));
+  return { scheme: "cda", volKwh, charge, netPerKwh: netPerKwh(charge.net, volKwh), fills };
 }
 
 export interface Comparison {
