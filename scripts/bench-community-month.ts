@@ -78,6 +78,18 @@ const SHARDS = 16;
 // that still holds their state (Phase 3 only needs Phase 1's oracle totals).
 const SKIP_P1 = process.env.SKIP_P1 === "1";
 const SKIP_P2 = process.env.SKIP_P2 === "1";
+// Price model for the settlement phase:
+//   fixed   — legacy behaviour (4.00 THB execution, 4.50/3.90 limits)
+//   uniform — uniform-price epoch clearing: every match executes at the top ask (3.45)
+//   cda     — CDA seller-quote rule: each match executes at its seller's own ask
+//   buyback — regulated feed-in baseline: no P2P trade; the seller retires (burns)
+//             the minted GRID directly and the 2.20 THB/kWh value is accounted
+//             off-chain (a feed-in payment never touches the order book)
+const PRICE_MODEL = process.env.PRICE_MODEL || "fixed";
+if (!["fixed", "uniform", "cda", "buyback"].includes(PRICE_MODEL)) throw new Error(`bad PRICE_MODEL ${PRICE_MODEL}`);
+// Ask ladder mirrors the §9.6 mechanism-comparison experiment (THB 6-dec micros).
+const ASK_LADDER_MICROS = [3_000_000, 3_150_000, 3_300_000, 3_450_000];
+const BUYBACK_RATE_MICROS = 2_200_000;
 
 interface Reading { m: number; t: number; g: number; c: number }
 interface MeterInfo { idx: number; chain_id: string; meter_type: string; solar: boolean }
@@ -607,7 +619,8 @@ async function main() {
   }));
 
   console.log("   setting up 68 buyers (ATAs, currency budget, escrow seeds)...");
-  for (let i = 0; i < buyers.length; i += 8) {
+  if (PRICE_MODEL === "buyback") console.log("   (buyback model: buyers and ALT are not needed — skipping)");
+  for (let i = 0; PRICE_MODEL !== "buyback" && i < buyers.length; i += 8) {
     await Promise.all(buyers.slice(i, i + 8).map(async (b) => {
       const setup = [
         createAssociatedTokenAccountInstruction(gateway.publicKey, curAta(b.kp.publicKey), b.kp.publicKey, currencyMint, TOKEN_PROGRAM_ID),
@@ -646,7 +659,7 @@ async function main() {
   // ALT creation is slot-sensitive ("X is not a recent slot" races preflight);
   // send raw with skipPreflight and retry with a fresh recentSlot on failure.
   let alt: anchor.web3.AddressLookupTableAccount | null = null;
-  for (let attempt = 0; attempt < 5 && !alt; attempt++) {
+  for (let attempt = 0; PRICE_MODEL !== "buyback" && attempt < 5 && !alt; attempt++) {
     try {
       const recentSlot = await conn.getSlot("finalized");
       const [createAltIx, altAddress] = AddressLookupTableProgram.createLookupTable({
@@ -668,11 +681,20 @@ async function main() {
       await sleep(600);
     }
   }
-  if (!alt) throw new Error("ALT creation failed after retries");
+  if (!alt && PRICE_MODEL !== "buyback") throw new Error("ALT creation failed after retries");
 
   // ── Daily lifecycle: 12 parallel prosumer lanes, sequential steps in a lane ─
-  const PRICE = 4_000_000;         // execution price, 6-dec THB scale
-  const BUY_LIMIT = 4_500_000, SELL_LIMIT = 3_900_000;
+  // Per-lane pricing under the selected model. The seller's signed limit is its
+  // ladder ask; settle_offchain_match enforces sell_limit <= price <= buy_limit.
+  const priceFor = (li: number): { price: number; buyLimit: number; sellLimit: number } => {
+    const ask = ASK_LADDER_MICROS[li % ASK_LADDER_MICROS.length];
+    switch (PRICE_MODEL) {
+      case "uniform": return { price: 3_450_000, buyLimit: 4_100_000, sellLimit: ask };
+      case "cda":     return { price: ask,       buyLimit: 4_100_000, sellLimit: ask };
+      case "buyback": return { price: BUYBACK_RATE_MICROS, buyLimit: 0, sellLimit: 0 }; // accounting only
+      default:        return { price: 4_000_000, buyLimit: 4_500_000, sellLimit: 3_900_000 };
+    }
+  };
   const lifecycleEnergy = { mintedWh: 0, settledWh: 0, burnedWh: 0, recWh: 0, currencyVolume: 0 };
   const settledPerProsumer = new Array(meters.length).fill(0);
   const mintedPerProsumer = new Array(meters.length).fill(0);
@@ -706,6 +728,22 @@ async function main() {
       lifecycleEnergy.mintedWh += capWh;
       mintedPerProsumer[p.idx] += capWh;
 
+      // Buyback baseline: no P2P trade — the utility pays the feed-in rate
+      // off-chain and the seller retires the delivered energy directly.
+      if (PRICE_MODEL === "buyback") {
+        const retireIx = await energyToken.methods.retireEnergyTokens(new BN(capWh)).accounts({
+          mint: energyMintPda, tokenAccount: engAta(p.kp.publicKey),
+          authority: p.kp.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
+        } as any).instruction();
+        if (await sendStep("burn", legacy([uniq(d), retireIx], p.kp))) {
+          lifecycleEnergy.burnedWh += capWh;
+          settledPerProsumer[p.idx] += capWh;
+          lifecycleEnergy.currencyVolume += Math.floor(capWh * BUYBACK_RATE_MICROS / 1e9);
+        }
+        continue;
+      }
+      const { price: lanePrice, buyLimit: laneBuyLimit, sellLimit: laneSellLimit } = priceFor(li);
+
       // B. seller deposits the minted GRID into the energy escrow
       const depIx = await trading.methods.depositEscrow(new BN(capWh)).accounts({
         user: p.kp.publicKey, mint: energyMintPda, userWallet: engAta(p.kp.publicKey),
@@ -723,10 +761,10 @@ async function main() {
       tradeId.writeBigUInt64LE(RUN_SALT, 0); tradeId.writeUInt16LE(d, 8); tradeId.writeUInt16LE(li, 10); tradeId.writeUInt8(2, 12);
       const mkPayload = (user: PublicKey, side: number, price: number) =>
         ({ orderId: [...(side === 0 ? buyerOrderId : sellerOrderId)], user, energyAmount: new BN(capWh), pricePerKwh: new BN(price), side, zoneId: ZONE_ID, expiresAt: new BN(0) });
-      const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.kp.publicKey, energyAmount: capWh, pricePerKwh: BUY_LIMIT, side: 0, zoneId: ZONE_ID, expiresAt: 0 });
-      const sellerMsg = orderMessage({ orderId: sellerOrderId, user: p.kp.publicKey, energyAmount: capWh, pricePerKwh: SELL_LIMIT, side: 1, zoneId: ZONE_ID, expiresAt: 0 });
+      const buyerMsg = orderMessage({ orderId: buyerOrderId, user: buyer.kp.publicKey, energyAmount: capWh, pricePerKwh: laneBuyLimit, side: 0, zoneId: ZONE_ID, expiresAt: 0 });
+      const sellerMsg = orderMessage({ orderId: sellerOrderId, user: p.kp.publicKey, energyAmount: capWh, pricePerKwh: laneSellLimit, side: 1, zoneId: ZONE_ID, expiresAt: 0 });
       const settleIx = await trading.methods
-        .settleOffchainMatch(mkPayload(buyer.kp.publicKey, 0, BUY_LIMIT) as any, mkPayload(p.kp.publicKey, 1, SELL_LIMIT) as any, new BN(capWh), new BN(PRICE), [...tradeId])
+        .settleOffchainMatch(mkPayload(buyer.kp.publicKey, 0, laneBuyLimit) as any, mkPayload(p.kp.publicKey, 1, laneSellLimit) as any, new BN(capWh), new BN(lanePrice), [...tradeId])
         .accounts({
           market: marketPda, zoneMarket: zoneMarketPda,
           buyerNullifier: nullifierPda(buyer.kp.publicKey, buyerOrderId),
@@ -765,7 +803,7 @@ async function main() {
       if (!okSettle) continue;
       lifecycleEnergy.settledWh += capWh;
       settledPerProsumer[p.idx] += capWh;
-      lifecycleEnergy.currencyVolume += Math.floor(capWh * PRICE / 1e9);
+      lifecycleEnergy.currencyVolume += Math.floor(capWh * lanePrice / 1e9);
 
       // D. buyer takes delivery and retires it: withdraw energy escrow + burn
       const wdIx = await trading.methods.withdrawEscrow(new BN(capWh)).accounts({
@@ -773,7 +811,7 @@ async function main() {
         userEscrow: escrowPda(buyer.kp.publicKey, energyMintPda), userWallet: engAta(buyer.kp.publicKey),
         marketAuthority: marketAuthorityPda, tokenProgram: TOKEN_2022_PROGRAM_ID,
       } as any).instruction();
-      const burnIx = await energyToken.methods.burnTokens(new BN(capWh)).accounts({
+      const burnIx = await energyToken.methods.retireEnergyTokens(new BN(capWh)).accounts({
         mint: energyMintPda, tokenAccount: engAta(buyer.kp.publicKey),
         authority: buyer.kp.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
       } as any).instruction();
@@ -860,7 +898,8 @@ async function main() {
       readings: meta.readings, stepSec: meta.step_sec, energyKwh: meta.energy_kwh,
       dayWeather: meta.day_weather, randomSeed: meta.random_seed,
     },
-    config: { batch: BATCH, zoneId: ZONE_ID, sellCapKwh: SELL_CAP_KWH, statusPollMs: STATUS_POLL_MS, maxInflight: MAX_INFLIGHT },
+    config: { batch: BATCH, zoneId: ZONE_ID, sellCapKwh: SELL_CAP_KWH, statusPollMs: STATUS_POLL_MS, maxInflight: MAX_INFLIGHT,
+      priceModel: PRICE_MODEL, askLadderMicros: ASK_LADDER_MICROS, buybackRateMicros: BUYBACK_RATE_MICROS },
     rpc: (conn as any)._rpcEndpoint,
     telemetry: {
       readings: meta.readings, readingsOk: p1.readingsOk,
@@ -905,7 +944,7 @@ async function main() {
 
   fs.mkdirSync("test-results", { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const jsonPath = `test-results/community-month-${meta.meters}m-${meta.prosumers}p-${stamp}.json`;
+  const jsonPath = `test-results/community-month-${meta.meters}m-${meta.prosumers}p-${PRICE_MODEL}-${stamp}.json`;
   fs.writeFileSync(jsonPath, JSON.stringify(summary, null, 2));
 
   const md = [
@@ -942,7 +981,7 @@ async function main() {
     `> Latency is send→first-seen-confirmed via bulk polling (±${STATUS_POLL_MS}ms quantisation).`,
     ``,
   ].join("\n");
-  const mdPath = `test-results/community-month-${meta.meters}m-${meta.prosumers}p-${stamp}.md`;
+  const mdPath = `test-results/community-month-${meta.meters}m-${meta.prosumers}p-${PRICE_MODEL}-${stamp}.md`;
   fs.writeFileSync(mdPath, md);
 
   console.log("\n" + "═".repeat(70));
