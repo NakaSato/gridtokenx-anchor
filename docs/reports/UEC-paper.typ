@@ -1064,6 +1064,78 @@ serialisation, not by execution.
   ),
 ) <tab-headline>
 
+Read together, the measurements are not free-standing benchmarks: each one
+tests a specific on-chain design decision from @sec-exec, @sec-security, and
+@sec-econ. @tab-design-map states that correspondence explicitly — the
+decision, the measured behaviour that follows from it, and where each side is
+developed — so that the results section can be read as a validation matrix
+for the smart-contract design rather than a throughput report.
+
+#figure(
+  caption: [On-chain design decisions and the measured evidence for each.
+    Design sections state the mechanism; results sections carry the numbers.
+    All values as in @tab-headline and the cited subsections.],
+  table(
+    columns: (auto, auto, auto),
+    align: (left, left, left),
+    table.header([*On-chain design decision*], [*Measured evidence*], [*Design / result*]),
+    [Per-entity PDA partitioning (meters, orders, matches — no shared
+     hot-path writes)],
+    [TPC-C scales super-linearly (9.4× over 8×, no knee); per-tx compute flat
+     22–24 k CU at every load; ingest CU flat ≈13.5 k to 100,000 meters],
+    [@sec-pda / @sec-oltp, @sec-ingest],
+
+    [Deliberately stale global aggregates (config and totals are read-only on
+     hot paths, reconciled by admin instructions)],
+    [Execution is load-independent; serialisation appears *only* where one
+     account is write-locked — mint 5.33 s#super[−1], single-fee-payer settle
+     0.6 s#super[−1], single-gateway ingest],
+    [@sec-pda / @tab-headline],
+
+    [Sharded order entry (market/zone shard PDAs absorb order-book
+     bookkeeping)],
+    [10,000-order burst sustains 179.65 confirmed TPS with 100% delivery
+     through the order-PDA path],
+    [@sec-pda / @sec-orderentry],
+
+    [Off-chain matching with on-chain Ed25519 verification and per-order /
+     per-match nullifiers],
+    [353 month-sim settlements, zero failures, replay blocked; one match per
+     transaction at 121,813 CU (≈61% budget) under the 1,232-byte packet],
+    [@sec-ed25519 / @sec-month],
+
+    [Execution price as a pure economic parameter (settlement code path is
+     rule-agnostic)],
+    [Per-settle compute invariant across uniform / CDA / midpoint rules
+     (114–116 k CU, spread < 2%); every match settles under every rule],
+    [@sec-price / @sec-pricerules],
+
+    [Integer-only value arithmetic with explicit floors and an on-chain
+     conservation identity],
+    [Month-sim currency audit conserves exactly: buyer escrow outflow equals
+     seller proceeds plus collector balances, to the atom],
+    [@sec-settle-math / @sec-month],
+
+    [REC-validator-gated minting with a GRID + REC $lt.eq$ generation
+     conservation CPI],
+    [Token accounting closes to the watt-hour: minted GRID plus certified
+     RECs equals oracle-accepted surplus],
+    [@sec-rec / @sec-month],
+
+    [The 20% ad-valorem network-charge cap as an explicit protocol
+     parameter],
+    [Flat wheeling inverts the seller-net ranking (CDA falls below the
+     regulated buyback at $w = 1.15$), making the participation threshold a
+     visible tariff-policy lever],
+    [@sec-price / @sec-pricerules],
+
+    [Zero-copy account layouts inside the per-instruction compute budget],
+    [Every deployed instruction profiles under the 200 k CU default; the
+     heaviest (settlement) uses ≈61% of it],
+    [@sec-zerocopy, @sec-cu-budget / @sec-cu],
+  ),
+) <tab-design-map>
+
 == Compute-unit cost of on-chain operations <sec-cu>
 
 @tab-cu summarises the measured CU cost of representative instructions and
