@@ -1,6 +1,6 @@
 // gridtokenx-anchor — 2-page condensed paper (UEC ASEAN workshop format).
 // Compile: typst compile UEC-paper-2page.typ UEC-paper-2page.pdf
-// Condensed from UEC-paper.typ. Academic register; no source-line citations.
+// Condensed from uec-paper/main.typ. Academic register; no source-line citations.
 
 #set page(paper: "a4", margin: (x: 1.6cm, y: 1.55cm), numbering: "1", columns: 2)
 #set columns(gutter: 0.9cm)
