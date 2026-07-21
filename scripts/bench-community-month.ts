@@ -686,7 +686,14 @@ async function main() {
   // ── Daily lifecycle: 12 parallel prosumer lanes, sequential steps in a lane ─
   // Per-lane pricing under the selected model. The seller's signed limit is its
   // ladder ask; settle_offchain_match enforces sell_limit <= price <= buy_limit.
+  // Optional overrides for tariff experiments (e.g. execution above the
+  // charge-cap-induced price floor): all three must be set together.
+  const PRICE_OVERRIDE = process.env.PRICE_MICROS ? parseInt(process.env.PRICE_MICROS, 10) : null;
+  const BUY_LIMIT_OVERRIDE = process.env.BUY_LIMIT_MICROS ? parseInt(process.env.BUY_LIMIT_MICROS, 10) : null;
+  const SELL_LIMIT_OVERRIDE = process.env.SELL_LIMIT_MICROS ? parseInt(process.env.SELL_LIMIT_MICROS, 10) : null;
   const priceFor = (li: number): { price: number; buyLimit: number; sellLimit: number } => {
+    if (PRICE_OVERRIDE !== null && BUY_LIMIT_OVERRIDE !== null && SELL_LIMIT_OVERRIDE !== null)
+      return { price: PRICE_OVERRIDE, buyLimit: BUY_LIMIT_OVERRIDE, sellLimit: SELL_LIMIT_OVERRIDE };
     const ask = ASK_LADDER_MICROS[li % ASK_LADDER_MICROS.length];
     switch (PRICE_MODEL) {
       case "uniform": return { price: 3_450_000, buyLimit: 4_100_000, sellLimit: ask };
@@ -899,7 +906,8 @@ async function main() {
       dayWeather: meta.day_weather, randomSeed: meta.random_seed,
     },
     config: { batch: BATCH, zoneId: ZONE_ID, sellCapKwh: SELL_CAP_KWH, statusPollMs: STATUS_POLL_MS, maxInflight: MAX_INFLIGHT,
-      priceModel: PRICE_MODEL, askLadderMicros: ASK_LADDER_MICROS, buybackRateMicros: BUYBACK_RATE_MICROS },
+      priceModel: PRICE_MODEL, askLadderMicros: ASK_LADDER_MICROS, buybackRateMicros: BUYBACK_RATE_MICROS,
+      priceOverrideMicros: PRICE_OVERRIDE, buyLimitOverrideMicros: BUY_LIMIT_OVERRIDE, sellLimitOverrideMicros: SELL_LIMIT_OVERRIDE },
     rpc: (conn as any)._rpcEndpoint,
     telemetry: {
       readings: meta.readings, readingsOk: p1.readingsOk,

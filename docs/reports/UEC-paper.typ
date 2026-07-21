@@ -1219,6 +1219,14 @@ for the smart-contract design rather than a throughput report.
     [Every deployed instruction profiles under the 200 k CU default; the
      heaviest (settlement) uses ≈61% of it],
     [@sec-zerocopy, @sec-cu-budget / @sec-cu],
+
+    [Price rule composable with the full pipeline (fresh-ledger replay per
+     rule)],
+    [Three complete month replays: conservation closes exactly under every
+     rule (minted = settled = burned = 1,734.35 kWh); currency ordering
+     uniform > CDA > buyback reproduced end-to-end; telemetry leg agrees to
+     0.1 s across ledgers; month absorbed at 3,094–3,942× real time],
+    [@sec-price / @sec-pricerules],
   ),
 ) <tab-design-map>
 
@@ -1756,6 +1764,61 @@ rules on the cleared volume alone: whether P2P trading dominates the regulated
 rate depends not only on the wheeling tariff but on demand-side participation,
 and the α threshold between the regimes is itself a fleet property. A full α
 sweep with heterogeneous per-prosumer asks is left to future work.
+
+*Full-lifecycle month replay under each price rule.* The mechanism comparison
+above drives the market legs against a reduced per-day book; as a final
+composition test we re-ran the *complete* one-month pipeline of @sec-month —
+telemetry replay, daily trading sessions, and the full
+mint→deposit→settle→burn lifecycle — three times end-to-end, once per price
+rule, on the 80-meter/30-day physically modelled dataset (7,029.9 kWh
+generated, 139,421.2 kWh consumed, 1,734.5 kWh tradeable surplus; the dataset
+carries the 5 kWh/day export cap of @sec-datasets, so the harness's 10 kWh/day
+sell cap never binds — 0.004 kWh withheld over the month — and the REC leg
+runs at zero volume). Because the oracle's strictly-increasing per-meter
+timestamp guard and the registry's mint-conservation bound make a same-dataset
+replay non-repeatable on a persistent ledger, each rule ran on a freshly
+created ledger — validator boot, program deploy, and state initialisation per
+run (`scripts/run-lifecycle-price-models.sh`).
+
+The rule-independent legs are near-identical across the three runs: all
+230,400 readings confirmed with zero rejections, retries, or delivery loss in
+433.7–433.8 s — a 0.02% wall-time spread across three independent ledgers — at
+531 readings·s#super[−1] (53.1 tx·s#super[−1] at ten readings per transaction,
+150,170 CU median per batched transaction, p50 confirmation ≈1.38 s), and the
+30 daily sessions submitted 2,397 of 2,398 orders (one blockhash expiry) at
+17.9 tx·s#super[−1]. @tab-lifecycle-rules reports the rule-dependent legs.
+
+#figure(
+  caption: [Full-month token lifecycle under each price rule (one fresh-ledger
+    run per rule; 80-meter/30-day dataset, 230,400 readings replayed per run).
+    Currency volume sums the floor-rounded per-prosumer-day settlement values
+    in whole THBC; the buyback rule retires GRID directly at the feed-in rate
+    and has no settlement leg.],
+  table(
+    columns: (auto, auto, auto, auto, auto, auto, auto),
+    align: (left, right, right, right, right, right, right),
+    table.header(
+      [*Price rule*], [*Settled (kWh)*], [*Burned (kWh)*], [*Settles*],
+      [*CU/settle*], [*Currency (THBC)*], [*Month wall*],
+    ),
+    [Uniform-price epoch], [1,734.35], [1,734.35], [356/356], [99,045], [5,888], [837.7 s ($3094 times$)],
+    [CDA], [1,734.35], [1,734.35], [356/356], [99,045], [5,418], [837.7 s ($3094 times$)],
+    [Buyback (feed-in)], [— (direct retirement)], [1,734.35], [—], [—], [3,685], [657.6 s ($3942 times$)],
+  ),
+) <tab-lifecycle-rules>
+
+Conservation closes exactly in all three runs: GRID minted = trade-settled =
+burned = 1,734.35 kWh under both P2P rules (356 Ed25519-verified settlements
+each), and the buyback rule mints and burns the same energy without a
+settlement leg — hence its shorter lifecycle and higher compression. The
+settlement-currency ordering — uniform 5,888 > CDA 5,418 > buyback 3,685 THBC
+— reproduces on the full pipeline the gross ranking of @tab-mechanism-fleets,
+and the whole calendar month is absorbed in 837.7 s (P2P rules) or 657.6 s
+(buyback), a 3,094–3,942-fold real-time compression: month-scale price-policy
+evaluation is a minutes-scale experiment on this harness. As throughout this
+section the runs are single-node and one per rule; the telemetry leg's
+three-fold repetition (one replay per rule, agreeing to 0.1 s) is the only
+multiply-replicated measurement in this subsection.
 
 = Discussion and Limitations <sec-discussion>
 

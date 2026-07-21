@@ -1,31 +1,197 @@
-@misc{ref1,
-  author = {Yakovenko, Anatoly},
-  title  = {Solana: A new architecture for a high performance blockchain v0.8.13},
-  year   = {2018},
-  note   = {Whitepaper},
+% --- Thailand energy policy: verified primary/official sources ---
+
+@misc{eppo_pdp2024,
+  author       = {{Energy Policy and Planning Office (EPPO), Ministry of Energy, Thailand}},
+  title        = {Draft {P}ower {D}evelopment {P}lan of {T}hailand 2024--2037 ({PDP2024}): Public Hearing Draft},
+  year         = {2024},
+  month        = jun,
+  howpublished = {\url{https://www.eppo.go.th/}},
+  note         = {Public consultation draft, 19--23 June 2024; new capacity and storage total
+                  60{,}208~MW, of which 34{,}851~MW renewable; not yet approved by the
+                  National Energy Policy Council as of early 2026},
 }
 
-@techreport{ref2,
-  author      = {{ASEAN Centre for Energy}},
-  title       = {ASEAN Plan of Action for Energy Cooperation (APAEC) 2016--2025, Phase II: 2021--2025},
-  institution = {ASEAN Centre for Energy},
-  year        = {2020},
-  address     = {Jakarta, Indonesia},
+@misc{eppo_smartgrid2025,
+  author       = {Lawanstined, Duangtip},
+  title        = {Thailand's Smart Grid Masterplan},
+  howpublished = {Presented at Regional Energy Transition Dialogue 2025, organized by
+                  CASE for SEA and GIZ},
+  year         = {2025},
+  month        = jul,
+  note         = {Energy Policy and Planning Office (EPPO), Ministry of Energy, Thailand.
+                  Describes the Smart Grid Action Plan (2022--2031), the medium-term
+                  phase of the overarching Master Plan for Smart Grid Network System
+                  Development in Thailand (2015--2036); confirms continuous AMI
+                  rollout by MEA/PEA under Pillar~3 (Microgrid \& Prosumer
+                  Administration)},
+  url          = {https://caseforsea.org/wp-content/uploads/2025/07/570953108071907720_1.-CASE-Smart-grid-%E0%B8%AA%E0%B9%88%E0%B8%87-GIZ.pdf},
 }
 
-@techreport{moe_factsheet_2026,
-  author      = {{Ministry of Energy (Thailand)}},
-  title       = {Power Development Plan ({PDP}) 2026--2050: Fact Sheet},
-  institution = {Ministry of Energy, Royal Thai Government},
-  year        = {2026},
-  address     = {Bangkok, Thailand},
+@techreport{onep_ltleds2022,
+  author      = {{Office of Natural Resources and Environmental Policy and Planning (ONEP)}},
+  title       = {Thailand's Long-Term Low Greenhouse Gas Emission Development
+                 Strategy (Revised)},
+  institution = {UNFCCC},
+  year        = {2022},
+  month       = nov,
+  note        = {Submitted 7 November 2022 at COP27; states carbon neutrality
+                 by 2050 and net-zero GHG emissions by 2065},
 }
 
-@article{ref3,
-  author  = {Mengelkamp, Esther and G{\"a}rttner, Johannes and Rock, Kerstin and Kessler, Scott and Orsini, Lawrence and Weinhardt, Christof},
-  title   = {Designing microgrid energy markets: A case study: The Brooklyn Microgrid},
+@misc{thailand_ndc3_2025,
+  author       = {{Royal Thai Government}},
+  title        = {Thailand's Third {N}ationally {D}etermined {C}ontribution ({NDC 3.0})},
+  year         = {2025},
+  month        = nov,
+  howpublished = {Approved by Cabinet, 4 November 2025},
+  note         = {Accelerates the net-zero target from 2065 to 2050; targets a
+                  47\% reduction in net GHG emissions by 2035 relative to 2019},
+}
+
+@techreport{netp2019report,
+  author       = {{Metropolitan Electricity Authority (MEA) and Electricity
+                   Generating Authority of Thailand (EGAT) and Provincial
+                   Electricity Authority (PEA)}},
+  title        = {{Development of the National Energy Trading Platform (NETP)}:
+                   Research and Development Project Report and Digital
+                   Platform Roadmap for Thailand's Electricity Authorities},
+  institution  = {Submitted to the State Enterprise Policy Office (SEPO),
+                  Thailand},
+  year         = {2019},
+  month        = dec,
+  howpublished = {\url{https://thai-smartgrid.com/wp-content/uploads/2020/05/%E0%B8%A3%E0%B8%B2%E0%B8%A2%E0%B8%87%E0%B8%B2%E0%B8%99-NETP-%E0%B8%9B%E0%B8%B5-2561.pdf}},
+  note         = {Full technical report of the NETP prototype (2018--2019
+                  fiscal year). Evaluated Ethereum (15--30 TPS), Hyperledger
+                  Fabric (300 TPS), EOS, and Tendermint (2{,}002.8 TPS,
+                  highest-scoring) as candidate platforms; selected a
+                  5-node permissioned Consortium Blockchain on Tendermint
+                  (3 utility nodes + 2 regulatory nodes) with PBFT-style
+                  Propose/Prevote/Precommit/Commit voting requiring 2/3
+                  majority. Piloted bilateral P2P settlement only across
+                  EGAT/MEA/PEA facilities (Apr--Oct 2019) with hourly
+                  (60-minute) smart-meter reporting; market-based auction
+                  clearing was explicitly out of scope for this phase},
+}
+
+@misc{egat_netp,
+  author       = {{Electricity Generating Authority of Thailand (EGAT)}},
+  title        = {National {E}nergy {T}rading {P}latform},
+  howpublished = {\url{https://www.egat.co.th/home/en/national-energy-trading-platform/}},
+  note         = {Joint initiative of EGAT, MEA, and PEA (Thailand's three state
+                  utilities), initiated circa 2017 to develop a national P2P
+                  energy trading platform for rooftop-solar prosumers;
+                  envisions blockchain-based settlement with a dedicated
+                  digital currency. Reported as still under development as of
+                  2025 (see governance literature)},
+}
+
+@misc{pea_solar_prachachon_2026,
+  author       = {{Provincial Electricity Authority (PEA), Thailand}},
+  title        = {{Rooftop Solar Power Generation Project for Residential
+                   Prosumers (Solar Phak Prachachon)}: Application Period
+                   from 2026 ({VSPP-RT3-2})},
+  year         = {2026},
+  howpublished = {\url{https://ppim.pea.co.th/app/v1/project/solar/detail/6a3df059ee9f0e286c0a1766}},
+  note         = {Regulatory basis: Energy Regulatory Commission (ERC)
+                  announcement inviting rooftop-solar purchase bids for
+                  residential prosumers, B.E. 2569 (2026). Fixed buy-back
+                  rate 2.20 THB/kWh for surplus generation over a 10-year
+                  term; capped at 5 kW (AC) capacity per participant and
+                  500 MW (AC) aggregate capacity jointly administered by
+                  PEA and MEA; self-consumption prioritised, with only
+                  surplus eligible for purchase},
+}
+
+% --- Reference platforms and prior work ---
+
+@misc{cineldi2024,
+  author       = {Engan, Lill Mari and Ekrheim, Stine and Bjarghov, Sigurd
+                  and Klemets, Jonatan and Kj{\o}lle, Gerd and Schytte, Ivan},
+  title        = {Reference dataset for semi-urban and rural {N}orwegian
+                   low voltage distribution system},
+  year         = {2024},
+  month        = dec,
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.14528192},
+  note         = {Developed within the Norwegian CINELDI research centre
+                  (SINTEF Energy Research). Four anonymised radial LV grids
+                  at 230 V (39/56-bus semi-urban, 50/80-bus rural) in
+                  MATPOWER format, with hourly active/reactive load per
+                  bus; no distributed generation data included. This work
+                  imports the 80-bus rural grid topology; time-series
+                  generation is synthetic (see Methodology)},
+}
+
+@article{mengelkamp2018,
+  author  = {Mengelkamp, Esther and G{\"a}rttner, Johannes and Rock, Kerstin
+             and Kessler, Scott and Orsini, Lawrence and Weinhardt, Christof},
+  title   = {Designing microgrid energy markets: {A} case study:
+             {The} {Brooklyn} {Microgrid}},
   journal = {Applied Energy},
   volume  = {210},
   pages   = {870--880},
   year    = {2018},
+}
+
+@article{thurner2018,
+  author  = {Thurner, Leon and Scheidler, Alexander and Sch{\"a}fer, Florian
+             and Menke, Jan-Hendrik and Dollichon, Julian and Meier, Friederike
+             and Meinecke, Steffen and Braun, Martin},
+  title   = {pandapower---{An} Open-Source {Python} Tool for Convenient Modeling,
+             Analysis, and Optimization of Electric Power Systems},
+  journal = {IEEE Transactions on Power Systems},
+  volume  = {33},
+  number  = {6},
+  pages   = {6510--6521},
+  year    = {2018},
+}
+
+@inproceedings{chassin2008,
+  author    = {Chassin, David P. and Schneider, Kevin and Gerkensmeyer, Clint},
+  title     = {{GridLAB-D}: An open-source power systems modeling and simulation environment},
+  booktitle = {2008 IEEE/PES Transmission and Distribution Conference and Exposition},
+  pages     = {1--5},
+  year      = {2008}
+}
+
+% --- Solana technical references ---
+
+@misc{yakovenko2018solana,
+  author       = {Yakovenko, Anatoly},
+  title        = {Solana: {A} New Architecture for a High Performance Blockchain
+                  v0.8.13},
+  year         = {2018},
+  howpublished = {\url{https://solana.com/solana-whitepaper.pdf}},
+  note         = {Defines Proof-of-History (PoH) as a verifiable-delay-function
+                  clock for transaction ordering, used alongside a separate
+                  consensus algorithm},
+}
+
+@misc{solana2019towerbft,
+  author       = {{Solana Foundation}},
+  title        = {Tower {BFT}: {S}olana's High Performance Implementation of {PBFT}},
+  year         = {2019},
+  month        = jul,
+  howpublished = {\url{https://solana.com/news/tower-bft--solana-s-high-performance-implementation-of-pbft}},
+  note         = {Describes Tower BFT, Solana's PoS-based consensus protocol,
+                  distinct from the PoH clock},
+}
+
+@article{holmgren2018pvlib,
+  author  = {Holmgren, William F. and Hansen, Clifford W. and Mikofski, Mark A.},
+  title   = {pvlib python: {A} python package for modeling solar energy systems},
+  journal = {Journal of Open Source Software},
+  volume  = {3},
+  number  = {29},
+  pages   = {884},
+  year    = {2018},
+  doi     = {10.21105/joss.00884},
+}
+
+@misc{anchor2024,
+  author = {{Coral / Anchor contributors}},
+  title  = {Anchor: Solana's {Sealevel} runtime framework},
+  howpublished = {Online documentation},
+  year   = {2024},
+  url    = {https://www.anchor-lang.com/}
 }
