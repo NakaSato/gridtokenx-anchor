@@ -143,18 +143,53 @@ async function main() {
     console.error('⚠️  set_settlement_thbc_mint failed (is the market initialized & are you its authority?):', e.message);
   }
 
-  // Create the 16 settlement accumulator shards + per-shard fee/wheeling/loss
-  // collectors for the THBC settlement currency (§2c). The sharded batch-settle path
-  // (batch_settle_offchain_match → record_settlement_sharded) writes BOTH per shard,
-  // so both must exist before any sharded settle runs. Idempotent: each is gated by
-  // `init`, so a re-run hits "already in use" per shard and is skipped. The unsharded
-  // global path is unaffected — these are additive destinations.
+  // Create ALL settlement charge destinations for the THBC currency: the global
+  // (unsharded) fee/wheeling/loss collectors used by the single-match settle path, plus
+  // the 16 settlement accumulator shards + per-shard collectors used by the batch path
+  // (batch_settle_offchain_match → record_settlement_sharded, which writes BOTH per shard).
+  // All must exist before any settle runs. Idempotent: each is `init`-gated, so a re-run
+  // hits "already in use" and is skipped.
   const NUM_SETTLE_SHARDS = 16;
   const shardedCollectorPda = (prefix: string, shardId: number) =>
     PublicKey.findProgramAddressSync(
       [Buffer.from(prefix), thbcMint.toBuffer(), Buffer.from([shardId])],
       tradingProgram.programId,
     )[0];
+  const globalCollectorPda = (prefix: string) =>
+    PublicKey.findProgramAddressSync(
+      [Buffer.from(prefix), thbcMint.toBuffer()],
+      tradingProgram.programId,
+    )[0];
+
+  // Global (unsharded) collectors: seeds = [prefix, thbcMint], NO shard byte. Used by the
+  // single-match `settle_offchain_match` path and as the consolidation target of
+  // `sweep_collectors` — distinct PDAs from the sharded set below, so they must be created
+  // separately. Idempotent: `init`-gated, a re-run hits "already in use" and is skipped.
+  let globalCollectorsCreated = false;
+  try {
+    await tradingProgram.methods
+      .initializeCollectors()
+      .accounts({
+        payer: authority.publicKey,
+        currencyMint: thbcMint,
+        feeCollector: globalCollectorPda('fee_collector'),
+        wheelingCollector: globalCollectorPda('wheeling_collector'),
+        lossCollector: globalCollectorPda('loss_collector'),
+        marketAuthority,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    globalCollectorsCreated = true;
+  } catch (e: any) {
+    if (!e.message?.includes('already in use')) {
+      console.error('⚠️  initialize_collectors (global) failed:', e.message);
+    }
+  }
+  console.log(
+    `✅ Global collectors ${globalCollectorsCreated ? 'created' : 'pre-existing'} ` +
+      `(fee/wheeling/loss for ${thbcMint.toBase58()}).`,
+  );
 
   let shardsCreated = 0;
   let collectorsCreated = 0;
