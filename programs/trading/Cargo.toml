@@ -17,8 +17,7 @@ custom-heap = []
 no-idl = []
 no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
-localnet = ["compute-debug/localnet", "test-skip-zk"]
-test-skip-zk = []
+localnet = ["compute-debug/localnet"]
 # Shielded-transfer (private_transfer) support. OFF by default: Phase 1 verifies
 # conservation + balance PoK but NOT range proofs, so it is not mainnet-sound
 # yet (see src/zk_verify.rs). Enable only for Phase-1 testing.
