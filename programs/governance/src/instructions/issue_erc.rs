@@ -105,8 +105,15 @@ pub fn issue_erc(
             &meter_data[8..8 + std::mem::size_of::<MeterAccount>()],
         );
         let meter_owner = Pubkey::new_from_array(meter.owner);
-        let unclaimed = meter
+        // Net-generation basis — MUST match registry `mark_erc_claimed`, which is the
+        // authoritative bound: the CPI below re-checks against net generation and reverts
+        // the whole tx if exceeded, so combined GRID + REC claims can never exceed net.
+        // This local precheck fails fast with a clearer error; keeping it on the same
+        // (net) basis avoids a looser "unclaimed" the CPI would then reject.
+        let net_generation = meter
             .total_generation
+            .saturating_sub(meter.total_consumption);
+        let unclaimed = net_generation
             .saturating_sub(meter.claimed_erc_generation)
             .saturating_sub(meter.settled_net_generation);
         (meter_owner, unclaimed)
@@ -141,7 +148,7 @@ pub fn issue_erc(
         GovernanceError::ValidationDataTooLong
     );
 
-    // === PREVENT DOUBLE-CLAIMING ===
+    // === PREVENT DOUBLE-CLAIMING (net-basis precheck; registry mark_erc_claimed CPI is authoritative) ===
     require!(
         energy_amount <= unclaimed_generation,
         GovernanceError::InsufficientUnclaimedGeneration

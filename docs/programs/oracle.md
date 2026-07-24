@@ -2,7 +2,7 @@
 
 ## Abstract
 
-The `oracle` program is the on-chain bridge between the platform's Advanced Metering Infrastructure (AMI) — the network of smart energy meters and their off-chain gateway — and the Solana ledger. It records validated per-meter energy production and consumption readings, enforces range, anomaly, and rate-limit checks at ingest time, and finalizes 15-minute market-clearing epochs that downstream settlement consumes. To keep the high-frequency reading path parallelizable under Solana's Sealevel runtime, the program writes each meter's data to its own Program Derived Address (PDA) while treating the singleton configuration account as read-only on that path (`programs/oracle/src/lib.rs:70`). Node-facing instructions are authorized either by the configured chain bridge key or by an aggregator admitted to the `governance` program's Proof-of-Authority (PoA) allow-list, the latter proven by supplying that aggregator's `AggregatorEntry` PDA (`programs/oracle/src/lib.rs:405`).
+The `oracle` program is the on-chain bridge between the platform's Advanced Metering Infrastructure (AMI) — the network of smart energy meters and their off-chain gateway — and the Solana ledger. It records validated per-meter energy production and consumption readings, enforces range, anomaly, and rate-limit checks at ingest time, and finalizes 15-minute market-clearing epochs that downstream settlement consumes. To keep the high-frequency reading path parallelizable under Solana's Sealevel runtime, the program writes each meter's data to its own Program Derived Address (PDA) while treating the singleton configuration account as read-only on that path (`programs/oracle/src/lib.rs:48`). Node-facing instructions are authorized either by the configured chain bridge key or by an aggregator admitted to the `governance` program's Proof-of-Authority (PoA) allow-list, the latter proven by supplying that aggregator's `AggregatorEntry` PDA (`programs/oracle/src/lib.rs:163`).
 
 ---
 
@@ -16,7 +16,7 @@ The `oracle` program is the on-chain bridge between the platform's Advanced Mete
 | Description | "Oracle program for P2P Energy Trading - AMI data bridge" |
 | Edition | 2021 |
 
-The program ID is declared at `programs/oracle/src/lib.rs:14` via `declare_id!`. The crate name, version, and description are defined in `programs/oracle/Cargo.toml:2`–`programs/oracle/Cargo.toml:4`.
+The program ID is declared at `programs/oracle/src/lib.rs:19` via `declare_id!`. The crate name, version, and description are defined in `programs/oracle/Cargo.toml:2`–`programs/oracle/Cargo.toml:4`.
 
 ### Dependencies
 
@@ -28,22 +28,22 @@ The program ID is declared at `programs/oracle/src/lib.rs:14` via `declare_id!`.
 | `compute-debug` | path `../../shared/compute-debug`, optional | Compute-unit profiling macros, gated by the `localnet` feature (`programs/oracle/Cargo.toml:27`) |
 | `governance` | path `../governance`, feature `cpi` | Types and program ID only — no CPI invoke (`programs/oracle/Cargo.toml:30`) |
 
-The `governance` dependency is consumed for **types and the program ID only**; the oracle performs no cross-program invocation into governance. As documented in the crate manifest, the dependency exists to authorize admitted aggregators against governance's PoA allow-list, and the `cpi` feature is requested solely because it pulls in `no-entrypoint` to avoid a duplicate program entrypoint (`programs/oracle/Cargo.toml:28`–`programs/oracle/Cargo.toml:30`). Concretely, the oracle imports the `governance::ID` constant and the `governance::AggregatorEntry` account type, deserializes a supplied `AggregatorEntry` PDA in-process, and validates it — it never issues an instruction to the governance program (`programs/oracle/src/lib.rs:414`–`programs/oracle/src/lib.rs:423`).
+The `governance` dependency is consumed for **types and the program ID only**; the oracle performs no cross-program invocation into governance. As documented in the crate manifest, the dependency exists to authorize admitted aggregators against governance's PoA allow-list, and the `cpi` feature is requested solely because it pulls in `no-entrypoint` to avoid a duplicate program entrypoint (`programs/oracle/Cargo.toml:28`–`programs/oracle/Cargo.toml:30`). Concretely, the oracle imports the `governance::ID` constant and the `governance::AggregatorEntry` account type, deserializes a supplied `AggregatorEntry` PDA in-process, and validates it — it never issues an instruction to the governance program (`programs/oracle/src/lib.rs:172`–`programs/oracle/src/lib.rs:181`).
 
-The `localnet` feature enables compute profiling by importing `compute_debug::{compute_checkpoint, compute_fn}`; when the feature is absent, `compute_fn!` expands to a no-op that simply evaluates its block (`programs/oracle/src/lib.rs:16`–`programs/oracle/src/lib.rs:29`).
+The `localnet` feature enables compute profiling by importing `compute_debug::{compute_checkpoint, compute_fn}`; when the feature is absent, `compute_fn!` expands to a no-op that simply evaluates its block (`programs/oracle/src/lib.rs:21`–`programs/oracle/src/lib.rs:29`).
 
 ---
 
 ## 2. System Role
 
-The oracle is the AMI gateway bridge. Advanced Metering Infrastructure (AMI) denotes the off-chain population of smart meters together with the gateway that collects their readings. The off-chain chain bridge submits each validated reading to the ledger through `submit_meter_reading`, and that instruction enforces that only the configured chain-bridge key may submit (`programs/oracle/src/lib.rs:100`–`programs/oracle/src/lib.rs:103`).
+The oracle is the AMI gateway bridge. Advanced Metering Infrastructure (AMI) denotes the off-chain population of smart meters together with the gateway that collects their readings. The off-chain chain bridge submits each validated reading to the ledger through `submit_meter_reading`, and that instruction enforces that only the configured chain-bridge key may submit (`programs/oracle/src/instructions/submit_meter_reading.rs:54`–`programs/oracle/src/instructions/submit_meter_reading.rs:57`).
 
 The program maintains two tiers of state:
 
 1. **Per-meter state.** Each physical meter is represented by a dedicated `MeterState` PDA keyed by its meter identifier (`programs/oracle/src/state.rs:8`–`programs/oracle/src/state.rs:9`). Readings for distinct meters therefore touch disjoint write sets, which is the precondition for Solana Sealevel parallel execution.
-2. **Singleton configuration and global counters.** A single `OracleData` account (PDA seed `b"oracle_data"`) holds program authority, the chain-bridge key, validation thresholds, and globally aggregated totals (`programs/oracle/src/lib.rs:478`–`programs/oracle/src/lib.rs:485`). On the hot reading path this account is loaded read-only so it imposes no write lock (`programs/oracle/src/lib.rs:96`).
+2. **Singleton configuration and global counters.** A single `OracleData` account (PDA seed `b"oracle_data"`) holds program authority, the chain-bridge key, validation thresholds, and globally aggregated totals (`programs/oracle/src/instructions/initialize.rs:11`, `programs/oracle/src/state.rs:36`–`programs/oracle/src/state.rs:62`). On the hot reading path this account is loaded read-only so it imposes no write lock (`programs/oracle/src/instructions/submit_meter_reading.rs:50`).
 
-**Market-clearing epochs.** Market clearing is organized into 15-minute (900-second) epochs. The `trigger_market_clearing` instruction finalizes an epoch by recording its timestamp, and the timestamp must be aligned to a 900-second boundary (`programs/oracle/src/lib.rs:211`–`programs/oracle/src/lib.rs:214`). The epoch must be strictly greater than the last cleared epoch and must not be in the future (`programs/oracle/src/lib.rs:201`–`programs/oracle/src/lib.rs:208`).
+**Market-clearing epochs.** Market clearing is organized into 15-minute (900-second) epochs. The `trigger_market_clearing` instruction finalizes an epoch by recording its timestamp, and the timestamp must be aligned to a 900-second boundary (`programs/oracle/src/instructions/trigger_market_clearing.rs:47`–`programs/oracle/src/instructions/trigger_market_clearing.rs:50`). The epoch must be strictly greater than the last cleared epoch and must not be in the future (`programs/oracle/src/instructions/trigger_market_clearing.rs:37`–`programs/oracle/src/instructions/trigger_market_clearing.rs:44`).
 
 **Relationship to the governance allow-list.** Beyond the chain-bridge key, the node-facing instructions `trigger_market_clearing` and `aggregate_readings` accept callers that are aggregators admitted to the `governance` PoA allow-list. Admission is represented in governance by a one-PDA-per-aggregator `AggregatorEntry` account (seeds `[b"aggregator", aggregator.as_ref()]`) carrying an `active` flag (`programs/governance/src/state/aggregator.rs:9`–`programs/governance/src/state/aggregator.rs:21`). The oracle validates such an entry in-handler (Section 6).
 
@@ -55,7 +55,7 @@ The program defines two account types in `programs/oracle/src/state.rs`. `MeterS
 
 ### 3.1 `MeterState` (regular account)
 
-PDA seeds: `[b"meter", meter_id.as_bytes()]` (`programs/oracle/src/lib.rs:507`). One account per meter. Declared at `programs/oracle/src/state.rs:11`.
+PDA seeds: `[b"meter", meter_id.as_bytes()]` (`programs/oracle/src/instructions/submit_meter_reading.rs:19`). One account per meter. Declared at `programs/oracle/src/state.rs:11`.
 
 | Field | Type | Size (bytes) | Meaning |
 | --- | --- | --- | --- |
@@ -75,7 +75,7 @@ Space: `MeterState::SPACE = 8 + 32 + 1 + 1 + 4 + 8 + 8 + 8 + 8 + 8 + 8 + 8 = 102
 
 ### 3.2 `OracleData` (zero-copy account)
 
-PDA seed: `[b"oracle_data"]` — a program singleton (`programs/oracle/src/lib.rs:484`). Declared `#[account(zero_copy)] #[repr(C)]` at `programs/oracle/src/state.rs:34`–`programs/oracle/src/state.rs:35`. Allocated space is `8 + std::mem::size_of::<OracleData>()` (`programs/oracle/src/lib.rs:483`).
+PDA seed: `[b"oracle_data"]` — a program singleton (`programs/oracle/src/instructions/initialize.rs:11`). Declared `#[account(zero_copy)] #[repr(C)]` at `programs/oracle/src/state.rs:34`–`programs/oracle/src/state.rs:35`. Allocated space is `8 + std::mem::size_of::<OracleData>()` (`programs/oracle/src/instructions/initialize.rs:10`).
 
 | Field | Type | Size (bytes) | Meaning |
 | --- | --- | --- | --- |
@@ -106,89 +106,89 @@ Per the layout commentary, the two `Pubkey` fields (64 bytes) plus twelve 8-byte
 
 ## 4. Instruction Set
 
-The program exposes eight instructions, all defined in the `#[program] mod oracle` block (`programs/oracle/src/lib.rs:31`). Each instruction body is wrapped in `compute_fn!` for compute-unit profiling under the `localnet` feature.
+The program exposes eight instructions, all declared in the `#[program] mod oracle` block (`programs/oracle/src/lib.rs:36`) as thin wrappers that delegate to handler functions in `programs/oracle/src/instructions/`. Each instruction body is wrapped in `compute_fn!` for compute-unit profiling under the `localnet` feature.
 
 ### 4.1 `initialize`
 
-- **Signature:** `initialize(ctx, chain_bridge: Pubkey)` (`programs/oracle/src/lib.rs:35`).
-- **Accounts (`Initialize`, `programs/oracle/src/lib.rs:479`):** `oracle_data` (`init`, PDA `b"oracle_data"`, payer = `authority`, space `8 + size_of::<OracleData>()`); `authority` (`mut` signer, rent payer); `system_program`.
+- **Signature:** `initialize(ctx, chain_bridge: Pubkey)` (`programs/oracle/src/lib.rs:40`).
+- **Accounts (`Initialize`, `programs/oracle/src/instructions/initialize.rs:6`):** `oracle_data` (`init`, PDA `b"oracle_data"`, payer = `authority`, space `8 + size_of::<OracleData>()`); `authority` (`mut` signer, rent payer); `system_program`.
 - **Signers:** `authority`.
-- **Effects:** Initializes `OracleData` via `load_init()`, setting `authority`, `chain_bridge`, `active = 1`, `created_at = now`, default validation thresholds (`min_energy_value = 0`, `max_energy_value = 1_000_000`, `anomaly_detection_enabled = 1`, `max_production_consumption_ratio = 1000`), `min_reading_interval = 60`, `last_quality_score = 100`, and zeroed counters (`programs/oracle/src/lib.rs:40`–`programs/oracle/src/lib.rs:62`). A single `Clock::get()` is reused for both `created_at` and `quality_score_updated_at` (`programs/oracle/src/lib.rs:37`–`programs/oracle/src/lib.rs:39`).
+- **Effects:** Initializes `OracleData` via `load_init()`, setting `authority`, `chain_bridge`, `active = 1`, `created_at = now`, default validation thresholds (`min_energy_value = 0`, `max_energy_value = 1_000_000`, `anomaly_detection_enabled = 1`, `max_production_consumption_ratio = 1000`), `min_reading_interval = 60`, `last_quality_score = 100`, and zeroed counters (`programs/oracle/src/instructions/initialize.rs:26`–`programs/oracle/src/instructions/initialize.rs:48`). A single `Clock::get()` is reused for both `created_at` and `quality_score_updated_at` (`programs/oracle/src/instructions/initialize.rs:23`–`programs/oracle/src/instructions/initialize.rs:25`).
 - **Events:** None.
 - **Errors:** None beyond Anchor account-init constraints.
 
 ### 4.2 `submit_meter_reading`
 
-- **Signature:** `submit_meter_reading(ctx, meter_id: String, energy_produced: u64, energy_consumed: u64, reading_timestamp: i64, zone_id: i32)` (`programs/oracle/src/lib.rs:75`).
-- **Accounts (`SubmitMeterReading`, `programs/oracle/src/lib.rs:497`):** `oracle_data` (read-only PDA — no write lock); `meter_state` (`init_if_needed`, PDA `[b"meter", meter_id.as_bytes()]`, payer = `authority`, space `MeterState::SPACE`); `authority` (`mut` signer); `system_program`.
-- **Signers:** `authority` — must equal `oracle_data.chain_bridge` (`programs/oracle/src/lib.rs:100`–`programs/oracle/src/lib.rs:103`).
+- **Signature:** `submit_meter_reading(ctx, meter_id: String, energy_produced: u64, energy_consumed: u64, reading_timestamp: i64, zone_id: i32)` (`programs/oracle/src/lib.rs:53`).
+- **Accounts (`SubmitMeterReading`, `programs/oracle/src/instructions/submit_meter_reading.rs:9`):** `oracle_data` (read-only PDA — no write lock); `meter_state` (`init_if_needed`, PDA `[b"meter", meter_id.as_bytes()]`, payer = `authority`, space `MeterState::SPACE`); `authority` (`mut` signer); `system_program`.
+- **Signers:** `authority` — must equal `oracle_data.chain_bridge` (`programs/oracle/src/instructions/submit_meter_reading.rs:54`–`programs/oracle/src/instructions/submit_meter_reading.rs:57`).
 - **Preconditions:**
-  - `meter_id.len() ≤ MAX_METER_ID_LEN` else `MeterIdTooLong` (`programs/oracle/src/lib.rs:90`–`programs/oracle/src/lib.rs:93`). The error itself is practically unreachable — the `meter_state` PDA seed `[b"meter", meter_id.as_bytes()]` already rejects identifiers longer than 32 bytes with `MaxSeedLengthExceeded` during account validation — but the check is kept deliberately as the explicit precondition that keeps the fixed-size copy into `id_bytes` provably panic-free without reasoning about seed limits (`programs/oracle/src/lib.rs:84`–`programs/oracle/src/lib.rs:89`).
-  - `oracle_data.active == 1` else `OracleInactive` (`programs/oracle/src/lib.rs:98`).
-  - Signer is the configured chain bridge else `UnauthorizedGateway` (`programs/oracle/src/lib.rs:100`–`programs/oracle/src/lib.rs:103`).
-  - `reading_timestamp ≤ now + 60` else `FutureReading` (`programs/oracle/src/lib.rs:108`–`programs/oracle/src/lib.rs:111`).
-  - If the meter already has readings: `reading_timestamp` strictly greater than the last (`OutdatedReading`) and at least `min_reading_interval` seconds beyond it (`RateLimitExceeded`) (`programs/oracle/src/lib.rs:114`–`programs/oracle/src/lib.rs:123`).
-  - `validate_meter_reading` passes: each non-zero value ≥ `min_energy_value`, both values ≤ `max_energy_value` (`EnergyValueOutOfRange`); when anomaly detection is on and consumption is non-zero, `energy_produced × 100 ≤ max_production_consumption_ratio × energy_consumed` (`AnomalousReading`), evaluated by integer cross-multiplication (`programs/oracle/src/lib.rs:428`–`programs/oracle/src/lib.rs:475`).
-- **Effects:** On first use, populates `meter_id`, `meter_id_len`, `bump`, and `created_at`. On every call updates `zone_id` (permitting meter relocation), the latest and cumulative production/consumption (saturating), `last_reading_timestamp`, and `total_readings` (`programs/oracle/src/lib.rs:148`–`programs/oracle/src/lib.rs:167`).
-- **Events:** `MeterReadingSubmitted` on success (`programs/oracle/src/lib.rs:169`); `MeterReadingRejected` is emitted from the validation error path before propagating the error (`programs/oracle/src/lib.rs:130`–`programs/oracle/src/lib.rs:140`).
+  - `meter_id.len() ≤ MAX_METER_ID_LEN` else `MeterIdTooLong` (`programs/oracle/src/instructions/submit_meter_reading.rs:44`–`programs/oracle/src/instructions/submit_meter_reading.rs:47`). The error itself is practically unreachable — the `meter_state` PDA seed `[b"meter", meter_id.as_bytes()]` already rejects identifiers longer than 32 bytes with `MaxSeedLengthExceeded` during account validation — but the check is kept deliberately as the explicit precondition that keeps the fixed-size copy into `id_bytes` provably panic-free without reasoning about seed limits (`programs/oracle/src/instructions/submit_meter_reading.rs:38`–`programs/oracle/src/instructions/submit_meter_reading.rs:43`).
+  - `oracle_data.active == 1` else `OracleInactive` (`programs/oracle/src/instructions/submit_meter_reading.rs:52`).
+  - Signer is the configured chain bridge else `UnauthorizedGateway` (`programs/oracle/src/instructions/submit_meter_reading.rs:54`–`programs/oracle/src/instructions/submit_meter_reading.rs:57`).
+  - `reading_timestamp ≤ now + 60` else `FutureReading` (`programs/oracle/src/instructions/submit_meter_reading.rs:62`–`programs/oracle/src/instructions/submit_meter_reading.rs:65`).
+  - If the meter already has readings: `reading_timestamp` strictly greater than the last (`OutdatedReading`) and at least `min_reading_interval` seconds beyond it (`RateLimitExceeded`) (`programs/oracle/src/instructions/submit_meter_reading.rs:68`–`programs/oracle/src/instructions/submit_meter_reading.rs:77`).
+  - `validate_meter_reading` passes: each non-zero value ≥ `min_energy_value`, both values ≤ `max_energy_value` (`EnergyValueOutOfRange`); when anomaly detection is on and consumption is non-zero, `energy_produced × 100 ≤ max_production_consumption_ratio × energy_consumed` (`AnomalousReading`), evaluated by integer cross-multiplication (`programs/oracle/src/instructions/submit_meter_reading.rs:136`–`programs/oracle/src/instructions/submit_meter_reading.rs:183`).
+- **Effects:** On first use, populates `meter_id`, `meter_id_len`, `bump`, and `created_at`. On every call updates `zone_id` (permitting meter relocation), the latest and cumulative production/consumption (saturating), `last_reading_timestamp`, and `total_readings` (`programs/oracle/src/instructions/submit_meter_reading.rs:103`–`programs/oracle/src/instructions/submit_meter_reading.rs:121`).
+- **Events:** `MeterReadingSubmitted` on success (`programs/oracle/src/instructions/submit_meter_reading.rs:123`); `MeterReadingRejected` is emitted from the validation error path before propagating the error (`programs/oracle/src/instructions/submit_meter_reading.rs:84`–`programs/oracle/src/instructions/submit_meter_reading.rs:94`).
 - **Errors:** `MeterIdTooLong`, `OracleInactive`, `UnauthorizedGateway`, `FutureReading`, `OutdatedReading`, `RateLimitExceeded`, `EnergyValueOutOfRange`, `AnomalousReading`, `InvalidConfiguration` (from the multiplication overflow guards).
 
 ### 4.3 `trigger_market_clearing`
 
-- **Signature:** `trigger_market_clearing(ctx, epoch_timestamp: i64)` (`programs/oracle/src/lib.rs:183`).
-- **Accounts (`TriggerMarketClearing`, `programs/oracle/src/lib.rs:531`):** `oracle_data` (`mut` PDA); `authority` (signer); `aggregator_entry` (optional `UncheckedAccount`, validated in-handler).
+- **Signature:** `trigger_market_clearing(ctx, epoch_timestamp: i64)` (`programs/oracle/src/lib.rs:74`).
+- **Accounts (`TriggerMarketClearing`, `programs/oracle/src/instructions/trigger_market_clearing.rs:9`):** `oracle_data` (`mut` PDA); `authority` (signer); `aggregator_entry` (optional `UncheckedAccount`, validated in-handler).
 - **Signers:** `authority` — either the chain bridge or an admitted aggregator (Section 6).
-- **Preconditions:** `oracle_data.active == 1` (`OracleInactive`); `authorize_node_caller` passes; `epoch_timestamp > last_cleared_epoch`, `epoch_timestamp ≤ now`, and `epoch_timestamp % 900 == 0` (all `InvalidEpoch`) (`programs/oracle/src/lib.rs:190`–`programs/oracle/src/lib.rs:214`).
-- **Effects:** Sets `last_clearing = now` and `last_cleared_epoch = epoch_timestamp` (`programs/oracle/src/lib.rs:216`–`programs/oracle/src/lib.rs:217`).
-- **Events:** `MarketClearingTriggered` (`programs/oracle/src/lib.rs:219`).
+- **Preconditions:** `oracle_data.active == 1` (`OracleInactive`); `authorize_node_caller` passes; `epoch_timestamp > last_cleared_epoch`, `epoch_timestamp ≤ now`, and `epoch_timestamp % 900 == 0` (all `InvalidEpoch`) (`programs/oracle/src/instructions/trigger_market_clearing.rs:26`–`programs/oracle/src/instructions/trigger_market_clearing.rs:50`).
+- **Effects:** Sets `last_clearing = now` and `last_cleared_epoch = epoch_timestamp` (`programs/oracle/src/instructions/trigger_market_clearing.rs:52`–`programs/oracle/src/instructions/trigger_market_clearing.rs:53`).
+- **Events:** `MarketClearingTriggered` (`programs/oracle/src/instructions/trigger_market_clearing.rs:55`).
 - **Errors:** `OracleInactive`, `InvalidEpoch`, `UnauthorizedGateway`, `AggregatorNotAdmitted`.
 
 ### 4.4 `update_oracle_status`
 
-- **Signature:** `update_oracle_status(ctx, active: bool)` (`programs/oracle/src/lib.rs:230`).
-- **Accounts (`UpdateOracleStatus`, `programs/oracle/src/lib.rs:543`):** `oracle_data` (`mut` PDA); `authority` (signer).
-- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/lib.rs:233`, helper at `programs/oracle/src/lib.rs:397`–`programs/oracle/src/lib.rs:399`).
-- **Effects:** Sets `active` to 1 or 0 (`programs/oracle/src/lib.rs:235`).
-- **Events:** `OracleStatusUpdated`, with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/lib.rs:239`–`programs/oracle/src/lib.rs:244`).
+- **Signature:** `update_oracle_status(ctx, active: bool)` (`programs/oracle/src/lib.rs:84`).
+- **Accounts (`UpdateOracleStatus`, `programs/oracle/src/instructions/update_oracle_status.rs:8`):** `oracle_data` (`mut` PDA); `authority` (signer).
+- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/instructions/update_oracle_status.rs:17`, helper at `programs/oracle/src/lib.rs:155`–`programs/oracle/src/lib.rs:157`).
+- **Effects:** Sets `active` to 1 or 0 (`programs/oracle/src/instructions/update_oracle_status.rs:19`).
+- **Events:** `OracleStatusUpdated`, with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/instructions/update_oracle_status.rs:23`–`programs/oracle/src/instructions/update_oracle_status.rs:28`).
 - **Errors:** `UnauthorizedAuthority`.
 
 ### 4.5 `update_api_gateway`
 
-- **Signature:** `update_api_gateway(ctx, new_api_gateway: Pubkey)` (`programs/oracle/src/lib.rs:251`).
-- **Accounts (`UpdateApiGateway`, `programs/oracle/src/lib.rs:551`):** `oracle_data` (`mut` PDA); `authority` (signer).
-- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/lib.rs:257`, helper at `programs/oracle/src/lib.rs:397`–`programs/oracle/src/lib.rs:399`).
-- **Effects:** Replaces `chain_bridge` with `new_api_gateway` (`programs/oracle/src/lib.rs:259`–`programs/oracle/src/lib.rs:260`).
-- **Events:** `ApiGatewayUpdated` (carrying old and new keys), with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/lib.rs:263`–`programs/oracle/src/lib.rs:269`).
+- **Signature:** `update_api_gateway(ctx, new_api_gateway: Pubkey)` (`programs/oracle/src/lib.rs:91`).
+- **Accounts (`UpdateApiGateway`, `programs/oracle/src/instructions/update_api_gateway.rs:8`):** `oracle_data` (`mut` PDA); `authority` (signer).
+- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/instructions/update_api_gateway.rs:20`, helper at `programs/oracle/src/lib.rs:155`–`programs/oracle/src/lib.rs:157`).
+- **Effects:** Replaces `chain_bridge` with `new_api_gateway` (`programs/oracle/src/instructions/update_api_gateway.rs:22`–`programs/oracle/src/instructions/update_api_gateway.rs:23`).
+- **Events:** `ApiGatewayUpdated` (carrying old and new keys), with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/instructions/update_api_gateway.rs:26`–`programs/oracle/src/instructions/update_api_gateway.rs:32`).
 - **Errors:** `UnauthorizedAuthority`.
 
 ### 4.6 `update_production_ratio_config`
 
-- **Signature:** `update_production_ratio_config(ctx, max_production_consumption_ratio: u16)` (`programs/oracle/src/lib.rs:277`).
-- **Accounts (`UpdateValidationConfig`, `programs/oracle/src/lib.rs:559`):** `oracle_data` (`mut` PDA); `authority` (signer).
-- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/lib.rs:283`, helper at `programs/oracle/src/lib.rs:397`–`programs/oracle/src/lib.rs:399`).
-- **Preconditions:** `max_production_consumption_ratio > 0` else `InvalidConfiguration` (`programs/oracle/src/lib.rs:285`–`programs/oracle/src/lib.rs:288`).
-- **Effects:** Updates `max_production_consumption_ratio` (`programs/oracle/src/lib.rs:290`).
-- **Events:** `ProductionRatioConfigUpdated`, with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/lib.rs:293`–`programs/oracle/src/lib.rs:298`).
+- **Signature:** `update_production_ratio_config(ctx, max_production_consumption_ratio: u16)` (`programs/oracle/src/lib.rs:102`).
+- **Accounts (`UpdateValidationConfig`, `programs/oracle/src/instructions/update_validation_config.rs:11`):** `oracle_data` (`mut` PDA); `authority` (signer).
+- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/instructions/update_validation_config.rs:52`, helper at `programs/oracle/src/lib.rs:155`–`programs/oracle/src/lib.rs:157`).
+- **Preconditions:** `max_production_consumption_ratio > 0` else `InvalidConfiguration` (`programs/oracle/src/instructions/update_validation_config.rs:54`–`programs/oracle/src/instructions/update_validation_config.rs:57`).
+- **Effects:** Updates `max_production_consumption_ratio` (`programs/oracle/src/instructions/update_validation_config.rs:59`).
+- **Events:** `ProductionRatioConfigUpdated`, with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/instructions/update_validation_config.rs:62`–`programs/oracle/src/instructions/update_validation_config.rs:67`).
 - **Errors:** `UnauthorizedAuthority`, `InvalidConfiguration`.
 
 ### 4.7 `update_validation_config`
 
-- **Signature:** `update_validation_config(ctx, min_energy_value: u64, max_energy_value: u64, anomaly_detection_enabled: bool)` (`programs/oracle/src/lib.rs:304`).
-- **Accounts (`UpdateValidationConfig`, `programs/oracle/src/lib.rs:559`):** `oracle_data` (`mut` PDA); `authority` (signer). (Shares the `UpdateValidationConfig` accounts struct with §4.6.)
-- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/lib.rs:312`, helper at `programs/oracle/src/lib.rs:397`–`programs/oracle/src/lib.rs:399`).
-- **Preconditions:** `min_energy_value ≤ max_energy_value` else `InvalidConfiguration` — guards against inverted bounds that would reject every reading (`programs/oracle/src/lib.rs:315`–`programs/oracle/src/lib.rs:318`).
-- **Effects:** Updates `min_energy_value`, `max_energy_value`, and `anomaly_detection_enabled` (`programs/oracle/src/lib.rs:320`–`programs/oracle/src/lib.rs:322`).
-- **Events:** `ValidationConfigUpdated`, with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/lib.rs:325`–`programs/oracle/src/lib.rs:329`).
+- **Signature:** `update_validation_config(ctx, min_energy_value: u64, max_energy_value: u64, anomaly_detection_enabled: bool)` (`programs/oracle/src/lib.rs:112`).
+- **Accounts (`UpdateValidationConfig`, `programs/oracle/src/instructions/update_validation_config.rs:11`):** `oracle_data` (`mut` PDA); `authority` (signer). (Shares the `UpdateValidationConfig` accounts struct with §4.6.)
+- **Signers:** `authority` — must equal `oracle_data.authority` else `UnauthorizedAuthority`, enforced via the shared `require_oracle_admin` helper (`programs/oracle/src/instructions/update_validation_config.rs:25`, helper at `programs/oracle/src/lib.rs:155`–`programs/oracle/src/lib.rs:157`).
+- **Preconditions:** `min_energy_value ≤ max_energy_value` else `InvalidConfiguration` — guards against inverted bounds that would reject every reading (`programs/oracle/src/instructions/update_validation_config.rs:28`–`programs/oracle/src/instructions/update_validation_config.rs:31`).
+- **Effects:** Updates `min_energy_value`, `max_energy_value`, and `anomaly_detection_enabled` (`programs/oracle/src/instructions/update_validation_config.rs:33`–`programs/oracle/src/instructions/update_validation_config.rs:35`).
+- **Events:** `ValidationConfigUpdated`, with `Clock::get()` hoisted into a local before `emit!` per invariant #5 (`programs/oracle/src/instructions/update_validation_config.rs:38`–`programs/oracle/src/instructions/update_validation_config.rs:42`).
 - **Errors:** `UnauthorizedAuthority`, `InvalidConfiguration`.
 
 ### 4.8 `aggregate_readings`
 
-- **Signature:** `aggregate_readings(ctx, total_produced: u64, total_consumed: u64, valid_count: u64, rejected_count: u64)` (`programs/oracle/src/lib.rs:339`).
-- **Accounts (`AggregateReadings`, `programs/oracle/src/lib.rs:519`):** `oracle_data` (`mut` PDA); `authority` (signer); `aggregator_entry` (optional `UncheckedAccount`).
+- **Signature:** `aggregate_readings(ctx, total_produced: u64, total_consumed: u64, valid_count: u64, rejected_count: u64)` (`programs/oracle/src/lib.rs:132`).
+- **Accounts (`AggregateReadings`, `programs/oracle/src/instructions/aggregate_readings.rs:9`):** `oracle_data` (`mut` PDA); `authority` (signer); `aggregator_entry` (optional `UncheckedAccount`).
 - **Signers:** `authority` — chain bridge or admitted aggregator (Section 6).
-- **Preconditions:** `oracle_data.active == 1` (`OracleInactive`); `authorize_node_caller` passes (`programs/oracle/src/lib.rs:349`–`programs/oracle/src/lib.rs:355`).
-- **Effects:** Folds batch totals into the global counters with saturating arithmetic — `total_global_energy_produced`, `total_global_energy_consumed`, `total_valid_readings`, `total_rejected_readings`, `total_readings`, and `last_reading_timestamp` — then recomputes `last_quality_score` as `valid × 100 / (valid + rejected)` capped at 100 (`programs/oracle/src/lib.rs:361`–`programs/oracle/src/lib.rs:377`). The single `Clock::get()` is reused for both timestamp fields and the event (`programs/oracle/src/lib.rs:357`–`programs/oracle/src/lib.rs:359`).
-- **Events:** `ReadingsAggregated` (`programs/oracle/src/lib.rs:379`).
+- **Preconditions:** `oracle_data.active == 1` (`OracleInactive`); `authorize_node_caller` passes (`programs/oracle/src/instructions/aggregate_readings.rs:29`–`programs/oracle/src/instructions/aggregate_readings.rs:35`).
+- **Effects:** Folds batch totals into the global counters with saturating arithmetic — `total_global_energy_produced`, `total_global_energy_consumed`, `total_valid_readings`, `total_rejected_readings`, `total_readings`, and `last_reading_timestamp` — then recomputes `last_quality_score` as `valid × 100 / (valid + rejected)` capped at 100 (`programs/oracle/src/instructions/aggregate_readings.rs:41`–`programs/oracle/src/instructions/aggregate_readings.rs:57`). The single `Clock::get()` is reused for both timestamp fields and the event (`programs/oracle/src/instructions/aggregate_readings.rs:37`–`programs/oracle/src/instructions/aggregate_readings.rs:39`).
+- **Events:** `ReadingsAggregated` (`programs/oracle/src/instructions/aggregate_readings.rs:59`).
 - **Errors:** `OracleInactive`, `UnauthorizedGateway`, `AggregatorNotAdmitted`.
 
 ---
@@ -197,39 +197,39 @@ The program exposes eight instructions, all defined in the `#[program] mod oracl
 
 ### 5.1 Per-meter PDA isolation (Sealevel parallelism)
 
-Meter readings are written to per-meter `MeterState` PDAs keyed by `[b"meter", meter_id.as_bytes()]`, while `oracle_data` is loaded read-only on the submit path (`programs/oracle/src/lib.rs:96`, `programs/oracle/src/lib.rs:499`). Because submissions for distinct meters touch disjoint write sets, the Sealevel scheduler can execute them in parallel. The source records an explicit caveat: the per-transaction fee payer — the chain-bridge authority, which is also the `mut` rent payer — is always write-locked, so submissions sharing one gateway signer still serialize; per-meter PDAs only parallelize across distinct fee payers (`programs/oracle/src/lib.rs:70`–`programs/oracle/src/lib.rs:74`). Global totals are deliberately kept off the hot path and reconciled in batch by `aggregate_readings`, consistent with the repository's "stale-on-purpose global totals" rule.
+Meter readings are written to per-meter `MeterState` PDAs keyed by `[b"meter", meter_id.as_bytes()]`, while `oracle_data` is loaded read-only on the submit path (`programs/oracle/src/instructions/submit_meter_reading.rs:50`, `programs/oracle/src/instructions/submit_meter_reading.rs:11`). Because submissions for distinct meters touch disjoint write sets, the Sealevel scheduler can execute them in parallel. The source records an explicit caveat: the per-transaction fee payer — the chain-bridge authority, which is also the `mut` rent payer — is always write-locked, so submissions sharing one gateway signer still serialize; per-meter PDAs only parallelize across distinct fee payers (`programs/oracle/src/lib.rs:49`–`programs/oracle/src/lib.rs:52`). Global totals are deliberately kept off the hot path and reconciled in batch by `aggregate_readings`, consistent with the repository's "stale-on-purpose global totals" rule.
 
 ### 5.2 Reading-validity invariants
 
-For an accepted reading: timestamps are monotonically increasing per meter (`OutdatedReading`), respect the configured minimum interval (`RateLimitExceeded`), and never exceed `now + 60` seconds (`FutureReading`) (`programs/oracle/src/lib.rs:108`–`programs/oracle/src/lib.rs:123`). Energy magnitudes stay within `[min_energy_value, max_energy_value]` — with the lower bound applied only to non-zero values so unilateral (produce-only or consume-only) meters remain valid — and, when anomaly detection is enabled, satisfy the cross-multiplied production/consumption ratio bound (`programs/oracle/src/lib.rs:428`–`programs/oracle/src/lib.rs:475`). The ratio check uses integer cross-multiplication rather than floating-point division, with `checked_mul` guards that surface `InvalidConfiguration` on overflow (`programs/oracle/src/lib.rs:462`–`programs/oracle/src/lib.rs:470`).
+For an accepted reading: timestamps are monotonically increasing per meter (`OutdatedReading`), respect the configured minimum interval (`RateLimitExceeded`), and never exceed `now + 60` seconds (`FutureReading`) (`programs/oracle/src/instructions/submit_meter_reading.rs:62`–`programs/oracle/src/instructions/submit_meter_reading.rs:77`). Energy magnitudes stay within `[min_energy_value, max_energy_value]` — with the lower bound applied only to non-zero values so unilateral (produce-only or consume-only) meters remain valid — and, when anomaly detection is enabled, satisfy the cross-multiplied production/consumption ratio bound (`programs/oracle/src/instructions/submit_meter_reading.rs:136`–`programs/oracle/src/instructions/submit_meter_reading.rs:183`). The ratio check uses integer cross-multiplication rather than floating-point division, with `checked_mul` guards that surface `InvalidConfiguration` on overflow (`programs/oracle/src/instructions/submit_meter_reading.rs:170`–`programs/oracle/src/instructions/submit_meter_reading.rs:178`).
 
 ### 5.3 Epoch logic
 
-`trigger_market_clearing` enforces three conjoined constraints that together prevent replay, stale, and arbitrary epochs: `epoch_timestamp` must be strictly greater than `last_cleared_epoch` (no re-clearing), must not exceed `now` (no future clearing), and must be aligned to a 900-second boundary (`epoch_timestamp % 900 == 0`) so an "epoch" cannot be an arbitrary instant (`programs/oracle/src/lib.rs:201`–`programs/oracle/src/lib.rs:214`). `last_cleared_epoch` is advanced monotonically (`programs/oracle/src/lib.rs:217`).
+`trigger_market_clearing` enforces three conjoined constraints that together prevent replay, stale, and arbitrary epochs: `epoch_timestamp` must be strictly greater than `last_cleared_epoch` (no re-clearing), must not exceed `now` (no future clearing), and must be aligned to a 900-second boundary (`epoch_timestamp % 900 == 0`) so an "epoch" cannot be an arbitrary instant (`programs/oracle/src/instructions/trigger_market_clearing.rs:37`–`programs/oracle/src/instructions/trigger_market_clearing.rs:50`). `last_cleared_epoch` is advanced monotonically (`programs/oracle/src/instructions/trigger_market_clearing.rs:53`).
 
 ### 5.4 Authorization
 
-Administrative instructions (`update_oracle_status`, `update_api_gateway`, `update_production_ratio_config`, `update_validation_config`) require the signer to equal `oracle_data.authority` (`UnauthorizedAuthority`). This check is centralized in a single helper, `require_oracle_admin`, that all four handlers call so the gate can never drift between them (`programs/oracle/src/lib.rs:397`–`programs/oracle/src/lib.rs:400`). The submit path requires the signer to equal `oracle_data.chain_bridge` (`UnauthorizedGateway`). The node-facing batch/clearing instructions accept the chain bridge or a governance-admitted aggregator, validated by `authorize_node_caller` (Section 6).
+Administrative instructions (`update_oracle_status`, `update_api_gateway`, `update_production_ratio_config`, `update_validation_config`) require the signer to equal `oracle_data.authority` (`UnauthorizedAuthority`). This check is centralized in a single helper, `require_oracle_admin`, that all four handlers call so the gate can never drift between them (`programs/oracle/src/lib.rs:155`–`programs/oracle/src/lib.rs:158`). The submit path requires the signer to equal `oracle_data.chain_bridge` (`UnauthorizedGateway`). The node-facing batch/clearing instructions accept the chain bridge or a governance-admitted aggregator, validated by `authorize_node_caller` (Section 6).
 
 ### 5.5 Arithmetic safety
 
-The release profile sets `overflow-checks = true`, so bare arithmetic panics rather than silently wrapping (`programs/oracle/Cargo.toml:34`–`programs/oracle/Cargo.toml:35`). In addition, cumulative counters use `saturating_add`/`saturating_mul` (`programs/oracle/src/lib.rs:164`–`programs/oracle/src/lib.rs:167`, `programs/oracle/src/lib.rs:361`–`programs/oracle/src/lib.rs:372`), the quality-score division uses `checked_div(...).unwrap_or(0)` (`programs/oracle/src/lib.rs:373`–`programs/oracle/src/lib.rs:374`), and the rate-limit comparison uses `saturating_add` on the interval (`programs/oracle/src/lib.rs:120`).
+The release profile sets `overflow-checks = true`, so bare arithmetic panics rather than silently wrapping (`programs/oracle/Cargo.toml:34`–`programs/oracle/Cargo.toml:35`). In addition, cumulative counters use `saturating_add`/`saturating_mul` (`programs/oracle/src/instructions/submit_meter_reading.rs:118`–`programs/oracle/src/instructions/submit_meter_reading.rs:121`, `programs/oracle/src/instructions/aggregate_readings.rs:41`–`programs/oracle/src/instructions/aggregate_readings.rs:52`), the quality-score division uses `checked_div(...).unwrap_or(0)` (`programs/oracle/src/instructions/aggregate_readings.rs:53`–`programs/oracle/src/instructions/aggregate_readings.rs:54`), and the rate-limit comparison uses `saturating_add` on the interval (`programs/oracle/src/instructions/submit_meter_reading.rs:74`).
 
-Per invariant #5, `Clock::get()` is hoisted into a local binding before each `emit!` rather than being invoked inside the macro expansion — applied across the four admin handlers (`programs/oracle/src/lib.rs:239`, `programs/oracle/src/lib.rs:263`, `programs/oracle/src/lib.rs:293`, `programs/oracle/src/lib.rs:325`) and `aggregate_readings`, where a single `Clock::get()` is reused for both timestamp fields and the event (`programs/oracle/src/lib.rs:357`–`programs/oracle/src/lib.rs:359`).
+Per invariant #5, `Clock::get()` is hoisted into a local binding before each `emit!` rather than being invoked inside the macro expansion — applied across the four admin handlers (`programs/oracle/src/instructions/update_oracle_status.rs:23`, `programs/oracle/src/instructions/update_api_gateway.rs:26`, `programs/oracle/src/instructions/update_validation_config.rs:62`, `programs/oracle/src/instructions/update_validation_config.rs:38`) and `aggregate_readings`, where a single `Clock::get()` is reused for both timestamp fields and the event (`programs/oracle/src/instructions/aggregate_readings.rs:37`–`programs/oracle/src/instructions/aggregate_readings.rs:39`).
 
 ---
 
 ## 6. Cross-Program Interfaces (CPI)
 
-The oracle does **not** invoke any other program. Its only inter-program coupling is a read-side validation against the `governance` program, performed in-process via `authorize_node_caller` (`programs/oracle/src/lib.rs:405`–`programs/oracle/src/lib.rs:425`).
+The oracle does **not** invoke any other program. Its only inter-program coupling is a read-side validation against the `governance` program, performed in-process via `authorize_node_caller` (`programs/oracle/src/lib.rs:163`–`programs/oracle/src/lib.rs:183`).
 
 The authorization algorithm for `trigger_market_clearing` and `aggregate_readings` is:
 
-1. If the signer equals `oracle_data.chain_bridge`, authorize immediately (`programs/oracle/src/lib.rs:410`–`programs/oracle/src/lib.rs:412`).
-2. Otherwise an `aggregator_entry` account must be supplied, or `UnauthorizedGateway` is returned (`programs/oracle/src/lib.rs:413`).
-3. The supplied account must be owned by `governance::ID`, else `AggregatorNotAdmitted` (`programs/oracle/src/lib.rs:414`).
-4. Its address must equal the PDA derived from `[b"aggregator", signer.as_ref()]` under `governance::ID`, else `AggregatorNotAdmitted` — binding the entry to the actual signer (`programs/oracle/src/lib.rs:415`–`programs/oracle/src/lib.rs:417`).
-5. The account is deserialized as a `governance::AggregatorEntry` and must satisfy `entry.active && entry.aggregator == signer`, else `AggregatorNotAdmitted` (`programs/oracle/src/lib.rs:418`–`programs/oracle/src/lib.rs:423`).
+1. If the signer equals `oracle_data.chain_bridge`, authorize immediately (`programs/oracle/src/lib.rs:168`–`programs/oracle/src/lib.rs:170`).
+2. Otherwise an `aggregator_entry` account must be supplied, or `UnauthorizedGateway` is returned (`programs/oracle/src/lib.rs:171`).
+3. The supplied account must be owned by `governance::ID`, else `AggregatorNotAdmitted` (`programs/oracle/src/lib.rs:172`).
+4. Its address must equal the PDA derived from `[b"aggregator", signer.as_ref()]` under `governance::ID`, else `AggregatorNotAdmitted` — binding the entry to the actual signer (`programs/oracle/src/lib.rs:173`–`programs/oracle/src/lib.rs:175`).
+5. The account is deserialized as a `governance::AggregatorEntry` and must satisfy `entry.active && entry.aggregator == signer`, else `AggregatorNotAdmitted` (`programs/oracle/src/lib.rs:176`–`programs/oracle/src/lib.rs:181`).
 
 This relies on the governance type contract: `AggregatorEntry` is a one-PDA-per-aggregator allow-list entry with seeds `[b"aggregator", aggregator.as_ref()]` and an `active` flag (`programs/governance/src/state/aggregator.rs:3`–`programs/governance/src/state/aggregator.rs:21`). The dependency therefore supplies only the program ID and the account type for deserialization — there is no instruction invocation into governance (`programs/oracle/Cargo.toml:28`–`programs/oracle/Cargo.toml:30`).
 
@@ -275,6 +275,6 @@ All errors are defined in the `OracleError` enum (`programs/oracle/src/error.rs:
 
 ## 9. Testing
 
-The crate carries an in-crate unit-test module, `validate_meter_reading_tests`, that exercises the pure, stateless `validate_meter_reading` validator directly (`programs/oracle/src/lib.rs:566`–`programs/oracle/src/lib.rs:676`). Because `OracleData` is zero-copy/`Pod`, the tests construct it as a host struct literal — no on-chain account or validator is needed. Its eleven cases lock in the edge semantics documented in Section 5.2: a zero produced/consumed value bypasses the `min_energy_value` bound (unilateral meters), the production/consumption ratio boundary is inclusive (`≤`), `energy_consumed == 0` skips the ratio check entirely, disabling anomaly detection allows any ratio, and both `checked_mul` overflow branches (`produced × 100` and `max_ratio × consumed`) surface `InvalidConfiguration` rather than wrapping. Assertions compare Anchor error codes rather than display strings. Run with `cargo test` inside `programs/oracle`.
+The crate carries an in-crate unit-test module, `validate_meter_reading_tests`, that exercises the pure, stateless `validate_meter_reading` validator directly (`programs/oracle/src/instructions/submit_meter_reading.rs:185`–`programs/oracle/src/instructions/submit_meter_reading.rs:295`). Because `OracleData` is zero-copy/`Pod`, the tests construct it as a host struct literal — no on-chain account or validator is needed. Its eleven cases lock in the edge semantics documented in Section 5.2: a zero produced/consumed value bypasses the `min_energy_value` bound (unilateral meters), the production/consumption ratio boundary is inclusive (`≤`), `energy_consumed == 0` skips the ratio check entirely, disabling anomaly detection allows any ratio, and both `checked_mul` overflow branches (`produced × 100` and `max_ratio × consumed`) surface `InvalidConfiguration` rather than wrapping. Assertions compare Anchor error codes rather than display strings. Run with `cargo test` inside `programs/oracle`.
 
-The integration suite is `tests/oracle.ts`, executed via the npm script `test:oracle`, which runs `anchor test tests/oracle.ts` (`package.json:14`). Per the repository conventions, `anchor test` builds the programs, spins up a test validator, deploys, and runs the Mocha suite; on Anchor 1.0 the validator is `surfpool`. The single-file Mocha invocation is `npx mocha -r tsx tests/oracle.ts --timeout 1000000` against an already-running validator.
+There is no longer a dedicated integration suite: `tests/oracle.ts` (and its `test:oracle` npm script) was removed together with the rest of the per-suite `tests/*.ts` files in commit `b2021fb`, and none of the remaining in-process litesvm suites exercises the oracle program directly. On-chain exercise now comes from the validator-gated scripts: `scripts/init-oracle.ts` initializes the `OracleData` singleton (`scripts/init-oracle.ts:30`), and `scripts/bench-meter-throughput.ts` drives `submit_meter_reading` from many distinct meters over multiple epochs (`scripts/bench-meter-throughput.ts:4`).

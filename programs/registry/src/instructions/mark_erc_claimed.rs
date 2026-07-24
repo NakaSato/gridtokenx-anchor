@@ -17,11 +17,15 @@ pub struct MarkErcClaimed<'info> {
 pub fn mark_erc_claimed(ctx: Context<MarkErcClaimed>, amount: u64) -> Result<()> {
     let mut meter = ctx.accounts.meter_account.load_mut()?;
 
-    // Authorization check - usually either the registry authority or a specific governance program
+    // Authorization: registry authority ONLY. The sole caller is governance `issue_erc`
+    // via CPI, which already forces its signer == registry.authority (issue_erc.rs
+    // registry-authority cross-check), so no legitimate path needs oracle_authority here.
+    // Accepting oracle_authority previously let the oracle key grief producers by
+    // inflating claimed_erc_generation (denying future REC issuance / GRID settlement),
+    // with no ERC minted. Dropped.
     let registry = ctx.accounts.registry.load()?;
     require!(
-        ctx.accounts.authority.key() == registry.authority
-            || ctx.accounts.authority.key() == registry.oracle_authority,
+        ctx.accounts.authority.key() == registry.authority,
         RegistryError::UnauthorizedAuthority
     );
 

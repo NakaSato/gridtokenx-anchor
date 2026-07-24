@@ -106,4 +106,6 @@ pub enum TradingError {
     DuplicateShard,
     #[msg("Shard does not belong to the given zone market")]
     ShardZoneMismatch,
+    #[msg("Referenced ERC certificate is not owned by the order seller")]
+    ErcOwnerMismatch,
 }

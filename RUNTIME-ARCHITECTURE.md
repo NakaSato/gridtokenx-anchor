@@ -54,10 +54,10 @@ to a **per-entity PDA** so that unrelated users/meters/orders never contend:
 
 | Hot path | Per-entity account | Seeds | Where |
 | :--- | :--- | :--- | :--- |
-| Meter telemetry | `MeterState` | `[b"meter", meter_id]` | `programs/oracle/src/lib.rs:473` |
-| Order placement | `Order` | `[b"order", authority, order_id]` | `programs/trading/src/lib.rs:1435` |
+| Meter telemetry | `MeterState` | `[b"meter", meter_id]` | `programs/oracle/src/instructions/submit_meter_reading.rs:19` |
+| Order placement | `Order` | `[b"order", authority, order_id]` | `programs/trading/src/instructions/create_sell_order.rs:13` |
 | Settlement replay guard | `OrderNullifier` | `[b"nullifier", user, order_id]` | `programs/trading/src/instructions/settle_offchain.rs:112` |
-| User registration counters | `RegistryShard` ×16 | `[b"registry_shard", shard_id]` | `programs/registry/src/lib.rs:770` |
+| User registration counters | `RegistryShard` ×16 | `[b"registry_shard", shard_id]` | `programs/registry/src/instructions/register_user.rs:22` |
 | Settlement escrow | escrow PDA | `[b"escrow", user, currency_mint]` | `programs/trading/src/instructions/settle_offchain.rs:140` |
 
 Shard selection is deterministic from the signer: `key.to_bytes()[0] % 16`
@@ -177,9 +177,12 @@ partially filled across transactions but never over-filled or replayed.
 
 GRID tokens represent physical energy (1 kWh = 1 GRID), so minting is gated behind
 registered REC validators in energy-token. Validators are added/removed by the admin
-(`programs/energy-token/src/lib.rs:280`, `lib.rs:313`); when any validator is registered
-(`rec_validators_count > 0`, `lib.rs:119`), mint paths require the signing key to appear in
-the validator set (`lib.rs:127`–`128`), with the same gate on the generation-mint path (`lib.rs:203`).
+(`programs/energy-token/src/lib.rs:200`, `lib.rs:214`); every human-driven mint path
+requires a co-signer present in the validator set — membership is checked by the shared
+`rec_validator_registered` helper (`programs/energy-token/src/lib.rs:64-69`), enforced on
+`mint_to_wallet` (`programs/energy-token/src/instructions/mint_to_wallet.rs:70-84`) and the
+generation-mint path (`programs/energy-token/src/instructions/mint_generation.rs:129-141`);
+only registry CPI mints are exempt (`programs/energy-token/src/instructions/mint_tokens_direct.rs:80-86`).
 
 ### 4.5 Trust boundary summary
 

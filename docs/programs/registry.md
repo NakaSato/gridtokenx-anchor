@@ -344,6 +344,10 @@ and a compute-unit profiler under the `localnet` feature.
 - **Signers:** the user, or the admin acting for them (`lib.rs:323-329`).
 - **Preconditions:** `user_account.authority` matches the `authority`; `airdrop_claimed == 0`,
   else `AirdropAlreadyClaimed` (`lib.rs:335-339`).
+- **Account pinning:** the `energy_token_program` account is constrained to
+  `energy_token::ID`, rejecting any other program with `InvalidEnergyTokenProgram`
+  (`instructions/claim_airdrop.rs:37-39`) — the CPI target cannot be substituted, and a
+  wrong program fails fast at account validation rather than inside the CPI.
 - **Effects:** sets `airdrop_claimed = 1` **before** the CPI so the flag and the mint commit
   or roll back together (`lib.rs:331-341`); CPIs `energy_token::mint_tokens_direct` for
   `AIRDROP_AMOUNT` with the registry PDA signing (`lib.rs:343-361`).
@@ -434,15 +438,25 @@ and a compute-unit profiler under the `localnet` feature.
 - Convenience variant: runs `do_settle_meter` then CPIs
   `energy_token::mint_tokens_direct` for the settled amount, with the registry PDA signing
   (`lib.rs:688-717`).
+- **Account pinning:** as in `claim_airdrop`, the `energy_token_program` account is
+  constrained to `energy_token::ID` (`InvalidEnergyTokenProgram`,
+  `instructions/settle_and_mint_tokens.rs:36-38`).
 
 #### `mark_erc_claimed(amount)`
-- **Signer:** `authority` — must be `registry.authority` **or** `registry.oracle_authority`
-  (`lib.rs:725-730`).
+- **Signer:** `authority` — must equal `registry.authority` **only**
+  (`instructions/mark_erc_claimed.rs:26-30`). The instruction previously also accepted
+  `registry.oracle_authority`, but that path was dropped: the sole legitimate caller is
+  the governance `issue_erc` CPI, which already forces its signer to be
+  `registry.authority` (its registry-authority cross-check), so no legitimate path needs
+  the oracle key — and accepting it let a compromised oracle key grief producers by
+  inflating `claimed_erc_generation` (denying future REC issuance / GRID settlement) with
+  no ERC minted (`instructions/mark_erc_claimed.rs:20-25`).
 - **Preconditions:** `amount <= net_gen − claimed_erc_generation − settled_net_generation`
   (`NoUnsettledBalance`), so combined GRID + ERC claims never exceed net generation
-  (`lib.rs:732-740`).
-- **Effects:** saturating-adds `amount` to `claimed_erc_generation` (`lib.rs:742`).
-- **Event:** `ErcClaimed` (`lib.rs:744`).
+  (`instructions/mark_erc_claimed.rs:32-40`).
+- **Effects:** saturating-adds `amount` to `claimed_erc_generation`
+  (`instructions/mark_erc_claimed.rs:42`).
+- **Event:** `ErcClaimed` (`instructions/mark_erc_claimed.rs:44`).
 
 ### 4.4 Validation views
 
@@ -615,9 +629,12 @@ indicating that the respective account's status is `Active`.
 
 6. **Combined tokenization claims are bounded by net generation.** Both GRID settlement
    (`do_settle_meter`, `lib.rs:1276-1282`) and ERC claims (`mark_erc_claimed`,
-   `lib.rs:732-740`) subtract the other's watermark from net generation, so the sum of
-   GRID-minted and ERC-claimed energy can never exceed total net generation. This prevents
-   double-minting.
+   `instructions/mark_erc_claimed.rs:32-40`) subtract the other's watermark from net
+   generation, so the sum of GRID-minted and ERC-claimed energy can never exceed total net
+   generation. This prevents double-minting. `mark_erc_claimed` is callable by
+   `registry.authority` only (the governance `issue_erc` CPI path); the oracle key was
+   removed from its authorization so it cannot inflate `claimed_erc_generation` to deny
+   producers future issuance (`instructions/mark_erc_claimed.rs:20-30`).
 
 7. **Airdrop is exactly-once and idempotent in failure.** `claim_airdrop` sets
    `airdrop_claimed = 1` before the mint CPI, so the flag and the mint commit or roll back
@@ -659,7 +676,11 @@ In both cases the registry PDA (`[b"registry"]`) signs via
 `CpiContext::new_with_signer` with `registry_seeds = [b"registry", &[bump]]`
 (`lib.rs:352-358`, `lib.rs:694-712`). The registry PDA is supplied as the energy-token
 `authority`, `registry_authority`, and (in the airdrop case, where no REC validator is
-required) `rec_validator` accounts (`lib.rs:347-349`).
+required) `rec_validator` accounts (`lib.rs:347-349`). In both instructions the
+`energy_token_program` account is pinned by an Anchor constraint to `energy_token::ID`
+(`InvalidEnergyTokenProgram`, `instructions/claim_airdrop.rs:37-39`,
+`instructions/settle_and_mint_tokens.rs:36-38`), so the CPI can only ever target the real
+energy-token program.
 
 ### 6.2 `registry → treasury` (slash routing — token transfer, not CPI)
 
@@ -732,6 +753,7 @@ no compile-time dependency on the treasury program.
 | `InvalidMeterStatusTransition` | set_meter_status cannot set or leave Inactive; Inactive is terminal (use deactivate_meter) | `error.rs:68` |
 | `InvalidZone` | Zone id must be non-negative | `error.rs:70` |
 | `OracleTotalMismatch` | Registry energy total exceeds the oracle's own recorded total for this meter | `error.rs:72` |
+| `InvalidEnergyTokenProgram` | Provided energy-token program does not match the expected program ID | `error.rs:74` |
 
 ---
 

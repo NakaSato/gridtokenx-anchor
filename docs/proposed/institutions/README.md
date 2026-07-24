@@ -117,8 +117,8 @@ removes a trusted-key assumption, in the spirit of `role-map.md`'s regulator/ope
 
 - **Delta A — per-territory admission delegation.** `governance::admit_aggregator` today
   requires the caller to be the single `governance_config.authority`
-  ([`governance/src/contexts.rs:288`](../../../programs/governance/src/contexts.rs),
-  [`handlers/aggregator.rs:9`](../../../programs/governance/src/handlers/aggregator.rs)), so
+  ([`instructions/admit_aggregator.rs:12`](../../../programs/governance/src/instructions/admit_aggregator.rs),
+  [`:34`](../../../programs/governance/src/instructions/admit_aggregator.rs)), so
   MEA/PEA cannot admit their own territory's aggregators. Proposed: add an optional
   `admission_delegate: Option<Pubkey>` to `GovernanceConfig` (or a per-territory delegate PDA)
   and accept `authority == config.authority || signer == admission_delegate` in

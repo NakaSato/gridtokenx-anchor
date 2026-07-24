@@ -501,14 +501,15 @@ live validator with trading deployed, self-bootstrapping market/zone/shards).
 below the 13.3–13.6k meter write) yet delivers **~2.6× lower TPS than meter ingest
 at the same fleet size on the same setup** (180 vs 462 at N=10k, §9): direct
 evidence that the path is lock-bound, not compute-bound. The cause is its write-lock
-footprint: besides the shared fee-payer, `SubmitLimitOrderShardedContext` still
-declares `zone_market` as `mut` (`programs/trading/src/lib.rs:1755`) although the
-handler writes only the per-shard `zone_shard` — so every "sharded" order
-write-locks the one shared `ZoneMarket` account and the 16 shards serialize behind
-it. This is the same defect class fixed for `ShardedMatchOrdersContext` in
-`95e7cdd` (measured there: writable → 1 match/slot, read-only → 3/slot) and is the
-identified next fix; delivery loss is pure transport (23 expired, zero on-chain
-errors). (Solana 3.1.10, Apple M2, 2026-07-07; harness
+footprint: besides the shared fee-payer, `SubmitLimitOrderShardedContext` at the time
+of measurement still declared `zone_market` as `mut` although the handler writes only
+the per-shard `zone_shard` — so every "sharded" order write-locked the one shared
+`ZoneMarket` account and the 16 shards serialized behind it. This is the same defect
+class fixed for `ShardedMatchOrdersContext` in `95e7cdd` (measured there: writable →
+1 match/slot, read-only → 3/slot); the vestigial `mut` was subsequently dropped in
+`1ee4417` — `zone_market` is now read-only in the sharded submit context
+(`programs/trading/src/instructions/submit_sharded_limit_order.rs:14-18`). Delivery
+loss is pure transport (23 expired, zero on-chain errors). (Solana 3.1.10, Apple M2, 2026-07-07; harness
 `bench-trading-throughput.ts`, since removed.)
 
 ---

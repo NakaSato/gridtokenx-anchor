@@ -70,4 +70,6 @@ pub enum RegistryError {
     InvalidZone,
     #[msg("Registry energy total exceeds the oracle's own recorded total for this meter")]
     OracleTotalMismatch,
+    #[msg("Provided energy-token program does not match the expected program ID")]
+    InvalidEnergyTokenProgram,
 }

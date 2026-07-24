@@ -26,7 +26,8 @@ The §3 spike was the gate: prove the fraud-proof primitive is *cheap enough* an
   *dropped* (non-membership) via the bounding "low leaf": valid drops verify, and
   both forge classes (claim-present-absent; widen the range) are rejected — proven
   off-chain (`tests/spike_merkle_exclusion.ts`, 5/5) and on-chain
-  (`tests/spike_merkle_cu.ts`, 6/6, forge vectors revert).
+  (`tests/spike_merkle_cu.ts`, 6/6, forge vectors revert). (Both throwaway spike
+  suites were removed in the b2021fb cleanup; results recorded at the time.)
 - **CU — negligible.** On-chain inclusion verify ≈ 3 250 CU (depth 10) / 4 114
   (depth 14); exclusion ≈ 3 629 / 4 493 — ~216 CU/level. Per-challenge cost =
   the existing Ed25519 SigVerify precompile (already inside the ~85–103k settle

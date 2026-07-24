@@ -71,6 +71,13 @@ pub fn create_sell_order(
             energy_amount <= erc.energy_amount,
             TradingError::ExceedsErcAmount
         );
+        // Bind the certificate to the seller — a validated cert alone is not enough,
+        // it must belong to the order's authority (else any user's cert satisfies the gate).
+        require_keys_eq!(
+            erc.owner,
+            ctx.accounts.authority.key(),
+            TradingError::ErcOwnerMismatch
+        );
     }
 
     // Fungible REC provenance gate (opt-in via remaining_accounts[0]): when the seller

@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::do_settle_meter;
+use crate::error::RegistryError;
 use crate::state::*;
 
 #[derive(Accounts)]
@@ -32,7 +33,8 @@ pub struct SettleAndMintTokens<'info> {
     pub registry: AccountLoader<'info, Registry>,
 
     /// The energy token program
-    /// CHECK: This is validated by the CPI call
+    /// CHECK: pinned to the real energy-token program ID (fail fast; don't rely on the CPI).
+    #[account(constraint = energy_token_program.key() == energy_token::ID @ RegistryError::InvalidEnergyTokenProgram)]
     pub energy_token_program: UncheckedAccount<'info>,
 
     /// CHECK: SPL Token program

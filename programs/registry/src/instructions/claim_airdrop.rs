@@ -34,7 +34,8 @@ pub struct ClaimAirdrop<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    /// CHECK: The energy token program.
+    /// CHECK: pinned to the real energy-token program ID (fail fast; don't rely on the CPI).
+    #[account(constraint = energy_token_program.key() == energy_token::ID @ RegistryError::InvalidEnergyTokenProgram)]
     pub energy_token_program: UncheckedAccount<'info>,
 
     /// CHECK: The energy token mint.

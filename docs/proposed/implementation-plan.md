@@ -12,7 +12,7 @@ Source design docs (banner-flagged PROPOSED):
 Current code baseline (verified):
 - `treasury::record_settlement(ctx, value: u64)` → bumps one global `total_settled_thbc`. No root/VAT/zone.
 - Bond = **GRX** (`registry::stake_grx`, `MIN_VALIDATOR_STAKE`; treasury GRX yield staking, separate product).
-- Slash = GRX → single `slash_destination` (registry `slash_validator@827`), redistributed via `fund_rewards`.
+- Slash = GRX → single `slash_destination` (registry `slash_validator`, `programs/registry/src/instructions/slash_validator.rs:67`), redistributed via `fund_rewards`.
 - No Merkle / challenge-window / fraud-proof / per-zone settlement record anywhere.
 
 ---
@@ -37,15 +37,15 @@ Current code baseline (verified):
 
 Goal: replace the single-destination slash with severity-scaled, capped-victim-compensation + transparent-fund distribution. Self-contained; no Merkle/challenge needed.
 
-> **Status (code reconciled 2026-06-20, T1.3/T1.4 shipped since):** the core rework is **already implemented** in `registry::slash_validator` (`programs/registry/src/lib.rs:839`). T1.3 (multi-victim pro-rata, `slash_validator_multi`) and T1.4 (distinct fund PDA + ledger, `initialize_slash_fund`/`disburse_slash_fund`) are both **DONE** — additive, on-chain verified `tests/staking.ts` 13/13 (see their checkboxes below). All T1.1–T1.8 items are closed.
+> **Status (code reconciled 2026-06-20, T1.3/T1.4 shipped since):** the core rework is **already implemented** in `registry::slash_validator` (`programs/registry/src/instructions/slash_validator.rs:67`). T1.3 (multi-victim pro-rata, `slash_validator_multi`) and T1.4 (distinct fund PDA + ledger, `initialize_slash_fund`/`disburse_slash_fund`) are both **DONE** — additive, on-chain verified `tests/staking.ts` 13/13 (suite removed in the b2021fb tests cleanup; results recorded at the time; see their checkboxes below). All T1.1–T1.8 items are closed.
 
-- [x] T1.1 Severity fraction `σ` — implemented as a **per-call arg** `slash_bps` (1..=10000, `InvalidSlashFraction` guard), `slash_amount = bond * slash_bps / 10_000` capped at bond (`lib.rs:883`). Deviation from "registry config table": severity is **governance-attested per slash**, not a stored per-fault-class table — fits the D3 governance-attested model; revisit only if fault classes need fixed on-chain rates.
-- [x] T1.2 `compensation = min(slash_amount, proven_loss)`, fund remainder `F = slash_amount − compensation`; `proven_loss` is a governance-attested arg (`lib.rs:889`).
-- [x] T1.3 **DONE (additive).** Multi-victim pro-rata payout shipped as a NEW instruction `registry::slash_validator_multi` (`lib.rs`, ctx `SlashValidatorMulti`) — victims passed as `remaining_accounts` parallel to a `victim_losses: Vec<u64>` arg; `pool = min(slash_amount, Σloss)`, victim `i` gets `pool * loss_i / Σloss` (floor; dust → fund), fund = `slash − Σpaid`, `slash == Σpaid + fund` invariant, same Suspended/Slashed transitions + guards (`VictimCountMismatch` added). The single-victim `slash_validator` is left untouched (no interface break). On-chain verified `tests/staking.ts` 13/13 (A=3000,B=1000 pro-rata of a 10k slash, fund=6000, Active) via the typed client (registry IDL regenerated with `anchor build -p registry --ignore-keys`).
+- [x] T1.1 Severity fraction `σ` — implemented as a **per-call arg** `slash_bps` (1..=10000, `InvalidSlashFraction` guard), `slash_amount = bond * slash_bps / 10_000` capped at bond (guard `programs/registry/src/instructions/slash_validator.rs:73`; math in `compute_slash_amount`, `programs/registry/src/lib.rs:393`). Deviation from "registry config table": severity is **governance-attested per slash**, not a stored per-fault-class table — fits the D3 governance-attested model; revisit only if fault classes need fixed on-chain rates.
+- [x] T1.2 `compensation = min(slash_amount, proven_loss)`, fund remainder `F = slash_amount − compensation`; `proven_loss` is a governance-attested arg (`programs/registry/src/instructions/slash_validator.rs:94`).
+- [x] T1.3 **DONE (additive).** Multi-victim pro-rata payout shipped as a NEW instruction `registry::slash_validator_multi` (`programs/registry/src/instructions/slash_validator_multi.rs:57`, ctx `SlashValidatorMulti`) — victims passed as `remaining_accounts` parallel to a `victim_losses: Vec<u64>` arg; `pool = min(slash_amount, Σloss)`, victim `i` gets `pool * loss_i / Σloss` (floor; dust → fund), fund = `slash − Σpaid`, `slash == Σpaid + fund` invariant, same Suspended/Slashed transitions + guards (`VictimCountMismatch` added). The single-victim `slash_validator` is left untouched (no interface break). On-chain verified `tests/staking.ts` 13/13 (A=3000,B=1000 pro-rata of a 10k slash, fund=6000, Active) via the typed client (registry IDL regenerated with `anchor build -p registry --ignore-keys`).
 - [x] T1.4 **DONE (additive).** Distinct transparent fund PDA + published accounting shipped: `registry::initialize_slash_fund` creates a registry-owned GRX vault `[b"slash_fund"]` + a `SlashFundLedger` PDA `[b"slash_fund_ledger"]`; point `slash_destination` at the vault so slash remainders route in automatically (inflows = vault balance), and `registry::disburse_slash_fund(amount)` pays out (e.g. to treasury `reward_vault` for `fund_rewards`), PoA-gated + bounded by vault balance, bumping `total_disbursed`/`disbursement_count` and emitting `SlashFundDisbursed`. Single/multi slash paths unchanged (additive). On-chain verified `tests/staking.ts` 13/13: full slash → bond into fund, disburse 5k → destination + typed `SlashFundLedger.total_disbursed` delta. Called via the typed client (registry IDL regenerated; `slash_validator_multi`/`initialize_slash_fund`/`disburse_slash_fund` + `SlashFundLedger` now in the IDL).
-- [x] T1.5 Top-up demotion: partial slash leaving `remaining < MIN_VALIDATOR_STAKE` → `Suspended`; full forfeiture (`slash_bps == 10000` or `remaining == 0`) → terminal `Slashed` (`lib.rs:949`).
+- [x] T1.5 Top-up demotion: partial slash leaving `remaining < MIN_VALIDATOR_STAKE` → `Suspended`; full forfeiture (`slash_bps == 10000` or `remaining == 0`) → terminal `Slashed` (`apply_slash_status`, `programs/registry/src/lib.rs:447`).
 - [x] T1.6 Guards: only `validator_status == Active` (`NotActiveValidator`); refuse if `has_slash_destination == 0`; authority-only; destination must equal the configured one (no misroute); full slash → `Slashed` bars re-registration.
-- [x] T1.7 Invariant `slash_amount == compensation + fund_amount` enforced (`SlashAccountingMismatch`, `lib.rs:896`).
+- [x] T1.7 Invariant `slash_amount == compensation + fund_amount` enforced (`SlashAccountingMismatch`, `programs/registry/src/instructions/slash_validator.rs:103`).
 - [x] T1.8 `compute_fn!` wrap + `compute_checkpoint!` around CPIs; `Clock::get()` hoisted before `emit!`; `checked_*`/u128 math.
 
 Tests (`tests/staking.ts`):
@@ -67,17 +67,17 @@ Goal: enrich settlement recording with a tamper-evidence root + VAT audit data. 
 - [x] T2a.1 `SettlementRecord` zero-copy PDA (112B, hand-padded), seeds `[b"settlement", zone_id, batch_id]`: `merkle_root[32]`, `recorder`, `total_value`, `vat_amount`, `committed_ts`, `batch_id`, `zone_id`, `vat_rate_bps`, `bump`, `_padding`.
 - [x] T2a.2 `record_settlement_batch(value, merkle_root, vat_amount, vat_rate_bps, zone_id, batch_id)` — bumps `total_settled_thbc`, inits the per-batch `SettlementRecord`, authorized by `settlement_recorder`. VAT rate per-batch (no Treasury-struct change). `compute_fn!` + Clock hoisted.
 - [x] T2a.3 `SettlementBatchRecorded` event (value/VAT/rate/root/total).
-- [x] Tests (`tests/settlement_commitment_litesvm.ts`, litesvm, 3 passing): commit+total bump; recorder gate; duplicate-`(zone,batch)` rejected.
+- [x] Tests (`tests/settlement_commitment_litesvm.ts` — suite removed in the b2021fb tests cleanup; results recorded at the time — litesvm, 3 passing): commit+total bump; recorder gate; duplicate-`(zone,batch)` rejected.
 
 ### §2b — wire trading batch path → treasury commitment — DONE (on-chain + litesvm)
 
-> **Verification note:** the batch settle path (`SettleOffchainMatchBatchContext`) moves escrow funds and is ~20 accounts + 2 Ed25519 verify ixs per match. It is **not** litesvm-testable cheaply; its test runs under `anchor test` (live validator), like `tests/escrow_settlement.ts`. Do this task only where a validator/CI is available — compile-only is insufficient for a CPI-init account-threading change (PDA-seed / signer / account-order errors surface at runtime, not compile).
+> **Verification note:** the batch settle path (`SettleOffchainMatchBatchContext`) moves escrow funds and is ~20 accounts + 2 Ed25519 verify ixs per match. It is **not** litesvm-testable cheaply; its test ran under `anchor test` (live validator), like `tests/escrow_settlement.ts` (suite removed in the b2021fb tests cleanup; results recorded at the time). Do this task only where a validator/CI is available — compile-only is insufficient for a CPI-init account-threading change (PDA-seed / signer / account-order errors surface at runtime, not compile).
 
 - [x] T2b.1 Added args to `batch_settle_offchain_match`: `merkle_root: [u8;32]`, `vat_amount: u64`, `vat_rate_bps: u16`, `batch_id: u64`. (`zone_id` from `zone_market.zone_id`.) **(compile-verified)**
 - [x] T2b.2 Added `settlement_record: Option<UncheckedAccount>` (mut) to `SettleOffchainMatchBatchContext` (`payer`/`system_program`/`treasury_*` already present). **(compile-verified)**
 - [x] T2b.3 Post-loop treasury block now calls `treasury::cpi::record_settlement_batch(value, merkle_root, vat_amount, vat_rate_bps, zone_market.zone_id, batch_id)` with `RecordSettlementBatch { treasury, settlement_record, recorder: market_authority, payer, system_program }`, `new_with_signer`. `TreasurySettlementRequired`/`TreasuryCurrencyMismatch` preserved; `settlement_record` required when recording fires. **(compile-verified; IDL confirms args + account)**
 - [x] T2b.4 Single `settle_offchain_match` left on `record_settlement` (per-batch commitment only).
-- [x] T2b.5 Client PDA helper `settlementRecordPda(zoneId, batchId)` derives `[b"settlement", zone_id_le(u32), batch_id_le(u64)]` under the treasury program — now inlined directly in `tests/batch_settle_tps.ts` and `tests/batch_settle_thbc.ts`. **Verified** it matches the litesvm test's on-chain-confirmed derivation (`HHYQ…` for zone 301/batch 42). Wiring it into an actual batch-settle caller still needs the off-chain match flow (validator-bound).
+- [x] T2b.5 Client PDA helper `settlementRecordPda(zoneId, batchId)` derives `[b"settlement", zone_id_le(u32), batch_id_le(u64)]` under the treasury program — now inlined directly in `tests/batch_settle_tps.ts` (still in tree) and `tests/batch_settle_thbc.ts` (suite removed in the b2021fb tests cleanup; results recorded at the time). **Verified** it matches the litesvm test's on-chain-confirmed derivation (`HHYQ…` for zone 301/batch 42). Wiring it into an actual batch-settle caller still needs the off-chain match flow (validator-bound).
 
 > **Verification status:** §2b is **on-chain verified, both paths.** The **single** `settle_offchain_match` path (incl. the `record_settlement` treasury CPI) passes via `tests/escrow_settlement.ts` (4/4). The **batch** path (`batch_settle_offchain_match` → `record_settlement_batch` + per-batch `SettlementRecord`) now passes via `tests/batch_settle_thbc.ts` (1/1). Getting the batch path green required a **program fix**: the batch handler read each `OrderNullifier` via `Account::try_from` and only updated `filled_amount` — it never created the PDA (the single path uses `init_if_needed`, which the `remaining_accounts` batch path can't). It now creates+seeds a fresh nullifier in-loop via a signed `system::create_account` CPI (`ensure_nullifier_initialized`), so fresh off-chain matches settle (previously failed `AccountNotInitialized`/3012). Remaining batch TODOs (negative cases, CU, root-rebuild) below.
 
@@ -98,13 +98,15 @@ Gotchas learned: (1) a pre-existing validator deployed by another upgrade author
 
 ### A2 provider regression — DONE (on-chain, this session)
 
+> All three suites below were removed in the b2021fb tests cleanup; results recorded at the time.
+
 - [x] `tests/treasury.ts` — 9/9 (swap/stake/redeem/slashStake; §2a treasury clean)
 - [x] `tests/staking.ts` — 7/7 (§1 slash: reject non-auth + full slash → fund → Slashed; outdated tests fixed in `f06ee5d`)
 - [x] `tests/escrow_settlement.ts` — 4/4 across runs (token-program + optional-account fixes in `7cfb5e0`/`62aad8a`; the signed off-chain **settle passes**, proving the `record_settlement` CPI on-chain)
 
 ### §2b batch runtime — happy + total_settled_thbc + TreasurySettlementRequired DONE (on-chain)
 
-`tests/batch_settle_thbc.ts` — 2/2 on a live validator. Required the
+`tests/batch_settle_thbc.ts` (suite removed in the b2021fb tests cleanup; results recorded at the time) — 2/2 on a live validator. Required the
 `ensure_nullifier_initialized` program fix (see verification status above) +
 three test-setup fixes (THBC funding vs swap rate, idempotent ATA, tx
 `recentBlockhash`). **Rebuild + redeploy current `trading.so` before running** —
@@ -117,13 +119,13 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
 - [x] `TreasurySettlementRequired` (6031) fires when treasury/settlement_record omitted on a THBC market — asserted via send + `conf.value.err` `Custom:6031`.
 - [x] Assert `total_settled_thbc` bumped by gross — happy-path captures the cumulative pre/post settle and asserts the delta == `total_value` (= `matchAmount*matchPrice`), not the VAT-adjusted/escrow-net figure. 2/2 on-chain.
 - [x] **Settle-path validation guards — DONE** via a new in-process litesvm full-match harness
-  (`tests/settle_offchain_guards_litesvm.ts`, **9/9**). First harness that boots trading
+  (`tests/settle_offchain_guards_litesvm.ts`, **9/9**; suite removed in the b2021fb tests cleanup — results recorded at the time). First harness that boots trading
   market+zone+shards+collectors, the energy Token-2022 mint, and the treasury in-process; signs a match
   with two Ed25519 precompile ixs; compresses the ~23-account settle through a hand-built ALT installed
   via `setAccount`. One valid-match template drives a positive control + every guard via field overrides
   (Ed25519 msgs regenerate from payloads → sigs stay valid). Guards asserted, all previously untested:
   - `TreasuryCurrencyMismatch` (6030): treasury passed but `thbc_mint` ≠ settlement currency → reverts at
-    `require_keys_eq!` (`settle_offchain.rs:474`) **before** any `record_settlement` CPI. Lighter than the
+    `require_keys_eq!` (`programs/trading/src/instructions/settle_offchain.rs:912`) **before** any `record_settlement` CPI. Lighter than the
     deferred live-validator 2nd-mint/market-reconfig route — the trigger is a mismatched-mint treasury,
     not an alt-currency market. Positive control (treasury omitted) settles the same match end-to-end.
   - `SlippageExceeded` (both directions: `match_price` above buyer limit / below seller limit).
@@ -134,7 +136,7 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
     replay guard (`match_amount > remaining` → `InvalidAmount`), proving a signed order can't settle twice.
   - `OrderExpired`: bank clock warped past a non-zero `expires_at` (via litesvm `setClock`) → rejected.
 - [x] **Order-path validation guards — DONE** via a second in-process litesvm harness
-  (`tests/order_guards_litesvm.ts`, **9/9**). Boots trading market+zone+escrow + the governance program.
+  (`tests/order_guards_litesvm.ts`, **9/9**; suite removed in the b2021fb tests cleanup — results recorded at the time). Boots trading market+zone+escrow + the governance program.
   Key trick: `GovernanceConfig` (`governance_config`) and `ErcCertificate` are plain Borsh `#[account]`s, so the
   tests **fabricate** them with `svm.setAccount` + the governance Anchor coder (camelCase account names
   `poAConfig`/`ercCertificate`), pinning the exact field a guard keys on — no need to drive governance's
@@ -148,9 +150,9 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
     with buy price < sell price), `InsufficientEscrowBalance` (`withdraw_escrow` over the escrow balance).
   - Positive control: operational config + valid ERC → `create_sell_order` succeeds. See [[litesvm-full-match-settle-harness]].
 - [x] **Treasury redeem peg/collateral guards — DONE** via a third litesvm harness
-  (`tests/treasury_redeem_guards_litesvm.ts`, **5/5**). Boots the treasury + an external GRX mint in-process,
+  (`tests/treasury_redeem_guards_litesvm.ts`, **5/5**; suite removed in the b2021fb tests cleanup — results recorded at the time). Boots the treasury + an external GRX mint in-process,
   attests a reserve, and drives real swap/redeem flows. Guards asserted, all previously untested (the
-  swap-side `StaleAttestation`/`PegBreach` were already covered by `tests/treasury.ts`):
+  swap-side `StaleAttestation`/`PegBreach` were already covered by `tests/treasury.ts`, also removed in b2021fb):
   - `SupplyUnderflow`: redeem `thbc_in` > tracked `thbc_supply` (trivial on a fresh treasury, supply 0).
   - `InsufficientVault`: **the headline invariant** (CLAUDE.md) — build vault collateral via a swap, drop
     `grx_per_thbc_rate` via `set_params`, then a tiny redeem computes `grx_out > swap_vault.amount` and is
@@ -158,9 +160,9 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
   - `Paused` (`set_params` paused → swap rejected), `ZeroAmount` (zero redeem).
   - Positive control: swap 2 GRX → redeem 4 THBC within collateral → succeeds, exercising the real math.
 - [x] **Registry slash/stake gating guards — DONE** via a fourth litesvm harness
-  (`tests/registry_slash_gating_litesvm.ts`, **3/3**). Boots a registry + an Active staked validator;
+  (`tests/registry_slash_gating_litesvm.ts`, **3/3**; suite removed in the b2021fb tests cleanup — results recorded at the time). Boots a registry + an Active staked validator;
   every slash attempt reverts so the validator stays Active and the guards are isolated (the slash *math*
-  + `InvalidSlashFraction`/`NotActiveValidator` are covered by `tests/slash_distribution_litesvm.ts`).
+  + `InvalidSlashFraction`/`NotActiveValidator` were covered by `tests/slash_distribution_litesvm.ts`, also removed in b2021fb).
   Guards asserted, all previously untested — the validator-bond misroute/drain protections:
   - `SlashDestinationNotSet`: slash before any `set_slash_destination` → rejected (registry refuses to
     slash until a destination is configured).
@@ -168,20 +170,20 @@ across runs, so a fixed `(zone,batch)` `SettlementRecord` PDA collides on re-run
     account is rejected — the fund remainder can't be misrouted to an attacker.
   - `InsufficientStakingBalance`: `unstake_grx` for more than the staked bond is rejected.
 - [x] **Registry meter-reading validation guards — DONE** via a fifth litesvm harness
-  (`tests/registry_meter_reading_guards_litesvm.ts`, **7/7**). The AMI data-integrity boundary for
+  (`tests/registry_meter_reading_guards_litesvm.ts`, **7/7**; suite removed in the b2021fb tests cleanup — results recorded at the time). The AMI data-integrity boundary for
   oracle-pushed telemetry on `update_meter_reading`. Boots registry + a registered user + an Active meter;
   a valid-reading control sets `last_reading_at` so the stale/rate-limit cases are exercised against real
   state. `reading_timestamp` is an explicit arg (not the bank clock) → no `setClock`. Guards asserted, all
-  previously untested, in handler order (`lib.rs:451-485`):
+  previously untested, in handler order (`programs/registry/src/instructions/update_meter_reading.rs:35`-68):
   - `OracleNotConfigured` (reading before any `set_oracle_authority`), `UnauthorizedOracle` (wrong oracle
     signer), `InvalidMeterStatus` (meter deactivated), `StaleReading` (non-increasing timestamp),
     `ReadingTooFrequent` (inside the 60s rate-limit), `ReadingTooHigh` (delta > 1e12 ceiling).
   - Positive control: a valid reading is accepted and advances `last_reading_at`.
 - [x] **Energy-token REC-gating guards — DONE** via a sixth litesvm harness
-  (`tests/energy_token_rec_guards_litesvm.ts`, **6/6**) — first test coverage of the energy-token program.
+  (`tests/energy_token_rec_guards_litesvm.ts`, **6/6**; suite removed in the b2021fb tests cleanup — results recorded at the time) — first test coverage of the energy-token program.
   The REC (Renewable Energy Certificate) co-sign requirement is the provenance boundary on
   `mint_to_wallet`: once any REC validator is registered, every mint must be co-signed by a validator in
-  the set, so the admin mint path can't bypass the certificate proof (`lib.rs:117-135`). Guards asserted,
+  the set, so the admin mint path can't bypass the certificate proof (`programs/energy-token/src/instructions/mint_to_wallet.rs:62`-84; since hardened further — the co-signer is now mandatory with no empty-set opt-out). Guards asserted,
   all previously untested:
   - `RecValidatorNotFound` (two ways): a mint with **no** REC co-signer, and a mint co-signed by a
     **non-registered** validator — both rejected once the set is non-empty. Positive control: a mint
@@ -222,7 +224,7 @@ Self-contained, CPI-only, no fund movement. Mirrors the registry 16-shard counte
   (program-owner + stored-bump-PDA validation, `u16` shard-id dedup bitmask) → `total_settled_thbc`.
   Global total stale-on-purpose, same trade-off as registry `aggregate_shards`.
 - [x] Errors `InvalidShardId` / `DuplicateShard`; event `SettlementShardRecorded` (shard total, not global).
-- [x] Tests `tests/settle_shard_litesvm.ts` **5/5**: per-shard accumulation + count, global stays 0
+- [x] Tests `tests/settle_shard_litesvm.ts` (suite removed in the b2021fb tests cleanup; results recorded at the time) **5/5**: per-shard accumulation + count, global stays 0
   until aggregation, recorder gate, out-of-range shard reject, aggregation sums across shards,
   duplicate-shard reject. Sibling litesvm suites (commitment/slash/staking) **10/10**, no regression.
   (Build: `anchor build -p treasury --ignore-keys` then **copy** `programs/treasury/target/deploy/treasury.so`
@@ -245,10 +247,10 @@ under a live validator (Solana 3.1.10), not litesvm.
   + the per-(zone,batch) `SettlementRecord`), dropping the global `total_settled_thbc` write off the hot path.
 - [x] T2c.4 `sweep_collectors(shard_id)` — permissionless consolidation of a shard's 3 ATAs into the
   canonical (unsharded) collectors (both `market_authority`-owned → can't exfiltrate).
-- [x] T2c.6 CU under budget: batch settle (sharded) ≈ **87k CU** (`tests/batch_settle_thbc.ts`), < 1.4M.
+- [x] T2c.6 CU under budget: batch settle (sharded) ≈ **87k CU** (`tests/batch_settle_thbc.ts` — suite removed in the b2021fb tests cleanup; results recorded at the time), < 1.4M.
 - [x] Correctness verified on-chain (`tests/batch_settle_thbc.ts` 2/2): the per-shard accumulator advances by
   the gross value, the **global total stays flat** (reconciled only via aggregation), buyer receives energy,
-  `TreasurySettlementRequired` (6031) still fires. Sharded litesvm accumulator (`settle_shard_litesvm.ts`) 5/5.
+  `TreasurySettlementRequired` (6031) still fires. Sharded litesvm accumulator (`settle_shard_litesvm.ts`, also removed in b2021fb) 5/5.
 - [~] **T2c.5 TPS win NOT demonstrated — confirmed unmeasurable at localnet scale.** Sweep
   (`tests/batch_settle_tps.ts`, N=8 conc=8, Solana 3.1.10): baseline (pinned shard 0) **0.41 TPS**,
   sharded-spread **0.47 TPS** — within noise, no real gain. A `BENCH_BATCH_SLOTTPS` slot-density probe
@@ -261,7 +263,7 @@ under a live validator (Solana 3.1.10), not litesvm.
      closed-loop harness's ALT-setup + confirm-poll latency, not a throughput ceiling. A real measurement needs a
      **true open-loop generator** (submit without per-tx confirm, count landed-tx/slot) — already listed open below.
   2. **`zone_market` is still a global `mut` lock the §2b root-cause missed.** Every settle does
-     `zone_market.load_mut()` (`settle_offchain.rs:591`) and the account is declared `mut` (`:251`) **regardless**
+     `zone_market.load_mut()` (`settle_offchain.rs:591` at the time — pre-Tier-A line refs, superseded by the update below) and the account was declared `mut` (`:251`) **regardless**
      of whether `committed_flow` is updated, so Sealevel write-locks the singleton zone PDA on every settle.
      Sharding collectors + treasury removed two of ≥3 global writes; this one remains. Hard to shard: the capacity
      throttle is a **global** cap, and Anchor's static account model can't conditionally lock — intra-zone settles
@@ -276,7 +278,7 @@ slot-density measurement) that isolates true validator packing rate from client 
 (full design + empirical A/B in [`settlement-tps-tier-a.md`](settlement-tps-tier-a.md)) moved `zone_market` to
 read-only (committed_flow lives on the per-zone `ZoneCapacity` PDA instead) in both settle paths. Measured
 result at N=40: **writable ~1/slot vs read-only 3/slot — ~2.7-3x** wall-clock-independent throughput, litesvm
-219 + on-chain `escrow_settlement`/`batch_settle_thbc` green. Remaining ceiling (~3 settles/slot, single node)
+219 + on-chain `escrow_settlement`/`batch_settle_thbc` green (both suites since removed in b2021fb). Remaining ceiling (~3 settles/slot, single node)
 is the validator's per-tx packing rate for a ~102k-CU settlement, not a write-lock — further gains would need a
 multi-node cluster or amortizing more matches per tx (blocked on the existing single-tx batch cap, see
 `batch-settle-single-tx-cap` note elsewhere), a separate and much larger lever than this section's scope.
@@ -287,8 +289,8 @@ Goal: prove or kill the trustless fraud-proof path **before** spending on it. Po
 
 > **Verification note:** CU measurement (T3.2) requires on-chain execution — run under a live validator / `anchor test`, not litesvm.
 
-- [x] T3.1 Prototype **indexed** Merkle tree giving **proof-of-exclusion** (`tests/spike_merkle_exclusion.ts`, throwaway PoC — 5/5, no validator). Leaf/index scheme confirmed: leaf = `H(value ‖ nextValue ‖ nextIndex)` (sentinel leaf 0 = `{0,0,0}`), sorted linked list. Non-membership of `q` = inclusion proof of the low leaf `L` with `L.value < q < L.nextValue` (or `L.nextValue == 0` for max) — O(log n) hashes (DEPTH 10 here), not the 2^256 SMT path. Both forge vectors rejected: claiming a present id absent fails the range check; widening `nextValue` fails the root check. Chose indexed over sparse precisely to keep the T3.2 on-chain proof small. (sha256 in the spike; on-chain → keccak syscall.)
-- [x] T3.2 Measured on-chain CU of the Merkle verify (`tests/spike_merkle_cu.ts` → throwaway `blockbench::merkle_verify_inclusion`/`_exclusion`, sha256 ladder, live validator Solana 3.1.10): **inclusion 3 250 CU @ depth 10 / 4 114 @ depth 14; exclusion 3 629 / 4 493** — ~**216 CU per tree level**, exclusion ~380 CU over inclusion (extra low-leaf hash + range check). Both forge vectors **revert on-chain** (tampered sibling → root mismatch; claim-present-absent → range check). The Ed25519 leg is the existing SigVerify precompile already measured in the settle path (the 103k single / ~85k batch settle CU *include* 2 ed verifies); per challenge that's 1 meter-sig verify + this ~3.6k Merkle exclusion verify. **Total per-challenge verify ≪ 200k default budget (~2%), ~0.3% of the 1.4M max.**
+- [x] T3.1 Prototype **indexed** Merkle tree giving **proof-of-exclusion** (`tests/spike_merkle_exclusion.ts`, throwaway PoC — 5/5, no validator; spike suite removed in the b2021fb tests cleanup, results recorded at the time). Leaf/index scheme confirmed: leaf = `H(value ‖ nextValue ‖ nextIndex)` (sentinel leaf 0 = `{0,0,0}`), sorted linked list. Non-membership of `q` = inclusion proof of the low leaf `L` with `L.value < q < L.nextValue` (or `L.nextValue == 0` for max) — O(log n) hashes (DEPTH 10 here), not the 2^256 SMT path. Both forge vectors rejected: claiming a present id absent fails the range check; widening `nextValue` fails the root check. Chose indexed over sparse precisely to keep the T3.2 on-chain proof small. (sha256 in the spike; on-chain → keccak syscall.)
+- [x] T3.2 Measured on-chain CU of the Merkle verify (`tests/spike_merkle_cu.ts`, also removed in b2021fb → throwaway `blockbench::merkle_verify_inclusion`/`_exclusion`, sha256 ladder, live validator Solana 3.1.10): **inclusion 3 250 CU @ depth 10 / 4 114 @ depth 14; exclusion 3 629 / 4 493** — ~**216 CU per tree level**, exclusion ~380 CU over inclusion (extra low-leaf hash + range check). Both forge vectors **revert on-chain** (tampered sibling → root mismatch; claim-present-absent → range check). The Ed25519 leg is the existing SigVerify precompile already measured in the settle path (the 103k single / ~85k batch settle CU *include* 2 ed verifies); per challenge that's 1 meter-sig verify + this ~3.6k Merkle exclusion verify. **Total per-challenge verify ≪ 200k default budget (~2%), ~0.3% of the 1.4M max.**
 - [~] T3.3 Decide. **CU gate: PASS** (3–4.5k CU, depth-logarithmic, huge headroom). **Soundness: demonstrated** (valid drop proven, both forge classes rejected — off-chain T3.1 *and* on-chain T3.2). So the *CU-and-soundness* blocker that this spike existed to test is **cleared**. BUT the go/no-go is not CU alone: the three 🔴 design assumptions in "Why this track" remain — chiefly that settlement is **immediate/non-reversible**, so an optimistic challenge has nothing to revert. A trustless Tier-2 would need a settlement-finality delay (escrow hold / challenge window) before funds move, which is a larger redesign. **Recommendation: CU/soundness no longer block trustless; the open gate is the challenge-window redesign — decide that before opening a Tier-2 epic.** Not a unilateral go.
 
 Tests / exit criteria:

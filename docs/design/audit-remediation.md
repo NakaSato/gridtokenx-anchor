@@ -70,9 +70,11 @@ Verify: `anchor test` (or `npm run test:*` for a single suite).
 - Tariff authority + per-zone wheeling/loss rate (0.4b) — **done** (2026-07-04): `trading::TariffConfig`
   (`wheeling_authority`/`loss_authority`, capped bps), replacing the flat 0.4 sanity cap with a
   governance-set rate. See [`role-map.md`](./role-map.md) fix #7b.
-- `mint_tokens_direct` registry-faucet REC policy (0.5b) — **decided and hardened**: the count==0
-  REC-skip is registry-caller-only (`programs/energy-token/src/lib.rs:505-512`); a human admin is
-  rejected even at count==0. Litesvm-locked (`mint_tokens_direct_litesvm.ts`).
+- `mint_tokens_direct` registry-faucet REC policy (0.5b) — **decided and hardened**: the REC
+  co-sign check is skipped **only for the registry CPI caller** (`if !is_registry`,
+  `programs/energy-token/src/instructions/mint_tokens_direct.rs:80-86`); a human admin always
+  needs a registered REC co-signer and is rejected even at `rec_validators_count == 0`.
+  Litesvm-locked (`tests/rec_gate_litesvm.ts`).
 
 ---
 

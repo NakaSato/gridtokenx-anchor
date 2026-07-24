@@ -184,7 +184,7 @@ Transfers `amount` `collateral_mint` into the vault; increments `collateral_post
 `collateral_posted ≥ min_collateral` else `InsufficientCollateral` (this is the "admission ⇒
 bond" enforcement, `role-map.md` §3). Flips status → `Active`; then **Delta A**: CPI
 `governance::admit_aggregator(aggregator, segment = 0 /* Retail */)`
-([`governance/src/handlers/aggregator.rs:9`](../../../programs/governance/src/handlers/aggregator.rs))
+([`governance/src/instructions/admit_aggregator.rs:34`](../../../programs/governance/src/instructions/admit_aggregator.rs))
 signed by the utility authority PDA acting as admission delegate. Without Delta A, this instead
 writes a `TerritoryEndorsement` PDA that ERC's key reads before performing the admit. Emits
 `AggregatorEndorsed`.
@@ -245,8 +245,8 @@ Signer: `authority`. Maps a meter to territory/zone/class.
 ## 6. Cross-Program Interfaces (CPI)
 
 - **mea → governance** — `admit_aggregator(_, segment=0)` / `revoke_aggregator`
-  ([`handlers/aggregator.rs:9`](../../../programs/governance/src/handlers/aggregator.rs),
-  [`:36`](../../../programs/governance/src/handlers/aggregator.rs)) as admission delegate
+  ([`instructions/admit_aggregator.rs:34`](../../../programs/governance/src/instructions/admit_aggregator.rs),
+  [`revoke_aggregator.rs:28`](../../../programs/governance/src/instructions/revoke_aggregator.rs)) as admission delegate
   (Delta A), plus `is_operational` reads. Segment is fixed **Retail (0)** — MEA never admits a
   wholesale operator.
 - **mea → trading** — `set_wheeling_rate` / `set_loss_rate`

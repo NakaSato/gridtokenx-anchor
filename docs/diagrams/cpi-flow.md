@@ -1,8 +1,10 @@
 # CPI Flow — Cross-Program Invocation, Precisely
 
 > Deep-dive. How one Solana program calls another mid-transaction, how accounts + signer seeds
-> propagate, the privilege/depth rules, and this repo's CPI graph
-> (`registry→energy-token`, `trading→governance`, `trading→treasury`, `oracle→governance`).
+> propagate, the privilege/depth rules, and this repo's CPI graph. **Three** runtime invoke
+> edges — `governance→registry`, `registry→energy-token`, `trading→treasury` — plus two
+> compile-time-only edges (`trading→governance`, `oracle→governance`) that share types and read
+> PDAs but never `invoke`.
 
 ---
 
@@ -19,10 +21,12 @@ Max depth = 4. Anchor wraps this in `CpiContext` + generated `cpi` modules.
 ## 1. What CPI is and why
 
 Programs are isolated — each runs in its own SVM sandbox, touching only declared accounts. But
-real flows span programs: registering a user (registry) should **mint tokens** (energy-token);
-settling a trade (trading) should **check authority** (governance) and **record settlement**
-(treasury). CPI is the controlled bridge: program A calls into program B's instruction handler,
-synchronously, mid-tx, sharing accounts.
+real flows span programs: an airdrop / net-settlement in registry should **mint GRID**
+(energy-token); certifying renewable generation in governance should **debit the meter's claimed
+counter** (registry); settling a trade (trading) should **record settlement** (treasury). CPI is
+the controlled bridge: program A calls into program B's instruction handler, synchronously,
+mid-tx, sharing accounts. (Checking governance authority/config from trading and oracle is a
+*read*, not a CPI — see §6.)
 
 Think function call across a security boundary: B executes with the accounts A hands it, under
 the same transaction's atomicity (if B fails, the whole tx reverts).
@@ -103,57 +107,87 @@ compose.
 With `features = ["cpi"]` on a path dependency, Anchor generates a typed `cpi` module for the
 callee. The caller builds a `CpiContext` and calls the typed fn:
 
-```rust
-use energy_token::cpi::accounts::MintTokens;
-use energy_token::cpi::mint_tokens;
+Real call site — registry minting GRID via energy-token, signing as its own PDA
+(`programs/registry/src/instructions/settle_and_mint_tokens.rs:61-72`):
 
-let cpi_accounts = MintTokens { mint, to, authority, token_program };
-let cpi_ctx = CpiContext::new(energy_token_program.to_account_info(), cpi_accounts);
-// or, signing for a PDA authority:
+```rust
+use energy_token::cpi::accounts::MintTokensDirect;
+use energy_token::cpi::mint_tokens_direct;
+
+let cpi_accounts = MintTokensDirect { token_info, mint, recipient, registry_authority,
+                                      rec_validator, token_program };
+// registry PDA is the authority — invoke_signed with its seeds:
 let signer = &[&[b"registry", &[registry_bump]][..]];
-let cpi_ctx = CpiContext::new_with_signer(prog, cpi_accounts, signer);
-mint_tokens(cpi_ctx, amount)?;
+let cpi_ctx = CpiContext::new_with_signer(
+    ctx.accounts.energy_token_program.key(),   // Anchor 1.0.0: takes Pubkey, not AccountInfo
+    cpi_accounts, signer);
+mint_tokens_direct(cpi_ctx, amount)?;
 ```
 
 `CpiContext::new` → `invoke`; `CpiContext::new_with_signer` → `invoke_signed`. Anchor serializes
 args, builds AccountMetas with correct signer/writable flags, and forwards account_infos.
 
-> Gotcha (memory `anchor-sbf-deploy-staleness`): `CpiContext` takes the program **Pubkey /
-> AccountInfo**, and a stale deployed `.so` can mismatch account counts — rebuild + restage when
-> CPI signatures change.
+> Anchor 1.0.0 gotcha: `CpiContext::new[_with_signer]` takes the program **`Pubkey`** (`.key()`),
+> not `AccountInfo` — a breaking change from 0.30.x (memory `anchor-sbf-deploy-staleness`). A
+> stale deployed `.so` can also mismatch account counts — rebuild + restage when CPI signatures
+> change.
 
 ---
 
 ## 6. This repo's CPI graph
 
-From `CLAUDE.md` + program map. Path deps with `features=["cpi"]`, **acyclic**:
+Verified against every `::cpi::` invoke site (`rg '::cpi::' programs/*/src`). Solid arrows =
+runtime `invoke`; dotted = compile-time type/ID dependency with **no** invoke. **Acyclic:**
 
 ```mermaid
 graph TD
-    REG["registry"] -->|CPI: mint on register| ET["energy-token"]
-    TRD["trading"] -->|CPI: check authority| GOV["governance"]
-    TRD -->|CPI optional: record_settlement| TRE["treasury"]
-    ORA["oracle"] -.->|types + ID only, NO invoke| GOV
+    GOV["governance"] -->|"CPI: mark_erc_claimed"| REG["registry"]
+    REG -->|"CPI: mint_tokens_direct (×2 sites)"| ET["energy-token"]
+    TRD["trading"] -->|"CPI: record_settlement / _batch_sharded"| TRE["treasury"]
+    TRD -.->|"types + read GovernanceConfig/AggregatorEntry, NO invoke"| GOV
+    ORA["oracle"] -.->|"types + ID only, NO invoke"| GOV
+    ET -->|"mint_to (Token-2022)"| T22["Token-2022"]
+    GOV --> T22
+    TRE --> T22
+    TRD --> T22
+    REG --> T22
 ```
 
-- **`registry → energy-token`** — on user/meter registration, registry CPIs `energy-token` to
-  mint GRID. registry signs via its own PDA authority (`invoke_signed`).
-- **`trading → governance`** — settlement checks PoA authority / config in governance before
-  acting.
-- **`trading → treasury` (optional, non-custodial)** — `record_settlement` fires **only when
-  treasury accounts are passed** to `settle_offchain_match` / `batch_settle_offchain_match`.
-  Authorized by the `settlement_recorder` signer = trading's `market_authority` PDA
-  (`invoke_signed`). For THBC markets it's **mandatory** — omitting treasury accounts when a
-  `settlement_thbc_mint` is set → `TreasurySettlementRequired` (no silent skip). Batch records
-  the whole batch with **one** CPI.
-- **`oracle → governance` — NOT a CPI invoke.** Oracle imports governance's **types + program
-  ID only**; it *validates* an admitted aggregator's `AggregatorEntry` PDA (reads/derives it) to
-  authorize node-facing oracle instructions. No `invoke` crosses — important distinction: a
-  dependency edge in Cargo ≠ a runtime CPI.
+- **`governance → registry`** :: `mark_erc_claimed(energy_amount)`
+  (`programs/governance/src/instructions/issue_erc.rs:176`). Signed by governance `authority`
+  (`invoke`, no PDA seeds — the outer signer propagates). Debits the meter's **net** claimed
+  generation to close the double-claim window before REC issuance. Callee now accepts
+  `authority`-only (`programs/registry/src/instructions/mark_erc_claimed.rs:26-30`).
+- **`registry → energy-token`** :: `mint_tokens_direct(amount)` — **two sites**:
+  `claim_airdrop.rs:94` (`AIRDROP_AMOUNT`) and `settle_and_mint_tokens.rs:72` (settled net).
+  registry signs as its **own PDA** (`invoke_signed`, `settle_and_mint_tokens.rs:71`). The
+  callee's REC co-sign gate is **exempt for the registry CPI**
+  (`programs/energy-token/src/instructions/mint_tokens_direct.rs:80-86`); `energy_token_program`
+  is pinned to `energy_token::ID` on the caller side (`InvalidEnergyTokenProgram`).
+- **`trading → treasury` (non-custodial)** :: `record_settlement` (single,
+  `settle_offchain.rs:914`) / `record_settlement_batch_sharded` (batch, `:1328`). Moves **no
+  tokens** — only bumps `total_settled_thbc` on the GROSS value. Authorized by the
+  `settlement_recorder` signer = trading's `market_authority` PDA (`invoke_signed`). For THBC
+  markets **mandatory** — `has_settlement_thbc_mint==1` + omitted treasury accounts →
+  `TreasurySettlementRequired` (no silent skip). Batch records the whole batch with **one** CPI.
+- **`trading → governance` — NOT a CPI invoke.** Cargo dep with `features=["cpi"]`
+  (`programs/trading/Cargo.toml:48`), but **zero** `governance::cpi::` calls: trading imports
+  `ErcCertificate`/`ErcStatus`/`GovernanceConfig` and *reads* `GovernanceConfig.is_operational`
+  + `AggregatorEntry` (raw byte, settle gate). A dependency edge ≠ a runtime CPI.
+- **`oracle → governance` — NOT a CPI invoke.** Same pattern: imports **types + program ID
+  only**, *validates* an admitted aggregator's `AggregatorEntry` PDA
+  (`programs/oracle/src/instructions/trigger_market_clearing.rs:17`) to authorize node-facing
+  instructions. No `invoke` crosses.
 
 > Also cross-program but **not a CPI**: registry's `slash_validator` *transfers* slashed bonds
-> to a configured `slash_destination` (e.g. treasury `reward_vault`) — a plain SPL token
-> transfer, not an `invoke` into treasury. Token movement ≠ CPI into the program.
+> to a configured `slash_destination` (e.g. treasury `rebate_vault`) — a plain Token-2022
+> transfer (`programs/registry/src/instructions/slash_validator.rs:140`), not an `invoke` into
+> treasury. Token movement ≠ CPI into the program.
+
+> **External CPIs to Token-2022** (solid arrows to `T22` above) exist wherever value moves:
+> energy-token/governance/treasury `mint_to`, all programs `transfer_checked`,
+> energy-token/governance/treasury `burn`. These are real `invoke`s into the SPL Token-2022
+> program — counted in CU and depth like any CPI — just not *inter-service* edges.
 
 ---
 
@@ -182,7 +216,10 @@ subset of its accounts via `invoke`, or `invoke_signed` to authorize a PDA it ow
 recomputes the PDA from seeds + A's program_id). Privileges flow **down, never up** — the callee
 can't gain signer/writable rights the outer tx didn't grant — depth caps at 4, and any failure
 reverts the whole tx on one shared CU budget. Anchor wraps it as `CpiContext::new` (→`invoke`) /
-`new_with_signer` (→`invoke_signed`) over generated `cpi` modules. This repo's acyclic graph:
-`registry→energy-token` (mint), `trading→governance` (authority), `trading→treasury`
-(optional/mandatory-for-THBC `record_settlement`, one CPI per batch), and `oracle→governance`
-which is **types-only, not an invoke** — and registry's slash is a token transfer, not a CPI.
+`new_with_signer` (→`invoke_signed`) over generated `cpi` modules. This repo has exactly **three**
+inter-program invoke edges — `governance→registry` (`mark_erc_claimed`), `registry→energy-token`
+(`mint_tokens_direct`, ×2 sites), `trading→treasury` (`record_settlement`, mandatory for THBC,
+one CPI per batch) — forming an acyclic chain. `trading→governance` and `oracle→governance` are
+**types-only Cargo deps, not invokes** (they read `GovernanceConfig`/`AggregatorEntry`), and
+registry's slash is a Token-2022 transfer, not a CPI. Plus external `invoke`s into Token-2022
+wherever value moves.
