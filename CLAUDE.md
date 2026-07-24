@@ -29,11 +29,11 @@ anchor keys sync                  # regenerate program IDs (then update declare_
 
 # NOTE: there are NO `npm run test:*` scripts (the old per-suite recipes and their
 # tests/*.ts files were removed in b2021fb). tests/ now holds exactly:
-#   3 in-process litesvm suites + batch_settle_tps.ts (validator-gated TPS sweep).
+#   6 in-process litesvm suites + batch_settle_tps.ts (validator-gated TPS sweep).
 # The lib-level price-model unit suite lives at scripts/lib/price-model-tariff.test.ts.
 
 # In-process litesvm suites (no validator needed) — run directly with mocha:
-npx mocha -r tsx tests/price_models_litesvm.ts tests/rec_gate_litesvm.ts tests/sharded_match_litesvm.ts tests/registry_hardening_litesvm.ts tests/erc_owner_gate_litesvm.ts --timeout 1000000
+npx mocha -r tsx tests/price_models_litesvm.ts tests/rec_gate_litesvm.ts tests/sharded_match_litesvm.ts tests/registry_hardening_litesvm.ts tests/erc_owner_gate_litesvm.ts tests/issue_erc_precheck_litesvm.ts --timeout 1000000
 
 # Validator-gated (start solana-test-validator + deploy + init first):
 npx mocha -r tsx tests/batch_settle_tps.ts --timeout 1000000
