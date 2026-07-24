@@ -33,7 +33,7 @@ anchor keys sync                  # regenerate program IDs (then update declare_
 # The lib-level price-model unit suite lives at scripts/lib/price-model-tariff.test.ts.
 
 # In-process litesvm suites (no validator needed) — run directly with mocha:
-npx mocha -r tsx tests/price_models_litesvm.ts tests/rec_gate_litesvm.ts tests/sharded_match_litesvm.ts --timeout 1000000
+npx mocha -r tsx tests/price_models_litesvm.ts tests/rec_gate_litesvm.ts tests/sharded_match_litesvm.ts tests/registry_hardening_litesvm.ts --timeout 1000000
 
 # Validator-gated (start solana-test-validator + deploy + init first):
 npx mocha -r tsx tests/batch_settle_tps.ts --timeout 1000000
