@@ -24,13 +24,13 @@ distinct from the yield-bearing staking implemented by the `treasury` program.
 | Program ID | `FcSd5x4X1nzJMKLZC4tMZXnQ1ipLrGsEfeoH8N4mvJX7` |
 | Crate name | `registry` (`Cargo.toml:2`) |
 | Crate version | `0.1.1` (`Cargo.toml:3`) |
-| `declare_id!` | `lib.rs:14` |
-| `GOVERNANCE_PROGRAM_ID` | `FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS` — owner of the PoA aggregator allow-list (`AggregatorEntry` PDA); hardcoded to avoid a `registry → governance` CPI cycle (`lib.rs:21`) |
-| `ORACLE_PROGRAM_ID` | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU` — owner of the oracle's per-meter `MeterState` PDA cross-checked by `update_meter_reading`; hardcoded for the same no-cycle reason (`oracle → governance → registry`, `lib.rs:28`) |
-| `RESIGN_COOLDOWN_SECS` | `24h` — bond stays locked and slashable after `deregister_validator` (`lib.rs:43`) |
+| `declare_id!` | `lib.rs:19` |
+| `GOVERNANCE_PROGRAM_ID` | `FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS` — owner of the PoA aggregator allow-list (`AggregatorEntry` PDA); hardcoded to avoid a `registry → governance` CPI cycle (`lib.rs:26`) |
+| `ORACLE_PROGRAM_ID` | `64Vgos61STZ8pW9NnHi2iGtXMTQr7NqBoMorK6Zg8RJU` — owner of the oracle's per-meter `MeterState` PDA cross-checked by `update_meter_reading`; hardcoded for the same no-cycle reason (`oracle → governance → registry`, `lib.rs:33`) |
+| `RESIGN_COOLDOWN_SECS` | `24h` — bond stays locked and slashable after `deregister_validator` (`lib.rs:48`) |
 | Anchor framework | `anchor-lang` / `anchor-spl` `1.0.0` (`Cargo.toml:24-25`) |
 
-The program ID declared in source (`lib.rs:14`) is the canonical on-chain identity; the
+The program ID declared in source (`lib.rs:19`) is the canonical on-chain identity; the
 `Anchor.toml [programs.localnet]` table is the deployment source of truth. The two must
 agree (`anchor keys sync` regenerates them in tandem).
 
@@ -64,8 +64,8 @@ denormalised meter count (`state.rs:55-75`). A **meter** (an AMI device of type 
 `MeterAccount` PDA carrying ownership, status, cumulative generation/consumption, and
 tokenization watermarks (`state.rs:80-98`). Downstream programs and services treat the
 existence and `Active` status of these accounts as the canonical attestation that a user
-or meter is real and admitted (`is_valid_user`, `lib.rs:640`; `is_valid_meter`,
-`lib.rs:649`).
+or meter is real and admitted (`is_valid_user`, `queries.rs:30`; `is_valid_meter`,
+`queries.rs:36`).
 
 ### 2.2 Sixteen-shard population counter
 
@@ -73,64 +73,64 @@ Maintaining a single global counter for users and meters would force every regis
 take a Sealevel write lock on one global account, serialising the platform's hottest path.
 The program instead partitions counts across **sixteen `RegistryShard` PDAs**
 (`state.rs:23-30`). Each entity is bound to exactly one shard by the canonical selector
-`shard_for(key) = key.to_bytes()[0] % 16` (`lib.rs:71-73`). Registration writes the shard,
-never the global `Registry` account, which remains read-only on hot paths (`lib.rs:1517-1520`).
+`shard_for(key) = key.to_bytes()[0] % 16` (`lib.rs:80-82`). Registration writes the shard,
+never the global `Registry` account, which remains read-only on hot paths (`register_meter.rs:34-37`).
 The global totals on the `Registry` account are therefore **stale on purpose** and are
-reconciled by the administrative `aggregate_shards` instruction (`lib.rs:198-250`).
+reconciled by the administrative `aggregate_shards` instruction (`aggregate_shards.rs:14-64`).
 
 ### 2.3 Validator security-bond staking
 
 Participants lock GRX into a single program-owned vault PDA at seeds `[b"grx_vault"]`
-(`lib.rs:1729`) whose token authority is the `registry` PDA. The staked amount is tracked on
+(`initialize_vault.rs:16-25`) whose token authority is the `registry` PDA. The staked amount is tracked on
 the staker's own `UserAccount.staked_grx` field (`state.rs:71`). Holding at least
-`MIN_VALIDATOR_STAKE = 10,000 GRX` (`lib.rs:35`) qualifies an account to be promoted to an
-`Active` validator via `register_validator` (`lib.rs:792-844`), gated additionally by a
+`MIN_VALIDATOR_STAKE = 10,000 GRX` (`lib.rs:40`) qualifies an account to be promoted to an
+`Active` validator via `register_validator` (`register_validator.rs:26-76`), gated additionally by a
 governance-admitted `AggregatorEntry` allow-list entry (PoA aggregator-admission). Withdrawal
-guards live in the pure, unit-tested helper `check_unstake_allowed` (`lib.rs:1342-1365`):
-a 24-hour cooldown anchored to the most recent stake (`UNSTAKE_COOLDOWN_SECS`, `lib.rs:38`;
-enforced `lib.rs:1351-1354`), and a bond lock — the bond of a still-slashable validator
+guards live in the pure, unit-tested helper `check_unstake_allowed` (`lib.rs:420-443`):
+a 24-hour cooldown anchored to the most recent stake (`UNSTAKE_COOLDOWN_SECS`, `lib.rs:43`;
+enforced `lib.rs:429-432`), and a bond lock — the bond of a still-slashable validator
 (`Active`, or `Resigning` within the resign cooldown) cannot be drawn below the minimum
-(`ValidatorStakeLocked`, `lib.rs:1355-1363`): an Active validator must first announce an honest
-exit via `deregister_validator` and serve `RESIGN_COOLDOWN_SECS` (`lib.rs:43`) before the bond
+(`ValidatorStakeLocked`, `lib.rs:433-441`): an Active validator must first announce an honest
+exit via `deregister_validator` and serve `RESIGN_COOLDOWN_SECS` (`lib.rs:48`) before the bond
 unlocks.
 
 **This is a security bond, not a yield product.** It pays no rewards, is gated by a
 minimum, and is subject to slashing of the bond for validator misbehaviour
-(`slash_validator`, `lib.rs:950`). It is deliberately distinct from the yield-bearing GRX
+(`slash_validator`, `slash_validator.rs:67`). It is deliberately distinct from the yield-bearing GRX
 staking in the `treasury` program; the two systems share no vault and no position account
 and are not reconciled.
 
 ### 2.4 Slashing and slash routing
 
 The PoA (Proof-of-Authority) registry authority may slash a validator's bond
-(`slash_validator`, `lib.rs:950`). Slashing is **severity-scaled and victim-compensating**,
+(`slash_validator`, `slash_validator.rs:67`). Slashing is **severity-scaled and victim-compensating**,
 not a flat forfeiture:
 
 - **Severity.** A governance-attested `slash_bps` (1..=10000) sets `slash_amount = bond *
-  slash_bps / 10_000`, capped at the bond (`compute_slash_amount`, `lib.rs:1315-1334`).
+  slash_bps / 10_000`, capped at the bond (`compute_slash_amount`, `lib.rs:393-412`).
 - **Capped victim compensation.** `compensation = min(slash_amount, proven_loss)` is paid to
-  the passed `victim_token_account` (`lib.rs:977`); capping at the governance-attested
+  the passed `victim_token_account` (`slash_validator.rs:94`); capping at the governance-attested
   `proven_loss` removes the bounty-gaming incentive.
 - **Transparent fund remainder.** `fund_amount = slash_amount − compensation` goes to the
-  pre-configured `slash_destination` (`lib.rs:978`), which must first be set by the authority
-  via `set_slash_destination` (`lib.rs:150`). The platform wires the destination to the
+  pre-configured `slash_destination` (`slash_validator.rs:95`), which must first be set by the authority
+  via `set_slash_destination` (`set_slash_destination.rs:15`). The platform wires the destination to the
   treasury `rebate_vault` — the regulator / consumer-rebate pool, not staker yield
   (`scripts/init-treasury.ts:106-121`).
 - **Value invariant.** `slash_amount == compensation + fund_amount` is enforced on-chain
-  (`lib.rs:984-987`) — no value is created or destroyed.
+  (`slash_validator.rs:101-104`) — no value is created or destroyed.
 - **Status transition.** Full forfeiture (`slash_bps == 10000` or the bond fully consumed) →
   terminal `Slashed`; a partial slash leaving the remaining bond below `MIN_VALIDATOR_STAKE`
   → `Suspended` (recoverable by topping up); otherwise the validator stays `Active`
-  (`apply_slash_status`, `lib.rs:1369-1377`).
+  (`apply_slash_status`, `lib.rs:447-455`).
 
-Only an `Active` or `Resigning` validator can be slashed (`lib.rs:1316-1326` — the honest-exit
+Only an `Active` or `Resigning` validator can be slashed (`lib.rs:398-404` — the honest-exit
 path stays slashable through the resign cooldown), only the registry authority may call it, and
 the destination must equal the configured one (no misroute). On-chain verified in
 `tests/staking.ts` (partial→Suspended, capped comp both directions, invariant, CU ≈ 27.8k);
 the pure slash-math and status-transition helpers are additionally unit-tested in-crate (§9).
 
 Two extensions complete the slashing pipeline. A **multi-victim variant**,
-`slash_validator_multi` (`lib.rs:1064`), distributes the capped compensation pool
+`slash_validator_multi` (`slash_validator_multi.rs:57`), distributes the capped compensation pool
 **pro-rata across several harmed parties** by their governance-attested losses, routing the
 remainder (including integer-division rounding dust) to the same configured fund (§4.5).
 And a **transparent slash fund** — a registry-owned GRX vault at `[b"slash_fund"]` paired
@@ -154,17 +154,17 @@ All persistent accounts use Anchor's zero-copy layout (`#[account(zero_copy)] #[
 
 Zero-copy structs cannot hold `String`. Meter identifiers are stored as a fixed `[u8; 32]`
 buffer (`MeterAccount.meter_id`, `state.rs:81`). Conversion is performed by two helpers:
-`string_to_bytes32` truncates/zero-pads a `&str` into the buffer (`lib.rs:76-82`), and
+`string_to_bytes32` truncates/zero-pads a `&str` into the buffer (`lib.rs:85-91`), and
 `bytes32_to_string` rehydrates the buffer back to a `String`, trimming trailing nulls,
-when emitting events (`lib.rs:61-67`). Meter IDs are bounded to 32 bytes at registration
-(`lib.rs:404`, error `InvalidMeterId`).
+when emitting events (`lib.rs:70-76`). Meter IDs are bounded to 32 bytes at registration
+(`register_meter.rs:81`, error `InvalidMeterId`).
 
 ### 3.2 `Registry`
 
 Global singleton holding authorities and the lazily-reconciled global totals.
 
-- **PDA seeds:** `[b"registry"]` (`lib.rs:1388`).
-- **Layout:** zero-copy (`state.rs:6-18`). **Space:** `8 + size_of::<Registry>()` (`lib.rs:1387`).
+- **PDA seeds:** `[b"registry"]` (`initialize.rs:13`).
+- **Layout:** zero-copy (`state.rs:6-18`). **Space:** `8 + size_of::<Registry>()` (`initialize.rs:12`).
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -182,8 +182,8 @@ Global singleton holding authorities and the lazily-reconciled global totals.
 
 Per-shard distributed counter; one of sixteen.
 
-- **PDA seeds:** `[b"registry_shard", &[shard_id]]` (`lib.rs:1406`).
-- **Layout:** zero-copy (`state.rs:23-30`). **Space:** `8 + size_of::<RegistryShard>()` (`lib.rs:1405`).
+- **PDA seeds:** `[b"registry_shard", &[shard_id]]` (`initialize_shard.rs:13`).
+- **Layout:** zero-copy (`state.rs:23-30`). **Space:** `8 + size_of::<RegistryShard>()` (`initialize_shard.rs:12`).
 - Provides `load_from_bytes` for raw deserialisation during aggregation (`state.rs:33-35`).
 
 | Field | Type | Notes |
@@ -199,9 +199,9 @@ Per-shard distributed counter; one of sixteen.
 
 Per-user identity, staking, and validator record.
 
-- **PDA seeds:** `[b"user", authority.key()]` (`lib.rs:1424`).
+- **PDA seeds:** `[b"user", authority.key()]` (`register_user.rs:15`).
 - **Layout:** zero-copy, manually padded to 104 bytes (`state.rs:55-75`).
-  **Space:** `8 + size_of::<UserAccount>()` (`lib.rs:1423`).
+  **Space:** `8 + size_of::<UserAccount>()` (`register_user.rs:14`).
 
 | Field | Type | Offset | Notes |
 | --- | --- | --- | --- |
@@ -228,8 +228,8 @@ Per-user identity, staking, and validator record.
 
 Per-meter device record and tokenization watermarks.
 
-- **PDA seeds:** `[b"meter", owner.key(), meter_id.as_bytes()]` (`lib.rs:1498`).
-- **Layout:** zero-copy (`state.rs:80-98`). **Space:** `8 + size_of::<MeterAccount>()` (`lib.rs:1497`).
+- **PDA seeds:** `[b"meter", owner.key(), meter_id.as_bytes()]` (`register_meter.rs:15`).
+- **Layout:** zero-copy (`state.rs:80-98`). **Space:** `8 + size_of::<MeterAccount>()` (`register_meter.rs:14`).
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -253,8 +253,8 @@ simply the `slash_fund` vault's GRX balance (slashed remainders routed in via th
 configured `slash_destination`); outflows are tracked here precisely, one event per
 disbursement, so the fund's redistribution history is auditable on-chain (`state.rs:38-41`).
 
-- **PDA seeds:** `[b"slash_fund_ledger"]` (`lib.rs:1991`).
-- **Layout:** zero-copy (`state.rs:44-50`). **Space:** `8 + size_of::<SlashFundLedger>()` (`lib.rs:1990`).
+- **PDA seeds:** `[b"slash_fund_ledger"]` (`initialize_slash_fund.rs:33`).
+- **Layout:** zero-copy (`state.rs:44-50`). **Space:** `8 + size_of::<SlashFundLedger>()` (`initialize_slash_fund.rs:32`).
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -288,156 +288,156 @@ and a compute-unit profiler under the `localnet` feature.
 
 #### `initialize`
 - **Signer:** `authority` (becomes `registry.authority`).
-- **Accounts:** initialises the `Registry` PDA at `[b"registry"]` (`lib.rs:1384-1391`).
+- **Accounts:** initialises the `Registry` PDA at `[b"registry"]` (`initialize.rs:9-16`).
 - **Effects:** sets `authority`, clears `has_oracle_authority`, `has_slash_destination`, and
-  all global counts (`lib.rs:91-97`).
-- **Event:** `RegistryInitialized` (`lib.rs:99`).
+  all global counts (`initialize.rs:26-31`).
+- **Event:** `RegistryInitialized` (`initialize.rs:33`).
 
 #### `initialize_shard(shard_id: u8)`
 - **Signer:** `authority`.
-- **Precondition:** `shard_id < 16`, else `InvalidShardId` (`lib.rs:108`).
+- **Precondition:** `shard_id < 16`, else `InvalidShardId` (`initialize_shard.rs:25`).
 - **Effects:** initialises the `RegistryShard` PDA, caches its canonical `bump`, and zeroes
-  its counters (`lib.rs:110-115`).
+  its counters (`initialize_shard.rs:26-31`).
 
 #### `set_oracle_authority(oracle: Pubkey)`
 - **Signer:** `authority` — must equal `registry.authority`, else `UnauthorizedAuthority`
-  (`lib.rs:124-128`).
-- **Effects:** sets `oracle_authority`, raises `has_oracle_authority` (`lib.rs:136-137`).
-- **Event:** `OracleAuthoritySet` (carries the prior oracle if any, `lib.rs:139`).
+  (`set_oracle_authority.rs:17-21`).
+- **Effects:** sets `oracle_authority`, raises `has_oracle_authority` (`set_oracle_authority.rs:29-30`).
+- **Event:** `OracleAuthoritySet` (carries the prior oracle if any, `set_oracle_authority.rs:32`).
 
 #### `set_slash_destination(destination: Pubkey)`
-- **Signer:** `authority` — must equal `registry.authority` (`lib.rs:153-157`).
-- **Effects:** sets `slash_destination`, raises `has_slash_destination` (`lib.rs:165-166`).
+- **Signer:** `authority` — must equal `registry.authority` (`set_slash_destination.rs:17-21`).
+- **Effects:** sets `slash_destination`, raises `has_slash_destination` (`set_slash_destination.rs:29-30`).
   This is a precondition for any slashing.
-- **Event:** `SlashDestinationSet` (`lib.rs:168`).
+- **Event:** `SlashDestinationSet` (`set_slash_destination.rs:32`).
 
 #### `update_authority(new_authority: Pubkey)`
-- **Signer:** current `authority` (`lib.rs:180-184`).
-- **Effects:** replaces `registry.authority` (`lib.rs:186-187`).
-- **Event:** `AuthorityUpdated` (`lib.rs:189`).
+- **Signer:** current `authority` (`update_authority.rs:17-21`).
+- **Effects:** replaces `registry.authority` (`update_authority.rs:23-24`).
+- **Event:** `AuthorityUpdated` (`update_authority.rs:26`).
 
 #### `aggregate_shards`
-- **Signer:** `authority` — must equal `registry.authority` (`lib.rs:201-205`).
+- **Signer:** `authority` — must equal `registry.authority` (`aggregate_shards.rs:16-20`).
 - **Accounts:** the `Registry` PDA plus shard accounts passed as `remaining_accounts`.
 - **Preconditions / checks:** each remaining account must be program-owned
-  (`lib.rs:216`); its address is re-validated against `create_program_address` using the
-  stored canonical bump (cheaper than `find_program_address`, `lib.rs:222-227`); a
-  16-bit `seen` bitmask rejects duplicate shard ids (`DuplicateShard`, `lib.rs:229-231`).
+  (`aggregate_shards.rs:31`); its address is re-validated against `create_program_address` using the
+  stored canonical bump (cheaper than `find_program_address`, `aggregate_shards.rs:39-42`); a
+  16-bit `seen` bitmask rejects duplicate shard ids (`DuplicateShard`, `aggregate_shards.rs:44-46`).
 - **Effects:** checked summation of the per-shard counts into the global `Registry`
-  totals (`MathOverflow` on overflow, `lib.rs:233-247`).
+  totals (`MathOverflow` on overflow, `aggregate_shards.rs:48-62`).
 
 ### 4.2 User and meter lifecycle
 
 #### `register_user(user_type, lat_e7, long_e7, h3_index, shard_id)`
 - **Signers:** `payer` (funds the account). `authority` is an `AccountInfo`, not a
   `Signer`, supporting a custodial model where either the user signs for themselves or the
-  registry admin (`payer == registry.authority`) signs on their behalf (`lib.rs:271-279`).
+  registry admin (`payer == registry.authority`) signs on their behalf (`register_user.rs:59-67`).
 - **Preconditions:** `shard_id < 16` **and** `shard_id == shard_for(authority)`, binding
-  the user to its canonical shard so counts cannot be scattered (`lib.rs:262-267`).
+  the user to its canonical shard so counts cannot be scattered (`register_user.rs:50-55`).
 - **Effects:** initialises the `UserAccount` (`Active`, `airdrop_claimed = 0`), increments
-  the shard's `user_count` (checked, `lib.rs:283-297`).
+  the shard's `user_count` (checked, `register_user.rs:74-85`).
 - **Note:** the welcome airdrop is deliberately **not** minted here, so a failed mint CPI
-  cannot roll back registration (`lib.rs:299-302`).
-- **Event:** `UserRegistered` (`lib.rs:303`).
+  cannot roll back registration (`register_user.rs:87-90`).
+- **Event:** `UserRegistered` (`register_user.rs:91`).
 
 #### `claim_airdrop`
-- **Signers:** the user, or the admin acting for them (`lib.rs:323-329`).
+- **Signers:** the user, or the admin acting for them (`claim_airdrop.rs:56-62`).
 - **Preconditions:** `user_account.authority` matches the `authority`; `airdrop_claimed == 0`,
-  else `AirdropAlreadyClaimed` (`lib.rs:335-339`).
+  else `AirdropAlreadyClaimed` (`claim_airdrop.rs:68-72`).
 - **Account pinning:** the `energy_token_program` account is constrained to
   `energy_token::ID`, rejecting any other program with `InvalidEnergyTokenProgram`
   (`instructions/claim_airdrop.rs:37-39`) — the CPI target cannot be substituted, and a
   wrong program fails fast at account validation rather than inside the CPI.
 - **Effects:** sets `airdrop_claimed = 1` **before** the CPI so the flag and the mint commit
-  or roll back together (`lib.rs:331-341`); CPIs `energy_token::mint_tokens_direct` for
-  `AIRDROP_AMOUNT` with the registry PDA signing (`lib.rs:343-361`).
-- **Event:** `AirdropClaimed` (`lib.rs:365`).
+  or roll back together (`claim_airdrop.rs:64-74`); CPIs `energy_token::mint_tokens_direct` for
+  `AIRDROP_AMOUNT` with the registry PDA signing (`claim_airdrop.rs:76-94`).
+- **Event:** `AirdropClaimed` (`claim_airdrop.rs:98`).
 
 #### `register_meter(meter_id: String, meter_type, shard_id, zone_id: i32)`
 - **Signer:** `payer`. `owner` is a non-signing `AccountInfo` (custodial model);
   ownership is enforced by `owner == user_account.authority` and by PDA seeds
-  (`lib.rs:398-402`, `lib.rs:1522-1527`).
-- **Preconditions:** `shard_id < 16` and `shard_id == shard_for(owner)` (`lib.rs:382-386`);
-  `zone_id >= 0` (`InvalidZone`, `lib.rs:383`); user must be `Active` (`UnauthorizedUser`,
-  `lib.rs:392-395`); `meter_id.len() <= 32` (`InvalidMeterId`, `lib.rs:404`).
+  (`register_meter.rs:75-79`, `register_meter.rs:20-25`).
+- **Preconditions:** `shard_id < 16` and `shard_id == shard_for(owner)` (`register_meter.rs:59-63`);
+  `zone_id >= 0` (`InvalidZone`, `register_meter.rs:60`); user must be `Active` (`UnauthorizedUser`,
+  `register_meter.rs:69-72`); `meter_id.len() <= 32` (`InvalidMeterId`, `register_meter.rs:81`).
 - **Effects (zone):** persists `zone_id` on the `MeterAccount`, binding the meter to one
-  governance zone (`lib.rs:410`).
+  governance zone (`register_meter.rs:87`).
 - **Effects:** initialises the `MeterAccount` (`Active`, zeroed watermarks); increments the
   user's `meter_count` and the shard's `meter_count` and `active_meter_count` (all checked,
-  `lib.rs:406-423`).
-- **Event:** `MeterRegistered` (`lib.rs:425`).
+  `register_meter.rs:83-100`).
+- **Event:** `MeterRegistered` (`register_meter.rs:102`).
 
 #### `update_user_status(new_status)`
-- **Signer:** `authority` — must equal `registry.authority` (`lib.rs:443-447`).
-- **Effects:** overwrites `user_account.status` (`lib.rs:449-450`).
-- **Event:** `UserStatusUpdated` (`lib.rs:452`).
+- **Signer:** `authority` — must equal `registry.authority` (`update_user_status.rs:25-29`).
+- **Effects:** overwrites `user_account.status` (`update_user_status.rs:31-32`).
+- **Event:** `UserStatusUpdated` (`update_user_status.rs:34`).
 
 #### `set_meter_status(new_status)`
-- **Signer:** `authority` — must be the meter owner or the registry admin (`lib.rs:558-560`).
+- **Signer:** `authority` — must be the meter owner or the registry admin (`set_meter_status.rs:33-35`).
 - **Preconditions:** the supplied shard must be the owner's shard (`InvalidShardId`,
-  `lib.rs:564-567`; the seed is derived from `meter.owner`, `lib.rs:1600`); neither the old
-  nor the new status may be `Inactive` (`InvalidMeterStatusTransition`, `lib.rs:577-580`) —
+  `set_meter_status.rs:39-42`; the seed is derived from `meter.owner`, `set_meter_status.rs:20`); neither the old
+  nor the new status may be `Inactive` (`InvalidMeterStatusTransition`, `set_meter_status.rs:52-55`) —
   `Inactive` is terminal and owned solely by `deactivate_meter`, so this instruction can
   neither revive a deactivated meter nor deactivate one (either would desync the shard's
   `active_meter_count` from `meter_count`).
 - **Effects:** adjusts the shard's `active_meter_count` on Active↔non-Active transitions
-  (saturating, `lib.rs:582-586`); sets the new status.
-- **Event:** `MeterStatusUpdated` (`lib.rs:590`).
+  (saturating, `set_meter_status.rs:57-61`); sets the new status.
+- **Event:** `MeterStatusUpdated` (`set_meter_status.rs:65`).
 
 #### `deactivate_meter`
-- **Signer:** `owner` — must equal `meter.owner` (`lib.rs:607-611`).
+- **Signer:** `owner` — must equal `meter.owner` (`deactivate_meter.rs:43-47`).
 - **Account binding (security fix):** `user_account` is seeds-bound to `owner`
-  (`[b"user", owner.key()]`, `lib.rs:1616-1621`), so the `meter_count` decrement can only
+  (`[b"user", owner.key()]`, `deactivate_meter.rs:16-21`), so the `meter_count` decrement can only
   ever hit the signer's own `UserAccount` — a caller cannot pass a victim's account to
   grief their `meter_count` down.
-- **Preconditions:** meter not already `Inactive` (`AlreadyInactive`, `lib.rs:613-616`).
+- **Preconditions:** meter not already `Inactive` (`AlreadyInactive`, `deactivate_meter.rs:49-52`).
 - **Effects:** decrements the shard `active_meter_count` if previously Active; sets
   `Inactive`; decrements the user's `meter_count` and the shard's `meter_count` (all
-  saturating, `lib.rs:618-627`).
-- **Event:** `MeterDeactivated` (`lib.rs:629`).
+  saturating, `deactivate_meter.rs:54-63`).
+- **Event:** `MeterDeactivated` (`deactivate_meter.rs:65`).
 
 ### 4.3 Metering and tokenization
 
 #### `update_meter_reading(energy_generated, energy_consumed, reading_timestamp)`
 - **Signer:** `oracle_authority` — must equal the configured `registry.oracle_authority`;
   requires `has_oracle_authority == 1` (`OracleNotConfigured` / `UnauthorizedOracle`,
-  `lib.rs:473-478`).
+  `update_meter_reading.rs:35-40`).
 - **Preconditions:** meter `Active` (`InvalidMeterStatus`); `reading_timestamp >
   last_reading_at` (`StaleReading`); minimum 60 s between readings after the first
   (`ReadingTooFrequent`); each delta `<= 1,000,000,000,000` (`ReadingTooHigh`)
-  (`lib.rs:480-507`).
+  (`update_meter_reading.rs:42-69`).
 - **Effects:** advances `last_reading_at`; checked-adds the cumulative generation and
-  consumption (`lib.rs:509-511`).
+  consumption (`update_meter_reading.rs:71-73`).
 - **Oracle cross-check (anti-double-bookkeeping):** the instruction takes the oracle
   program's own per-meter `MeterState` PDA as an `UncheckedAccount`
-  (`oracle_meter_state`, `lib.rs:1553-1559`) and raw-validates it in-handler — owner ==
+  (`oracle_meter_state`, `update_meter_reading.rs:16-21`) and raw-validates it in-handler — owner ==
   `ORACLE_PROGRAM_ID`, canonical PDA `[b"meter", meter_id]`, and minimum byte length —
   then requires the registry's post-update cumulative totals to never exceed the oracle's
   `total_energy_produced` / `total_energy_consumed` for the same meter
-  (`OracleTotalMismatch`, `lib.rs:513-539`). The comparison is `<=`, not `==`, so a
+  (`OracleTotalMismatch`, `update_meter_reading.rs:84-101`). The comparison is `<=`, not `==`, so a
   registry sync that lags an oracle submission still passes; only "registry claims more
   than oracle ever recorded" is rejected. This closes the gap where a corrupt
   `oracle_authority` could push inflated totals to registry alone and mint GRID against
   energy the oracle never saw. Raw validation (no `oracle` crate dependency) avoids the
   `registry → oracle → governance → registry` dependency cycle, mirroring the
-  `GOVERNANCE_PROGRAM_ID` pattern (`lib.rs:28`).
-- **Event:** `MeterReadingUpdated` (`lib.rs:541`).
+  `GOVERNANCE_PROGRAM_ID` pattern (`lib.rs:33`).
+- **Event:** `MeterReadingUpdated` (`update_meter_reading.rs:103`).
 
 #### `get_unsettled_balance` (view, returns `u64`)
-- Returns `net_generation − settled_net_generation`, saturating (`lib.rs:659-672`).
+- Returns `net_generation − settled_net_generation`, saturating (`queries.rs:42-52`).
 
 #### `settle_meter_balance` (returns `u64`)
-- **Signer:** `meter_owner` (verified inside `do_settle_meter`, `lib.rs:1266-1270`).
+- **Signer:** `meter_owner` (verified inside `do_settle_meter`, `lib.rs:344-348`).
 - **Effects:** computes new mintable tokens as
   `net_gen − settled_net_generation − claimed_erc_generation` (saturating), requires the
   result `> 0` (`NoUnsettledBalance`), advances `settled_net_generation`, and returns the
-  amount (`lib.rs:1272-1293`). No tokens are minted; minting is the caller's responsibility.
-- **Event:** `MeterBalanceSettled` (`lib.rs:1286`).
+  amount (`lib.rs:350-371`). No tokens are minted; minting is the caller's responsibility.
+- **Event:** `MeterBalanceSettled` (`lib.rs:364`).
 
 #### `settle_and_mint_tokens`
 - Convenience variant: runs `do_settle_meter` then CPIs
   `energy_token::mint_tokens_direct` for the settled amount, with the registry PDA signing
-  (`lib.rs:688-717`).
+  (`settle_and_mint_tokens.rs:48-73`).
 - **Account pinning:** as in `claim_airdrop`, the `energy_token_program` account is
   constrained to `energy_token::ID` (`InvalidEnergyTokenProgram`,
   `instructions/settle_and_mint_tokens.rs:36-38`).
@@ -460,138 +460,138 @@ and a compute-unit profiler under the `localnet` feature.
 
 ### 4.4 Validation views
 
-`is_valid_user` (`lib.rs:640`) and `is_valid_meter` (`lib.rs:649`) return a boolean
+`is_valid_user` (`queries.rs:30`) and `is_valid_meter` (`queries.rs:36`) return a boolean
 indicating that the respective account's status is `Active`.
 
 ### 4.5 Staking, validation, and slashing
 
 #### `initialize_vault`
-- **Signer:** `authority` — `has_one = authority` on the `Registry` (`lib.rs:1722`).
-- **Effects:** the handler body is empty (`lib.rs:755-757`); the work is the account-context
+- **Signer:** `authority` — `has_one = authority` on the `Registry` (`initialize_vault.rs:12`).
+- **Effects:** the handler body is empty (`initialize_vault.rs:37-39`); the work is the account-context
   `init` of the GRX vault PDA at `[b"grx_vault"]` with the registry as token authority
-  (`lib.rs:1726-1735`).
+  (`initialize_vault.rs:16-25`).
 
 #### `stake_grx(amount)`
-- **Signer:** `authority` — `has_one = authority` binds the `UserAccount` (`lib.rs:1753`).
-- **Precondition:** `amount > 0` (`MinStakeNotMet`, `lib.rs:761`).
+- **Signer:** `authority` — `has_one = authority` binds the `UserAccount` (`stake_grx.rs:18`).
+- **Precondition:** `amount > 0` (`MinStakeNotMet`, `stake_grx.rs:55`).
 - **Effects:** `transfer_checked` of `amount` GRX from the user's ATA into the vault
-  (`lib.rs:763-772`); checked-adds to `staked_grx` (`lib.rs:775-779`); **re-anchors
-  `last_stake_at` to now on every stake** (`lib.rs:786`, see §5).
+  (`stake_grx.rs:56-65`); checked-adds to `staked_grx` (`stake_grx.rs:68-72`); **re-anchors
+  `last_stake_at` to now on every stake** (`stake_grx.rs:79`, see §5).
 
 #### `register_validator`
-- **Signer:** `authority` (`has_one`, `lib.rs:1795`).
+- **Signer:** `authority` (`has_one`, `register_validator.rs:13`).
 - **Accounts:** an `aggregator_entry` PDA — the governance `AggregatorEntry` allow-list
   entry for `authority`, passed as an `UncheckedAccount` and raw-validated in-handler
-  (`lib.rs:1799-1803`).
+  (`register_validator.rs:17-21`).
 - **Preconditions:** `validator_status != Slashed` (`ValidatorAlreadySlashed`, a slashed
-  validator may never self-reinstate, `lib.rs:799-802`); `staked_grx >=
-  MIN_VALIDATOR_STAKE` (`MinStakeNotMet`, `lib.rs:804-807`).
+  validator may never self-reinstate, `register_validator.rs:32-35`); `staked_grx >=
+  MIN_VALIDATOR_STAKE` (`MinStakeNotMet`, `register_validator.rs:37-40`).
 - **PoA aggregator-admission gate:** the bond is only granted to a governance-admitted
   aggregator — `MIN` stake alone cannot self-promote. The `aggregator_entry` is validated
   by raw account checks (no governance crate dep — would cycle): owner ==
   `GOVERNANCE_PROGRAM_ID` (`AggregatorNotAdmitted`), canonical PDA
   `[b"aggregator", authority]` (`AggregatorNotAdmitted`), borsh length `>= 57`
   (`InvalidAggregatorEntry`), `aggregator == authority`, and `active == 1`
-  (`AggregatorNotAdmitted`) (`lib.rs:813-837`).
+  (`AggregatorNotAdmitted`) (`register_validator.rs:46-70`).
 - **Effect:** sets `validator_status = Active` and clears `resign_at = 0`, so re-activating
-  from `Resigning` cancels a pending resignation (`lib.rs:840-841`).
+  from `Resigning` cancels a pending resignation (`register_validator.rs:73-74`).
 
 #### `deregister_validator`
-- **Signer:** `authority` (`has_one`, `lib.rs:1814`).
-- **Precondition:** `validator_status == Active` (`NotActiveValidator`, `lib.rs:855-858`).
-- **Effects:** flips `Active → Resigning` and stamps `resign_at = now` (`lib.rs:859-860`).
+- **Signer:** `authority` (`has_one`, `deregister_validator.rs:12`).
+- **Precondition:** `validator_status == Active` (`NotActiveValidator`, `deregister_validator.rs:22-25`).
+- **Effects:** flips `Active → Resigning` and stamps `resign_at = now` (`deregister_validator.rs:26-27`).
   This is the **honest-exit path**: the bond stays locked and the validator stays slashable
   for `RESIGN_COOLDOWN_SECS` (24 h), so an honest exit cannot dodge a pending slash. Only
   after the window may the bond be unstaked below `MIN_VALIDATOR_STAKE`; calling
   `register_validator` again before unstaking cancels the resignation.
 
 #### `unstake_grx(amount)`
-- **Signer:** `authority` (`has_one`, `lib.rs:1827`).
+- **Signer:** `authority` (`has_one`, `unstake_grx.rs:20`).
 - **Guard helper:** the balance, cooldown, and bond-lock checks live in the pure function
   `check_unstake_allowed(amount, staked, last_stake_at, resign_at, now, validator_status)`
-  (`lib.rs:1342-1365`), extracted for direct unit-testing (§9) and called before the CPI
-  (`lib.rs:886`).
-- **Preconditions:** `amount > 0` (`InsufficientStakingBalance`, `lib.rs:871`);
-  `amount <= staked_grx` (`lib.rs:1350`); cooldown elapsed,
-  `now − last_stake_at >= UNSTAKE_COOLDOWN_SECS` (`UnstakingLocked`, `lib.rs:1351-1354`).
+  (`lib.rs:420-443`), extracted for direct unit-testing (§9) and called before the CPI
+  (`unstake_grx.rs:71`).
+- **Preconditions:** `amount > 0` (`InsufficientStakingBalance`, `unstake_grx.rs:57`);
+  `amount <= staked_grx` (`lib.rs:428`); cooldown elapsed,
+  `now − last_stake_at >= UNSTAKE_COOLDOWN_SECS` (`UnstakingLocked`, `lib.rs:429-432`).
 - **Bond lock (anti-slash-escape):** while the validator is still slashable, the bond
-  cannot be drawn below `MIN_VALIDATOR_STAKE` (`ValidatorStakeLocked`, `lib.rs:1355-1363`).
+  cannot be drawn below `MIN_VALIDATOR_STAKE` (`ValidatorStakeLocked`, `lib.rs:433-441`).
   An `Active` validator is always locked; a `Resigning` one stays locked until the resign
   cooldown elapses (`now − resign_at >= RESIGN_COOLDOWN_SECS`). Suspended/Slashed/None
   accounts are unlocked, and excess above `MIN` is always withdrawable. To exit, an Active
   validator must first `deregister_validator` and serve the resign cooldown (or be slashed).
 - **Effects:** `transfer_checked` from vault to the user's ATA, with the registry PDA
-  signing (`lib.rs:893-907`); checked-subtracts from `staked_grx` (`lib.rs:909-914`). The
+  signing (`unstake_grx.rs:78-91`); checked-subtracts from `staked_grx` (`unstake_grx.rs:94-99`). The
   former `Active → Suspended` auto-demotion is **removed**: the pre-CPI bond-lock guard
   guarantees an Active validator's remaining stake can never drop below `MIN` via unstake
-  (`lib.rs:916-918`).
-- **Event:** `Unstaked` (`lib.rs:920-925`).
+  (`unstake_grx.rs:101-103`).
+- **Event:** `Unstaked` (`unstake_grx.rs:105-110`).
 
 #### `slash_validator(slash_bps, proven_loss)`
 - **Signer:** `authority` — must equal `registry.authority` (`UnauthorizedAuthority`).
-- **Preconditions:** `slash_bps ∈ 1..=10000` (`InvalidSlashFraction`, `lib.rs:955-958`);
+- **Preconditions:** `slash_bps ∈ 1..=10000` (`InvalidSlashFraction`, `slash_validator.rs:72-75`);
   PoA gate via the shared `poa_slash_gate` helper — registry authority + `has_slash_destination
   == 1` (`SlashDestinationNotSet`) + supplied destination equals the configured one
-  (`InvalidSlashDestination`) (`lib.rs:959-969`, `lib.rs:1299-1311`); and (in
-  `compute_slash_amount`, `lib.rs:1315-1334`) the target's `validator_status` is `Active`
+  (`InvalidSlashDestination`) (`slash_validator.rs:79-86`, `lib.rs:377-389`); and (in
+  `compute_slash_amount`, `lib.rs:393-412`) the target's `validator_status` is `Active`
   **or `Resigning`** (`NotActiveValidator`) with `staked_grx > 0`
   (`InsufficientStakingBalance`). Including `Resigning` keeps the honest-exit path from
   being a slash dodge — the bond stays slashable for the whole resign cooldown.
 - **Effects:** `slash_amount = bond * slash_bps / 10000` capped at the bond; victim
   compensation `= min(slash_amount, proven_loss)` to `victim_token_account`, the remainder
   to `slash_destination` — both `transfer_checked` with the registry PDA signing; value
-  invariant `slash_amount == compensation + fund` enforced (`lib.rs:970-1037`). Status
-  transition applied by the shared `apply_slash_status` helper (`lib.rs:1369-1377`).
-- **Event:** `ValidatorSlashed` (`lib.rs:1040-1048`).
+  invariant `slash_amount == compensation + fund` enforced (`slash_validator.rs:88-150`). Status
+  transition applied by the shared `apply_slash_status` helper (`lib.rs:447-455`).
+- **Event:** `ValidatorSlashed` (`slash_validator.rs:157-165`).
 
 > The PoA gate (`poa_slash_gate`) and the amount/status helpers (`compute_slash_amount`,
 > `apply_slash_status`) are **deduped** and shared with the multi-victim
-> `slash_validator_multi` variant (`lib.rs:1064`). The pure helpers — plus the
+> `slash_validator_multi` variant (`slash_validator_multi.rs:57`). The pure helpers — plus the
 > `check_unstake_allowed` unstake guard — carry direct in-crate unit tests
-> (`mod slash_math_tests`, `lib.rs:2048-2225`; see §9).
+> (`mod slash_math_tests`, `lib.rs:457-634`; see §9).
 
 #### `slash_validator_multi(slash_bps, victim_losses: Vec<u64>)`
 - **Signer:** `authority` — identical PoA gate to `slash_validator` via the shared
-  `poa_slash_gate` (`lib.rs:1077-1085`).
+  `poa_slash_gate` (`slash_validator_multi.rs:71-78`).
 - **Accounts:** same as `SlashValidator` except the single `victim_token_account` is
   replaced by N victim GRX token accounts passed as `remaining_accounts` (all `mut`),
-  parallel to `victim_losses` (`lib.rs:1916-1962`).
-- **Preconditions:** `slash_bps ∈ 1..=10000` (`InvalidSlashFraction`, `lib.rs:1069-1072`);
+  parallel to `victim_losses` (`slash_validator_multi.rs:12-55`).
+- **Preconditions:** `slash_bps ∈ 1..=10000` (`InvalidSlashFraction`, `slash_validator_multi.rs:62-65`);
   `victim_losses.len()` must equal the number of remaining accounts
-  (`VictimCountMismatch`, `lib.rs:1073-1076`); target `Active`/`Resigning` with a positive
-  bond (shared `compute_slash_amount`, `lib.rs:1091`).
-- **Effects:** `total_loss = Σ victim_losses` (checked, `lib.rs:1093-1096`); compensation
-  pool `= min(slash_amount, total_loss)` (`lib.rs:1097`); victim `i` receives
+  (`VictimCountMismatch`, `slash_validator_multi.rs:66-69`); target `Active`/`Resigning` with a positive
+  bond (shared `compute_slash_amount`, `slash_validator_multi.rs:84`).
+- **Effects:** `total_loss = Σ victim_losses` (checked, `slash_validator_multi.rs:86-89`); compensation
+  pool `= min(slash_amount, total_loss)` (`slash_validator_multi.rs:90`); victim `i` receives
   `pool * victim_losses[i] / total_loss` (u128 floor division; zero-amount payouts are
-  skipped, `lib.rs:1108-1135`); the fund receives everything not paid to victims,
-  `slash_amount − Σ paid`, so integer rounding dust falls to the fund (`lib.rs:1138`);
+  skipped, `slash_validator_multi.rs:102-127`); the fund receives everything not paid to victims,
+  `slash_amount − Σ paid`, so integer rounding dust falls to the fund (`slash_validator_multi.rs:131`);
   value invariant `slash_amount == paid + fund_amount` enforced
-  (`SlashAccountingMismatch`, `lib.rs:1139-1142`); status transition via the shared
-  `apply_slash_status` (`lib.rs:1163`).
+  (`SlashAccountingMismatch`, `slash_validator_multi.rs:132-135`); status transition via the shared
+  `apply_slash_status` (`slash_validator_multi.rs:156`).
 - **Event:** `ValidatorSlashed` — `compensation` carries the total paid across all
-  victims, `proven_loss` the summed loss (`lib.rs:1166-1174`).
+  victims, `proven_loss` the summed loss (`slash_validator_multi.rs:159-167`).
 
 #### `initialize_slash_fund`
-- **Signer:** `authority` — `has_one = authority` on the `Registry` (`lib.rs:1972`).
+- **Signer:** `authority` — `has_one = authority` on the `Registry` (`initialize_slash_fund.rs:14`).
 - **Effects:** creates the **transparent slash fund**: a registry-owned GRX vault PDA at
-  `[b"slash_fund"]` with the registry as token authority (`lib.rs:1976-1985`) plus the
+  `[b"slash_fund"]` with the registry as token authority (`initialize_slash_fund.rs:18-27`) plus the
   `SlashFundLedger` PDA at `[b"slash_fund_ledger"]` (§3.6) with zeroed accounting and its
-  canonical bump cached (`lib.rs:1185-1194`).
+  canonical bump cached (`initialize_slash_fund.rs:49-53`).
 - **Intended wiring:** point `slash_destination` at this vault via `set_slash_destination`
   so slash remainders route here automatically — inflows are then the vault's GRX balance,
-  outflows are tracked precisely in the ledger (`lib.rs:1179-1184`).
+  outflows are tracked precisely in the ledger (`lib.rs:319-324`).
 
 #### `disburse_slash_fund(amount)`
 - **Signer:** `authority` — must equal `registry.authority` (`UnauthorizedAuthority`,
-  `lib.rs:1201-1208`).
-- **Preconditions:** `amount > 0` (`InvalidAmount`, `lib.rs:1200`); `amount <=
-  slash_fund.amount` (`InsufficientSlashFund`, `lib.rs:1209-1212`).
+  `disburse_slash_fund.rs:52-59`).
+- **Preconditions:** `amount > 0` (`InvalidAmount`, `disburse_slash_fund.rs:51`); `amount <=
+  slash_fund.amount` (`InsufficientSlashFund`, `disburse_slash_fund.rs:60-63`).
 - **Effects:** `transfer_checked` of `amount` GRX from the fund vault to the passed
   `destination` token account (e.g. the treasury `reward_vault` for redistribution via
-  `fund_rewards`, `lib.rs:1196-1198`, `lib.rs:2032-2038`), with the registry PDA signing
-  (`lib.rs:1214-1231`); checked-updates the published ledger — `total_disbursed`,
-  `disbursement_count`, `last_disbursed_ts` (`lib.rs:1234-1246`).
-- **Event:** `SlashFundDisbursed` (`lib.rs:1247-1253`).
+  `fund_rewards`, `disburse_slash_fund.rs:34`, `disburse_slash_fund.rs:35-40`), with the registry PDA signing
+  (`disburse_slash_fund.rs:65-82`); checked-updates the published ledger — `total_disbursed`,
+  `disbursement_count`, `last_disbursed_ts` (`disburse_slash_fund.rs:85-97`).
+- **Event:** `SlashFundDisbursed` (`disburse_slash_fund.rs:98-104`).
 
 ---
 
@@ -599,7 +599,7 @@ indicating that the respective account's status is `Active`.
 
 1. **Cooldown re-anchoring closes the dust-bypass (recent fix).** `stake_grx` re-anchors
    `last_stake_at` to the current time on **every** stake, not only the first deposit
-   (`lib.rs:780-786`). Anchoring only to the first deposit had allowed a staker to keep a
+   (`stake_grx.rs:73-79`). Anchoring only to the first deposit had allowed a staker to keep a
    permanent dust balance so that `last_stake_at` never refreshed, then stake-large and
    immediately unstake-large with zero cooldown, escaping the slashing window. Every fresh
    GRX now serves the full 24-hour cooldown before it can leave the vault.
@@ -607,28 +607,28 @@ indicating that the respective account's status is `Active`.
 2. **Slashing is constrained to slashable validators and a configured sink.** `slash_validator`
    refuses to operate until `set_slash_destination` has been called (`SlashDestinationNotSet`),
    rejects any destination other than the configured one (`InvalidSlashDestination`)
-   (`poa_slash_gate`, `lib.rs:1299-1311`), and slashes only accounts whose
+   (`poa_slash_gate`, `lib.rs:377-389`), and slashes only accounts whose
    `validator_status` is `Active` or `Resigning` (`NotActiveValidator`,
-   `lib.rs:1315-1327`). A slash therefore cannot be misrouted, and plain stakers,
+   `lib.rs:398-404`). A slash therefore cannot be misrouted, and plain stakers,
    suspended, or already-slashed accounts cannot be slashed — while an honest exit
    (`Resigning`) stays slashable through its cooldown.
 
 3. **Slashed validators cannot self-reinstate.** `register_validator` rejects accounts in
-   `Slashed` status (`lib.rs:799-802`); restaking can never silently undo a slash.
+   `Slashed` status (`register_validator.rs:32-35`); restaking can never silently undo a slash.
 
 4. **Sharding preserves write-parallelism.** Hot-path registrations write only the per-shard
-   counter and never take a write lock on the global `Registry` (`lib.rs:1517-1520`). The
+   counter and never take a write lock on the global `Registry` (`register_meter.rs:34-37`). The
    global totals are stale by design and reconciled by `aggregate_shards`, which rejects
    non-program-owned accounts, validates each shard's PDA via its cached bump, and rejects
-   duplicate shards through a bitmask (`lib.rs:215-231`).
+   duplicate shards through a bitmask (`aggregate_shards.rs:31-46`).
 
 5. **Shard binding cannot be forged.** Both `register_user` and `register_meter` require
-   `shard_id == shard_for(key)` (`lib.rs:264-267`, `lib.rs:384-386`), so counts cannot be
+   `shard_id == shard_for(key)` (`register_user.rs:52-55`, `register_meter.rs:62-63`), so counts cannot be
    scattered onto arbitrary shards, and the same selector seeds the shard PDA in
-   status-change instructions (`lib.rs:1596-1603`, `lib.rs:1626-1633`).
+   status-change instructions (`set_meter_status.rs:18-22`, `deactivate_meter.rs:28-32`).
 
 6. **Combined tokenization claims are bounded by net generation.** Both GRID settlement
-   (`do_settle_meter`, `lib.rs:1276-1282`) and ERC claims (`mark_erc_claimed`,
+   (`do_settle_meter`, `lib.rs:350-360`) and ERC claims (`mark_erc_claimed`,
    `instructions/mark_erc_claimed.rs:32-40`) subtract the other's watermark from net
    generation, so the sum of GRID-minted and ERC-claimed energy can never exceed total net
    generation. This prevents double-minting. `mark_erc_claimed` is callable by
@@ -638,9 +638,9 @@ indicating that the respective account's status is `Active`.
 
 7. **Airdrop is exactly-once and idempotent in failure.** `claim_airdrop` sets
    `airdrop_claimed = 1` before the mint CPI, so the flag and the mint commit or roll back
-   atomically; a second claim is rejected with `AirdropAlreadyClaimed` (`lib.rs:331-341`).
+   atomically; a second claim is rejected with `AirdropAlreadyClaimed` (`claim_airdrop.rs:64-74`).
    The airdrop amount is fixed at `AIRDROP_AMOUNT = 10,000,000,000` smallest units = **10 GRX**
-   (9 decimals, `lib.rs:31`).
+   (9 decimals, `lib.rs:36`).
 
 8. **Checked arithmetic throughout.** The release profile forces `overflow-checks = true`
    (`Cargo.toml:34-35`), and counters use explicit `checked_add` (`MathOverflow`) on
@@ -648,7 +648,7 @@ indicating that the respective account's status is `Active`.
 
 9. **Meter-reading anti-abuse.** Readings must be strictly newer than the last
    (`StaleReading`), at least 60 s apart (`ReadingTooFrequent`), and below a per-delta cap
-   of `1e12` units (`ReadingTooHigh`) (`lib.rs:480-507`).
+   of `1e12` units (`ReadingTooHigh`) (`update_meter_reading.rs:42-69`).
 
 10. **Registry energy totals are bounded by the oracle's ledger (recent fix).** The
     registry (`MeterAccount.total_generation/total_consumption`) and the oracle
@@ -656,7 +656,7 @@ indicating that the respective account's status is `Active`.
     pushed by separate signed calls with no CPI between them. `update_meter_reading` now
     cross-checks the raw-validated oracle `MeterState` PDA and rejects any update that
     would make the registry's totals exceed the oracle's (`OracleTotalMismatch`,
-    `lib.rs:513-539`), so a corrupt `oracle_authority` can no longer inflate the
+    `update_meter_reading.rs:84-101`), so a corrupt `oracle_authority` can no longer inflate the
     settleable (mintable) balance through registry alone. `<=` rather than `==` tolerates
     a registry sync that lags an oracle submission.
 
@@ -669,14 +669,14 @@ indicating that the respective account's status is `Active`.
 The registry depends on `energy-token` with `features = ["cpi"]` (`Cargo.toml:30`) and
 invokes its `mint_tokens_direct` instruction in two places:
 
-- **`claim_airdrop`** — mints `AIRDROP_AMOUNT` to the new user (`lib.rs:343-361`).
-- **`settle_and_mint_tokens`** — mints the freshly-settled net generation (`lib.rs:702-713`).
+- **`claim_airdrop`** — mints `AIRDROP_AMOUNT` to the new user (`claim_airdrop.rs:76-94`).
+- **`settle_and_mint_tokens`** — mints the freshly-settled net generation (`settle_and_mint_tokens.rs:61-72`).
 
 In both cases the registry PDA (`[b"registry"]`) signs via
 `CpiContext::new_with_signer` with `registry_seeds = [b"registry", &[bump]]`
-(`lib.rs:352-358`, `lib.rs:694-712`). The registry PDA is supplied as the energy-token
+(`claim_airdrop.rs:85-91`, `settle_and_mint_tokens.rs:53-71`). The registry PDA is supplied as the energy-token
 `authority`, `registry_authority`, and (in the airdrop case, where no REC validator is
-required) `rec_validator` accounts (`lib.rs:347-349`). In both instructions the
+required) `rec_validator` accounts (`claim_airdrop.rs:80-82`). In both instructions the
 `energy_token_program` account is pinned by an Anchor constraint to `energy_token::ID`
 (`InvalidEnergyTokenProgram`, `instructions/claim_airdrop.rs:37-39`,
 `instructions/settle_and_mint_tokens.rs:36-38`), so the CPI can only ever target the real
@@ -687,7 +687,7 @@ energy-token program.
 Slash redistribution is **not** a CPI into the treasury program. `slash_validator` performs
 plain SPL `transfer_checked`s of the slashed bond from the GRX vault — victim compensation
 to `victim_token_account`, the remainder to the configured `slash_destination` token
-account (`lib.rs:993-1033`), which the platform wires to the treasury `rebate_vault`
+account (`slash_validator.rs:110-150`), which the platform wires to the treasury `rebate_vault`
 (regulator / consumer-rebate pool, `scripts/init-treasury.ts:106-121`). The registry holds
 no compile-time dependency on the treasury program.
 
@@ -761,7 +761,7 @@ no compile-time dependency on the treasury program.
 
 | Suite | Command | Coverage |
 | --- | --- | --- |
-| Unit (Rust, in-crate) | `cd programs/registry && cargo test` | 21 tests over the pure helpers and layouts: `compute_slash_amount` (fractional / full / capped slash, Resigning slashable, non-Active and zero-bond rejections) and `apply_slash_status` (terminal `Slashed`, below-floor `Suspended`, at-floor stays `Active`) plus the `check_unstake_allowed` bond-guard edges (`mod slash_math_tests`, `lib.rs:2048-2225`), and zero-copy layout guards (`state.rs:160`) |
+| Unit (Rust, in-crate) | `cd programs/registry && cargo test` | 21 tests over the pure helpers and layouts: `compute_slash_amount` (fractional / full / capped slash, Resigning slashable, non-Active and zero-bond rejections) and `apply_slash_status` (terminal `Slashed`, below-floor `Suspended`, at-floor stays `Active`) plus the `check_unstake_allowed` bond-guard edges (`mod slash_math_tests`, `lib.rs:457-634`), and zero-copy layout guards (`state.rs:160`) |
 | Sharding (Mocha/Anchor) | `npm run test:registry` → `anchor test tests/registry_sharding.ts` (`package.json:15`) | shard initialisation, shard-bound registration, `aggregate_shards` reconciliation |
 | Staking (Mocha/Anchor) | `npm run test:staking` → `anchor test tests/staking.ts` (`package.json:16`) | stake / register-validator / unstake-cooldown / slash flows; multi-victim pro-rata slash (`tests/staking.ts:546-577`) and the slash-fund init → route-remainder → disburse lifecycle with ledger deltas (`tests/staking.ts:579-625`) |
 | Staking (LiteSVM, in-process) | `npm run test:staking-litesvm` → `mocha -r tsx tests/staking_unstake_litesvm.ts` (`package.json:17`) | clock-warped unstake happy-path, cooldown, and demotion without a live validator |
