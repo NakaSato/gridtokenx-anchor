@@ -1,4 +1,4 @@
-// Treasury THBC invariants F1/F3/F5/F6 against the real compiled program (litesvm,
+// Treasury THBC invariants F1/F3/F5/F6/F7 against the real compiled program (litesvm,
 // no validator).
 //
 // Why this suite exists: treasury has had NO litesvm coverage since tests/treasury.ts
@@ -10,6 +10,7 @@
 //   F3  one bank_ref => at most one issuance                 [b"deposit", H(ref)] nullifier
 //   F5  now - attestation_ts <= ttl, else issuance halts     issue_thbc, StaleAttestation
 //   F6  the exchange path never changes thbc_supply          exchange_*, transfers only
+//   F7  a holder recovers within delta, or the issuer burns   redeem/confirm/reclaim
 //
 // F3 is the one that most needed a real runtime. Its guarantee is Anchor `init` on a
 // PDA in the SAME instruction as the mint, so a replay is rejected by the SOLANA
@@ -42,6 +43,9 @@ const TREASURY_DISC = Buffer.from([238, 239, 123, 238, 89, 1, 168, 253]);
 const STALE_ATTESTATION = 6006;
 const PEG_BREACH = 6007;
 const INSUFFICIENT_INVENTORY = 6019;
+const TIMELOCK_NOT_EXPIRED = 6022;
+
+const DELTA = 86_400; // REDEMPTION_DELTA_SECS
 
 const NOW = 1_800_000_000;
 const TTL = 3_600;
@@ -53,7 +57,7 @@ function bankRefHash(reference: string): Buffer {
   return createHash("sha256").update(reference.trim().toUpperCase(), "utf8").digest();
 }
 
-describe("treasury THBC — F1/F3/F5/F6 invariants", () => {
+describe("treasury THBC — F1/F3/F5/F6/F7 invariants", () => {
   let svm: LiteSVM;
   let treasury: Program<Treasury>;
   let programId: PublicKey;
@@ -62,6 +66,7 @@ describe("treasury THBC — F1/F3/F5/F6 invariants", () => {
   let thbcMintPda: PublicKey, thbcMintBump: number;
   let inventoryPda: PublicKey, inventoryBump: number;
   let swapVaultPda: PublicKey, swapVaultBump: number;
+  let escrowPda: PublicKey, escrowBump: number;
 
   const authority = Keypair.generate(); // also the issuer (disclosed conflation)
   const attestor = Keypair.generate();
@@ -113,7 +118,8 @@ describe("treasury THBC — F1/F3/F5/F6 invariants", () => {
    *   8x u8                     @250  paused, bump, thbc_mint_bump, swap_vault_bump,
    *                                   stake_vault_bump, reward_vault_bump,
    *                                   rebate_vault_bump, thbc_inventory_bump
-   *   [u8; 14] padding          @258
+   *   u8 redeem_escrow_bump     @258
+   *   [u8; 13] padding          @259
    */
   function installTreasury(opts: {
     attestedReserve: bigint;
@@ -143,6 +149,7 @@ describe("treasury THBC — F1/F3/F5/F6 invariants", () => {
     data.writeUInt8(swapVaultBump, b + 253);
     // stake_vault_bump, reward_vault_bump, rebate_vault_bump unused here
     data.writeUInt8(inventoryBump, b + 257);
+    data.writeUInt8(escrowBump, b + 258);
 
     svm.setAccount(treasuryPda, {
       lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))),
@@ -239,6 +246,7 @@ describe("treasury THBC — F1/F3/F5/F6 invariants", () => {
     [thbcMintPda, thbcMintBump] = PublicKey.findProgramAddressSync([Buffer.from("thbc_mint")], programId);
     [inventoryPda, inventoryBump] = PublicKey.findProgramAddressSync([Buffer.from("thbc_inventory")], programId);
     [swapVaultPda, swapVaultBump] = PublicKey.findProgramAddressSync([Buffer.from("swap_vault")], programId);
+    [escrowPda, escrowBump] = PublicKey.findProgramAddressSync([Buffer.from("redeem_escrow")], programId);
 
     installMint(thbcMintPda, 6, 0n);
     installMint(grxMint, 9, 0n);
@@ -248,6 +256,176 @@ describe("treasury THBC — F1/F3/F5/F6 invariants", () => {
     installTokenAccount(userGrxAta, grxMint, user.publicKey, 10_000_000_000n); // 10 GRX
     installTokenAccount(inventoryPda, thbcMintPda, treasuryPda, 0n);
     installTokenAccount(swapVaultPda, grxMint, treasuryPda, 0n);
+    installTokenAccount(escrowPda, thbcMintPda, treasuryPda, 0n);
+  });
+
+  // ---------------------------------------------------------------------------
+  // F7 — redemption liveness
+  // ---------------------------------------------------------------------------
+
+  function seqLe(seq: number) {
+    const b = Buffer.alloc(8);
+    b.writeBigUInt64LE(BigInt(seq));
+    return b;
+  }
+  const recordPda = (owner: PublicKey, seq: number) =>
+    PublicKey.findProgramAddressSync(
+      [Buffer.from("redeem"), owner.toBuffer(), seqLe(seq)], programId,
+    )[0];
+
+  async function redeemIx(amount: bigint, seq: number) {
+    return treasury.methods
+      .redeemThbcForFiat(new BN(amount.toString()), new BN(seq))
+      .accounts({
+        treasury: treasuryPda, thbcMint: thbcMintPda, redeemEscrow: escrowPda,
+        userThbcAta, redemption: recordPda(user.publicKey, seq),
+        user: user.publicKey, tokenProgram: TOKEN_2022,
+        systemProgram: SystemProgram.programId,
+      } as any).instruction();
+  }
+  async function confirmIx(seq: number) {
+    return treasury.methods.confirmRedemption()
+      .accounts({
+        treasury: treasuryPda, thbcMint: thbcMintPda, redeemEscrow: escrowPda,
+        redemption: recordPda(user.publicKey, seq), user: user.publicKey,
+        issuer: authority.publicKey, tokenProgram: TOKEN_2022,
+      } as any).instruction();
+  }
+  async function reclaimIx(seq: number) {
+    return treasury.methods.reclaimRedemption()
+      .accounts({
+        treasury: treasuryPda, thbcMint: thbcMintPda, redeemEscrow: escrowPda,
+        userThbcAta, redemption: recordPda(user.publicKey, seq),
+        user: user.publicKey, tokenProgram: TOKEN_2022,
+      } as any).instruction();
+  }
+
+  /** Treasury holding `supply` THBC with the user holding all of it. */
+  function readyToRedeem(supply: bigint) {
+    installTreasury({ attestedReserve: 100_000_000n, attestationTs: BigInt(NOW), thbcSupply: supply });
+    installMint(thbcMintPda, 6, supply);
+    installTokenAccount(userThbcAta, thbcMintPda, user.publicKey, supply);
+    installTokenAccount(escrowPda, thbcMintPda, treasuryPda, 0n);
+  }
+
+  it("F7: escrow holds the tokens WITHOUT burning them", async () => {
+    // The whole basis of F7: the user's wallet is debited but supply is not, which is
+    // what leaves the tokens recoverable if the issuer never wires.
+    readyToRedeem(1_000_000n);
+    ok(send(await redeemIx(400_000n, 1), [user]));
+
+    expect(balanceOf(userThbcAta), "debited from the wallet").to.eq(600_000n);
+    expect(balanceOf(escrowPda), "held in escrow").to.eq(400_000n);
+    expect(trackedSupply(), "supply UNCHANGED — not yet burned").to.eq(1_000_000n);
+    expect(mintSupply(thbcMintPda), "SPL supply unchanged too").to.eq(1_000_000n);
+  });
+
+  it("F7: reclaim fails one second before delta, succeeds at exactly delta", async () => {
+    readyToRedeem(1_000_000n);
+    ok(send(await redeemIx(400_000n, 1), [user]));
+
+    setNow(NOW + DELTA - 1);
+    expectCustomError(send(await reclaimIx(1), [user]), TIMELOCK_NOT_EXPIRED);
+    expect(balanceOf(userThbcAta), "still escrowed").to.eq(600_000n);
+
+    setNow(NOW + DELTA);
+    ok(send(await reclaimIx(1), [user]));
+    expect(balanceOf(userThbcAta), "holder made whole in tokens").to.eq(1_000_000n);
+    expect(balanceOf(escrowPda)).to.eq(0n);
+    expect(trackedSupply(), "a reclaim NEVER changes supply").to.eq(1_000_000n);
+  });
+
+  it("F7: confirm burns, and supply falls only there", async () => {
+    readyToRedeem(1_000_000n);
+    ok(send(await redeemIx(400_000n, 1), [user]));
+    ok(send(await confirmIx(1), [authority]));
+
+    expect(trackedSupply(), "supply falls at confirm").to.eq(600_000n);
+    expect(mintSupply(thbcMintPda), "and the SPL mint really burned").to.eq(600_000n);
+    expect(balanceOf(escrowPda)).to.eq(0n);
+    expect(balanceOf(userThbcAta), "the holder does not get tokens back").to.eq(600_000n);
+  });
+
+  it("F7: confirm BLOCKS reclaim, forever", async () => {
+    readyToRedeem(1_000_000n);
+    ok(send(await redeemIx(400_000n, 1), [user]));
+    ok(send(await confirmIx(1), [authority]));
+
+    // The record is closed, so there is nothing left to reclaim against — the runtime
+    // rejects it rather than any status check the program could get wrong.
+    setNow(NOW + DELTA * 10);
+    expectFailure(send(await reclaimIx(1), [user]));
+    expect(balanceOf(userThbcAta)).to.eq(600_000n);
+    expect(trackedSupply()).to.eq(600_000n);
+  });
+
+  it("F7: a redemption cannot be confirmed twice", async () => {
+    readyToRedeem(1_000_000n);
+    ok(send(await redeemIx(400_000n, 1), [user]));
+    ok(send(await confirmIx(1), [authority]));
+    expectFailure(send(await confirmIx(1), [authority]));
+    expect(trackedSupply(), "supply must fall exactly once").to.eq(600_000n);
+  });
+
+  it("F7: a reclaimed redemption cannot then be confirmed", async () => {
+    readyToRedeem(1_000_000n);
+    ok(send(await redeemIx(400_000n, 1), [user]));
+    setNow(NOW + DELTA);
+    ok(send(await reclaimIx(1), [user]));
+
+    expectFailure(send(await confirmIx(1), [authority]));
+    expect(trackedSupply(), "no burn after the tokens went home").to.eq(1_000_000n);
+    expect(balanceOf(userThbcAta)).to.eq(1_000_000n);
+  });
+
+  it("F7: pausing cannot trap a holder's tokens in escrow", async () => {
+    // Deliberate asymmetry: pause stops new commitments and the burn, but the escape
+    // hatch stays open. A pause that could strand escrowed tokens would hand the
+    // platform exactly the leverage F8 exists to deny it.
+    readyToRedeem(1_000_000n);
+    ok(send(await redeemIx(400_000n, 1), [user]));
+
+    installTreasury({
+      attestedReserve: 100_000_000n, attestationTs: BigInt(NOW),
+      thbcSupply: 1_000_000n, paused: true,
+    });
+    setNow(NOW + DELTA);
+    ok(send(await reclaimIx(1), [user]));
+    expect(balanceOf(userThbcAta)).to.eq(1_000_000n);
+  });
+
+  it("F7: a stranger cannot reclaim someone else's redemption", async () => {
+    readyToRedeem(1_000_000n);
+    ok(send(await redeemIx(400_000n, 1), [user]));
+    setNow(NOW + DELTA);
+
+    const stranger = Keypair.generate();
+    svm.airdrop(stranger.publicKey, BigInt(1_000_000_000));
+    const ix = await treasury.methods.reclaimRedemption()
+      .accounts({
+        treasury: treasuryPda, thbcMint: thbcMintPda, redeemEscrow: escrowPda,
+        userThbcAta, redemption: recordPda(user.publicKey, 1),
+        user: stranger.publicKey, tokenProgram: TOKEN_2022,
+      } as any).instruction();
+    // Seeds are derived from the signer, so a stranger's key resolves to a DIFFERENT
+    // (nonexistent) record — rejected before any ownership check is even reached.
+    expectFailure(send(ix, [stranger]));
+    expect(balanceOf(escrowPda), "escrow untouched").to.eq(400_000n);
+  });
+
+  it("F7: concurrent redemptions by seq are independent", async () => {
+    readyToRedeem(1_000_000n);
+    ok(send(await redeemIx(300_000n, 1), [user]));
+    ok(send(await redeemIx(200_000n, 2), [user]));
+    expect(balanceOf(escrowPda)).to.eq(500_000n);
+
+    ok(send(await confirmIx(1), [authority]));      // issuer honours #1
+    setNow(NOW + DELTA);
+    ok(send(await reclaimIx(2), [user]));           // and stiffs #2
+
+    expect(trackedSupply(), "only the confirmed one burned").to.eq(700_000n);
+    expect(balanceOf(userThbcAta)).to.eq(700_000n);
+    expect(balanceOf(escrowPda)).to.eq(0n);
   });
 
   // ---------------------------------------------------------------------------

@@ -1,4 +1,8 @@
 pub mod aggregate_settlement_shards;
+pub mod redeem_thbc_for_fiat;
+pub mod reclaim_redemption;
+pub mod initialize_redemption_escrow;
+pub mod confirm_redemption;
 pub mod claim_rewards;
 pub mod exchange_grx_for_thbc;
 pub mod exchange_thbc_for_grx;
@@ -19,6 +23,10 @@ pub mod unstake_grx;
 pub mod update_attestation;
 
 pub use aggregate_settlement_shards::*;
+pub use redeem_thbc_for_fiat::*;
+pub use reclaim_redemption::*;
+pub use initialize_redemption_escrow::*;
+pub use confirm_redemption::*;
 pub use claim_rewards::*;
 pub use exchange_grx_for_thbc::*;
 pub use exchange_thbc_for_grx::*;

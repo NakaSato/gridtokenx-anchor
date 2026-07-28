@@ -23,6 +23,45 @@ pub struct ThbcIssued {
     pub timestamp: i64,
 }
 
+/// THBC committed to a fiat redemption and moved into escrow — NOT burned. Supply is
+/// unchanged; `RedemptionConfirmed` is what reports the burn.
+#[event]
+pub struct RedemptionEscrowed {
+    pub user: Pubkey,
+    pub seq: u64,
+    pub amount: u64,
+    /// When the holder may reclaim if the issuer has not confirmed by then. Emitted so
+    /// a holder (or the `E` observer) knows the deadline without deriving it.
+    pub reclaimable_at: i64,
+    pub timestamp: i64,
+}
+
+/// The issuer wired the fiat and burned the escrow. The ONLY event reporting a decrease
+/// in `thbc_supply`, and the point after which the holder can no longer reclaim.
+#[event]
+pub struct RedemptionConfirmed {
+    pub user: Pubkey,
+    pub seq: u64,
+    pub amount: u64,
+    pub thbc_supply: u64,
+    pub timestamp: i64,
+}
+
+/// F7 fired: delta elapsed with no issuer confirmation, and the holder took their THBC
+/// back. Publicly visible, which is how an issuer sitting on redemptions becomes
+/// observable without anyone gaining custody.
+///
+/// Note what this does NOT mean: the holder is whole in *tokens*, but if the issuer
+/// took the fiat and never wired, the reserve is short — spec §6.4.
+#[event]
+pub struct RedemptionReclaimed {
+    pub user: Pubkey,
+    pub seq: u64,
+    pub amount: u64,
+    pub elapsed_secs: i64,
+    pub timestamp: i64,
+}
+
 /// GRX exchanged for THBC out of platform-held inventory.
 ///
 /// `thbc_supply` is emitted even though this instruction never changes it — on

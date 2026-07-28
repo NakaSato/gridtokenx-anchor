@@ -49,4 +49,11 @@ pub enum TreasuryError {
     InsufficientInventory,
     #[msg("THBC inventory vault has not been created — call initialize_thbc_inventory")]
     InventoryVaultNotInitialized,
+    #[msg("Redemption escrow vault has not been created — call initialize_redemption_escrow")]
+    RedemptionEscrowNotInitialized,
+    #[msg(
+        "F7: the redemption timelock has not expired — the issuer still has until \
+         delta to confirm the fiat payout"
+    )]
+    TimelockNotExpired,
 }

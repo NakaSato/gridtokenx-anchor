@@ -260,6 +260,9 @@ mod tests {
         let _ = crate::instruction::ExchangeGrxForThbc { grx_in: 0 };
         let _ = crate::instruction::ExchangeThbcForGrx { thbc_in: 0 };
         let _ = crate::instruction::InitializeThbcInventory {};
+        let _ = crate::instruction::RedeemThbcForFiat { amount: 0, seq: 0 };
+        let _ = crate::instruction::ConfirmRedemption {};
+        let _ = crate::instruction::ReclaimRedemption {};
     }
 
     // --- issuance math: F5 then F1 ---
@@ -685,6 +688,49 @@ pub mod treasury {
     pub fn issue_thbc(ctx: Context<IssueThbc>, amount: u64, bank_ref_hash: [u8; 32]) -> Result<()> {
         compute_fn!("issue_thbc" => {
             instructions::issue_thbc(ctx, amount, bank_ref_hash)
+        })
+    }
+
+    /// Create the redemption escrow vault (`[b"redeem_escrow"]`). Admin-only, once.
+    pub fn initialize_redemption_escrow(ctx: Context<InitializeRedemptionEscrow>) -> Result<()> {
+        compute_fn!("initialize_redemption_escrow" => {
+            instructions::initialize_redemption_escrow(ctx)
+        })
+    }
+
+    /// Commit THBC to a fiat redemption — spec §6.1 steps 1–2. **F7.**
+    ///
+    /// USER-SIGNED: `B` cannot redeem on a holder's behalf. The amount moves into
+    /// escrow and stays inside `thbc_supply` — it is NOT burned, which is exactly what
+    /// leaves room for `reclaim_redemption` if the issuer never wires.
+    pub fn redeem_thbc_for_fiat(
+        ctx: Context<RedeemThbcForFiat>,
+        amount: u64,
+        seq: u64,
+    ) -> Result<()> {
+        compute_fn!("redeem_thbc_for_fiat" => {
+            instructions::redeem_thbc_for_fiat(ctx, amount, seq)
+        })
+    }
+
+    /// Burn an escrowed redemption once the fiat is wired — spec §6.1 step 5. **F7.**
+    ///
+    /// The only place `thbc_supply` decreases. Closes the record, so a double-confirm
+    /// and any later reclaim both fail at the account level.
+    pub fn confirm_redemption(ctx: Context<ConfirmRedemption>) -> Result<()> {
+        compute_fn!("confirm_redemption" => {
+            instructions::confirm_redemption(ctx)
+        })
+    }
+
+    /// Recover escrowed THBC after Δ with no confirmation — spec §6.3. **F7.**
+    ///
+    /// USER-SIGNED, and deliberately NOT gated on `paused`: pausing must never trap a
+    /// holder's tokens in escrow. Supply is untouched, because the tokens were moved
+    /// rather than burned.
+    pub fn reclaim_redemption(ctx: Context<ReclaimRedemption>) -> Result<()> {
+        compute_fn!("reclaim_redemption" => {
+            instructions::reclaim_redemption(ctx)
         })
     }
 

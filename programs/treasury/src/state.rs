@@ -71,10 +71,15 @@ pub struct Treasury {
     /// because `initialize_thbc_inventory` is what sets it and the exchange
     /// instructions validate the vault by seeds regardless.
     pub thbc_inventory_bump: u8, // 1
-    pub _padding: [u8; 14],    // 14 — pad to 272 (16-aligned; base 258 rounds up to next multiple of 16)
-    // size = 16 + 32*5 + 8*9 + 2 + 8 + 14 = 272 (multiple of 16, u128-aligned).
-    // UNCHANGED from before `thbc_inventory_bump` was added — the byte came out of
-    // `_padding`, so the on-chain layout is identical and no migration is needed.
+    /// Canonical bump for the redemption escrow vault `[b"redeem_escrow"]` (created by
+    /// `initialize_redemption_escrow`). Carved out of `_padding` for the same reason as
+    /// `thbc_inventory_bump`: growing the struct would break every deployed PDA.
+    pub redeem_escrow_bump: u8, // 1
+    pub _padding: [u8; 13],    // 13 — pad to 272
+    // size = 16 + 32*5 + 8*9 + 2 + 9 + 13 = 272 (multiple of 16, u128-aligned).
+    // UNCHANGED since before `thbc_inventory_bump` and `redeem_escrow_bump` were added —
+    // both bytes came out of `_padding`, so the on-chain layout is identical and no
+    // migration is needed.
 }
 
 #[cfg(test)]
@@ -143,6 +148,50 @@ pub struct DepositNullifier {
 impl DepositNullifier {
     /// Payload size (excludes the 8-byte Anchor discriminator).
     pub const LEN: usize = 32 + 8 + 32 + 8 + 1;
+}
+
+/// Default redemption timeout Δ, in seconds (24h).
+///
+/// A **constant**, not a `Treasury` field: an `i64` needs 8-byte alignment and the
+/// spare padding does not offer an aligned 8-byte slot, so making Δ configurable means
+/// the layout change and re-init that this work deliberately avoids. Changing it here
+/// changes it for redemptions created *after* the upgrade only — each record stores the
+/// Δ it was created under, so an in-flight holder's reclaim window can never be moved
+/// by a redeploy. That property is worth more than configurability.
+pub const REDEMPTION_DELTA_SECS: i64 = 86_400;
+
+/// A redemption in flight — F7. PDA seeds: `[b"redeem", user, seq.to_le_bytes()]`.
+///
+/// **The account's existence IS the pending queue.** `confirm_redemption` and
+/// `reclaim_redemption` both `close` it, so a terminal redemption leaves no account to
+/// re-process — the same account-existence trick as the deposit nullifier, inverted.
+/// A double-confirm or a confirm-after-reclaim fails at the runtime level rather than
+/// needing a status field this program could check wrongly.
+///
+/// It also makes `redemption_queue_len` (spec §4.1) derivable rather than stored: the
+/// queue is exactly the set of live `[b"redeem", ...]` accounts, which `E` reads with
+/// `getProgramAccounts`. That field does not fit in the remaining padding anyway.
+#[account]
+pub struct RedemptionRecord {
+    pub user: Pubkey, // 32
+    /// THBC held in the escrow vault on this user's behalf. NOT yet burned — supply
+    /// falls only at `confirm_redemption`, which is what makes reclaim possible.
+    pub amount: u64, // 8
+    /// User's THBC token account, recorded at request time so `reclaim_redemption`
+    /// returns the tokens where they came from rather than wherever the caller points.
+    pub user_thbc_ata: Pubkey, // 32
+    /// When the escrow was created. Δ runs from here.
+    pub escrowed_at: i64, // 8
+    /// Δ as it stood when this record was created. Stored per-record so a later change
+    /// to `REDEMPTION_DELTA_SECS` cannot extend an in-flight holder's wait.
+    pub delta_secs: i64, // 8
+    pub seq: u64,  // 8
+    pub bump: u8,  // 1
+}
+
+impl RedemptionRecord {
+    /// Payload size (excludes the 8-byte Anchor discriminator).
+    pub const LEN: usize = 32 + 8 + 32 + 8 + 8 + 8 + 1;
 }
 
 /// Per-shard settlement accumulator (zero-copy). Hot-path settles bump the shard
