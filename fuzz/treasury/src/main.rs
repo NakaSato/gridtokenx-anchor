@@ -419,9 +419,14 @@ impl TreasuryFixture {
         ok
     }
 
-    /// Toggle the pause flag via set_params. When paused, swap_grx_for_thbc and
-    /// redeem_thbc_for_grx must halt (TreasuryError::Paused) — the pause-violation
-    /// invariant (I9) checks no swap/redeem lands while `self.paused`.
+    /// Toggle the pause flag via set_params. When paused, exchange_grx_for_thbc and
+    /// exchange_thbc_for_grx must halt (TreasuryError::Paused) — the pause-violation
+    /// invariant (I9) checks no exchange lands while `self.paused`.
+    ///
+    /// (Renamed from swap_grx_for_thbc / redeem_thbc_for_grx when the F6 fix replaced
+    /// the minting swap with an inventory transfer. `idls/treasury.json` in this
+    /// directory is a committed snapshot and is now STALE — regenerate it with
+    /// `anchor build` before relying on this harness against the new instructions.)
     pub fn action_set_pause(&mut self, paused: bool) -> bool {
         let ok = self
             .ctx
@@ -879,11 +884,11 @@ fn invariant_test(fixture: &mut TreasuryFixture) {
         !fixture.double_record_detected,
         "double-record succeeded: a re-recorded (zone,batch) bypassed the init guard"
     );
-    // I9 — pause safety: swap_grx_for_thbc / redeem_thbc_for_grx must halt while paused.
-    // Any that landed while the mirror said paused bypassed the TreasuryError::Paused gate.
+    // I9 — pause safety: exchange_grx_for_thbc / exchange_thbc_for_grx must halt while
+    // paused. Any that landed while the mirror said paused bypassed TreasuryError::Paused.
     fuzz_assert!(
         !fixture.pause_violation,
-        "swap/redeem succeeded while treasury was paused"
+        "exchange succeeded while treasury was paused"
     );
 
     for (ns, zone, batch, value, vat, vat_rate) in fixture.committed_records.iter() {

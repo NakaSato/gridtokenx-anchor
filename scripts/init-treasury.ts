@@ -40,6 +40,7 @@ async function main() {
   const [stakeVault] = PublicKey.findProgramAddressSync([Buffer.from('stake_vault')], treasuryProgram.programId);
   const [rewardVault] = PublicKey.findProgramAddressSync([Buffer.from('reward_vault')], treasuryProgram.programId);
   const [rebateVault] = PublicKey.findProgramAddressSync([Buffer.from('rebate_vault')], treasuryProgram.programId);
+  const [thbcInventory] = PublicKey.findProgramAddressSync([Buffer.from('thbc_inventory')], treasuryProgram.programId);
 
   console.log('  Treasury PDA   :', treasuryPda.toBase58());
   console.log('  THBC mint      :', thbcMint.toBase58());
@@ -99,6 +100,38 @@ async function main() {
       console.log('ℹ️  Rebate vault already initialized.');
     } else {
       console.error('❌ Rebate vault init error:', e.message);
+      throw e;
+    }
+  }
+
+  // THBC inventory vault (F6): platform-held THBC that the exchange path pays out of.
+  //
+  // `exchange_grx_for_thbc` transfers from here instead of minting — that is the whole
+  // of the F6 fix. Nothing in the program mints into this vault; it is funded by a
+  // plain SPL transfer of THBC the platform already holds.
+  //
+  // NOTE: with the old `swap_grx_for_thbc` gone there is NO THBC mint path left in any
+  // program (`issue_thbc` is not implemented — spec §12). This vault therefore starts
+  // empty and stays empty until someone transfers existing THBC in, and until then
+  // every exchange fails with InsufficientInventory. That is correct: THBC is supposed
+  // to come into existence only against fiat received.
+  try {
+    const invTx = await treasuryProgram.methods
+      .initializeThbcInventory()
+      .accounts({
+        treasury: treasuryPda,
+        thbcMint,
+        inventoryVault: thbcInventory,
+        authority: authority.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log('✅ THBC inventory vault initialized:', thbcInventory.toBase58(), 'TX:', invTx);
+  } catch (e: any) {
+    if (e.message?.includes('already in use')) {
+      console.log('ℹ️  THBC inventory vault already initialized.');
+    } else {
       throw e;
     }
   }

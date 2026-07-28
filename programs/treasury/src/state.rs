@@ -57,8 +57,42 @@ pub struct Treasury {
     pub stake_vault_bump: u8,  // 1
     pub reward_vault_bump: u8, // 1
     pub rebate_vault_bump: u8, // 1 — canonical bump for the `rebate_vault` PDA (created by `initialize_rebate_vault`)
-    pub _padding: [u8; 15],    // 15 — pad to 272 (16-aligned; base 257 rounds up to next multiple of 16)
-    // size = 16 + 32*5 + 8*9 + 2 + 7 + 15 = 272 (multiple of 16, u128-aligned).
+    /// Canonical bump for the THBC inventory vault `[b"thbc_inventory"]` (created by
+    /// `initialize_thbc_inventory`).
+    ///
+    /// Taken from `_padding`, not appended: the struct is `zero_copy`, so growing it
+    /// would change the account size and make every already-deployed Treasury PDA
+    /// fail to deserialize — requiring a re-init that would wipe `attested_reserve`,
+    /// `thbc_supply`, staking positions and the settlement totals the trading program
+    /// writes. One spare padding byte buys the same field for free.
+    ///
+    /// Zero on a Treasury initialized before this field existed, which is
+    /// indistinguishable from "vault not yet created" — correct in both cases,
+    /// because `initialize_thbc_inventory` is what sets it and the exchange
+    /// instructions validate the vault by seeds regardless.
+    pub thbc_inventory_bump: u8, // 1
+    pub _padding: [u8; 14],    // 14 — pad to 272 (16-aligned; base 258 rounds up to next multiple of 16)
+    // size = 16 + 32*5 + 8*9 + 2 + 8 + 14 = 272 (multiple of 16, u128-aligned).
+    // UNCHANGED from before `thbc_inventory_bump` was added — the byte came out of
+    // `_padding`, so the on-chain layout is identical and no migration is needed.
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    /// The whole reason `thbc_inventory_bump` was carved out of `_padding` rather
+    /// than appended. If this ever fails, deployed Treasury accounts stop
+    /// deserializing and the change needs a re-init or a realloc migration.
+    #[test]
+    fn treasury_layout_is_still_272_bytes() {
+        assert_eq!(core::mem::size_of::<Treasury>(), 272);
+    }
+
+    #[test]
+    fn treasury_is_16_byte_aligned_for_its_leading_u128() {
+        assert_eq!(core::mem::align_of::<Treasury>(), 16);
+    }
 }
 
 /// Per-user staking position (regular Borsh account — staking is not a hot path).

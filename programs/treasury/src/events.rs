@@ -10,23 +10,33 @@ pub struct ReserveAttested {
     pub timestamp: i64,
 }
 
-/// GRX swapped into THBC — the baht-denominated settlement primitive.
+/// GRX exchanged for THBC out of platform-held inventory.
+///
+/// `thbc_supply` is emitted even though this instruction never changes it — on
+/// purpose. An indexer replaying the event stream can assert supply is identical
+/// before and after every exchange, which is F6 made externally checkable rather than
+/// merely asserted in a doc comment.
 #[event]
-pub struct SwappedGrxForThbc {
+pub struct ExchangedGrxForThbc {
     pub user: Pubkey,
     pub grx_in: u64,
     pub thbc_out: u64,
     pub fee: u64,
+    /// Unchanged by this instruction. See above.
     pub thbc_supply: u64,
     pub timestamp: i64,
 }
 
-/// THBC redeemed back into GRX held by the treasury swap vault.
+/// THBC exchanged back for GRX; the THBC returns to inventory rather than burning.
 #[event]
-pub struct RedeemedThbcForGrx {
+pub struct ExchangedThbcForGrx {
     pub user: Pubkey,
     pub thbc_in: u64,
     pub grx_out: u64,
+    /// Fee, in GRX atoms — charged on the output leg, mirroring the forward
+    /// direction's fee on its THBC output.
+    pub fee: u64,
+    /// Unchanged by this instruction.
     pub thbc_supply: u64,
     pub timestamp: i64,
 }

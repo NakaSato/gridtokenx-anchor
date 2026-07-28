@@ -42,4 +42,11 @@ pub enum TreasuryError {
     InvalidFeeBps,
     #[msg("Settlement shard account is malformed or too small")]
     InvalidShardAccount,
+    #[msg(
+        "THBC inventory vault has insufficient balance — the exchange path pays from \
+         platform-held inventory and must never mint to cover a shortfall (F6)"
+    )]
+    InsufficientInventory,
+    #[msg("THBC inventory vault has not been created — call initialize_thbc_inventory")]
+    InventoryVaultNotInitialized,
 }
