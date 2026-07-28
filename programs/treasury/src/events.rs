@@ -10,6 +10,19 @@ pub struct ReserveAttested {
     pub timestamp: i64,
 }
 
+/// THBC minted against fiat received — the on-ramp (spec §5). The ONLY event in this
+/// program that reports an increase in `thbc_supply`.
+#[event]
+pub struct ThbcIssued {
+    pub beneficiary: Pubkey,
+    pub amount: u64,
+    /// `H(bank_ref)` — the F3 nullifier seed. Binds this issuance to a bank statement
+    /// line for an auditor without revealing the reference itself.
+    pub bank_ref_hash: [u8; 32],
+    pub thbc_supply: u64,
+    pub timestamp: i64,
+}
+
 /// GRX exchanged for THBC out of platform-held inventory.
 ///
 /// `thbc_supply` is emitted even though this instruction never changes it — on

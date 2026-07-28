@@ -111,6 +111,40 @@ impl StakePosition {
     pub const LEN: usize = 32 + 8 + 16 + 8 + 1;
 }
 
+/// Deposit nullifier — F3. PDA seeds: `[b"deposit", H(bank_ref)]`.
+///
+/// **The account's existence is the invariant; its contents are only evidence.**
+/// `issue_thbc` creates this with Anchor `init` in the *same instruction* as the mint,
+/// so a replayed bank webhook fails at the **account level** — the Solana runtime
+/// refuses to create an account that already exists, before any of this program's code
+/// runs. No application bug can defeat it, which is exactly why the guarantee is worth
+/// having in the runtime rather than in a database `UNIQUE` index.
+///
+/// Deliberately the same construction as `[b"gen_mint", meter, window]` on the meter
+/// path: both convert an at-least-once off-chain event into an exactly-once on-chain
+/// effect via account existence.
+///
+/// A regular Borsh `#[account]`, not `zero_copy`: it is written once and never mutated,
+/// so there is no hot-path re-serialization cost to avoid.
+#[account]
+pub struct DepositNullifier {
+    /// SHA-256 over the bank's own (normalised) transaction reference. Stored so an
+    /// auditor can bind this account back to a bank statement line without trusting
+    /// the PDA derivation.
+    pub bank_ref_hash: [u8; 32], // 32
+    /// THBC minor units issued against this deposit.
+    pub amount: u64, // 8
+    /// Token account that received the mint.
+    pub beneficiary: Pubkey, // 32
+    pub issued_at: i64, // 8
+    pub bump: u8,       // 1
+}
+
+impl DepositNullifier {
+    /// Payload size (excludes the 8-byte Anchor discriminator).
+    pub const LEN: usize = 32 + 8 + 32 + 8 + 1;
+}
+
 /// Per-shard settlement accumulator (zero-copy). Hot-path settles bump the shard
 /// PDA for the buyer's shard instead of the global `Treasury.total_settled_thbc`, so
 /// settles on distinct shards don't write-lock a single account. PDA seeds:
