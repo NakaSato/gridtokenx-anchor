@@ -30,6 +30,7 @@ import type { Trading } from "../target/types/trading";
 import type { EnergyToken } from "../target/types/energy_token";
 import type { Treasury } from "../target/types/treasury";
 import type { Governance } from "../target/types/governance";
+import { createHash } from "crypto";
 import {
   PublicKey,
   Keypair,
@@ -79,6 +80,9 @@ const envInt = (k: string, d: number) => {
 interface PreparedTx { edIxs: any[]; settleIx: any; alt: any; payer: Keypair; }
 
 describe("batch_settle THBC — TPS sweep (§2b)", () => {
+  // Treasury authority == issuer (issue_thbc is gated on Treasury.authority until a
+  // dedicated `issuer` key fits the layout). Assigned in before().
+  let attestorKp: Keypair;
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
@@ -127,7 +131,6 @@ describe("batch_settle THBC — TPS sweep (§2b)", () => {
   const energyInfoPda = tpda(energy, "token_info_2022");
   const treasuryPda = tpda(treasury, "treasury");
   const thbcMint = tpda(treasury, "thbc_mint");
-  const swapVault = tpda(treasury, "swap_vault");
   const zoneMarketPda = PublicKey.findProgramAddressSync(
     [Buffer.from("zone_market"), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, "le", 4)],
     trading.programId
@@ -176,15 +179,34 @@ describe("batch_settle THBC — TPS sweep (§2b)", () => {
       marketAuthority: marketAuthorityPda, tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
     } as any).signers([kp]).rpc();
   }
+  /// Give a participant THBC to trade with.
+  ///
+  /// Was `swap_grx_for_thbc`, which minted THBC against GRX collateral — removed by the
+  /// F6 fix, because that put a volatile asset in the backing set of a fiat-referenced
+  /// token. The replacement `exchange_grx_for_thbc` pays from a pre-funded inventory
+  /// vault and would need seeding before every run, which is a worse fixture.
+  ///
+  /// `issue_thbc` is the honest primitive here anyway: this benchmark wants THBC to
+  /// exist, and issuance against the attested reserve is how THBC comes into existence.
+  /// `before()` already attests 1e15 with a 24h TTL, which covers any fleet size.
+  ///
+  /// Each call needs a UNIQUE bank_ref_hash — F3 creates a `[b"deposit", H(ref)]`
+  /// nullifier per issuance and a repeat would be rejected by the runtime. Keyed on the
+  /// participant's pubkey, so a re-run against a live validator that already funded
+  /// this exact keypair will (correctly) fail rather than silently double-issue.
   async function fundThbc(kp: Keypair, thbcTarget: number): Promise<PublicKey> {
-    const grx = thbcTarget * 300;
-    const grxAta = await createAtaFor(energyMintPda, kp.publicKey);
-    await mintEnergyTo(grxAta, kp.publicKey, grx);
     const thbcAta = await createAtaFor(thbcMint, kp.publicKey);
-    await treasury.methods.swapGrxForThbc(new BN(grx)).accounts({
-      treasury: treasuryPda, grxMint: energyMintPda, thbcMint, swapVault,
-      userGrxAta: grxAta, userThbcAta: thbcAta, user: kp.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
-    } as any).signers([kp]).rpc();
+    const bankRefHash = createHash("sha256")
+      .update(`BENCH-${kp.publicKey.toBase58()}`, "utf8")
+      .digest();
+    const [nullifier] = PublicKey.findProgramAddressSync(
+      [Buffer.from("deposit"), bankRefHash], treasury.programId,
+    );
+    await treasury.methods.issueThbc(new BN(thbcTarget), Array.from(bankRefHash) as any).accounts({
+      treasury: treasuryPda, thbcMint, beneficiaryThbcAta: thbcAta,
+      depositNullifier: nullifier, issuer: attestorKp.publicKey,
+      tokenProgram: TOKEN_2022_PROGRAM_ID, systemProgram: SystemProgram.programId,
+    } as any).signers([attestorKp]).rpc();
     return thbcAta;
   }
 
@@ -403,7 +425,7 @@ describe("batch_settle THBC — TPS sweep (§2b)", () => {
     // init-treasury was first run by a different wallet). Sign update_attestation
     // with the real attestor keypair (env ATTESTOR_WALLET, default id.json).
     const attestorPath = process.env.ATTESTOR_WALLET || `${os.homedir()}/.config/solana/id.json`;
-    const attestorKp = Keypair.fromSecretKey(new Uint8Array(JSON.parse(fs.readFileSync(attestorPath, "utf8"))));
+    attestorKp = Keypair.fromSecretKey(new Uint8Array(JSON.parse(fs.readFileSync(attestorPath, "utf8"))));
     // Large fleets seed for >1h; the default attestation_ttl (3600s) goes stale
     // mid-seed. Bump ttl to 24h (set_params, authority = attestor keypair) so one
     // attestation covers the whole seed+settle window. Preserve other params.
