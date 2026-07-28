@@ -92,6 +92,199 @@
       "args": []
     },
     {
+      "name": "confirm_redemption",
+      "docs": [
+        "Burn an escrowed redemption once the fiat is wired — spec §6.1 step 5. **F7.**",
+        "",
+        "The only place `thbc_supply` decreases. Closes the record, so a double-confirm",
+        "and any later reclaim both fail at the account level."
+      ],
+      "discriminator": [
+        206,
+        187,
+        131,
+        172,
+        213,
+        207,
+        18,
+        228
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "thbc_mint",
+          "writable": true
+        },
+        {
+          "name": "redeem_escrow",
+          "writable": true
+        },
+        {
+          "name": "redemption",
+          "docs": [
+            "Closed on success, with rent returned to the holder who paid it. Closing is what",
+            "makes a double-confirm impossible: there is no account left to confirm against,",
+            "and the runtime says so before any code here runs."
+          ],
+          "writable": true
+        },
+        {
+          "name": "user",
+          "docs": [
+            "record's rent back; does not sign, because confirmation is the issuer's action."
+          ],
+          "writable": true
+        },
+        {
+          "name": "issuer",
+          "docs": [
+            "The licensed issuer partner `B`, after the THB wire is out.",
+            "",
+            "Gated on `Treasury.authority` for the same reason as `issue_thbc`: a dedicated",
+            "`issuer` Pubkey does not fit in the remaining padding. Disclosed, not hidden."
+          ],
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "exchange_grx_for_thbc",
+      "docs": [
+        "Exchange GRX → THBC out of platform-held inventory.",
+        "",
+        "**Replaces `swap_grx_for_thbc`, which minted (F6).** Both legs are transfers of",
+        "tokens that already exist: `thbc_supply` and `attested_reserve` are untouched,",
+        "so a volatile asset never enters the backing set of a fiat-referenced token.",
+        "Bounded by the inventory vault's live balance, not by reserve headroom. The",
+        "attestation-freshness check is deliberately absent — F5 guards *issuance*, and",
+        "this issues nothing."
+      ],
+      "discriminator": [
+        58,
+        12,
+        192,
+        204,
+        132,
+        85,
+        190,
+        124
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "thbc_mint"
+        },
+        {
+          "name": "swap_vault",
+          "writable": true
+        },
+        {
+          "name": "inventory_vault",
+          "docs": [
+            "Platform-held THBC. Its balance IS the inventory bound."
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_grx_ata",
+          "writable": true
+        },
+        {
+          "name": "user_thbc_ata",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "grx_in",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "exchange_thbc_for_grx",
+      "docs": [
+        "Exchange THBC → GRX from the swap vault.",
+        "",
+        "**Replaces `redeem_thbc_for_grx`, which burned (F6).** The incoming THBC returns",
+        "to the inventory vault instead of being destroyed, so supply is unchanged and",
+        "`thbc_supply` stays equal to \"THBC issued against fiat\" — the quantity F2 is an",
+        "identity over. Not named `redeem_*`: redemption here means *fiat* redemption",
+        "(spec §6), a user-signed burn against a THB payout with a Δ-timelocked escrow."
+      ],
+      "discriminator": [
+        110,
+        134,
+        191,
+        131,
+        216,
+        237,
+        103,
+        176
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "grx_mint"
+        },
+        {
+          "name": "thbc_mint"
+        },
+        {
+          "name": "swap_vault",
+          "writable": true
+        },
+        {
+          "name": "inventory_vault",
+          "writable": true
+        },
+        {
+          "name": "user_grx_ata",
+          "writable": true
+        },
+        {
+          "name": "user_thbc_ata",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "thbc_in",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "fund_rewards",
       "docs": [
         "Deposit GRX into the reward pool, distributing it pro-rata to current stakers",
@@ -283,6 +476,58 @@
       "args": []
     },
     {
+      "name": "initialize_redemption_escrow",
+      "docs": [
+        "Create the redemption escrow vault (`[b\"redeem_escrow\"]`). Admin-only, once."
+      ],
+      "discriminator": [
+        106,
+        208,
+        191,
+        222,
+        46,
+        249,
+        236,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "thbc_mint"
+        },
+        {
+          "name": "redeem_escrow",
+          "docs": [
+            "Holds THBC that users have committed to redeem but which is **not yet burned**.",
+            "",
+            "One shared vault rather than a token account per redemption: per-redemption",
+            "accounts would cost rent and an extra `init` on every request for no benefit,",
+            "since the `[b\"redeem\", user, seq]` record already says who owns what.",
+            "",
+            "Tokens sitting here are still inside `thbc_supply` — that is the point of F7.",
+            "Supply falls only at `confirm_redemption`, which is precisely what leaves room",
+            "for `reclaim_redemption` to give them back."
+          ],
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initialize_settlement_shard",
       "docs": [
         "Create one settlement accumulator shard PDA (`[b\"settle_shard\", &[shard_id]]`).",
@@ -322,6 +567,206 @@
           "type": "u8"
         }
       ]
+    },
+    {
+      "name": "initialize_thbc_inventory",
+      "docs": [
+        "Create the THBC inventory vault (`[b\"thbc_inventory\"]`). Admin-only.",
+        "",
+        "Must be called once before either `exchange_*` instruction will work; they",
+        "refuse with `InventoryVaultNotInitialized` until it is. Funded by transferring",
+        "THBC in — nothing in this program mints into it."
+      ],
+      "discriminator": [
+        180,
+        215,
+        64,
+        220,
+        251,
+        29,
+        160,
+        63
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "thbc_mint"
+        },
+        {
+          "name": "inventory_vault",
+          "docs": [
+            "Platform-held THBC that the exchange path pays out of.",
+            "",
+            "A plain token account owned by the treasury PDA. Its **balance is the",
+            "inventory** — there is no mirrored `thbc_inventory: u64` on `Treasury`, and",
+            "that is deliberate: a mirrored counter can drift from the real balance, and",
+            "the drift would be invisible until an exchange either over-paid or refused a",
+            "valid one. Reading `inventory_vault.amount` cannot drift from itself."
+          ],
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "issue_thbc",
+      "docs": [
+        "Mint THBC against fiat received — the on-ramp (spec §5).",
+        "",
+        "The **only** instruction that increases `thbc_supply`, and therefore the only",
+        "place F1 and F5 can be enforced. Both guards previously lived on the minting",
+        "swap; the F6 fix removed that instruction and left them unreachable until this",
+        "restored them to where they belong.",
+        "",
+        "F3 is enforced by the runtime, not by this code: the `[b\"deposit\",",
+        "H(bank_ref)]` nullifier is created with `init` in the SAME instruction as the",
+        "mint, so a replayed bank webhook is rejected at the account level."
+      ],
+      "discriminator": [
+        93,
+        88,
+        165,
+        177,
+        243,
+        142,
+        177,
+        241
+      ],
+      "accounts": [
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "thbc_mint",
+          "writable": true
+        },
+        {
+          "name": "beneficiary_thbc_ata",
+          "writable": true
+        },
+        {
+          "name": "deposit_nullifier",
+          "docs": [
+            "**F3.** `init` here is the entire guarantee: a replayed `bank_ref` makes the",
+            "Solana runtime reject the instruction because the account already exists —",
+            "before a single line of this program runs. Because it is in the *same*",
+            "instruction as the mint, the two either both happen or neither does.",
+            "",
+            "Creating this in a separate transaction would not implement F3: the window",
+            "between the two is exactly where a double-issue lives."
+          ],
+          "writable": true
+        },
+        {
+          "name": "issuer",
+          "docs": [
+            "The licensed issuer partner `B`.",
+            "",
+            "**Currently checked against `Treasury.authority`, not a dedicated `issuer`",
+            "key.** Spec §4.2 wants them distinct; a `Pubkey` is 32 bytes and only 14 spare",
+            "padding bytes remain on the zero-copy `Treasury`, so a separate field needs a",
+            "layout change and a re-init. Conflating them means the parameter admin can",
+            "issue — a real weakening of the §3 actor separation, disclosed rather than",
+            "hidden, and the first thing the next layout change should fix."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "bank_ref_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "reclaim_redemption",
+      "docs": [
+        "Recover escrowed THBC after Δ with no confirmation — spec §6.3. **F7.**",
+        "",
+        "USER-SIGNED, and deliberately NOT gated on `paused`: pausing must never trap a",
+        "holder's tokens in escrow. Supply is untouched, because the tokens were moved",
+        "rather than burned."
+      ],
+      "discriminator": [
+        133,
+        174,
+        29,
+        3,
+        124,
+        239,
+        138,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "thbc_mint"
+        },
+        {
+          "name": "redeem_escrow",
+          "writable": true
+        },
+        {
+          "name": "user_thbc_ata",
+          "docs": [
+            "Tokens go back where they came from — the ATA recorded at request time, not",
+            "wherever the caller points now."
+          ],
+          "writable": true
+        },
+        {
+          "name": "redemption",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "docs": [
+            "**The holder signs.** The platform cannot reclaim on a user's behalf — doing so",
+            "would need their key, which is exactly what F8 forbids. The off-chain sweep",
+            "therefore reports overdue redemptions and the holder acts."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
     },
     {
       "name": "record_settlement",
@@ -603,40 +1048,33 @@
       ]
     },
     {
-      "name": "redeem_thbc_for_grx",
+      "name": "redeem_thbc_for_fiat",
       "docs": [
-        "Redeem THBC → GRX from the swap vault. Burns the user's THBC (shrinking the",
-        "peg liability) and returns GRX at the configured rate."
+        "Commit THBC to a fiat redemption — spec §6.1 steps 1–2. **F7.**",
+        "",
+        "USER-SIGNED: `B` cannot redeem on a holder's behalf. The amount moves into",
+        "escrow and stays inside `thbc_supply` — it is NOT burned, which is exactly what",
+        "leaves room for `reclaim_redemption` if the issuer never wires."
       ],
       "discriminator": [
-        41,
-        69,
-        146,
-        197,
-        173,
-        215,
-        110,
-        230
+        68,
+        102,
+        9,
+        129,
+        154,
+        45,
+        85,
+        72
       ],
       "accounts": [
         {
-          "name": "treasury",
-          "writable": true
+          "name": "treasury"
         },
         {
-          "name": "grx_mint",
-          "writable": true
+          "name": "thbc_mint"
         },
         {
-          "name": "thbc_mint",
-          "writable": true
-        },
-        {
-          "name": "swap_vault",
-          "writable": true
-        },
-        {
-          "name": "user_grx_ata",
+          "name": "redeem_escrow",
           "writable": true
         },
         {
@@ -644,16 +1082,36 @@
           "writable": true
         },
         {
+          "name": "redemption",
+          "docs": [
+            "The pending-redemption record. Its existence IS the queue entry; both terminal",
+            "instructions `close` it, so a completed redemption cannot be re-processed."
+          ],
+          "writable": true
+        },
+        {
           "name": "user",
+          "docs": [
+            "**The user signs.** `B` cannot redeem on a holder's behalf — that is the whole",
+            "point of spec §6.1 step 1, and it is why F8 survives this instruction."
+          ],
+          "writable": true,
           "signer": true
         },
         {
           "name": "token_program"
+        },
+        {
+          "name": "system_program"
         }
       ],
       "args": [
         {
-          "name": "thbc_in",
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "seq",
           "type": "u64"
         }
       ]
@@ -826,67 +1284,6 @@
       ]
     },
     {
-      "name": "swap_grx_for_thbc",
-      "docs": [
-        "Swap GRX → THBC. This is the baht-denominated settlement primitive: a",
-        "producer's GRX is converted to THB-pegged value at `grx_per_thbc_rate`.",
-        "",
-        "Peg invariants enforced here:",
-        "1. The reserve attestation must be fresh (`now - attestation_ts <= ttl`).",
-        "2. Outstanding `thbc_supply + minted` must never exceed `attested_reserve`.",
-        "Staked GRX is held in a separate vault and never backs the peg."
-      ],
-      "discriminator": [
-        184,
-        17,
-        95,
-        244,
-        154,
-        180,
-        100,
-        28
-      ],
-      "accounts": [
-        {
-          "name": "treasury",
-          "writable": true
-        },
-        {
-          "name": "grx_mint",
-          "writable": true
-        },
-        {
-          "name": "thbc_mint",
-          "writable": true
-        },
-        {
-          "name": "swap_vault",
-          "writable": true
-        },
-        {
-          "name": "user_grx_ata",
-          "writable": true
-        },
-        {
-          "name": "user_thbc_ata",
-          "writable": true
-        },
-        {
-          "name": "user",
-          "signer": true
-        },
-        {
-          "name": "token_program"
-        }
-      ],
-      "args": [
-        {
-          "name": "grx_in",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "unstake_grx",
       "docs": [
         "Unstake GRX. Settles pending reward, returns principal from the staking vault."
@@ -972,6 +1369,32 @@
   ],
   "accounts": [
     {
+      "name": "DepositNullifier",
+      "discriminator": [
+        220,
+        114,
+        37,
+        49,
+        108,
+        192,
+        142,
+        227
+      ]
+    },
+    {
+      "name": "RedemptionRecord",
+      "discriminator": [
+        225,
+        49,
+        176,
+        110,
+        91,
+        172,
+        28,
+        16
+      ]
+    },
+    {
       "name": "SettlementRecord",
       "discriminator": [
         172,
@@ -1026,6 +1449,32 @@
   ],
   "events": [
     {
+      "name": "ExchangedGrxForThbc",
+      "discriminator": [
+        55,
+        196,
+        234,
+        37,
+        246,
+        129,
+        227,
+        116
+      ]
+    },
+    {
+      "name": "ExchangedThbcForGrx",
+      "discriminator": [
+        219,
+        205,
+        141,
+        28,
+        11,
+        249,
+        203,
+        89
+      ]
+    },
+    {
       "name": "ParamsUpdated",
       "discriminator": [
         2,
@@ -1039,16 +1488,42 @@
       ]
     },
     {
-      "name": "RedeemedThbcForGrx",
+      "name": "RedemptionConfirmed",
       "discriminator": [
-        73,
-        51,
-        67,
-        72,
-        170,
-        249,
-        72,
-        215
+        112,
+        18,
+        157,
+        29,
+        184,
+        131,
+        193,
+        54
+      ]
+    },
+    {
+      "name": "RedemptionEscrowed",
+      "discriminator": [
+        111,
+        228,
+        98,
+        9,
+        190,
+        221,
+        219,
+        79
+      ]
+    },
+    {
+      "name": "RedemptionReclaimed",
+      "discriminator": [
+        201,
+        112,
+        174,
+        87,
+        93,
+        159,
+        127,
+        18
       ]
     },
     {
@@ -1169,16 +1644,16 @@
       ]
     },
     {
-      "name": "SwappedGrxForThbc",
+      "name": "ThbcIssued",
       "discriminator": [
-        36,
         14,
-        246,
-        213,
-        47,
-        246,
-        124,
-        116
+        106,
+        203,
+        78,
+        148,
+        232,
+        153,
+        167
       ]
     },
     {
@@ -1290,9 +1765,175 @@
       "code": 6018,
       "name": "InvalidShardAccount",
       "msg": "Settlement shard account is malformed or too small"
+    },
+    {
+      "code": 6019,
+      "name": "InsufficientInventory",
+      "msg": "THBC inventory vault has insufficient balance — the exchange path pays from \\\n         platform-held inventory and must never mint to cover a shortfall (F6)"
+    },
+    {
+      "code": 6020,
+      "name": "InventoryVaultNotInitialized",
+      "msg": "THBC inventory vault has not been created — call initialize_thbc_inventory"
+    },
+    {
+      "code": 6021,
+      "name": "RedemptionEscrowNotInitialized",
+      "msg": "Redemption escrow vault has not been created — call initialize_redemption_escrow"
+    },
+    {
+      "code": 6022,
+      "name": "TimelockNotExpired",
+      "msg": "F7: the redemption timelock has not expired — the issuer still has until \\\n         delta to confirm the fiat payout"
     }
   ],
   "types": [
+    {
+      "name": "DepositNullifier",
+      "docs": [
+        "Deposit nullifier — F3. PDA seeds: `[b\"deposit\", H(bank_ref)]`.",
+        "",
+        "**The account's existence is the invariant; its contents are only evidence.**",
+        "`issue_thbc` creates this with Anchor `init` in the *same instruction* as the mint,",
+        "so a replayed bank webhook fails at the **account level** — the Solana runtime",
+        "refuses to create an account that already exists, before any of this program's code",
+        "runs. No application bug can defeat it, which is exactly why the guarantee is worth",
+        "having in the runtime rather than in a database `UNIQUE` index.",
+        "",
+        "Deliberately the same construction as `[b\"gen_mint\", meter, window]` on the meter",
+        "path: both convert an at-least-once off-chain event into an exactly-once on-chain",
+        "effect via account existence.",
+        "",
+        "A regular Borsh `#[account]`, not `zero_copy`: it is written once and never mutated,",
+        "so there is no hot-path re-serialization cost to avoid."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bank_ref_hash",
+            "docs": [
+              "SHA-256 over the bank's own (normalised) transaction reference. Stored so an",
+              "auditor can bind this account back to a bank statement line without trusting",
+              "the PDA derivation."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "THBC minor units issued against this deposit."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "beneficiary",
+            "docs": [
+              "Token account that received the mint."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "issued_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExchangedGrxForThbc",
+      "docs": [
+        "GRX exchanged for THBC out of platform-held inventory.",
+        "",
+        "`thbc_supply` is emitted even though this instruction never changes it — on",
+        "purpose. An indexer replaying the event stream can assert supply is identical",
+        "before and after every exchange, which is F6 made externally checkable rather than",
+        "merely asserted in a doc comment."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "grx_in",
+            "type": "u64"
+          },
+          {
+            "name": "thbc_out",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "type": "u64"
+          },
+          {
+            "name": "thbc_supply",
+            "docs": [
+              "Unchanged by this instruction. See above."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExchangedThbcForGrx",
+      "docs": [
+        "THBC exchanged back for GRX; the THBC returns to inventory rather than burning."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "thbc_in",
+            "type": "u64"
+          },
+          {
+            "name": "grx_out",
+            "type": "u64"
+          },
+          {
+            "name": "fee",
+            "docs": [
+              "Fee, in GRX atoms — charged on the output leg, mirroring the forward",
+              "direction's fee on its THBC output."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "thbc_supply",
+            "docs": [
+              "Unchanged by this instruction."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
     {
       "name": "ParamsUpdated",
       "docs": [
@@ -1334,9 +1975,10 @@
       }
     },
     {
-      "name": "RedeemedThbcForGrx",
+      "name": "RedemptionConfirmed",
       "docs": [
-        "THBC redeemed back into GRX held by the treasury swap vault."
+        "The issuer wired the fiat and burned the escrow. The ONLY event reporting a decrease",
+        "in `thbc_supply`, and the point after which the holder can no longer reclaim."
       ],
       "type": {
         "kind": "struct",
@@ -1346,11 +1988,11 @@
             "type": "pubkey"
           },
           {
-            "name": "thbc_in",
+            "name": "seq",
             "type": "u64"
           },
           {
-            "name": "grx_out",
+            "name": "amount",
             "type": "u64"
           },
           {
@@ -1360,6 +2002,142 @@
           {
             "name": "timestamp",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RedemptionEscrowed",
+      "docs": [
+        "THBC committed to a fiat redemption and moved into escrow — NOT burned. Supply is",
+        "unchanged; `RedemptionConfirmed` is what reports the burn."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "seq",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reclaimable_at",
+            "docs": [
+              "When the holder may reclaim if the issuer has not confirmed by then. Emitted so",
+              "a holder (or the `E` observer) knows the deadline without deriving it."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RedemptionReclaimed",
+      "docs": [
+        "F7 fired: delta elapsed with no issuer confirmation, and the holder took their THBC",
+        "back. Publicly visible, which is how an issuer sitting on redemptions becomes",
+        "observable without anyone gaining custody.",
+        "",
+        "Note what this does NOT mean: the holder is whole in *tokens*, but if the issuer",
+        "took the fiat and never wired, the reserve is short — spec §6.4."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "seq",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "elapsed_secs",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RedemptionRecord",
+      "docs": [
+        "A redemption in flight — F7. PDA seeds: `[b\"redeem\", user, seq.to_le_bytes()]`.",
+        "",
+        "**The account's existence IS the pending queue.** `confirm_redemption` and",
+        "`reclaim_redemption` both `close` it, so a terminal redemption leaves no account to",
+        "re-process — the same account-existence trick as the deposit nullifier, inverted.",
+        "A double-confirm or a confirm-after-reclaim fails at the runtime level rather than",
+        "needing a status field this program could check wrongly.",
+        "",
+        "It also makes `redemption_queue_len` (spec §4.1) derivable rather than stored: the",
+        "queue is exactly the set of live `[b\"redeem\", ...]` accounts, which `E` reads with",
+        "`getProgramAccounts`. That field does not fit in the remaining padding anyway."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "docs": [
+              "THBC held in the escrow vault on this user's behalf. NOT yet burned — supply",
+              "falls only at `confirm_redemption`, which is what makes reclaim possible."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "user_thbc_ata",
+            "docs": [
+              "User's THBC token account, recorded at request time so `reclaim_redemption`",
+              "returns the tokens where they came from rather than wherever the caller points."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "escrowed_at",
+            "docs": [
+              "When the escrow was created. Δ runs from here."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "delta_secs",
+            "docs": [
+              "Δ as it stood when this record was created. Stored per-record so a later change",
+              "to `REDEMPTION_DELTA_SECS` cannot extend an in-flight holder's wait."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "seq",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
@@ -1807,28 +2585,34 @@
       }
     },
     {
-      "name": "SwappedGrxForThbc",
+      "name": "ThbcIssued",
       "docs": [
-        "GRX swapped into THBC — the baht-denominated settlement primitive."
+        "THBC minted against fiat received — the on-ramp (spec §5). The ONLY event in this",
+        "program that reports an increase in `thbc_supply`."
       ],
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "user",
+            "name": "beneficiary",
             "type": "pubkey"
           },
           {
-            "name": "grx_in",
+            "name": "amount",
             "type": "u64"
           },
           {
-            "name": "thbc_out",
-            "type": "u64"
-          },
-          {
-            "name": "fee",
-            "type": "u64"
+            "name": "bank_ref_hash",
+            "docs": [
+              "`H(bank_ref)` — the F3 nullifier seed. Binds this issuance to a bank statement",
+              "line for an auditor without revealing the reference itself."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
           },
           {
             "name": "thbc_supply",
@@ -1953,11 +2737,39 @@
             "type": "u8"
           },
           {
+            "name": "thbc_inventory_bump",
+            "docs": [
+              "Canonical bump for the THBC inventory vault `[b\"thbc_inventory\"]` (created by",
+              "`initialize_thbc_inventory`).",
+              "",
+              "Taken from `_padding`, not appended: the struct is `zero_copy`, so growing it",
+              "would change the account size and make every already-deployed Treasury PDA",
+              "fail to deserialize — requiring a re-init that would wipe `attested_reserve`,",
+              "`thbc_supply`, staking positions and the settlement totals the trading program",
+              "writes. One spare padding byte buys the same field for free.",
+              "",
+              "Zero on a Treasury initialized before this field existed, which is",
+              "indistinguishable from \"vault not yet created\" — correct in both cases,",
+              "because `initialize_thbc_inventory` is what sets it and the exchange",
+              "instructions validate the vault by seeds regardless."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "redeem_escrow_bump",
+            "docs": [
+              "Canonical bump for the redemption escrow vault `[b\"redeem_escrow\"]` (created by",
+              "`initialize_redemption_escrow`). Carved out of `_padding` for the same reason as",
+              "`thbc_inventory_bump`: growing the struct would break every deployed PDA."
+            ],
+            "type": "u8"
+          },
+          {
             "name": "_padding",
             "type": {
               "array": [
                 "u8",
-                15
+                13
               ]
             }
           }

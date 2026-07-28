@@ -249,7 +249,7 @@ integer with a declared scale. Energy is a `u64` count of 10⁻⁹ kWh atoms
 (one Token-2022 GRID token = 1 kWh at 9 decimals), currency a `u64` count of
 10⁻⁶ THBC atoms, and rates and fees are integers with explicit divisors.
 The treasury swap shows the canonical shape of such arithmetic
-(`compute_swap_grx_for_thbc`, `treasury/src/lib.rs:67`): widen to `u128`
+(`compute_exchange_grx_for_thbc`, `treasury/src/lib.rs`; formerly `compute_swap_grx_for_thbc`): widen to `u128`
 *before* multiplying (`grx_in × rate` can exceed 2⁶⁴ for legal inputs),
 divide by the scale constant (`GRX_ATOMS_PER_WHOLE = 10⁹`,
 `treasury/src/lib.rs:41`), take the fee as basis points over 10,000, check

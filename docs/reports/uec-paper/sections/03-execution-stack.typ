@@ -255,15 +255,26 @@ administrative.
 
 *`treasury`* (`programs/treasury/src/instructions/`) provides the pegged
 settlement unit: THBC, a six-decimal THB-pegged stablecoin whose mint
-authority is the `[b"treasury"]` PDA. `swap_grx_for_thbc` mints THBC against
-GRX only while a custodian reserve attestation is fresh and the post-mint
-supply stays within the attested reserve; `redeem_thbc_for_grx` burns THBC
-against vault-bounded GRX. A MasterChef-style accumulator pays GRX staking
+authority is the `[b"treasury"]` PDA. Supply changes through exactly two
+instructions. `issue_thbc` mints against fiat received, only while a custodian
+reserve attestation is fresh and only up to that attested reserve, and creates
+a `[b"deposit", H(bank_ref)]` nullifier in the same instruction so a replayed
+bank webhook is rejected at the account level. `confirm_redemption` burns,
+completing a redemption that `redeem_thbc_for_fiat` first escrowed under a
+timelock — if the issuer does not confirm within it, the holder calls
+`reclaim_redemption` and recovers the tokens.
+
+Currency exchange is deliberately *not* one of those two. `exchange_grx_for_thbc`
+and `exchange_thbc_for_grx` move THBC between a platform-held inventory vault and
+the user, leaving supply and the attested reserve untouched, so GRX never enters
+the backing set of a fiat-referenced unit and the peg is not a function of the
+admin-set exchange rate. A MasterChef-style accumulator pays GRX staking
 yield from a dedicated reward vault, and `record_settlement` (plus its
 16-way sharded variant, §9.2) lets the trading program register gross settled
 THBC value by CPI without the treasury taking custody. Four PDA vaults keep
-the roles disjoint: swap collateral, staker custody, staker rewards, and the
-regulator rebate vault that receives registry slashes.
+the roles disjoint: exchange collateral, staker custody, staker rewards, and the
+regulator rebate vault that receives registry slashes; two further vaults hold
+the platform's THBC exchange inventory and escrowed redemptions.
 
 The two benchmark crates (`blockbench`, `tpc-benchmark`) are measurement
 harnesses only — they implement the SIGMOD BlockBench micro-operations,

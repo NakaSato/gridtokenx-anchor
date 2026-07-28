@@ -200,12 +200,22 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 | Instruction | CU |
 | ----------- | --: |
 | `treasury.initialize` | 42 277 |
-| `treasury.swap_grx_for_thbc` | 21 509 |
-| `treasury.redeem_thbc_for_grx` | 21 328 |
+| `treasury.swap_grx_for_thbc` †  | 21 509 |
+| `treasury.redeem_thbc_for_grx` † | 21 328 |
 | `treasury.stake_grx` (first — inits position) | 19 538 |
 | `treasury.set_params` | 3 404 |
 | `treasury.update_attestation` | 3 303 |
 | `treasury.record_settlement` | 3 301 |
+
+> † **Stale — these two instructions no longer exist.** The F6 fix replaced
+> `swap_grx_for_thbc` / `redeem_thbc_for_grx` with `exchange_grx_for_thbc` /
+> `exchange_thbc_for_grx`, which transfer against an inventory vault instead of
+> minting/burning. The figures above are real measurements of the *old* minting code and
+> are kept for historical comparison, not as current numbers. The replacements should be
+> cheaper (a `transfer_checked` in place of a `mint_to`, and no `thbc_supply` write on
+> the forward path) but have **not** been re-measured. `issue_thbc` and the F7 redemption
+> instructions are unmeasured entirely.
+
 
 **Reading:** the swap/redeem/stake hot paths cluster at **~19.5–21.5k CU**, driven
 by the Token-2022 transfer + mint/burn CPIs (one-time `stake` adds a position-PDA

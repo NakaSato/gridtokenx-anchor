@@ -67,7 +67,7 @@ Persisted price state: `Market.last_clearing_price`, `ZoneMarketShard.last_clear
 
 This is a **conversion rate, not a discovered price**. GRX = 9 decimals, THBC = 6 decimals. `grx_per_thbc_rate` = THBC minor units per 1 whole GRX (`state.rs:41`).
 
-**Swap** (`compute_swap_grx_for_thbc`, `lib.rs:62-88`):
+**Exchange** (`compute_exchange_grx_for_thbc`, `lib.rs`) — formerly `compute_swap_grx_for_thbc`, which minted; the F6 fix made it an inventory transfer. Pricing is unchanged, so the arithmetic below still holds; the bound moved from `new_supply <= attested_reserve` to `net <= inventory`:
 
 ```
 gross = grx_in * rate / 1e9
@@ -76,7 +76,7 @@ net   = gross - fee                       // thbc_out
 require!(thbc_supply + net <= attested_reserve, PegBreach)
 ```
 
-**Redeem** (`compute_redeem_thbc_for_grx`, `lib.rs:95-113`) — inverse, no fee, with two collateral guards:
+**Reverse exchange** (`compute_exchange_thbc_for_grx`, `lib.rs`) — formerly `compute_redeem_thbc_for_grx`, which burned. Inverse pricing, and it **now charges the same `swap_fee_bps` spread** as the forward direction (the old redeem path was free, so a round trip cost the forward fee only). The `SupplyUnderflow` guard is gone — a transfer into inventory cannot underflow supply — and the vault guard is kept:
 
 ```
 require!(thbc_in <= thbc_supply, SupplyUnderflow)
