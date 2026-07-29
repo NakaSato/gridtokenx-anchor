@@ -79,6 +79,7 @@ pub(crate) fn compute_issue_thbc(
     amount: u64,
     thbc_supply: u64,
     attested_reserve: u64,
+    reserve_encumbered: u64,
     now: i64,
     attestation_ts: i64,
     attestation_ttl: i64,
@@ -88,17 +89,20 @@ pub(crate) fn compute_issue_thbc(
     require!(age >= 0, TreasuryError::StaleAttestation);
     require!(age <= attestation_ttl, TreasuryError::StaleAttestation);
 
-    // F1. Checked against `attested_reserve`, NOT `attested_reserve -
-    // reserve_encumbered` as spec §4.1 wants — that field does not exist on the
-    // zero-copy Treasury and adding it needs a layout change. The ceiling here is
-    // therefore looser than specified by exactly the encumbered amount.
+    // F1, now the ceiling spec §4.1 actually specifies: `attested_reserve −
+    // reserve_encumbered`. Fiat that cleared the bank but failed or is awaiting KYC is
+    // not free backing — issuing against it would mint THBC backed by baht the
+    // treasury is about to wire back.
+    //
+    // `saturating_sub`, not `checked_sub`: an encumbrance exceeding the attested
+    // reserve is a reserve-service accounting fault, and the safe reading of it is a
+    // ceiling of zero (issuance halts), not a MathOverflow that a caller might treat
+    // as transient. Under-issuing on bad data is recoverable; over-issuing is not.
+    let free_reserve = attested_reserve.saturating_sub(reserve_encumbered);
     let new_supply = (thbc_supply as u128)
         .checked_add(amount as u128)
         .ok_or(TreasuryError::MathOverflow)?;
-    require!(
-        new_supply <= attested_reserve as u128,
-        TreasuryError::PegBreach
-    );
+    require!(new_supply <= free_reserve as u128, TreasuryError::PegBreach);
 
     u64::try_from(new_supply).map_err(|_| TreasuryError::MathOverflow.into())
 }
@@ -269,14 +273,14 @@ mod tests {
 
     #[test]
     fn issue_adds_to_supply_under_the_ceiling() {
-        let new_supply = compute_issue_thbc(1_000_000, 500_000, 10_000_000, 100, 50, 3_600).unwrap();
+        let new_supply = compute_issue_thbc(1_000_000, 500_000, 10_000_000, 0, 100, 50, 3_600).unwrap();
         assert_eq!(new_supply, 1_500_000);
     }
 
     // F1 ceiling is inclusive: supply + amount == reserve is allowed.
     #[test]
     fn issue_ceiling_is_inclusive() {
-        let new_supply = compute_issue_thbc(500_000, 500_000, 1_000_000, 100, 50, 3_600).unwrap();
+        let new_supply = compute_issue_thbc(500_000, 500_000, 1_000_000, 0, 100, 50, 3_600).unwrap();
         assert_eq!(new_supply, 1_000_000);
     }
 
@@ -284,20 +288,73 @@ mod tests {
     // between the F6 fix and issue_thbc landing, PegBreach had no call site at all.
     #[test]
     fn issue_one_over_the_ceiling_breaches_the_peg() {
-        let e = compute_issue_thbc(500_001, 500_000, 1_000_000, 100, 50, 3_600).unwrap_err();
+        let e = compute_issue_thbc(500_001, 500_000, 1_000_000, 0, 100, 50, 3_600).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::PegBreach));
+    }
+
+    // --- F1: the ceiling is attested_reserve MINUS reserve_encumbered (spec §4.1) ---
+
+    // The case the old ceiling got wrong. Reserve 1_000_000 with 400_000 encumbered
+    // leaves 600_000 of real backing; issuing 700_000 was previously allowed because
+    // the encumbered fiat still counted.
+    #[test]
+    fn issue_is_bounded_by_free_reserve_not_attested_reserve() {
+        let e = compute_issue_thbc(700_000, 0, 1_000_000, 400_000, 100, 50, 3_600).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::PegBreach));
+        // ...and the same call against the un-encumbered reserve still succeeds, which
+        // is what makes this a tightening rather than a behaviour change.
+        assert_eq!(
+            compute_issue_thbc(700_000, 0, 1_000_000, 0, 100, 50, 3_600).unwrap(),
+            700_000
+        );
+    }
+
+    // The tightened ceiling is inclusive too.
+    #[test]
+    fn issue_to_exactly_the_free_reserve_is_allowed() {
+        let new_supply = compute_issue_thbc(600_000, 0, 1_000_000, 400_000, 100, 50, 3_600).unwrap();
+        assert_eq!(new_supply, 600_000);
+        let e = compute_issue_thbc(600_001, 0, 1_000_000, 400_000, 100, 50, 3_600).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::PegBreach));
+    }
+
+    // Zero encumbrance must reproduce the old behaviour EXACTLY — this is what makes
+    // the field safe to add to already-deployed accounts, where those bytes read zero.
+    #[test]
+    fn zero_encumbrance_is_the_old_ceiling() {
+        assert_eq!(
+            compute_issue_thbc(500_000, 500_000, 1_000_000, 0, 100, 50, 3_600).unwrap(),
+            1_000_000
+        );
+    }
+
+    // An encumbrance larger than the reserve is a reserve-service accounting fault.
+    // It must halt issuance (ceiling 0), not wrap around into an enormous ceiling and
+    // not surface as MathOverflow.
+    #[test]
+    fn encumbrance_exceeding_the_reserve_halts_issuance() {
+        let e = compute_issue_thbc(1, 0, 1_000, u64::MAX, 100, 50, 3_600).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::PegBreach));
+    }
+
+    // F5 still precedes F1 with an encumbrance in play: a stale attestation is reported
+    // as staleness, not as the peg breach the zero ceiling would otherwise produce.
+    #[test]
+    fn staleness_still_outranks_the_encumbered_ceiling() {
+        let e = compute_issue_thbc(1, 0, 1_000, u64::MAX, 3_701, 100, 3_600).unwrap_err();
+        assert_eq!(err_code(e), code_of(TreasuryError::StaleAttestation));
     }
 
     // F5: exactly at the TTL is still fresh.
     #[test]
     fn issue_at_exactly_the_ttl_is_fresh() {
-        assert!(compute_issue_thbc(1, 0, 1_000, 3_700, 100, 3_600).is_ok());
+        assert!(compute_issue_thbc(1, 0, 1_000, 0, 3_700, 100, 3_600).is_ok());
     }
 
     // F5: one second past the TTL halts issuance.
     #[test]
     fn issue_one_second_past_the_ttl_halts() {
-        let e = compute_issue_thbc(1, 0, 1_000, 3_701, 100, 3_600).unwrap_err();
+        let e = compute_issue_thbc(1, 0, 1_000, 0, 3_701, 100, 3_600).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::StaleAttestation));
     }
 
@@ -306,7 +363,7 @@ mod tests {
     // actionable information.
     #[test]
     fn issue_reports_staleness_before_peg_breach() {
-        let e = compute_issue_thbc(u64::MAX, 0, 0, 999_999, 100, 3_600).unwrap_err();
+        let e = compute_issue_thbc(u64::MAX, 0, 0, 0, 999_999, 100, 3_600).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::StaleAttestation));
     }
 
@@ -314,13 +371,13 @@ mod tests {
     // otherwise a clock-skewed or malicious attestor buys unlimited freshness.
     #[test]
     fn issue_rejects_a_future_dated_attestation() {
-        let e = compute_issue_thbc(1, 0, 1_000, 100, 5_000, 3_600).unwrap_err();
+        let e = compute_issue_thbc(1, 0, 1_000, 0, 100, 5_000, 3_600).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::StaleAttestation));
     }
 
     #[test]
     fn issue_supply_overflow_is_rejected() {
-        let e = compute_issue_thbc(u64::MAX, u64::MAX, u64::MAX, 100, 50, 3_600).unwrap_err();
+        let e = compute_issue_thbc(u64::MAX, u64::MAX, u64::MAX, 0, 100, 50, 3_600).unwrap_err();
         assert_eq!(err_code(e), code_of(TreasuryError::PegBreach));
     }
 
@@ -658,9 +715,13 @@ pub mod treasury {
 
     /// Custodian: refresh the off-chain THB reserve figure that caps THBC supply.
     /// This is the peg's source of truth — mints are blocked once it goes stale.
-    pub fn update_attestation(ctx: Context<UpdateAttestation>, attested_reserve: u64) -> Result<()> {
+    pub fn update_attestation(
+        ctx: Context<UpdateAttestation>,
+        attested_reserve: u64,
+        reserve_encumbered: u64,
+    ) -> Result<()> {
         compute_fn!("update_attestation" => {
-            instructions::update_attestation(ctx, attested_reserve)
+            instructions::update_attestation(ctx, attested_reserve, reserve_encumbered)
         })
     }
 

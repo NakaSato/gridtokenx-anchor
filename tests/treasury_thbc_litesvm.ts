@@ -119,13 +119,18 @@ describe("treasury THBC — F1/F3/F5/F6/F7 invariants", () => {
    *                                   stake_vault_bump, reward_vault_bump,
    *                                   rebate_vault_bump, thbc_inventory_bump
    *   u8 redeem_escrow_bump     @258
-   *   [u8; 13] padding          @259
+   *   [u8; 5] padding           @259
+   *   u64 reserve_encumbered    @264  <- carved from the old [u8; 13] padding; the
+   *                                      struct is still 272 bytes, which is why
+   *                                      adding it needed no re-init on chain.
    */
   function installTreasury(opts: {
     attestedReserve: bigint;
     attestationTs: bigint;
     thbcSupply: bigint;
     paused?: boolean;
+    /** F1: fiat cleared but not issuable. Omitted == 0 == the pre-field behaviour. */
+    reserveEncumbered?: bigint;
   }) {
     const data = Buffer.alloc(8 + 272);
     TREASURY_DISC.copy(data, 0);
@@ -150,6 +155,8 @@ describe("treasury THBC — F1/F3/F5/F6/F7 invariants", () => {
     // stake_vault_bump, reward_vault_bump, rebate_vault_bump unused here
     data.writeUInt8(inventoryBump, b + 257);
     data.writeUInt8(escrowBump, b + 258);
+    // padding @259..264 stays zero; reserve_encumbered @264
+    data.writeBigUInt64LE(opts.reserveEncumbered ?? 0n, b + 264);
 
     svm.setAccount(treasuryPda, {
       lamports: Number(svm.minimumBalanceForRentExemption(BigInt(data.length))),
@@ -528,6 +535,62 @@ describe("treasury THBC — F1/F3/F5/F6/F7 invariants", () => {
     expectCustomError(send(await issueIx(600_001n, "SCB-1"), [authority]), PEG_BREACH);
     expect(trackedSupply(), "a refused issuance must not move supply").to.eq(400_000n);
     expect(balanceOf(userThbcAta)).to.eq(0n);
+  });
+
+  // F1's ceiling is `attested_reserve - reserve_encumbered` (spec §4.1), not the bare
+  // reserve. These run against the COMPILED program, so they also prove the field is
+  // actually being read from offset 264 of the 272-byte account — the whole basis for
+  // adding it without a re-init.
+
+  it("F1: encumbered fiat does not count as backing", async () => {
+    // 1_000_000 attested, 400_000 encumbered => 600_000 of real backing.
+    installTreasury({
+      attestedReserve: 1_000_000n, attestationTs: BigInt(NOW), thbcSupply: 0n,
+      reserveEncumbered: 400_000n,
+    });
+    // 700_000 fits under the bare reserve and was allowed before this field existed.
+    expectCustomError(send(await issueIx(700_000n, "SCB-1"), [authority]), PEG_BREACH);
+    expect(trackedSupply(), "a refused issuance must not move supply").to.eq(0n);
+    expect(balanceOf(userThbcAta)).to.eq(0n);
+  });
+
+  it("F1: the encumbered ceiling is inclusive, and one over it breaches", async () => {
+    installTreasury({
+      attestedReserve: 1_000_000n, attestationTs: BigInt(NOW), thbcSupply: 0n,
+      reserveEncumbered: 400_000n,
+    });
+    ok(send(await issueIx(600_000n, "SCB-1"), [authority]));
+    expect(trackedSupply()).to.eq(600_000n);
+
+    installTreasury({
+      attestedReserve: 1_000_000n, attestationTs: BigInt(NOW), thbcSupply: 0n,
+      reserveEncumbered: 400_000n,
+    });
+    expectCustomError(send(await issueIx(600_001n, "SCB-2"), [authority]), PEG_BREACH);
+  });
+
+  it("F1: zero encumbrance reproduces the old ceiling exactly", async () => {
+    // This is what every Treasury deployed before the field existed reads, because
+    // those bytes were zeroed padding. If this ever fails, the change was NOT
+    // backward compatible and deployed accounts are being misread.
+    installTreasury({
+      attestedReserve: 1_000_000n, attestationTs: BigInt(NOW), thbcSupply: 400_000n,
+      reserveEncumbered: 0n,
+    });
+    ok(send(await issueIx(600_000n, "SCB-1"), [authority]));
+    expect(trackedSupply()).to.eq(1_000_000n);
+  });
+
+  it("F1: an encumbrance above the reserve halts issuance instead of wrapping", async () => {
+    // Reserve-service accounting fault. saturating_sub gives a ceiling of 0; a
+    // checked/wrapping subtraction here would produce an enormous ceiling and let
+    // anything through, which is the worst possible failure for this invariant.
+    installTreasury({
+      attestedReserve: 1_000_000n, attestationTs: BigInt(NOW), thbcSupply: 0n,
+      reserveEncumbered: 2_000_000n,
+    });
+    expectCustomError(send(await issueIx(1n, "SCB-1"), [authority]), PEG_BREACH);
+    expect(trackedSupply()).to.eq(0n);
   });
 
   // ---------------------------------------------------------------------------

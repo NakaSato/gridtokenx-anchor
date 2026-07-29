@@ -7,6 +7,10 @@ use anchor_lang::prelude::*;
 pub struct ReserveAttested {
     pub attestor: Pubkey,
     pub attested_reserve: u64,
+    /// Fiat cleared but not issuable (F1). The effective peg ceiling this attestation
+    /// establishes is `attested_reserve − reserve_encumbered`, so an indexer reading
+    /// only `attested_reserve` would overstate available headroom.
+    pub reserve_encumbered: u64,
     pub timestamp: i64,
 }
 

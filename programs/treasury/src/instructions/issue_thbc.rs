@@ -97,6 +97,7 @@ pub fn issue_thbc(ctx: Context<IssueThbc>, amount: u64, bank_ref_hash: [u8; 32])
             amount,
             t.thbc_supply,
             t.attested_reserve,
+            t.reserve_encumbered,
             now,
             t.attestation_ts,
             t.attestation_ttl,

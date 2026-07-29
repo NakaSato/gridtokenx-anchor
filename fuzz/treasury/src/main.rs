@@ -218,7 +218,12 @@ impl TreasuryFixture {
 
         // --- seed a fresh, generous reserve attestation so swaps are allowed ---
         ctx.program(program_id)
-            .call(instruction::UpdateAttestation { attested_reserve: INIT_RESERVE })
+            .call(instruction::UpdateAttestation {
+                attested_reserve: INIT_RESERVE,
+                // No encumbrance at genesis, so the F1 ceiling starts at the full
+                // reserve and `action_attest` is free to explore encumbered states.
+                reserve_encumbered: 0,
+            })
             .accounts(accounts::UpdateAttestation { treasury: treasury_pda, attestor: admin.pubkey() })
             .signers(&[&*admin])
             .send()
@@ -444,12 +449,29 @@ impl TreasuryFixture {
 
     /// Attest a fresh reserve. Kept >= current supply so I2 stays a meaningful
     /// regression guard on the swap over-mint check (never a spurious failure).
-    pub fn action_attest(&mut self, headroom: u64) -> bool {
+    ///
+    /// `encumbrance` is bounded to `0..=reserve` rather than left as a raw u64. An
+    /// unbounded value would exceed the reserve on almost every draw, pinning the F1
+    /// ceiling at zero and starving every issuance path the fuzzer is meant to explore.
+    /// The bound still includes `encumbrance == reserve` (ceiling exactly zero), and
+    /// the over-subtraction case is covered deterministically by the unit test and the
+    /// litesvm case instead.
+    ///
+    /// I2 deliberately still compares supply against `attested_reserve`, NOT against
+    /// `attested_reserve - reserve_encumbered`: the attestor may report an encumbrance
+    /// at any time, including after tokens were legitimately issued, so supply above
+    /// the tightened ceiling is a valid state rather than a program fault. F1 bounds
+    /// new issuance; it does not retroactively bound existing supply.
+    pub fn action_attest(&mut self, headroom: u64, encumbrance: u64) -> bool {
         let supply = self.treasury().thbc_supply;
         let reserve = supply.saturating_add(headroom);
+        let reserve_encumbered = encumbrance % reserve.saturating_add(1);
         self.ctx
             .program(self.program_id)
-            .call(instruction::UpdateAttestation { attested_reserve: reserve })
+            .call(instruction::UpdateAttestation {
+                attested_reserve: reserve,
+                reserve_encumbered,
+            })
             .accounts(accounts::UpdateAttestation {
                 treasury: self.treasury_pda,
                 attestor: self.admin.pubkey(),

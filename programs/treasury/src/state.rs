@@ -75,11 +75,31 @@ pub struct Treasury {
     /// `initialize_redemption_escrow`). Carved out of `_padding` for the same reason as
     /// `thbc_inventory_bump`: growing the struct would break every deployed PDA.
     pub redeem_escrow_bump: u8, // 1
-    pub _padding: [u8; 13],    // 13 — pad to 272
-    // size = 16 + 32*5 + 8*9 + 2 + 9 + 13 = 272 (multiple of 16, u128-aligned).
-    // UNCHANGED since before `thbc_inventory_bump` and `redeem_escrow_bump` were added —
-    // both bytes came out of `_padding`, so the on-chain layout is identical and no
-    // migration is needed.
+    pub _padding: [u8; 5],     // 5 — aligns `reserve_encumbered` to offset 264
+    /// **F1.** Fiat that has cleared the bank but is NOT free backing — a deposit that
+    /// settled and then failed or is still awaiting KYC (spec §4.1, §5.2). The peg
+    /// ceiling is `attested_reserve − reserve_encumbered`, not `attested_reserve`:
+    /// counting encumbered fiat as backing would let the treasury issue against baht
+    /// it is about to wire back.
+    ///
+    /// Written by the attestor as part of `update_attestation`, deliberately in the
+    /// SAME instruction as `attested_reserve`. A separate setter would leave a window
+    /// where a fresh reserve is on-chain with a stale encumbrance, and that window is
+    /// exactly the over-issuance this field exists to prevent.
+    ///
+    /// Carved out of `_padding` like `thbc_inventory_bump` and `redeem_escrow_bump`
+    /// before it: the bumps ended at offset 259, the next 8-aligned offset is 264, and
+    /// 264 + 8 = 272 — so this `u64` lands in the tail of the old padding without
+    /// moving a single existing field. **The struct is still 272 bytes**, every
+    /// deployed Treasury PDA keeps deserializing, and no re-init or realloc is needed.
+    /// On an account initialized before this field existed the bytes are zero, so the
+    /// ceiling evaluates to `attested_reserve − 0` — identical to the old behaviour
+    /// until an attestation actually reports an encumbrance.
+    pub reserve_encumbered: u64, // 8 — offset 264..272
+    // size = 16 + 32*5 + 8*9 + 2 + 9 + 5 + 8 = 272 (multiple of 16, u128-aligned).
+    // UNCHANGED since before `thbc_inventory_bump`, `redeem_escrow_bump` and
+    // `reserve_encumbered` were added — all three came out of `_padding`, so the
+    // on-chain layout is identical and no migration is needed.
 }
 
 #[cfg(test)]
@@ -97,6 +117,26 @@ mod layout_tests {
     #[test]
     fn treasury_is_16_byte_aligned_for_its_leading_u128() {
         assert_eq!(core::mem::align_of::<Treasury>(), 16);
+    }
+
+    /// Size alone does not prove backward compatibility — a change that moved a field
+    /// while keeping the total at 272 would still silently misread every deployed
+    /// account. These pin the offsets that matter.
+    ///
+    /// `reserve_encumbered` must sit at 264 specifically: it was carved out of the
+    /// tail of `_padding`, which is the only reason adding it needed no re-init. If it
+    /// moves, it is no longer reading zero on pre-existing accounts and the F1 ceiling
+    /// starts subtracting whatever bytes happen to be there.
+    #[test]
+    fn carved_fields_kept_their_offsets() {
+        assert_eq!(core::mem::offset_of!(Treasury, reserve_encumbered), 264);
+        assert_eq!(core::mem::offset_of!(Treasury, thbc_inventory_bump), 257);
+        assert_eq!(core::mem::offset_of!(Treasury, redeem_escrow_bump), 258);
+        // The fields every deployed account already had — none may shift.
+        assert_eq!(core::mem::offset_of!(Treasury, authority), 16);
+        assert_eq!(core::mem::offset_of!(Treasury, attested_reserve), 176);
+        assert_eq!(core::mem::offset_of!(Treasury, thbc_supply), 200);
+        assert_eq!(core::mem::offset_of!(Treasury, total_settled_thbc), 240);
     }
 }
 

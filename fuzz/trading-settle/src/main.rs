@@ -301,8 +301,8 @@ impl SettleFixture {
         let (zone_capacity, _) =
             Pubkey::find_program_address(&[b"zone_capacity", zone_market.as_ref()], &program_id);
         ctx.program(program_id)
-            .call(instruction::InitZoneCapacity {})
-            .accounts(accounts::InitZoneCapacity {
+            .call(instruction::InitializeZoneCapacity {})
+            .accounts(accounts::InitializeZoneCapacity {
                 zone_market,
                 zone_capacity,
                 authority: admin.pubkey(),

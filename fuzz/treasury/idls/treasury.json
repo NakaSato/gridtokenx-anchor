@@ -1363,6 +1363,10 @@
         {
           "name": "attested_reserve",
           "type": "u64"
+        },
+        {
+          "name": "reserve_encumbered",
+          "type": "u64"
         }
       ]
     }
@@ -2159,6 +2163,15 @@
             "type": "u64"
           },
           {
+            "name": "reserve_encumbered",
+            "docs": [
+              "Fiat cleared but not issuable (F1). The effective peg ceiling this attestation",
+              "establishes is `attested_reserve − reserve_encumbered`, so an indexer reading",
+              "only `attested_reserve` would overstate available headroom."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "timestamp",
             "type": "i64"
           }
@@ -2769,9 +2782,34 @@
             "type": {
               "array": [
                 "u8",
-                13
+                5
               ]
             }
+          },
+          {
+            "name": "reserve_encumbered",
+            "docs": [
+              "**F1.** Fiat that has cleared the bank but is NOT free backing — a deposit that",
+              "settled and then failed or is still awaiting KYC (spec §4.1, §5.2). The peg",
+              "ceiling is `attested_reserve − reserve_encumbered`, not `attested_reserve`:",
+              "counting encumbered fiat as backing would let the treasury issue against baht",
+              "it is about to wire back.",
+              "",
+              "Written by the attestor as part of `update_attestation`, deliberately in the",
+              "SAME instruction as `attested_reserve`. A separate setter would leave a window",
+              "where a fresh reserve is on-chain with a stale encumbrance, and that window is",
+              "exactly the over-issuance this field exists to prevent.",
+              "",
+              "Carved out of `_padding` like `thbc_inventory_bump` and `redeem_escrow_bump`",
+              "before it: the bumps ended at offset 259, the next 8-aligned offset is 264, and",
+              "264 + 8 = 272 — so this `u64` lands in the tail of the old padding without",
+              "moving a single existing field. **The struct is still 272 bytes**, every",
+              "deployed Treasury PDA keeps deserializing, and no re-init or realloc is needed.",
+              "On an account initialized before this field existed the bytes are zero, so the",
+              "ceiling evaluates to `attested_reserve − 0` — identical to the old behaviour",
+              "until an attestation actually reports an encumbrance."
+            ],
+            "type": "u64"
           }
         ]
       }
