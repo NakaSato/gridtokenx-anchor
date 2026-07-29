@@ -1,3 +1,16 @@
 */target/
 */crashes/
 .fuzz-cache/
+
+# Re-include lockfiles, which ../.gitignore drops via a blanket `Cargo.lock`
+# under its generic "# Rust" section.
+#
+# That blanket rule is right for programs/* — they are libraries built through
+# Anchor, and their versions are pinned by Cargo.toml. It is wrong here. Every
+# harness depends on three crucible crates by `branch = "main"`, which carries
+# NO version constraint at all: without a committed lock, an upstream push
+# silently changes what the fuzzers are built against, and a crash that does or
+# does not reproduce can no longer be attributed to our code.
+#
+# All ten harnesses currently pin crucible at 812cd554.
+!Cargo.lock

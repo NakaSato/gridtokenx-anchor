@@ -42,6 +42,9 @@ const INIT_RATE: u64 = 1_000_000; // THBC minor units per whole GRX
 const INIT_FEE_BPS: u16 = 30;
 const HUGE_TTL: i64 = i64::MAX; // freshness gate always passes; we don't fuzz staleness
 const INIT_RESERVE: u64 = 1_000_000_000_000_000_000; // 1e18 THBC headroom
+/// THBC seeded into `thbc_inventory` so the exchange path has something to pay out.
+/// Well under INIT_RESERVE so the seed issuance itself cannot trip the F1 ceiling.
+const INIT_INVENTORY: u64 = 1_000_000_000_000_000; // 1e9 THBC (6 dec)
 const NUM_SHARDS: u8 = 16; // treasury::state::NUM_SETTLE_SHARDS
 
 #[derive(Clone)]
@@ -62,6 +65,10 @@ struct TreasuryFixture {
     treasury_pda: Pubkey,
     thbc_mint: Pubkey,
     swap_vault: Pubkey,
+    /// `[b"thbc_inventory"]` — the platform-held THBC the exchange path pays out of
+    /// since the F6 fix. Before F6 the swap *minted*, so no inventory existed and the
+    /// exchange was bounded by reserve headroom; now it is bounded by this balance.
+    inventory_vault: Pubkey,
     stake_vault: Pubkey,
     reward_vault: Pubkey,
     grx_mint: Pubkey,
@@ -131,6 +138,8 @@ impl TreasuryFixture {
         let (treasury_pda, _) = Pubkey::find_program_address(&[b"treasury"], &program_id);
         let (thbc_mint, _) = Pubkey::find_program_address(&[b"thbc_mint"], &program_id);
         let (swap_vault, _) = Pubkey::find_program_address(&[b"swap_vault"], &program_id);
+        let (inventory_vault, _) =
+            Pubkey::find_program_address(&[b"thbc_inventory"], &program_id);
         let (stake_vault, _) = Pubkey::find_program_address(&[b"stake_vault"], &program_id);
         let (reward_vault, _) = Pubkey::find_program_address(&[b"reward_vault"], &program_id);
 
@@ -215,6 +224,56 @@ impl TreasuryFixture {
             .send()
             .unwrap();
 
+        // --- create the THBC inventory vault and seed it (F6) ---
+        //
+        // Since the F6 fix the exchange path transfers out of this vault instead of
+        // minting, so an unfunded vault makes every exchange fail with
+        // InsufficientInventory and the swap/redeem actions become dead weight — the
+        // fuzzer would explore nothing.
+        //
+        // Seeding goes through `issue_thbc` rather than fabricating a token balance at
+        // the SVM level, because `issue_thbc` is the ONLY instruction that raises
+        // `thbc_supply`. Minting the seed any other way would put the mint's real
+        // supply above the treasury's `thbc_supply` counter from genesis, and the
+        // conservation check below would then be measuring the fixture's shortcut
+        // rather than the program's accounting.
+        ctx.program(program_id)
+            .call(instruction::InitializeThbcInventory {})
+            .accounts(accounts::InitializeThbcInventory {
+                treasury: treasury_pda,
+                thbc_mint,
+                inventory_vault,
+                authority: admin.pubkey(),
+                token_program,
+                system_program: system_program::ID,
+            })
+            .signers(&[&*admin])
+            .send()
+            .unwrap();
+
+        // A fixed bank_ref for the seed issuance. F3 makes this replay-proof, so the
+        // hash only has to be stable, not unique per run.
+        let seed_bank_ref: [u8; 32] = [0xA5; 32];
+        let (seed_nullifier, _) =
+            Pubkey::find_program_address(&[b"deposit", &seed_bank_ref], &program_id);
+        ctx.program(program_id)
+            .call(instruction::IssueThbc {
+                amount: INIT_INVENTORY,
+                bank_ref_hash: seed_bank_ref,
+            })
+            .accounts(accounts::IssueThbc {
+                treasury: treasury_pda,
+                thbc_mint,
+                beneficiary_thbc_ata: inventory_vault,
+                deposit_nullifier: seed_nullifier,
+                issuer: admin.pubkey(),
+                token_program,
+                system_program: system_program::ID,
+            })
+            .signers(&[&*admin])
+            .send()
+            .unwrap();
+
         // --- initialize all 16 settlement-accumulator shards ---
         let mut shards = Vec::new();
         for id in 0..NUM_SHARDS {
@@ -243,6 +302,7 @@ impl TreasuryFixture {
             treasury_pda,
             thbc_mint,
             swap_vault,
+            inventory_vault,
             stake_vault,
             reward_vault,
             grx_mint,
@@ -306,7 +366,9 @@ impl TreasuryFixture {
     // Actions
     // --------------------------------------------------------------------- //
 
-    /// Swap GRX → THBC (mints THBC, pulls GRX collateral into swap_vault).
+    /// Exchange GRX → THBC. Pulls GRX collateral into `swap_vault` and pays THBC out
+    /// of `inventory_vault` — since F6 this **transfers**, it does not mint, so it
+    /// cannot raise `thbc_supply` and cannot put GRX into the backing set.
     pub fn action_swap(&mut self, #[range(0..2)] uidx: usize, grx_in: u64) -> bool {
         let u = &self.users[uidx];
         let bal = self.token_amount(&u.grx_ata);
@@ -317,12 +379,13 @@ impl TreasuryFixture {
         let ok = self
             .ctx
             .program(self.program_id)
-            .call(instruction::SwapGrxForThbc { grx_in: amt })
-            .accounts(accounts::SwapGrxForThbc {
+            .call(instruction::ExchangeGrxForThbc { grx_in: amt })
+            .accounts(accounts::ExchangeGrxForThbc {
                 treasury: self.treasury_pda,
                 grx_mint: self.grx_mint,
                 thbc_mint: self.thbc_mint,
                 swap_vault: self.swap_vault,
+                inventory_vault: self.inventory_vault,
                 user_grx_ata: u.grx_ata,
                 user_thbc_ata: u.thbc_ata,
                 user: u.kp.pubkey(),
@@ -338,7 +401,15 @@ impl TreasuryFixture {
         ok
     }
 
-    /// Redeem THBC → GRX (burns THBC, returns GRX from swap_vault).
+    /// Exchange THBC → GRX. Returns THBC to `inventory_vault` and pays GRX out of
+    /// `swap_vault`. Since F6 this **returns** the THBC rather than burning it, so
+    /// `thbc_supply` is untouched in this direction too — which is why the old
+    /// `SupplyUnderflow` guard no longer exists.
+    ///
+    /// NOTE: this is deliberately NOT `redeem_thbc_for_fiat`, despite the name
+    /// similarity the compiler suggests. That one is the F7 user-signed escrow path
+    /// (off-ramp to fiat); this is the GRX exchange path. Conflating them would fuzz
+    /// the redemption timelock while claiming to cover the exchange.
     pub fn action_redeem(&mut self, #[range(0..2)] uidx: usize, thbc_in: u64) -> bool {
         let u = &self.users[uidx];
         let bal = self.token_amount(&u.thbc_ata);
@@ -349,12 +420,13 @@ impl TreasuryFixture {
         let ok = self
             .ctx
             .program(self.program_id)
-            .call(instruction::RedeemThbcForGrx { thbc_in: amt })
-            .accounts(accounts::RedeemThbcForGrx {
+            .call(instruction::ExchangeThbcForGrx { thbc_in: amt })
+            .accounts(accounts::ExchangeThbcForGrx {
                 treasury: self.treasury_pda,
                 grx_mint: self.grx_mint,
                 thbc_mint: self.thbc_mint,
                 swap_vault: self.swap_vault,
+                inventory_vault: self.inventory_vault,
                 user_grx_ata: u.grx_ata,
                 user_thbc_ata: u.thbc_ata,
                 user: u.kp.pubkey(),
@@ -424,9 +496,11 @@ impl TreasuryFixture {
     /// invariant (I9) checks no exchange lands while `self.paused`.
     ///
     /// (Renamed from swap_grx_for_thbc / redeem_thbc_for_grx when the F6 fix replaced
-    /// the minting swap with an inventory transfer. `idls/treasury.json` in this
-    /// directory is a committed snapshot and is now STALE — regenerate it with
-    /// `anchor build` before relying on this harness against the new instructions.)
+    /// the minting swap with an inventory transfer. `idls/treasury.json` was
+    /// regenerated for that rename, but the call sites in this file were not, so the
+    /// harness failed to COMPILE from the F6 commit until 2026-07-29 — it has never
+    /// fuzzed the post-F6 program. Both are now in sync; `cargo check --locked` is the
+    /// guard, since a rename like that is a hard build error here, not silent drift.)
     pub fn action_set_pause(&mut self, paused: bool) -> bool {
         let ok = self
             .ctx
