@@ -202,6 +202,12 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 | `treasury.initialize` | 42 277 |
 | `treasury.swap_grx_for_thbc` †  | 21 509 |
 | `treasury.redeem_thbc_for_grx` † | 21 328 |
+| `treasury.issue_thbc` ‡ | 18 465 |
+| `treasury.exchange_grx_for_thbc` ‡ | 23 929 |
+| `treasury.exchange_thbc_for_grx` ‡ | 23 904 |
+| `treasury.redeem_thbc_for_fiat` ‡ | 19 875 |
+| `treasury.confirm_redemption` ‡ | 15 585 |
+| `treasury.reclaim_redemption` ‡ | 16 488 |
 | `treasury.stake_grx` (first — inits position) | 19 538 |
 | `treasury.set_params` | 3 404 |
 | `treasury.update_attestation` | 3 303 |
@@ -210,11 +216,31 @@ Reproduce: `npm run test:cu-profile` (runs every `tests/cu_profile_*_litesvm.ts`
 > † **Stale — these two instructions no longer exist.** The F6 fix replaced
 > `swap_grx_for_thbc` / `redeem_thbc_for_grx` with `exchange_grx_for_thbc` /
 > `exchange_thbc_for_grx`, which transfer against an inventory vault instead of
-> minting/burning. The figures above are real measurements of the *old* minting code and
-> are kept for historical comparison, not as current numbers. The replacements should be
-> cheaper (a `transfer_checked` in place of a `mint_to`, and no `thbc_supply` write on
-> the forward path) but have **not** been re-measured. `issue_thbc` and the F7 redemption
-> instructions are unmeasured entirely.
+> minting/burning. Kept for comparison, not as current numbers.
+>
+> ‡ **Measured 2026-07-29 under litesvm**, not on a validator: `npx tsx
+> scripts/measure-treasury-cu.ts`, reading `meta().computeUnitsConsumed()` against
+> `target/deploy/treasury.so`. Program consumption including the token-program CPI,
+> excluding the ComputeBudget instruction. The rest of this table was gathered
+> differently, so treat cross-row comparisons within a few hundred CU as noise —
+> the ‡ rows are comparable to each other.
+>
+> **The prediction in the previous revision of this note was WRONG.** It said the
+> exchange pair "should be cheaper — a `transfer_checked` in place of a `mint_to`, and
+> no `thbc_supply` write on the forward path". Both are ~2 400 CU *more* expensive
+> (21 509 → 23 929, 21 328 → 23 904). The reasoning missed that the exchange does
+> **two** `transfer_checked` CPIs where the swap did one transfer plus a `mint_to`, and
+> loads an extra `InterfaceAccount` for the inventory vault. Removing a mint did not pay
+> for adding a transfer.
+>
+> `issue_thbc` at 18 465 *is* cheaper than the old swap despite creating the F3
+> nullifier account, because it has no GRX leg at all. The F7 instructions are the
+> cheapest of the group: `confirm_redemption` (burn + account close) and
+> `reclaim_redemption` (one transfer + close) touch fewer accounts than any exchange.
+>
+> All six sit far below the 200k per-instruction default, so none is near a budget
+> ceiling; `issue_thbc` is nonetheless submitted with an explicit 400k limit because it
+> is bundled behind a `create_associated_token_account_idempotent`.
 
 
 **Reading:** the swap/redeem/stake hot paths cluster at **~19.5–21.5k CU**, driven

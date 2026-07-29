@@ -41,6 +41,7 @@ async function main() {
   const [rewardVault] = PublicKey.findProgramAddressSync([Buffer.from('reward_vault')], treasuryProgram.programId);
   const [rebateVault] = PublicKey.findProgramAddressSync([Buffer.from('rebate_vault')], treasuryProgram.programId);
   const [thbcInventory] = PublicKey.findProgramAddressSync([Buffer.from('thbc_inventory')], treasuryProgram.programId);
+  const [redeemEscrow] = PublicKey.findProgramAddressSync([Buffer.from('redeem_escrow')], treasuryProgram.programId);
 
   console.log('  Treasury PDA   :', treasuryPda.toBase58());
   console.log('  THBC mint      :', thbcMint.toBase58());
@@ -110,11 +111,11 @@ async function main() {
   // of the F6 fix. Nothing in the program mints into this vault; it is funded by a
   // plain SPL transfer of THBC the platform already holds.
   //
-  // NOTE: with the old `swap_grx_for_thbc` gone there is NO THBC mint path left in any
-  // program (`issue_thbc` is not implemented — spec §12). This vault therefore starts
-  // empty and stays empty until someone transfers existing THBC in, and until then
-  // every exchange fails with InsufficientInventory. That is correct: THBC is supposed
-  // to come into existence only against fiat received.
+  // The vault starts EMPTY and nothing in the program fills it: `issue_thbc` mints to
+  // a beneficiary, never here. Until someone transfers THBC in, every exchange fails
+  // with InsufficientInventory. That is correct rather than a gap — THBC comes into
+  // existence only against fiat received, and the platform buys its inventory like
+  // anyone else.
   try {
     const invTx = await treasuryProgram.methods
       .initializeThbcInventory()
@@ -131,6 +132,36 @@ async function main() {
   } catch (e: any) {
     if (e.message?.includes('already in use')) {
       console.log('ℹ️  THBC inventory vault already initialized.');
+    } else {
+      throw e;
+    }
+  }
+
+  // Redemption escrow vault (F7): holds THBC that holders have committed to redeem but
+  // which is NOT yet burned — it stays inside `thbc_supply` until `confirm_redemption`,
+  // which is exactly what leaves room for `reclaim_redemption` to hand it back if the
+  // issuer never wires.
+  //
+  // Without this account `redeem_thbc_for_fiat` fails with
+  // RedemptionEscrowNotInitialized, so the entire off-ramp is unreachable even though
+  // the program supports it. One shared vault, not one per redemption: the
+  // [b"redeem", user, seq] record already says who owns what.
+  try {
+    const escrowTx = await treasuryProgram.methods
+      .initializeRedemptionEscrow()
+      .accounts({
+        treasury: treasuryPda,
+        thbcMint,
+        redeemEscrow,
+        authority: authority.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log('✅ Redemption escrow vault initialized:', redeemEscrow.toBase58(), 'TX:', escrowTx);
+  } catch (e: any) {
+    if (e.message?.includes('already in use')) {
+      console.log('ℹ️  Redemption escrow vault already initialized.');
     } else {
       throw e;
     }
