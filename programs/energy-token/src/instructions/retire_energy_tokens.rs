@@ -4,6 +4,9 @@ use anchor_spl::token_interface::{
     TokenAccount as TokenAccountInterface, TokenInterface,
 };
 
+use crate::error::EnergyTokenError;
+use crate::state::*;
+
 #[cfg(feature = "localnet")]
 use compute_debug::compute_checkpoint;
 #[cfg(not(feature = "localnet"))]
@@ -11,7 +14,23 @@ use crate::compute_checkpoint;
 
 #[derive(Accounts)]
 pub struct RetireEnergyTokens<'info> {
-    #[account(mut)]
+    /// Canonical token config. Read-only here — the burn deliberately does NOT
+    /// write `total_supply` (see the note at the end of the handler); this account
+    /// exists solely to pin `mint` below.
+    #[account(seeds = [b"token_info_2022"], bump)]
+    pub token_info: AccountLoader<'info, TokenInfo>,
+
+    /// The mint being burned from. **Must** be the canonical energy mint.
+    ///
+    /// Without this constraint the instruction burned whatever mint it was handed:
+    /// `authority` only has to own `token_account`, so anyone could call the
+    /// GridTokenX program to destroy their balance of an UNRELATED Token-2022 mint
+    /// and have it look, on-chain and in logs, like a GridTokenX energy retirement.
+    /// Mirrors the pin already used by `sync_total_supply`.
+    #[account(
+        mut,
+        constraint = mint.key() == token_info.load()?.mint @ EnergyTokenError::InvalidMint,
+    )]
     pub mint: InterfaceAccount<'info, MintInterface>,
 
     #[account(mut)]

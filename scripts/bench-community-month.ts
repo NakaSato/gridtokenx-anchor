@@ -739,6 +739,7 @@ async function main() {
       // off-chain and the seller retires the delivered energy directly.
       if (PRICE_MODEL === "buyback") {
         const retireIx = await energyToken.methods.retireEnergyTokens(new BN(capWh)).accounts({
+          tokenInfo: tokenInfoPda,
           mint: energyMintPda, tokenAccount: engAta(p.kp.publicKey),
           authority: p.kp.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
         } as any).instruction();
@@ -819,6 +820,7 @@ async function main() {
         marketAuthority: marketAuthorityPda, tokenProgram: TOKEN_2022_PROGRAM_ID,
       } as any).instruction();
       const burnIx = await energyToken.methods.retireEnergyTokens(new BN(capWh)).accounts({
+        tokenInfo: tokenInfoPda,
         mint: energyMintPda, tokenAccount: engAta(buyer.kp.publicKey),
         authority: buyer.kp.publicKey, tokenProgram: TOKEN_2022_PROGRAM_ID,
       } as any).instruction();

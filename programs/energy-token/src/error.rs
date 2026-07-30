@@ -32,4 +32,9 @@ pub enum EnergyTokenError {
     RecValidatorIsAuthority,
     #[msg("Invalid governance account — must be the canonical governance_config PDA")]
     InvalidGovernanceAccount,
+    // Appended at the END on purpose: Anchor assigns codes sequentially from 6000,
+    // so inserting above would renumber every later variant and break clients that
+    // match on the numeric code.
+    #[msg("Mint must be the canonical energy-token mint recorded in token_info")]
+    InvalidMint,
 }

@@ -344,8 +344,15 @@ async function main() {
     console.log('  ℹ️  Aggregator admission already exists or failed:', e.message);
   }
 
-  // 4b. Initialize Zones 0, 1, 2, 3
-  for (const zoneId of [0, 1, 2, 3, 7583, 7584, 7585, 7586, 7587, 7588]) {
+  // 4b. Initialize zone markets.
+  // 0-9 covers the default zone space (IOT_NUM_ZONES=10); 7583-7588 are the MEA/PEA
+  // zone codes. A zone MISSING here is not a soft failure: record_order_custodial
+  // takes zone_market as an AccountLoader, so an uninitialized zone makes on-chain
+  // order placement fail with AccountOwnedByWrongProgram (Custom 3007). The order
+  // still returns 200 and still matches off-chain, but it carries no PDA and its
+  // settlement ends permanently_failed. Previously this list stopped at 3, so any
+  // order in zones 4-9 was silently unsettleable.
+  for (const zoneId of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 7583, 7584, 7585, 7586, 7587, 7588]) {
     console.log(`  Initializing Zone ${zoneId} Market...`);
     const [zoneMarketPda] = PublicKey.findProgramAddressSync(
       [Buffer.from('zone_market'), marketPda.toBuffer(), new BN(zoneId).toArrayLike(Buffer, 'le', 4)],
