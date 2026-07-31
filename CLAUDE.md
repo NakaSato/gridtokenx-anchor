@@ -29,11 +29,16 @@ anchor keys sync                  # regenerate program IDs (then update declare_
 
 # NOTE: there are NO `npm run test:*` scripts (the old per-suite recipes and their
 # tests/*.ts files were removed in b2021fb). tests/ now holds exactly:
-#   9 in-process litesvm suites + batch_settle_tps.ts (validator-gated TPS sweep).
+#   10 in-process litesvm suites + batch_settle_tps.ts (validator-gated TPS sweep).
 # The lib-level price-model unit suite lives at scripts/lib/price-model-tariff.test.ts.
 
 # In-process litesvm suites (no validator needed) — run directly with mocha:
-npx mocha -r tsx tests/price_models_litesvm.ts tests/rec_gate_litesvm.ts tests/sharded_match_litesvm.ts tests/registry_hardening_litesvm.ts tests/erc_owner_gate_litesvm.ts tests/issue_erc_precheck_litesvm.ts tests/treasury_thbc_litesvm.ts tests/order_expiry_litesvm.ts tests/settle_offchain_guards_litesvm.ts --timeout 1000000
+npx mocha -r tsx tests/price_models_litesvm.ts tests/rec_gate_litesvm.ts tests/sharded_match_litesvm.ts tests/registry_hardening_litesvm.ts tests/erc_owner_gate_litesvm.ts tests/issue_erc_precheck_litesvm.ts tests/treasury_thbc_litesvm.ts tests/order_expiry_litesvm.ts tests/settle_offchain_guards_litesvm.ts tests/atomic_settlement_guards_litesvm.ts --timeout 1000000
+# atomic_settlement_guards_litesvm.ts covers execute_atomic_settlement — the CUSTODIAL
+# settle path (on-chain Order accounts), which is the one the trading service calls.
+# Mutation-checked: removing its self-trade guard or its expiry guard kills exactly one
+# case each. Its escrows are UncheckedAccounts, so unlike settle_offchain_match a
+# same-wallet trade actually reaches the handler — see the asymmetry note below.
 # order_expiry_litesvm.ts and settle_offchain_guards_litesvm.ts are complementary halves of
 # the same rule: the former pins that the expiry a CLIENT sends reaches the Order PDA, the
 # latter (with the two match suites) pins that a lapsed order is then refused a match.
