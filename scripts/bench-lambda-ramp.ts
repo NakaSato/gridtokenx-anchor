@@ -105,7 +105,10 @@ async function main() {
       trading.programId,
     );
     const ix = await trading.methods
-      .createBuyOrder(orderId, new BN(1_000_000_000), new BN(4_000_000)) // 1 kWh @ 4.00
+      // 1 kWh @ 4.00; trailing 0 = no expiry (utils::validate_order_expiry) — a
+      // throughput bench measures submit cost, and a host-clock expiry could be
+      // rejected against a lagging validator clock mid-ramp.
+      .createBuyOrder(orderId, new BN(1_000_000_000), new BN(4_000_000), new BN(0))
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,

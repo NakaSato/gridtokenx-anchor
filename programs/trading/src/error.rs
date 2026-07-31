@@ -108,4 +108,6 @@ pub enum TradingError {
     ShardZoneMismatch,
     #[msg("Referenced ERC certificate is not owned by the order seller")]
     ErcOwnerMismatch,
+    #[msg("Buyer and seller must be different parties — an order cannot match or settle against the same user's own order")]
+    SelfTradeNotAllowed,
 }

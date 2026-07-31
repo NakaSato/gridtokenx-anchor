@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::error::TradingError;
 use crate::state::*;
-use crate::utils::get_governance_config;
+use crate::utils::{get_governance_config, validate_order_expiry};
 
 #[derive(Accounts)]
 #[instruction(order_id_val: u64)]
@@ -23,6 +23,7 @@ pub fn create_buy_order(
     order_id_val: u64,
     energy_amount: u64,
     max_price_per_kwh: u64,
+    expires_at: i64,
 ) -> Result<()> {
     require!(
         get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
@@ -59,7 +60,8 @@ pub fn create_buy_order(
     order.order_type = OrderType::Buy as u8;
     order.status = OrderStatus::Active as u8;
     order.created_at = clock.unix_timestamp;
-    order.expires_at = clock.unix_timestamp + 86400;
+    // Caller-supplied expiry (0 = none). See utils::validate_order_expiry.
+    order.expires_at = validate_order_expiry(expires_at, clock.unix_timestamp)?;
 
     zone_market.active_orders += 1;
     emit!(crate::events::BuyOrderCreated {

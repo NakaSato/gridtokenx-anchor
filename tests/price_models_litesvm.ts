@@ -85,7 +85,11 @@ describe("price models (litesvm) — comparative prosumer economics on one book"
   let tradingId: PublicKey;
   let governanceId: PublicKey;
 
+  // `payer` is the prosumer/seller side, `buyer` the consumer side. They MUST be
+  // different wallets: every matching path enforces SelfTradeNotAllowed / skips
+  // self-pairs, so a one-wallet book models nothing that can actually clear.
   const payer = Keypair.generate();
+  const buyer = Keypair.generate();
   let marketPda: PublicKey, zoneMarketPda: PublicKey;
   let cfg: PublicKey, erc: PublicKey;
 
@@ -106,24 +110,32 @@ describe("price models (litesvm) — comparative prosumer economics on one book"
     return r; // TransactionMetadata on success — carries computeUnitsConsumed()
   }
 
-  const orderPda = (id: number) =>
+  // Order PDAs are seeded by their OWNER — pass it explicitly now that buys and sells
+  // belong to different wallets.
+  const orderPda = (id: number, owner: PublicKey = payer.publicKey) =>
     PublicKey.findProgramAddressSync(
-      [Buffer.from("order"), payer.publicKey.toBuffer(), new BN(id).toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("order"), owner.toBuffer(), new BN(id).toArrayLike(Buffer, "le", 8)],
       tradingId
     )[0];
 
-  const sellIx = (id: number, amt: number, price: number) =>
-    trading.methods.createSellOrder(new BN(id), new BN(amt), new BN(price)).accounts({
+  // Trailing 0 = the no-expiry sentinel (utils::validate_order_expiry); these
+  // suites exercise price models, not expiry.
+  const sellIx = (id: number, amt: number, price: number, expiresAt = 0) =>
+    trading.methods.createSellOrder(new BN(id), new BN(amt), new BN(price), new BN(expiresAt)).accounts({
       market: marketPda, zoneMarket: zoneMarketPda, order: orderPda(id), ercCertificate: erc,
       authority: payer.publicKey, systemProgram: SystemProgram.programId, governanceConfig: cfg,
     } as any).instruction();
-  const buyIx = (id: number, amt: number, maxPrice: number) =>
-    trading.methods.createBuyOrder(new BN(id), new BN(amt), new BN(maxPrice)).accounts({
-      market: marketPda, zoneMarket: zoneMarketPda, order: orderPda(id),
-      authority: payer.publicKey, systemProgram: SystemProgram.programId, governanceConfig: cfg,
+  // `owner` defaults to the consumer wallet; the self-trade case overrides it to
+  // `payer` so one wallet holds both legs.
+  const buyIx = (id: number, amt: number, maxPrice: number, owner: Keypair = buyer, expiresAt = 0) =>
+    trading.methods.createBuyOrder(new BN(id), new BN(amt), new BN(maxPrice), new BN(expiresAt)).accounts({
+      market: marketPda, zoneMarket: zoneMarketPda, order: orderPda(id, owner.publicKey),
+      authority: owner.publicKey, systemProgram: SystemProgram.programId, governanceConfig: cfg,
     } as any).instruction();
-  const matchIx = async (buyId: number, sellId: number, amt: number) => {
-    const buy = orderPda(buyId), sell = orderPda(sellId);
+  const matchIx = async (
+    buyId: number, sellId: number, amt: number, buyOwner: PublicKey = buyer.publicKey
+  ) => {
+    const buy = orderPda(buyId, buyOwner), sell = orderPda(sellId);
     const tradeRecord = PublicKey.findProgramAddressSync(
       [Buffer.from("trade"), buy.toBuffer(), sell.toBuffer()], tradingId)[0];
     const ix = await trading.methods.matchOrders(new BN(amt)).accounts({
@@ -200,6 +212,9 @@ describe("price models (litesvm) — comparative prosumer economics on one book"
     svm.addProgramFromFile(tradingId, "target/deploy/trading.so");
     svm.addProgramFromFile(governanceId, "target/deploy/governance.so");
     svm.airdrop(payer.publicKey, BigInt(1_000_000_000_000));
+    // The buyer signs and rent-pays its own order accounts (create_buy_order:
+    // `payer = authority`).
+    svm.airdrop(buyer.publicKey, BigInt(1_000_000_000_000));
 
     [marketPda] = PublicKey.findProgramAddressSync([Buffer.from("market")], tradingId);
     [zoneMarketPda] = PublicKey.findProgramAddressSync(
@@ -223,7 +238,7 @@ describe("price models (litesvm) — comparative prosumer economics on one book"
   // ── Model 1: Continuous double auction (match_orders, price = seller ask) ────
   it("CDA: each fill executes at its own seller ask (discriminatory pricing)", async () => {
     for (const s of SELLS) send([await sellIx(s.id, s.amt, s.price)]);
-    for (const b of BUYS) send([await buyIx(b.id, b.amt, b.price)]);
+    for (const b of BUYS) send([await buyIx(b.id, b.amt, b.price)], [buyer]);
 
     let gross = 0, volume = 0;
     for (const p of CDA_PAIRS) {
@@ -244,11 +259,56 @@ describe("price models (litesvm) — comparative prosumer economics on one book"
     results["CDA"] = { gross, net: net(gross, volume), volume, note: "per-fill seller ask (3.00–3.30)" };
   });
 
+  // Same CDA path, same crossing prices — only the identity differs. A wallet that
+  // holds both legs cannot match them: the pair is otherwise perfectly valid (Active,
+  // 3.80 >= 3.00, amount > 0), so only the self-trade guard can reject it, and nothing
+  // is booked. This is the on-chain counterpart of the off-chain matcher's
+  // `self_trade_is_skipped` (trading-engine engine.rs).
+  it("CDA: rejects a self-trade — same wallet on both legs (SelfTradeNotAllowed)", async () => {
+    const SELF = { sellId: 91, buyId: 92, amt: 50, price: SELLS[0].price };
+    send([await sellIx(SELF.sellId, SELF.amt, SELF.price)]);
+    send([await buyIx(SELF.buyId, SELF.amt, BUYS[0].price, payer)]);
+
+    const volBefore = decodeZoneMarket().totalVolume.toNumber();
+    const { ix, tradeRecord } = await matchIx(
+      SELF.buyId, SELF.sellId, SELF.amt, payer.publicKey);
+    const res = sendRaw([ix]);
+    expect(res instanceof FailedTransactionMetadata, "self-trade tx must fail").to.be.true;
+    expect((res as FailedTransactionMetadata).meta().logs().join("\n"))
+      .to.include("SelfTradeNotAllowed");
+
+    // Nothing settled and nothing booked.
+    expect(svm.getAccount(tradeRecord)).to.be.null;
+    expect(decodeZoneMarket().totalVolume.toNumber()).to.eq(volBefore);
+  });
+
+  // match_orders counterpart of the sharded suite's expiry case: a TTL that has run out
+  // stops the pair matching. (The sharded suite pins the same helper as a function of the
+  // clock alone by rewinding and re-matching; this one just holds the non-sharded path to
+  // the same rule.) Restores the clock so the models below keep their fixed timestamp.
+  it("CDA: a lapsed order does not match (OrderExpired)", async () => {
+    const S = 81, B = 82, expiry = NOW + 100;
+    send([await sellIx(S, 100, SELLS[0].price, expiry)]);
+    send([await buyIx(B, 100, BUYS[0].price, buyer, expiry)], [buyer]);
+
+    svm.setClock(new Clock(svm.getClock().slot, 0n, 0n, 0n, BigInt(expiry)));
+    const { ix, tradeRecord } = await matchIx(B, S, 100);
+    const res = sendRaw([ix]);
+    expect(res instanceof FailedTransactionMetadata, "lapsed pair must not match").to.be.true;
+    expect((res as FailedTransactionMetadata).meta().logs().join("\n")).to.include("OrderExpired");
+    expect(svm.getAccount(tradeRecord)).to.be.null;
+
+    svm.setClock(new Clock(svm.getClock().slot, 0n, 0n, 0n, BigInt(NOW)));
+  });
+
   // ── Model 2: Uniform-price auction (clear_auction, one clearing price) ───────
   it("uniform auction: one clearing price at the max-crossing volume", async () => {
+    // `user` must differ by side: clear_auction skips self-pairs, so sells and buys
+    // owned by one wallet would clear a price but match zero volume.
     const auctionOrder = (o: { price: number; amt: number }, isBuy: boolean) => ({
       orderKey: Keypair.generate().publicKey, pricePerKwh: new BN(o.price),
-      amount: new BN(o.amt), filledAmount: new BN(0), user: payer.publicKey, isBuy,
+      amount: new BN(o.amt), filledAmount: new BN(0),
+      user: isBuy ? buyer.publicKey : payer.publicKey, isBuy,
     });
     const sells = SELLS.map((s) => auctionOrder(s, false));
     const buys = BUYS.map((b) => auctionOrder(b, true));
@@ -269,6 +329,32 @@ describe("price models (litesvm) — comparative prosumer economics on one book"
     const gross = clearing * volume;
     expect(gross).to.eq(1_320_000_000);
     results["Uniform"] = { gross, net: net(gross, volume), volume, note: "single clearing 3.30 for all" };
+  });
+
+  // A user may only trade with SOMEONE ELSE — including inside the uniform auction.
+  // Same book as the test above but with ONE wallet on both sides: a clearing price is
+  // still discovered from the curves (they cross), yet nothing may match, so no volume
+  // and no trades are booked. Without the skip, this book "clears" 400 kWh of a wallet
+  // trading with itself and inflates market volume + price history.
+  it("uniform auction: self-pairs are skipped — one wallet on both sides matches nothing", async () => {
+    const selfOrder = (o: { price: number; amt: number }, isBuy: boolean) => ({
+      orderKey: Keypair.generate().publicKey, pricePerKwh: new BN(o.price),
+      amount: new BN(o.amt), filledAmount: new BN(0), user: payer.publicKey, isBuy,
+    });
+    const before = decodeZoneMarket();
+    send([await trading.methods.clearAuction(
+      SELLS.map((s) => selfOrder(s, false)) as any,
+      BUYS.map((b) => selfOrder(b, true)) as any,
+    ).accounts({
+      market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey,
+      feeCollector: Keypair.generate().publicKey, tokenProgram: TOKEN_PROGRAM_ID, governanceConfig: cfg,
+    } as any).instruction()]);
+
+    const after = decodeZoneMarket();
+    expect(after.totalVolume.toNumber() - before.totalVolume.toNumber(),
+      "a self-only book must match zero volume").to.eq(0);
+    expect(after.totalTrades - before.totalTrades,
+      "a self-only book must book zero trades").to.eq(0);
   });
 
   // ── Model 3: Single-rate buyback @ 2.20 (guaranteed utility feed-in) ─────────

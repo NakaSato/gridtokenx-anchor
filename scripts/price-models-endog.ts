@@ -184,8 +184,10 @@ async function main() {
       trading.programId,
     );
 
+    // Trailing 0 = no expiry (utils::validate_order_expiry) — matched in the same
+    // iteration, so a lifetime would only add a clock dependency here.
     await trading.methods
-      .createSellOrder(sellId, atomic, new BN(f.askMicros.toString()))
+      .createSellOrder(sellId, atomic, new BN(f.askMicros.toString()), new BN(0))
       .accounts({
         market: marketPda, zoneMarket: zoneMarketPda, order: sellOrderPda,
         ercCertificate: null, authority: authority.publicKey,
@@ -193,7 +195,7 @@ async function main() {
       })
       .rpc();
     await trading.methods
-      .createBuyOrder(buyId, atomic, new BN(f.bidMicros.toString()))
+      .createBuyOrder(buyId, atomic, new BN(f.bidMicros.toString()), new BN(0))
       .accounts({
         market: marketPda, zoneMarket: zoneMarketPda, order: buyOrderPda,
         authority: authority.publicKey, systemProgram: SystemProgram.programId,

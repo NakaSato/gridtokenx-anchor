@@ -68,8 +68,11 @@ describe("create_sell_order — ERC ownership gate", () => {
       [Buffer.from("order"), payer.publicKey.toBuffer(), new BN(id).toArrayLike(Buffer, "le", 8)],
       tradingId)[0];
 
+  // Trailing 0 = the no-expiry sentinel (utils::validate_order_expiry). These
+  // suites assert the ERC/provenance gate, not expiry, and a wall-clock expiry
+  // would be measured against the SVM's own clock rather than the host's.
   const sellIx = (id: number, amt: number, erc: PublicKey) =>
-    trading.methods.createSellOrder(new BN(id), new BN(amt), new BN(PRICE)).accounts({
+    trading.methods.createSellOrder(new BN(id), new BN(amt), new BN(PRICE), new BN(0)).accounts({
       market: marketPda, zoneMarket: zoneMarketPda, order: orderPda(id), ercCertificate: erc,
       authority: payer.publicKey, systemProgram: SystemProgram.programId, governanceConfig: cfg,
     } as any).instruction();

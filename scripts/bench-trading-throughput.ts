@@ -172,7 +172,9 @@ async function main() {
         program.programId);
       try {
         const ix = await program.methods
-          .submitLimitOrderSharded(orderId, side, amount, price, shard)
+          // Trailing 0 = no expiry (utils::validate_order_expiry): a throughput
+          // bench measures submit cost, not order lifetime.
+          .submitLimitOrderSharded(orderId, side, amount, price, shard, new BN(0))
           .accounts({
             order: orderPda, zoneMarket: zoneMarketPda, zoneShard: shardPdas[shard],
             authority: payer.publicKey, systemProgram: SystemProgram.programId,

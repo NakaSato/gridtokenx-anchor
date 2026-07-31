@@ -152,9 +152,10 @@ pub mod trading {
         order_id_val: u64,
         energy_amount: u64,
         price_per_kwh: u64,
+        expires_at: i64,
     ) -> Result<()> {
         compute_fn!("create_sell_order" => {
-            instructions::create_sell_order(ctx, order_id_val, energy_amount, price_per_kwh)
+            instructions::create_sell_order(ctx, order_id_val, energy_amount, price_per_kwh, expires_at)
         })
     }
 
@@ -163,9 +164,10 @@ pub mod trading {
         order_id_val: u64,
         energy_amount: u64,
         max_price_per_kwh: u64,
+        expires_at: i64,
     ) -> Result<()> {
         compute_fn!("create_buy_order" => {
-            instructions::create_buy_order(ctx, order_id_val, energy_amount, max_price_per_kwh)
+            instructions::create_buy_order(ctx, order_id_val, energy_amount, max_price_per_kwh, expires_at)
         })
     }
 
@@ -181,9 +183,10 @@ pub mod trading {
         is_buy: bool,
         energy_amount: u64,
         price_per_kwh: u64,
+        expires_at: i64,
     ) -> Result<()> {
         compute_fn!("record_order_custodial" => {
-            instructions::record_order_custodial(ctx, order_id_val, user, is_buy, energy_amount, price_per_kwh)
+            instructions::record_order_custodial(ctx, order_id_val, user, is_buy, energy_amount, price_per_kwh, expires_at)
         })
     }
 
@@ -270,9 +273,10 @@ pub mod trading {
         side: u8, // 0 = Buy, 1 = Sell
         amount: u64,
         price: u64,
+        expires_at: i64,
     ) -> Result<()> {
         compute_fn!("submit_limit_order" => {
-            instructions::submit_limit_order(ctx, order_id_val, side, amount, price)
+            instructions::submit_limit_order(ctx, order_id_val, side, amount, price, expires_at)
         })
     }
 
@@ -283,8 +287,17 @@ pub mod trading {
         amount: u64,
         price: u64,
         shard_id: u8,
+        expires_at: i64,
     ) -> Result<()> {
-        instructions::submit_limit_order_sharded(ctx, order_id_val, side, amount, price, shard_id)
+        instructions::submit_limit_order_sharded(
+            ctx,
+            order_id_val,
+            side,
+            amount,
+            price,
+            shard_id,
+            expires_at,
+        )
     }
 
     /// CDA Market Order - Execute immediately at best available price
@@ -431,6 +444,23 @@ pub mod trading {
         while sell_idx < eligible_sells.len() && buy_idx < eligible_buys.len() {
             let sell_order = eligible_sells[sell_idx];
             let buy_order = eligible_buys[buy_idx];
+
+            // Self-trade: a user may not buy their own energy. SKIP the pair rather than
+            // failing the instruction — one participant holding both sides must not void
+            // the clearing for every other bidder in the auction. Advancing SUPPLY (not
+            // demand) mirrors the off-chain uniform auction this path shadows
+            // (trading-service crates/trading-engine/src/uniform_auction.rs: "advance
+            // supply to try the next seller for this buyer"), so on-chain discovery and
+            // the off-chain matcher pair the same book the same way. Consequence, shared
+            // with the off-chain twin: matched volume can fall below `clearing_volume`,
+            // which is derived from the raw curves in STEP 4 and does not model identity.
+            // The aggregates below use `matched_buy_volume`, so what is booked is what
+            // actually matched.
+            if sell_order.user == buy_order.user {
+                sell_idx += 1;
+                continue;
+            }
+
             let sell_rem = &mut sell_remaining[sell_idx];
             let buy_rem = &mut buy_remaining[buy_idx];
 
@@ -587,6 +617,28 @@ pub mod trading {
         let mut buy_order = ctx.accounts.buy_order.load_mut()?;
         let mut sell_order = ctx.accounts.sell_order.load_mut()?;
         let clock = Clock::get()?;
+
+        // A user may never settle against their own order. This path MOVES TOKENS between
+        // the two orders' escrows, so without the guard a single wallet could round-trip
+        // its own funds through a real settlement — paying the market fee but booking
+        // volume, price history and (via the treasury CPI) settled value for a trade with
+        // no counterparty. Same rule as match_orders / settle_offchain_match.
+        require_keys_neq!(
+            buy_order.buyer,
+            sell_order.seller,
+            TradingError::SelfTradeNotAllowed
+        );
+        // A lapsed order must not settle, matching what `settle_offchain_match` has always
+        // enforced for signed payloads. NOTE the operational consequence on this path: a
+        // match agreed BEFORE expiry can no longer settle AFTER it, so settlement has to
+        // land inside the order's TTL (orders created with the 0 sentinel are unaffected).
+        // That is the point of a TTL, but it does mean a slow settlement now fails loudly
+        // instead of quietly consummating a lapsed order.
+        crate::utils::require_orders_live(
+            buy_order.expires_at,
+            sell_order.expires_at,
+            clock.unix_timestamp,
+        )?;
 
         // Slippage Protection: Ensure match price is within limits of both orders
         require!(

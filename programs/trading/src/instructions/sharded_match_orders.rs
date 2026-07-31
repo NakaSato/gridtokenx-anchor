@@ -61,6 +61,18 @@ pub fn sharded_match_orders(ctx: Context<ShardedMatchOrdersContext>, match_amoun
         buy_order.price_per_kwh >= sell_order.price_per_kwh,
         crate::error::TradingError::PriceMismatch
     );
+    // Same guard as match_orders: a user may never trade with themselves.
+    require_keys_neq!(
+        buy_order.buyer,
+        sell_order.seller,
+        crate::error::TradingError::SelfTradeNotAllowed
+    );
+    // Same guard as match_orders: a lapsed order must not match.
+    crate::utils::require_orders_live(
+        buy_order.expires_at,
+        sell_order.expires_at,
+        clock.unix_timestamp,
+    )?;
 
     let clearing_price = sell_order.price_per_kwh;
     let buy_remaining = buy_order.amount.saturating_sub(buy_order.filled_amount);

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use crate::error::TradingError;
 use crate::state::*;
-use crate::utils::get_governance_config;
+use crate::utils::{get_governance_config, validate_order_expiry};
 
 #[derive(Accounts)]
 #[instruction(order_id_val: u64, user: Pubkey)]
@@ -30,6 +30,7 @@ pub fn record_order_custodial(
     is_buy: bool,
     energy_amount: u64,
     price_per_kwh: u64,
+    expires_at: i64,
 ) -> Result<()> {
     require!(
         get_governance_config(&ctx.accounts.governance_config.to_account_info())?.is_operational(),
@@ -71,7 +72,10 @@ pub fn record_order_custodial(
     order.price_per_kwh = price_per_kwh;
     order.status = OrderStatus::Active as u8;
     order.created_at = clock.unix_timestamp;
-    order.expires_at = clock.unix_timestamp + 86400;
+    // The expiry the trading service resolved for this order off-chain (0 = none),
+    // not a hardcoded 24h — this PDA is what `trading_orders.order_pda` points at,
+    // so a reader comparing the two must not see two different lifetimes.
+    order.expires_at = validate_order_expiry(expires_at, clock.unix_timestamp)?;
 
     zone_market.active_orders += 1;
     Ok(())

@@ -45,7 +45,11 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
   let tradingId: PublicKey;
   let governanceId: PublicKey;
 
+  // `payer` sells, `buyer` buys. They MUST be different wallets: matching enforces
+  // SelfTradeNotAllowed, so a single-wallet fixture (what this suite used to do) is
+  // not a valid book — it can only ever produce self-trades.
   const payer = Keypair.generate();
+  const buyer = Keypair.generate();
   let marketPda: PublicKey, zoneMarketPda: PublicKey, zoneShardPda: PublicKey;
   let cfg: PublicKey, erc: PublicKey;
 
@@ -66,25 +70,33 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
     return r; // TransactionMetadata on success — carries computeUnitsConsumed()
   }
 
-  const orderPda = (id: number) =>
+  // Order PDAs are seeded by their OWNER, so the owner must be passed explicitly now
+  // that the two sides of the book are different wallets.
+  const orderPda = (id: number, owner: PublicKey = payer.publicKey) =>
     PublicKey.findProgramAddressSync(
-      [Buffer.from("order"), payer.publicKey.toBuffer(), new BN(id).toArrayLike(Buffer, "le", 8)],
+      [Buffer.from("order"), owner.toBuffer(), new BN(id).toArrayLike(Buffer, "le", 8)],
       tradingId
     )[0];
 
-  const sellIx = (id: number, amt: number, price: number) =>
-    trading.methods.createSellOrder(new BN(id), new BN(amt), new BN(price)).accounts({
+  // Trailing 0 = the no-expiry sentinel (utils::validate_order_expiry); these
+  // suites exercise matching, not expiry.
+  const sellIx = (id: number, amt: number, price: number, expiresAt = 0) =>
+    trading.methods.createSellOrder(new BN(id), new BN(amt), new BN(price), new BN(expiresAt)).accounts({
       market: marketPda, zoneMarket: zoneMarketPda, order: orderPda(id), ercCertificate: erc,
       authority: payer.publicKey, systemProgram: SystemProgram.programId, governanceConfig: cfg,
     } as any).instruction();
-  const buyIx = (id: number, amt: number, maxPrice: number) =>
-    trading.methods.createBuyOrder(new BN(id), new BN(amt), new BN(maxPrice)).accounts({
-      market: marketPda, zoneMarket: zoneMarketPda, order: orderPda(id),
-      authority: payer.publicKey, systemProgram: SystemProgram.programId, governanceConfig: cfg,
+  // `owner` defaults to the counterparty wallet; the self-trade case overrides it to
+  // `payer` so both legs of the match belong to one wallet.
+  const buyIx = (id: number, amt: number, maxPrice: number, owner: Keypair = buyer, expiresAt = 0) =>
+    trading.methods.createBuyOrder(new BN(id), new BN(amt), new BN(maxPrice), new BN(expiresAt)).accounts({
+      market: marketPda, zoneMarket: zoneMarketPda, order: orderPda(id, owner.publicKey),
+      authority: owner.publicKey, systemProgram: SystemProgram.programId, governanceConfig: cfg,
     } as any).instruction();
 
-  const shardedMatchIx = async (buyId: number, sellId: number, amt: number) => {
-    const buy = orderPda(buyId), sell = orderPda(sellId);
+  const shardedMatchIx = async (
+    buyId: number, sellId: number, amt: number, buyOwner: PublicKey = buyer.publicKey
+  ) => {
+    const buy = orderPda(buyId, buyOwner), sell = orderPda(sellId);
     const tradeRecord = PublicKey.findProgramAddressSync(
       [Buffer.from("trade"), buy.toBuffer(), sell.toBuffer()], tradingId)[0];
     const ix = await trading.methods.shardedMatchOrders(new BN(amt), SHARD_ID).accounts({
@@ -106,8 +118,8 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
     } as any).remainingAccounts(
       shards.map((pubkey) => ({ pubkey, isWritable: true, isSigner: false }))
     ).instruction();
-  const decodeOrder = (id: number) =>
-    trading.coder.accounts.decode("order", Buffer.from(svm.getAccount(orderPda(id))!.data));
+  const decodeOrder = (id: number, owner: PublicKey = payer.publicKey) =>
+    trading.coder.accounts.decode("order", Buffer.from(svm.getAccount(orderPda(id, owner))!.data));
   const decodeTrade = (tr: PublicKey) =>
     trading.coder.accounts.decode("tradeRecord", Buffer.from(svm.getAccount(tr)!.data));
 
@@ -166,6 +178,9 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
     svm.addProgramFromFile(tradingId, "target/deploy/trading.so");
     svm.addProgramFromFile(governanceId, "target/deploy/governance.so");
     svm.airdrop(payer.publicKey, BigInt(1_000_000_000_000));
+    // The buyer signs and rent-pays its own order accounts (create_buy_order:
+    // `payer = authority`), so it needs its own lamports.
+    svm.airdrop(buyer.publicKey, BigInt(1_000_000_000_000));
 
     [marketPda] = PublicKey.findProgramAddressSync([Buffer.from("market")], tradingId);
     [zoneMarketPda] = PublicKey.findProgramAddressSync(
@@ -190,7 +205,7 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
     patchBand(P_MIN, P_MAX);
 
     for (const o of [SELL]) send([await sellIx(o.id, o.amt, o.price)]);
-    for (const o of [BUY]) send([await buyIx(o.id, o.amt, o.price)]);
+    for (const o of [BUY]) send([await buyIx(o.id, o.amt, o.price)], [buyer]);
   });
 
   it("rejects match_amount == 0 (InvalidAmount) with NO state mutation", async () => {
@@ -201,12 +216,44 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
     expect(logs).to.include("InvalidAmount");
 
     // No side effects: orders still Active (status 0), no TradeRecord, shard untouched.
-    expect(decodeOrder(BUY.id).status).to.eq(0);
+    expect(decodeOrder(BUY.id, buyer.publicKey).status).to.eq(0);
     expect(decodeOrder(SELL.id).status).to.eq(0);
     expect(svm.getAccount(tradeRecord)).to.be.null;
     const shard = decodeShard();
     expect(shard.tradeCount).to.eq(0);
     expect(shard.volumeAccumulated.toNumber()).to.eq(0);
+  });
+
+  // A user may only trade with SOMEONE ELSE. `payer` already rests SELL; here it also
+  // posts a crossing buy, then tries to match its own two orders — the pair is valid on
+  // every other axis (both Active, buy price 3.50 >= ask 3.00, amount > 0, same shard),
+  // so only the self-trade guard can reject it. Without that guard the trade settles and
+  // books real volume/price history for a transfer between one wallet and itself.
+  it("rejects a self-trade — same wallet on both legs (SelfTradeNotAllowed), NO state mutation", async () => {
+    const SELF_BUY = { id: 21, amt: SELL.amt, price: BUY.price };
+    send([await buyIx(SELF_BUY.id, SELF_BUY.amt, SELF_BUY.price, payer)]);
+    expect(
+      decodeOrder(SELF_BUY.id).buyer.toBase58(),
+      "fixture must put the same wallet on both legs"
+    ).to.eq(decodeOrder(SELL.id).seller.toBase58());
+
+    const { ix, tradeRecord } = await shardedMatchIx(
+      SELF_BUY.id, SELL.id, SELL.amt, payer.publicKey);
+    const res = sendRaw([ix]);
+    expect(res instanceof FailedTransactionMetadata, "self-trade tx must fail").to.be.true;
+    expect((res as FailedTransactionMetadata).meta().logs().join("\n"))
+      .to.include("SelfTradeNotAllowed");
+
+    // Nothing settled: no TradeRecord, both orders still Active, shard counters clean.
+    expect(svm.getAccount(tradeRecord)).to.be.null;
+    expect(decodeOrder(SELF_BUY.id).status).to.eq(0);
+    expect(decodeOrder(SELL.id).status).to.eq(0);
+    const shard = decodeShard();
+    expect(shard.tradeCount).to.eq(0);
+    expect(shard.volumeAccumulated.toNumber()).to.eq(0);
+
+    // The honest cross is unaffected — the guard rejects the PAIR, not the order.
+    expect(decodeOrder(BUY.id, buyer.publicKey).status).to.eq(0);
   });
 
   it("full match: shard bookkeeping + fully-populated TradeRecord (seller ask pricing)", async () => {
@@ -221,7 +268,7 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
     expect(tr.amount.toNumber()).to.eq(SELL.amt);
     // Parity fix #2: fields previously left zeroed from load_init.
     expect(tr.seller.toBase58()).to.eq(payer.publicKey.toBase58());
-    expect(tr.buyer.toBase58()).to.eq(payer.publicKey.toBase58());
+    expect(tr.buyer.toBase58()).to.eq(buyer.publicKey.toBase58());
     expect(tr.totalValue.toNumber()).to.eq(SELL.amt * SELL.price); // raw discovery scale, NO /1e9
     expect(tr.feeAmount.toNumber()).to.eq(0);
     expect(tr.executedAt.toNumber()).to.eq(NOW);
@@ -233,7 +280,7 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
     expect(shard.lastClearingPrice.toNumber()).to.eq(SELL.price);
 
     // Both orders fully filled → Completed (status 2).
-    expect(decodeOrder(BUY.id).status).to.eq(2);
+    expect(decodeOrder(BUY.id, buyer.publicKey).status).to.eq(2);
     expect(decodeOrder(SELL.id).status).to.eq(2);
   });
 
@@ -286,5 +333,38 @@ describe("sharded_match_orders (litesvm) — shard-lock CDA parity with match_or
     svm.expireBlockhash();
     expect(res instanceof FailedTransactionMetadata, "non-authority must fail").to.be.true;
     expect((res as FailedTransactionMetadata).meta().logs().join("\n")).to.include("UnauthorizedAuthority");
+  });
+
+  // `Order.expires_at` was validated at creation and then never read back, so a TTL stopped
+  // meaning anything once the PDA existed — a lapsed order still matched. This pins the
+  // enforcement, and pins it as a function of the CLOCK ALONE: the same pair is rejected at
+  // its expiry second and then matches after the clock is rewound, so nothing but time
+  // differs between the two attempts. Runs last: the successful second attempt moves the
+  // shard counters the earlier cases assert on.
+  it("rejects a lapsed order (OrderExpired), and the same pair matches once the clock is back", async () => {
+    const TTL_SELL = 41, TTL_BUY = 42;
+    const expiry = NOW + 100;
+    send([await sellIx(TTL_SELL, SELL.amt, SELL.price, expiry)]);
+    send([await buyIx(TTL_BUY, SELL.amt, BUY.price, buyer, expiry)], [buyer]);
+
+    // Exactly AT expires_at: strict `<` means already lapsed (same reading as the
+    // signed-payload settle path).
+    svm.setClock(new Clock(svm.getClock().slot, 0n, 0n, 0n, BigInt(expiry)));
+    const { ix, tradeRecord } = await shardedMatchIx(TTL_BUY, TTL_SELL, SELL.amt);
+    const lapsed = sendRaw([ix]);
+    expect(lapsed instanceof FailedTransactionMetadata, "a lapsed order must not match").to.be.true;
+    expect((lapsed as FailedTransactionMetadata).meta().logs().join("\n")).to.include("OrderExpired");
+    expect(svm.getAccount(tradeRecord), "no trade may be recorded").to.be.null;
+    expect(decodeOrder(TTL_SELL).status, "sell stays Active").to.eq(0);
+    expect(decodeOrder(TTL_BUY, buyer.publicKey).status, "buy stays Active").to.eq(0);
+
+    // Rewind inside the TTL — the only thing that changed is the clock.
+    svm.setClock(new Clock(svm.getClock().slot, 0n, 0n, 0n, BigInt(expiry - 1)));
+    const retry = await shardedMatchIx(TTL_BUY, TTL_SELL, SELL.amt);
+    send([retry.ix]);
+    expect(decodeTrade(retry.tradeRecord).amount.toNumber()).to.eq(SELL.amt);
+    expect(decodeOrder(TTL_SELL).status, "sell fills").to.eq(2);
+
+    svm.setClock(new Clock(svm.getClock().slot, 0n, 0n, 0n, BigInt(NOW)));
   });
 });

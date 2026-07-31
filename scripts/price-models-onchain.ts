@@ -156,6 +156,23 @@ async function main() {
   console.log(`  [uniform] clear_auction  clearing=${Number(onchainClearingPrice) / 1e6}  volΔ(atomic)=${onchainVolDelta}  tx=${uniformSig.slice(0, 8)}`);
 
   // ---- Scheme 2: CDA via create orders + match_orders ---------------------
+  // The buy side needs its OWN wallet: match_orders rejects a pair whose buyer and
+  // seller are the same key (SelfTradeNotAllowed), so driving both legs from the
+  // provider wallet — as this script used to — can no longer produce a trade. The
+  // counterparty signs and rent-pays its order accounts (create_buy_order:
+  // `payer = authority`), hence the funding transfer.
+  const buyerKp = Keypair.generate();
+  {
+    const fundTx = new anchor.web3.Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: authority.publicKey,
+        toPubkey: buyerKp.publicKey,
+        lamports: 0.2 * anchor.web3.LAMPORTS_PER_SOL, // rent for `tranches` order accounts + fees
+      }),
+    );
+    await provider.sendAndConfirm(fundTx);
+    console.log(`  [cda] counterparty ${buyerKp.publicKey.toBase58().slice(0, 8)} funded (buyer != seller)`);
+  }
   const runSalt = new BN(Date.now()); // unique order-id base so PDAs don't collide across reruns
   const tradeRecords: string[] = [];
   const cdaSigs: string[] = [];
@@ -169,7 +186,7 @@ async function main() {
       trading.programId,
     );
     const [buyOrderPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("order"), authority.publicKey.toBuffer(), orderIdSeed(buyId)],
+      [Buffer.from("order"), buyerKp.publicKey.toBuffer(), orderIdSeed(buyId)],
       trading.programId,
     );
     const [tradePda] = PublicKey.findProgramAddressSync(
@@ -177,8 +194,11 @@ async function main() {
       trading.programId,
     );
 
+    // Trailing 0 = no expiry (utils::validate_order_expiry). Both orders are
+    // matched within the same iteration, so a lifetime would only add a clock
+    // dependency to a price-model measurement.
     await trading.methods
-      .createSellOrder(sellId, atomic, new BN(t.priceMicros.toString()))
+      .createSellOrder(sellId, atomic, new BN(t.priceMicros.toString()), new BN(0))
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,
@@ -190,15 +210,17 @@ async function main() {
       })
       .rpc();
     await trading.methods
-      .createBuyOrder(buyId, atomic, new BN(topAsk.toString())) // bid the top ask -> crosses
+      // bid the top ask -> crosses; trailing 0 = no expiry
+      .createBuyOrder(buyId, atomic, new BN(topAsk.toString()), new BN(0))
       .accounts({
         market: marketPda,
         zoneMarket: zoneMarketPda,
         order: buyOrderPda,
-        authority: authority.publicKey,
+        authority: buyerKp.publicKey,
         systemProgram: SystemProgram.programId,
         governanceConfig: governanceConfigPda,
       })
+      .signers([buyerKp])
       .rpc();
     const sig = await trading.methods
       .matchOrders(atomic)

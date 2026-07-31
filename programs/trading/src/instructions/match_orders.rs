@@ -54,6 +54,25 @@ pub fn match_orders(ctx: Context<MatchOrdersContext>, match_amount: u64) -> Resu
         buy_order.price_per_kwh >= sell_order.price_per_kwh,
         TradingError::PriceMismatch
     );
+    // A user may never trade with themselves. The off-chain matcher already skips
+    // self-crosses (trading-engine: `priced_candidate` / `uniform_auction`), but that
+    // is a courtesy of one client — this program must not accept a pair it is handed
+    // where both legs belong to the same wallet. Both fields are the REAL user even on
+    // the custodial path: `record_order_custodial` stores `user` in buyer/seller and
+    // only the platform signs.
+    require_keys_neq!(
+        buy_order.buyer,
+        sell_order.seller,
+        TradingError::SelfTradeNotAllowed
+    );
+    // A lapsed order must not match. `Order.expires_at` was validated when the order was
+    // created and then never read back, so a TTL stopped meaning anything the moment the
+    // PDA existed. Same 0-is-no-expiry, strict-`<` reading as the signed-payload path.
+    crate::utils::require_orders_live(
+        buy_order.expires_at,
+        sell_order.expires_at,
+        clock.unix_timestamp,
+    )?;
 
     let buy_remaining = buy_order.amount.saturating_sub(buy_order.filled_amount);
     let sell_remaining = sell_order.amount.saturating_sub(sell_order.filled_amount);

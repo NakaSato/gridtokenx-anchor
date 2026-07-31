@@ -719,6 +719,25 @@ pub fn settle_offchain_match<'info>(
     require!(match_price >= seller_payload.price_per_kwh, TradingError::SlippageExceeded);
     require!(buyer_payload.side == 0, TradingError::InvalidOrderSide);
     require!(seller_payload.side == 1, TradingError::InvalidOrderSide);
+    // A user may never settle against their own resting order. The off-chain matcher
+    // already refuses self-crosses (trading-engine `priced_candidate` /
+    // `uniform_auction`), but settlement must not TRUST the matcher: both legs are
+    // signed independently.
+    //
+    // DEFENSE-IN-DEPTH on THIS path, and deliberately kept: with one wallet on both legs
+    // `buyer_currency_escrow` and `seller_currency_escrow` are the SAME address, so
+    // Anchor's duplicate-mutable-account check rejects the tx in `try_accounts`
+    // (ConstraintDuplicateMutableAccount, 2040) before this line ever runs — verified in
+    // tests/settle_offchain_guards_litesvm.ts. The guard is what makes the rule explicit
+    // rather than incidental to the account layout, and it is what would still hold if
+    // these escrows were ever moved into remaining_accounts. It is genuinely load-bearing
+    // in `batch_settle_offchain_match`, which already passes escrows that way: removing it
+    // there lets a funded self-trade settle (mutation-checked).
+    require_keys_neq!(
+        buyer_payload.user,
+        seller_payload.user,
+        TradingError::SelfTradeNotAllowed
+    );
 
     let clock = Clock::get()?;
     require!(buyer_payload.expires_at == 0 || clock.unix_timestamp < buyer_payload.expires_at, TradingError::OrderExpired);
@@ -1077,6 +1096,34 @@ pub fn batch_settle_offchain_match<'info>(
         // Instructions: [Ed25519_Buyer_0, Ed25519_Seller_0, Ed25519_Buyer_1, Ed25519_Seller_1, ..., Program_IX]
         verify_ed25519_signature(sysvar_info, (i * 2) as u16, &m.buyer_payload.user, &m.buyer_payload.get_message())?;
         verify_ed25519_signature(sysvar_info, (i * 2 + 1) as u16, &m.seller_payload.user, &m.seller_payload.get_message())?;
+
+        // Same self-trade guard as the single-match path, per match — checked here, before
+        // any nullifier account is created, so a self-matched entry costs nothing and one
+        // bad match reverts the whole batch rather than settling alongside honest ones.
+        require_keys_neq!(
+            m.buyer_payload.user,
+            m.seller_payload.user,
+            TradingError::SelfTradeNotAllowed
+        );
+
+        // SIDE + EXPIRY, per match. The single-match path has enforced these since it was
+        // written; the batch path did NOT, and a signature proves only that the user signed
+        // THAT payload — never that the aggregator assigned it to the leg the user intended.
+        // Both legs' escrows are derived from the payloads below, so without the side check
+        // a payload signed `side = 1` (SELL) can be handed in as `buyer_payload` and have its
+        // CURRENCY escrow debited: the opposite of what the user signed. Expiry matters for
+        // the same reason — an order the user let lapse must not settle in a batch when it
+        // could not settle alone. `clock` is hoisted above the loop (SKILL.md invariant #5).
+        require!(m.buyer_payload.side == 0, TradingError::InvalidOrderSide);
+        require!(m.seller_payload.side == 1, TradingError::InvalidOrderSide);
+        require!(
+            m.buyer_payload.expires_at == 0 || clock.unix_timestamp < m.buyer_payload.expires_at,
+            TradingError::OrderExpired
+        );
+        require!(
+            m.seller_payload.expires_at == 0 || clock.unix_timestamp < m.seller_payload.expires_at,
+            TradingError::OrderExpired
+        );
 
         let offset = i * 7;
 

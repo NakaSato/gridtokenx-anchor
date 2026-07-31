@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::state::*;
+use crate::utils::validate_order_expiry;
 
 #[cfg(feature = "localnet")]
 use compute_debug::compute_fn;
@@ -7,7 +8,7 @@ use compute_debug::compute_fn;
 use crate::compute_fn;
 
 #[derive(Accounts)]
-#[instruction(order_id_val: u64, side: u8, amount: u64, price: u64, shard_id: u8)]
+#[instruction(order_id_val: u64, side: u8, amount: u64, price: u64, shard_id: u8, expires_at: i64)]
 pub struct SubmitLimitOrderShardedContext<'info> {
     #[account(init, payer = authority, space = 8 + std::mem::size_of::<Order>(), seeds = [b"order", authority.key().as_ref(), &order_id_val.to_le_bytes()], bump)]
     pub order: AccountLoader<'info, Order>,
@@ -32,6 +33,7 @@ pub fn submit_limit_order_sharded(
     amount: u64,
     price: u64,
     _shard_id: u8,
+    expires_at: i64,
 ) -> Result<()> {
     compute_fn!("submit_limit_order_sharded" => {
     let clock = Clock::get()?;
@@ -48,7 +50,8 @@ pub fn submit_limit_order_sharded(
     order.order_type = order_type as u8;
     order.status = OrderStatus::Active as u8;
     order.created_at = clock.unix_timestamp;
-    order.expires_at = clock.unix_timestamp + 86400;
+    // Caller-supplied expiry (0 = none). See utils::validate_order_expiry.
+    order.expires_at = validate_order_expiry(expires_at, clock.unix_timestamp)?;
     
     if side == 0 {
         order.buyer = ctx.accounts.authority.key();

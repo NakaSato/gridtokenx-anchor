@@ -404,7 +404,10 @@ async function main() {
       const amount = new BN(Math.round(slot.amountKwh * 1e9).toString());
       try {
         const ix = await trading.methods
-          .submitLimitOrderSharded(orderId, slot.side, amount, new BN(slot.price), shard)
+          // Trailing 0 = no expiry (utils::validate_order_expiry): this bench
+          // replays a month of slots against one chain clock, so a per-slot
+          // lifetime would expire orders the replay still needs.
+          .submitLimitOrderSharded(orderId, slot.side, amount, new BN(slot.price), shard, new BN(0))
           .accounts({
             order: orderPda, zoneMarket: zoneMarketPda, zoneShard: shardPdas[shard],
             authority: slot.node.publicKey, systemProgram: SystemProgram.programId,

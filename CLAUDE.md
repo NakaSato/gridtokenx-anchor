@@ -29,11 +29,27 @@ anchor keys sync                  # regenerate program IDs (then update declare_
 
 # NOTE: there are NO `npm run test:*` scripts (the old per-suite recipes and their
 # tests/*.ts files were removed in b2021fb). tests/ now holds exactly:
-#   7 in-process litesvm suites + batch_settle_tps.ts (validator-gated TPS sweep).
+#   9 in-process litesvm suites + batch_settle_tps.ts (validator-gated TPS sweep).
 # The lib-level price-model unit suite lives at scripts/lib/price-model-tariff.test.ts.
 
 # In-process litesvm suites (no validator needed) — run directly with mocha:
-npx mocha -r tsx tests/price_models_litesvm.ts tests/rec_gate_litesvm.ts tests/sharded_match_litesvm.ts tests/registry_hardening_litesvm.ts tests/erc_owner_gate_litesvm.ts tests/issue_erc_precheck_litesvm.ts tests/treasury_thbc_litesvm.ts --timeout 1000000
+npx mocha -r tsx tests/price_models_litesvm.ts tests/rec_gate_litesvm.ts tests/sharded_match_litesvm.ts tests/registry_hardening_litesvm.ts tests/erc_owner_gate_litesvm.ts tests/issue_erc_precheck_litesvm.ts tests/treasury_thbc_litesvm.ts tests/order_expiry_litesvm.ts tests/settle_offchain_guards_litesvm.ts --timeout 1000000
+# order_expiry_litesvm.ts and settle_offchain_guards_litesvm.ts are complementary halves of
+# the same rule: the former pins that the expiry a CLIENT sends reaches the Order PDA, the
+# latter (with the two match suites) pins that a lapsed order is then refused a match.
+# settle_offchain_guards_litesvm.ts covers BOTH settle paths — settle_offchain_match and
+# batch_settle_offchain_match — the fund-moving settlement code, previously reachable only
+# from the validator-gated TPS suite. It settles real matches in-process (fabricated
+# mints/escrows/ALT + real Ed25519 precompile ixs; a settle tx needs the ALT or it exceeds
+# the 1232-byte packet), so its happy-path cases are what prove the rejection cases are
+# guards firing and not a broken fixture. Mutation-checked: deleting the batch side/expiry
+# requires kills exactly its 5 side/expiry cases, and deleting the batch self-trade guard
+# lets a funded self-trade SETTLE.
+#   Asymmetry worth knowing: a same-wallet self-trade on the SINGLE path never reaches the
+#   SelfTradeNotAllowed guard — both currency escrows are the same address, so Anchor's
+#   ConstraintDuplicateMutableAccount (2040) rejects it in try_accounts first. The batch
+#   path passes escrows via remaining_accounts, where no such constraint applies, so there
+#   the explicit guard is the only thing stopping it.
 
 # Validator-gated (start solana-test-validator + deploy + init first):
 npx mocha -r tsx tests/batch_settle_tps.ts --timeout 1000000
@@ -108,6 +124,7 @@ Crate versions: `anchor-lang` / `anchor-spl` = **1.0.0** (not the 0.30.x the SKI
 7. **Every program's `Cargo.toml` sets `[profile.release] overflow-checks = true`** (cargo build-sbf defaults to off → silent wrapping). New programs must include the same block; still prefer `checked_*`/`saturating_*` explicitly.
 8. **Any instruction that mints or burns MUST pin its mint to the program's own config account.** `retire_energy_tokens` shipped without one: its context had no `token_info` and no constraint on `mint`, and `authority` only had to own `token_account` — so the energy-token program would burn **any** Token-2022 mint it was handed (the treasury's real THBC included) and it would read on-chain as a GridTokenX energy retirement. Fixed 2026-07-30 by adding the read-only `token_info` PDA and `constraint = mint.key() == token_info.load()?.mint @ EnergyTokenError::InvalidMint` (6014), mirroring the pin `sync_total_supply` already used. New error variants go at the **END** of the enum — Anchor numbers them sequentially from 6000, so inserting renumbers every later variant and breaks clients matching on the code. Verified against the deployed program by `scripts/test-retire-mint-binding.ts` (burning THBC is rejected 6014 with THBC supply unchanged; burning GRID succeeds with supply exactly −1e9), because a green `cargo build` proves nothing about an account constraint.
 9. **Renaming an account TYPE never renames its PDA seed bytes as a side effect.** The seed literal (e.g. `b"governance_config"`) IS the on-chain address — changing it orphans every already-initialized account and breaks every cached/hardcoded derivation (clients, CPI binds, scripts, tests), requiring a full migration for zero functional gain if done casually. Precedent: `PoAConfig` → `GovernanceConfig` (`ae35805`) renamed the Rust type/IDL everywhere but *deliberately* kept `seeds = [b"poa_config"]` at the time — this platform was (and still is) pre-mainnet/localnet-only, but the seed itself wasn't worth migrating in that commit. The seed was later migrated in its own explicit, planned commit (`b"poa_config"` → `b"governance_config"`, 2026-07-04) specifically *because* it was still the cheap pre-mainnet window — full re-init of the running validator's governance state, not a live-data migration. Only change seed bytes when the account is genuinely new (e.g. energy-token's `mint` → `mint_2022` was a real SPL→Token-2022 mint swap) or, as here, a full migration is explicitly planned and executed as its own change — never as an incidental side effect of an unrelated rename.
+10. **A pair is only tradeable if the two sides are DIFFERENT users and BOTH legs are still live — enforced on every pairing path, not just in the off-chain matcher.** The trading engine has always skipped self-crosses (`trading-engine` `priced_candidate` / `uniform_auction`), but the programs trusted it: `match_orders`, `sharded_match_orders`, `execute_atomic_settlement`, `settle_offchain_match` and `batch_settle_offchain_match` all accepted a self-matched pair, and `clear_auction` happily paired a wallet with itself. Now every one of them rejects it with `SelfTradeNotAllowed` (6051) — except `clear_auction`, which **skips** the pair instead of failing, so one participant on both sides cannot void the clearing for everyone else (mirrors the off-chain uniform auction, which advances supply). Separately, `Order.expires_at` was validated at creation by `validate_order_expiry` and then **never read back**, so a TTL meant nothing once the PDA existed; the on-chain-order paths now call `utils::require_orders_live`, and the batch settle path (which had no side or expiry checks at all, unlike the single path) now checks both legs' `side` and expiry too. Two things to know: (a) the semantics are `expires_at == 0 || now < expires_at` everywhere — 0 is no-expiry and the comparison is STRICT, so `expires_at == now` is already lapsed; keep them identical or an order becomes live on one path and lapsed on another. (b) **Operational consequence on `execute_atomic_settlement`:** a match agreed before expiry can no longer settle after it, so settlement must land inside the order's TTL (the service writes real TTLs on-chain via `record_order_custodial`) — a slow settlement now fails loudly instead of quietly consummating a lapsed order. Verified in `tests/settle_offchain_guards_litesvm.ts`, `tests/sharded_match_litesvm.ts`, `tests/price_models_litesvm.ts` and `utils.rs` unit tests, each mutation-checked, because a green build proves nothing about a guard.
 
 ## Search Tooling
 
