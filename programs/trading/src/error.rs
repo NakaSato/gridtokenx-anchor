@@ -110,4 +110,11 @@ pub enum TradingError {
     ErcOwnerMismatch,
     #[msg("Buyer and seller must be different parties — an order cannot match or settle against the same user's own order")]
     SelfTradeNotAllowed,
+    // NEW VARIANTS GO AT THE END. Anchor numbers these sequentially from 6000, so
+    // inserting one anywhere above renumbers every later variant and breaks clients
+    // matching on the code.
+    #[msg("Settlement energy mint is not configured on this market — set_settlement_energy_mint must be called before any settlement can burn energy")]
+    SettlementEnergyMintUnset,
+    #[msg("Energy mint does not match the market's pinned settlement energy mint — refusing to burn an unpinned mint")]
+    InvalidEnergyMint,
 }

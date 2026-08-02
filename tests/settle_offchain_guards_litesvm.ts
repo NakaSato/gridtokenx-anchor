@@ -190,11 +190,16 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
   }
 
   // ---- fixture installers -------------------------------------------------
-  function installMint(key: PublicKey, decimals: number, program: PublicKey) {
+  // `supply` matters for any mint this suite BURNS: escrows are installed by writing
+  // token-account balances directly, which never moves the mint's supply counter, so a
+  // mint left at supply 0 makes the first burn underflow (`Operation overflowed`, 0xe)
+  // even though the escrow holds plenty. Give a burnable mint a supply that covers what
+  // the fixture hands out. Assertions compare a DELTA, so the exact figure is free.
+  function installMint(key: PublicKey, decimals: number, program: PublicKey, supply = BigInt(0)) {
     const data = Buffer.alloc(MINT_SIZE);
     MintLayout.encode(
       {
-        mintAuthorityOption: 1, mintAuthority: payer.publicKey, supply: BigInt(0),
+        mintAuthorityOption: 1, mintAuthority: payer.publicKey, supply,
         decimals, isInitialized: true, freezeAuthorityOption: 0,
         freezeAuthority: PublicKey.default,
       },
@@ -226,6 +231,11 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
 
   const tokenAmount = (addr: PublicKey) =>
     Number(AccountLayout.decode(Buffer.from(svm.getAccount(addr)!.data)).amount);
+
+  // Settlement BURNS the seller's energy, so the mint's own supply is the thing that
+  // proves it — a debited seller escrow alone is equally consistent with a transfer.
+  const mintSupply = (addr: PublicKey) =>
+    Number(MintLayout.decode(Buffer.from(svm.getAccount(addr)!.data)).supply);
 
   async function installGovernanceConfig() {
     const c = {
@@ -292,7 +302,15 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
   // Builds [ed25519(buyer), ed25519(seller), batch_settle] for a single-match batch.
   // `buyerLeg` is whatever is passed in the buyer slot — the wrong-side test deliberately
   // puts a SELL-signed payload there, which is the whole point of the side check.
-  async function settleIxs(buyerLeg: Leg, sellerLeg: Leg, tradeId = freshTradeId()) {
+  //
+  // `eMint` overrides the energy mint handed to the program. It defaults to the market's
+  // pinned mint; the InvalidEnergyMint case passes a DIFFERENT one, which is the attack
+  // the pin exists to stop. It is threaded through the escrow seeds too, because the
+  // escrow the burn spends is derived `[b"escrow", user, energy_mint]` from this very
+  // account — that derivation is why an unpinned mint is dangerous rather than merely wrong.
+  async function settleIxs(
+    buyerLeg: Leg, sellerLeg: Leg, tradeId = freshTradeId(), eMint: PublicKey = energyMint,
+  ) {
     const match = {
       buyerPayload: payloadOf(buyerLeg), sellerPayload: payloadOf(sellerLeg),
       matchAmount: new BN(MATCH_AMOUNT), matchPrice: new BN(MATCH_PRICE),
@@ -304,8 +322,8 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
       { pubkey: nullifierPda(sellerLeg.kp.publicKey, sellerLeg.orderId), isWritable: true, isSigner: false },
       { pubkey: escrowPda(buyerLeg.kp.publicKey, currencyMint), isWritable: true, isSigner: false },
       { pubkey: escrowPda(sellerLeg.kp.publicKey, currencyMint), isWritable: true, isSigner: false },
-      { pubkey: escrowPda(sellerLeg.kp.publicKey, energyMint), isWritable: true, isSigner: false },
-      { pubkey: escrowPda(buyerLeg.kp.publicKey, energyMint), isWritable: true, isSigner: false },
+      { pubkey: escrowPda(sellerLeg.kp.publicKey, eMint), isWritable: true, isSigner: false },
+      { pubkey: escrowPda(buyerLeg.kp.publicKey, eMint), isWritable: true, isSigner: false },
       { pubkey: tradeNullifierPda(tradeId), isWritable: true, isSigner: false },
       // trailing: governance_config, tariff_config, aggregator_entry
       { pubkey: govCfgPda, isWritable: false, isSigner: false },
@@ -318,7 +336,7 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
       )
       .accounts({
         market: marketPda, zoneMarket: zoneMarketPda,
-        currencyMint, energyMint, marketAuthority: marketAuthorityPda,
+        currencyMint, energyMint: eMint, marketAuthority: marketAuthorityPda,
         marketShard: marketShardPda, zoneShard: zoneShardPda,
         feeCollector: collectorPda("fee_collector"),
         wheelingCollector: collectorPda("wheeling_collector"),
@@ -360,7 +378,6 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
         buyerCurrencyEscrow: escrowPda(buyerLeg.kp.publicKey, currencyMint),
         sellerCurrencyEscrow: escrowPda(sellerLeg.kp.publicKey, currencyMint),
         sellerEnergyEscrow: escrowPda(sellerLeg.kp.publicKey, energyMint),
-        buyerEnergyEscrow: escrowPda(buyerLeg.kp.publicKey, energyMint),
         feeCollector: collectorPdaUnsharded("fee_collector"),
         wheelingCollector: collectorPdaUnsharded("wheeling_collector"),
         lossCollector: collectorPdaUnsharded("loss_collector"),
@@ -429,11 +446,21 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
     await installGovernanceConfig();
     installAggregatorEntry();
     installMint(currencyMint, 6, TOKEN_PROGRAM_ID);
-    installMint(energyMint, 9, TOKEN_2022_PROGRAM_ID);
+    // Energy is burned on settlement, so this mint needs a real supply to burn against —
+    // generous enough to cover every re-funding across the suite's cases.
+    installMint(energyMint, 9, TOKEN_2022_PROGRAM_ID, BigInt(ENERGY_FUND) * 1000n);
 
     // Real program instructions for the accounts the program owns.
     send([await trading.methods.initializeMarket(NUM_SHARDS).accounts({
       market: marketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId,
+    } as any).instruction()]);
+    // Settlement burns energy, and a burn destroys whatever mint it is aimed at, so the
+    // program refuses to settle until the market pins which mint that may be. Without
+    // this the whole suite fails closed with SettlementEnergyMintUnset — the intended
+    // behaviour, pinned directly by the two "energy-mint pin" cases at the end of the file
+    // (which clear the flag / pass a decoy mint rather than relying on this line's absence).
+    send([await trading.methods.setSettlementEnergyMint(energyMint).accounts({
+      market: marketPda, authority: payer.publicKey,
     } as any).instruction()]);
     // capacity 0 -> the cross-zone throttle is off, so no ZoneCapacity account is needed
     // (cross_zone = capacity > 0 && ...), keeping this suite on the intra-zone path.
@@ -484,8 +511,9 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
 
   // Load-bearing: proves the harness reaches the settle logic and moves real tokens, so
   // the rejections below are the guards firing rather than a broken fixture.
-  it("happy path: an honest cross settles — energy buyer-ward, currency seller-ward", async () => {
+  it("happy path: an honest cross settles — energy BURNED, currency seller-ward", async () => {
     fundEscrows(buyerKp.publicKey, sellerKp.publicKey);
+    const energySupplyBefore = mintSupply(energyMint);
     const buyer = leg(buyerKp, 0, BUY_PRICE);
     const seller = leg(sellerKp, 1, SELL_PRICE);
 
@@ -497,10 +525,15 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
     const totalValue = Math.floor((MATCH_AMOUNT * MATCH_PRICE) / ONE_KWH);
     const fee = Math.floor((totalValue * feeBps) / 10_000);
 
+    // GRX is minted only from metered surplus, so a trade RETIRES it rather than handing
+    // the buyer surplus they never generated. The buyer receives energy physically, not
+    // as a token; value reaches the seller in THBC only.
     expect(tokenAmount(escrowPda(buyerKp.publicKey, energyMint)),
-      "buyer receives the energy").to.eq(MATCH_AMOUNT);
+      "buyer receives NO energy token — it is burned").to.eq(0);
     expect(tokenAmount(escrowPda(sellerKp.publicKey, energyMint)),
       "seller's energy escrow is debited").to.eq(ENERGY_FUND - MATCH_AMOUNT);
+    expect(energySupplyBefore - mintSupply(energyMint),
+      "supply falls by exactly the matched amount — burned, not moved").to.eq(MATCH_AMOUNT);
     expect(tokenAmount(escrowPda(sellerKp.publicKey, currencyMint)),
       "seller is paid net of the market fee").to.eq(totalValue - fee);
     expect(tokenAmount(escrowPda(buyerKp.publicKey, currencyMint)),
@@ -575,6 +608,8 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
   // guard rejects.
   it("single path: an honest cross settles", async () => {
     fundEscrows(buyerKp.publicKey, sellerKp.publicKey);
+    const energySupplyBefore = mintSupply(energyMint);
+    const sellerEnergyBefore = tokenAmount(escrowPda(sellerKp.publicKey, energyMint));
     const meta = send(await settleSingleIxs(leg(buyerKp, 0, BUY_PRICE), leg(sellerKp, 1, SELL_PRICE)));
     console.log(`  [CU] settle_offchain_match (1 match) = ${Number(meta!.computeUnitsConsumed()).toLocaleString()} CU`);
 
@@ -582,8 +617,16 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
       "market", Buffer.from(svm.getAccount(marketPda)!.data)).marketFeeBps;
     const totalValue = Math.floor((MATCH_AMOUNT * MATCH_PRICE) / ONE_KWH);
 
+    // "buyer got 0" alone is NOT evidence of a burn — it is equally true if the energy
+    // leg did nothing at all (a mutation neutering the burn amount passed this suite until
+    // the two assertions below were added). The supply delta and the seller debit are what
+    // actually pin it.
     expect(tokenAmount(escrowPda(buyerKp.publicKey, energyMint)),
-      "buyer receives the energy").to.eq(MATCH_AMOUNT);
+      "buyer receives NO energy token — the single path burns it too").to.eq(0);
+    expect(sellerEnergyBefore - tokenAmount(escrowPda(sellerKp.publicKey, energyMint)),
+      "seller's energy escrow is debited by the matched amount").to.eq(MATCH_AMOUNT);
+    expect(energySupplyBefore - mintSupply(energyMint),
+      "supply falls by exactly the matched amount — burned, not moved").to.eq(MATCH_AMOUNT);
     expect(tokenAmount(escrowPda(sellerKp.publicKey, currencyMint)),
       "seller is paid net of the market fee")
       .to.eq(totalValue - Math.floor((totalValue * feeBps) / 10_000));
@@ -627,9 +670,98 @@ describe("batch_settle_offchain_match (litesvm) — per-match guards on the fund
     expect(atNow instanceof FailedTransactionMetadata, "expires_at == now must be lapsed").to.be.true;
     expect((atNow as FailedTransactionMetadata).meta().logs().join("\n")).to.include("OrderExpired");
 
+    const supplyBefore = mintSupply(energyMint);
     send(await settleIxs(
       leg(buyerKp, 0, BUY_PRICE, { expiresAt: NOW + 1 }), leg(sellerKp, 1, SELL_PRICE)));
-    expect(tokenAmount(escrowPda(buyerKp.publicKey, energyMint)),
+    // The settle is proven by the burn, not by a buyer credit — the buyer is never
+    // credited energy on any path now.
+    expect(supplyBefore - mintSupply(energyMint),
       "the still-live order settles").to.eq(MATCH_AMOUNT);
+  });
+
+  // ── The energy-mint pin (invariant #8: a burn must pin its mint) ────────────
+  // Settlement RETIRES the seller's energy rather than transferring it, and `energy_mint`
+  // arrives from the CALLER — the seller's Ed25519 payload binds their identity, amount,
+  // price, zone and expiry, but never the mint. The escrow drained is derived
+  // `[b"escrow", user, energy_mint]` off that same caller-supplied account, so without a
+  // pin the settlement authority could aim the burn at any Token-2022 asset a user holds
+  // in escrow — and it would read on-chain as an ordinary energy retirement.
+  //
+  // Both cases below assert the mint's SUPPLY is unchanged, not merely that the tx failed:
+  // a rejection with tokens already burned would be the actual harm.
+
+  // Locate `Market.settlement_energy_mint` by value rather than by a hand-counted offset —
+  // the struct is zero-copy with manual padding, so a literal offset here would rot
+  // silently the next time a field is carved out of `_padding_depth_4`. Asserting the
+  // pubkey occurs EXACTLY once keeps the search honest.
+  function energyPinOffset(data: Buffer): number {
+    const needle = energyMint.toBuffer();
+    const hits: number[] = [];
+    for (let i = 0; i + 32 <= data.length; i++)
+      if (data.subarray(i, i + 32).equals(needle)) hits.push(i);
+    expect(hits.length, "energy mint must appear exactly once in Market — layout changed?")
+      .to.eq(1);
+    // has_settlement_energy_mint sits immediately after the pubkey (state/market.rs).
+    expect(data[hits[0] + 32], "the flag byte must follow the pinned mint, set").to.eq(1);
+    return hits[0] + 32;
+  }
+
+  it("refuses to settle when no energy mint is pinned (SettlementEnergyMintUnset), nothing burned", async () => {
+    fundEscrows(buyerKp.publicKey, sellerKp.publicKey);
+    const acct = svm.getAccount(marketPda)!;
+    const original = Buffer.from(acct.data);
+
+    // There is no "unpin" instruction — set_settlement_energy_mint rejects the default
+    // pubkey — so the unset state is reproduced by clearing the flag byte directly. This
+    // is the state every Market deployed before this change is already in, which is
+    // exactly why the path must fail closed rather than fall back to burning what it was
+    // handed.
+    const cleared = Buffer.from(original);
+    cleared[energyPinOffset(cleared)] = 0;
+    svm.setAccount(marketPda, { ...acct, data: cleared } as any);
+
+    try {
+      const supplyBefore = mintSupply(energyMint);
+      const sellerBefore = tokenAmount(escrowPda(sellerKp.publicKey, energyMint));
+
+      const res = sendRaw(await settleIxs(leg(buyerKp, 0, BUY_PRICE), leg(sellerKp, 1, SELL_PRICE)));
+      expect(res instanceof FailedTransactionMetadata, "an unpinned market must not settle").to.be.true;
+      expect((res as FailedTransactionMetadata).meta().logs().join("\n"))
+        .to.include("SettlementEnergyMintUnset");
+
+      expect(mintSupply(energyMint), "no burn happened").to.eq(supplyBefore);
+      expect(tokenAmount(escrowPda(sellerKp.publicKey, energyMint)),
+        "the seller's escrow is untouched").to.eq(sellerBefore);
+    } finally {
+      // Restore before any later case runs — the tx above failed, so the account was never
+      // really mutated, but leaving a hand-edited Market behind would make an ordering
+      // change silently poison the suite.
+      svm.setAccount(marketPda, { ...acct, data: original } as any);
+    }
+  });
+
+  it("refuses to burn a mint the market did not pin (InvalidEnergyMint), decoy supply intact", async () => {
+    // A decoy Token-2022 asset the seller holds in escrow — stand-in for THBC or any other
+    // Token-2022 balance. The 2026-07-30 `retire_energy_tokens` bug was this exact shape.
+    const decoyMint = Keypair.generate().publicKey;
+    installMint(decoyMint, 9, TOKEN_2022_PROGRAM_ID, BigInt(ENERGY_FUND) * 10n);
+    installTokenAccount(escrowPda(sellerKp.publicKey, decoyMint), decoyMint, ENERGY_FUND, TOKEN_2022_PROGRAM_ID);
+    installTokenAccount(escrowPda(buyerKp.publicKey, decoyMint), decoyMint, 0, TOKEN_2022_PROGRAM_ID);
+    fundEscrows(buyerKp.publicKey, sellerKp.publicKey); // currency legs, funded as usual
+
+    const decoySupplyBefore = mintSupply(decoyMint);
+    const decoyHeldBefore = tokenAmount(escrowPda(sellerKp.publicKey, decoyMint));
+
+    // Every other input is honest — two live, correctly-signed, opposite-side legs from
+    // different wallets. The ONLY deviation is the mint, so the pin is unambiguously what
+    // rejects this and not one of the guards above.
+    const res = sendRaw(await settleIxs(
+      leg(buyerKp, 0, BUY_PRICE), leg(sellerKp, 1, SELL_PRICE), freshTradeId(), decoyMint));
+    expect(res instanceof FailedTransactionMetadata, "an unpinned mint must not settle").to.be.true;
+    expect((res as FailedTransactionMetadata).meta().logs().join("\n")).to.include("InvalidEnergyMint");
+
+    expect(mintSupply(decoyMint), "the decoy asset was NOT burned").to.eq(decoySupplyBefore);
+    expect(tokenAmount(escrowPda(sellerKp.publicKey, decoyMint)),
+      "the seller keeps the decoy asset").to.eq(decoyHeldBefore);
   });
 });

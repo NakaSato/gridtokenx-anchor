@@ -6,6 +6,40 @@ const ED25519_ID: Pubkey = Pubkey::new_from_array([
     244, 138, 100, 252, 202, 112, 68, 128, 0, 0, 0,
 ]);
 
+/// Refuse to settle unless `energy_mint` is the mint this Market pinned for burning.
+///
+/// Settlement RETIRES the seller's energy instead of transferring it, and a burn
+/// destroys whatever mint it is pointed at. `energy_mint` arrives from the caller and
+/// the escrow spent is derived `[b"escrow", user, energy_mint]` from it, while the
+/// seller's Ed25519 payload binds only their identity and amount — never the mint. So
+/// an unpinned mint would let the settlement authority burn any Token-2022 asset a user
+/// holds in escrow. Repo invariant #8; same class as the 2026-07-30 fix that stopped
+/// `retire_energy_tokens` burning any mint handed to it.
+///
+/// Fails CLOSED when unset: no fallback to transferring, and no "burn what was passed".
+///
+/// `pub(crate)` because `execute_atomic_settlement` (lib.rs) enforces the same pin. That
+/// path TRANSFERS rather than burns, so it cannot destroy the wrong asset — but it still
+/// takes `energy_mint` from the caller with no constraint, so without this the settlement
+/// authority decides which token counts as energy and the trade is recorded as an energy
+/// trade regardless. Same reason the REC leg in that handler pins `rec_mint` to the
+/// governance PDA.
+pub(crate) fn require_energy_mint_pinned(
+    market: &crate::state::Market,
+    energy_mint: &Pubkey,
+) -> Result<()> {
+    require!(
+        market.has_settlement_energy_mint == 1,
+        crate::error::TradingError::SettlementEnergyMintUnset
+    );
+    require_keys_eq!(
+        *energy_mint,
+        market.settlement_energy_mint,
+        crate::error::TradingError::InvalidEnergyMint
+    );
+    Ok(())
+}
+
 // Instructions sysvar: Sysvar1nstructions1111111111111111111111111
 const IX_ID: Pubkey = Pubkey::new_from_array([
     6, 167, 213, 23, 24, 123, 209, 102, 53, 218, 212, 4, 85, 253, 194, 192, 193, 36, 198, 143, 33,
@@ -448,6 +482,10 @@ pub struct SettleOffchainMatchContext<'info> {
     pub seller_nullifier: Box<Account<'info, OrderNullifier>>,
 
     pub currency_mint: Box<InterfaceAccount<'info, Mint>>,
+    // WRITABLE: settlement burns energy out of the seller's escrow, and a burn
+    // decreases the mint's supply — so the mint account itself is mutated. It was
+    // read-only while this path merely transferred between escrows.
+    #[account(mut)]
     pub energy_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// CHECK: global escrow authority PDA — signs the transfer CPIs.
@@ -486,15 +524,16 @@ pub struct SettleOffchainMatchContext<'info> {
         token::token_program = secondary_token_program,
     )]
     pub seller_energy_escrow: Box<InterfaceAccount<'info, TokenAccount>>,
-    #[account(
-        mut,
-        seeds = [b"escrow", buyer_payload.user.as_ref(), energy_mint.key().as_ref()],
-        bump,
-        token::mint = energy_mint,
-        token::authority = market_authority,
-        token::token_program = secondary_token_program,
-    )]
-    pub buyer_energy_escrow: Box<InterfaceAccount<'info, TokenAccount>>,
+    // `buyer_energy_escrow` REMOVED. The buyer is never credited energy — settlement burns
+    // the seller's — so the account had no remaining purpose, and this context sits at the
+    // BPF stack ceiling for `try_accounts`: making `energy_mint` writable (required by the
+    // burn) pushed the frame over, and the compiler reported it would overwrite frame
+    // values. Dropping this dead account is what buys that budget back. Keeping it "just
+    // in case" is not free here.
+    //
+    // The BATCH path keeps its slot (+5) — those accounts arrive via remaining_accounts
+    // and cost no try_accounts stack, while its rigid `match_count*7` layout and length
+    // asserts are relied on by every client that builds the list.
 
     // Protocol collectors — bound to seed PDAs so fees can't be redirected.
     #[account(
@@ -586,6 +625,10 @@ pub struct SettleOffchainMatchBatchContext<'info> {
     // in-handler by `require_governance_operational` / `tariff_rates` / `require_admitted_aggregator`.
 
     pub currency_mint: Box<InterfaceAccount<'info, Mint>>,
+    // WRITABLE: settlement burns energy out of the seller's escrow, and a burn
+    // decreases the mint's supply — so the mint account itself is mutated. It was
+    // read-only while this path merely transferred between escrows.
+    #[account(mut)]
     pub energy_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// CHECK: global escrow authority PDA — signs the transfer CPIs.
@@ -744,6 +787,7 @@ pub fn settle_offchain_match<'info>(
     require!(seller_payload.expires_at == 0 || clock.unix_timestamp < seller_payload.expires_at, TradingError::OrderExpired);
 
     let market = ctx.accounts.market.load()?;
+    require_energy_mint_pinned(&market, &ctx.accounts.energy_mint.key())?;
     let mut market_shard = ctx.accounts.market_shard.load_mut()?;
     let mut zone_shard = ctx.accounts.zone_shard.load_mut()?;
 
@@ -883,16 +927,22 @@ pub fn settle_offchain_match<'info>(
         )?;
     }
 
-    // Energy: seller escrow -> buyer escrow
-    anchor_spl::token_interface::transfer_checked(
-        CpiContext::new_with_signer(ctx.accounts.secondary_token_program.key(), anchor_spl::token_interface::TransferChecked {
-            from: ctx.accounts.seller_energy_escrow.to_account_info(),
+    // Energy: BURNED out of the seller's escrow — the buyer receives none.
+    //
+    // GRX exists only because a meter measured surplus (1 kWh = 1 GRX, minted upstream by
+    // the aggregator bridge via chain.tx.mint); trading never mints it. A trade DELIVERS
+    // that energy to the buyer, who consumes it, so the token has to leave circulation
+    // here. Crediting the buyer instead would let them hold — and resell — surplus they
+    // never generated, inflating GRX beyond metered reality. Value moves the other way
+    // and in THBC only (the currency transfers above).
+    //
+    anchor_spl::token_interface::burn(
+        CpiContext::new_with_signer(ctx.accounts.secondary_token_program.key(), anchor_spl::token_interface::Burn {
             mint: ctx.accounts.energy_mint.to_account_info(),
-            to: ctx.accounts.buyer_energy_escrow.to_account_info(),
+            from: ctx.accounts.seller_energy_escrow.to_account_info(),
             authority: ctx.accounts.market_authority.to_account_info(),
         }, signer),
         match_amount,
-        ctx.accounts.energy_mint.decimals
     )?;
 
     // REC (renewable attribute): seller escrow -> buyer escrow. OPT-IN — moves only when the
@@ -1058,6 +1108,7 @@ pub fn batch_settle_offchain_match<'info>(
 
     let clock = Clock::get()?;
     let market = ctx.accounts.market.load()?;
+    require_energy_mint_pinned(&market, &ctx.accounts.energy_mint.key())?;
     // Tier-A: zone_market READ-ONLY; committed_flow on the ZoneCapacity PDA (cross-zone only).
     // Loaded before the operator gate below — it needs `segment`.
     let zone_market = ctx.accounts.zone_market.load()?;
@@ -1300,14 +1351,18 @@ pub fn batch_settle_offchain_match<'info>(
             )?;
         }
 
-        anchor_spl::token_interface::transfer_checked(
-            CpiContext::new_with_signer(sec_token_prog_key, anchor_spl::token_interface::TransferChecked {
-                from: remaining_accounts[offset + 4].to_account_info(),
+        // Energy: BURNED from the seller's escrow (slot +4), buyer gets none — same rule
+        // as the single-match path above. Slot +5 (the buyer's energy escrow) stays in the
+        // rigid 7-slot layout and is still bound to its canonical PDA; it just no longer
+        // receives. Changing the slot count here would break the length asserts and every
+        // client that builds this account list.
+        anchor_spl::token_interface::burn(
+            CpiContext::new_with_signer(sec_token_prog_key, anchor_spl::token_interface::Burn {
                 mint: ctx.accounts.energy_mint.to_account_info(),
-                to: remaining_accounts[offset + 5].to_account_info(),
+                from: remaining_accounts[offset + 4].to_account_info(),
                 authority: ctx.accounts.market_authority.to_account_info(),
             }, signer),
-            m.match_amount, ctx.accounts.energy_mint.decimals
+            m.match_amount,
         )?;
         // NOTE: REC-token movement is NOT wired into the batch path — only the single-match
         // `settle_offchain_match` moves the renewable attribute (opt-in, via remaining_accounts).

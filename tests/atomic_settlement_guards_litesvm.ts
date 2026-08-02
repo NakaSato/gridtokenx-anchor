@@ -204,18 +204,25 @@ describe("execute_atomic_settlement (litesvm) — guards on the custodial settle
     return { buy, sell };
   }
 
-  async function settleIx(buy: PublicKey, sell: PublicKey, tradeId = freshTradeId()) {
+  // `over` swaps the energy mint and its two token accounts together — they must move as a
+  // set, because `transfer_checked` rejects a token account whose mint disagrees with the
+  // mint passed. The InvalidEnergyMint case uses it to hand the program a fully coherent
+  // trade in the WRONG asset, which is exactly what the pin has to catch.
+  async function settleIx(
+    buy: PublicKey, sell: PublicKey, tradeId = freshTradeId(),
+    over: { eMint?: PublicKey; sellerEnergy?: PublicKey; buyerEnergy?: PublicKey } = {},
+  ) {
     return trading.methods
       .executeAtomicSettlement(new BN(AMOUNT), new BN(MATCH_PRICE), [...tradeId])
       .accounts({
         market: marketPda, buyOrder: buy, sellOrder: sell,
         tradeNullifier: pda([Buffer.from("trade"), tradeId]),
         buyerCurrencyEscrow: buyerCurrencyEscrow,
-        sellerEnergyEscrow: sellerEnergyEscrow,
+        sellerEnergyEscrow: over.sellerEnergy ?? sellerEnergyEscrow,
         sellerCurrencyAccount: sellerCurrencyAccount,
-        buyerEnergyAccount: buyerEnergyAccount,
+        buyerEnergyAccount: over.buyerEnergy ?? buyerEnergyAccount,
         feeCollector, wheelingCollector, lossCollector,
-        energyMint, currencyMint,
+        energyMint: over.eMint ?? energyMint, currencyMint,
         escrowAuthority: escrowAuthority.publicKey,
         marketAuthority: payer.publicKey,
         tokenProgram: TOKEN_PROGRAM_ID,
@@ -272,6 +279,12 @@ describe("execute_atomic_settlement (litesvm) — guards on the custodial settle
 
     send([await trading.methods.initializeMarket(NUM_SHARDS).accounts({
       market: marketPda, authority: payer.publicKey, systemProgram: SystemProgram.programId,
+    } as any).instruction()]);
+    // This path takes `energy_mint` as an unconstrained account and its escrows are
+    // matcher-supplied CHECK accounts, so the market must say which token is energy or the
+    // settle fails closed (SettlementEnergyMintUnset). Pinned as its own case at the end.
+    send([await trading.methods.setSettlementEnergyMint(energyMint).accounts({
+      market: marketPda, authority: payer.publicKey,
     } as any).instruction()]);
     send([await trading.methods.initializeZoneMarket(ZONE, NUM_SHARDS, new BN(0), 0).accounts({
       market: marketPda, zoneMarket: zoneMarketPda, authority: payer.publicKey,
@@ -348,5 +361,84 @@ describe("execute_atomic_settlement (litesvm) — guards on the custodial settle
     expect(tokenAmount(buyerEnergyAccount), "the still-live pair settles").to.eq(AMOUNT);
 
     svm.setClock(new Clock(svm.getClock().slot, 0n, 0n, 0n, BigInt(NOW)));
+  });
+
+  // ── The energy-mint pin on the CUSTODIAL path (invariant #8) ───────────────
+  // This path TRANSFERS energy rather than burning it, so an unpinned mint cannot destroy
+  // a third party's asset — `transfer_checked` binds both accounts to the mint passed, and
+  // `escrow_authority` must sign for the source. What it can still do is settle a trade
+  // denominated in an arbitrary token and book it as an energy trade: market volume, price
+  // history and the treasury's settled value all move for something that was never metered
+  // surplus. The pin makes "which token is energy" market policy instead of a caller
+  // argument — the same thing this handler already does for `rec_mint`.
+  //
+  // Worth stating plainly: this is the path the trading service actually calls, so until
+  // the pin landed here it protected only the off-chain settle instructions.
+
+  // Found by value, not by a hand-counted offset — Market is zero-copy with manual padding
+  // and a literal offset would rot silently. Exactly-one-occurrence keeps it honest.
+  function energyPinOffset(data: Buffer): number {
+    const needle = energyMint.toBuffer();
+    const hits: number[] = [];
+    for (let i = 0; i + 32 <= data.length; i++)
+      if (data.subarray(i, i + 32).equals(needle)) hits.push(i);
+    expect(hits.length, "energy mint must appear exactly once in Market — layout changed?")
+      .to.eq(1);
+    expect(data[hits[0] + 32], "the flag byte must follow the pinned mint, set").to.eq(1);
+    return hits[0] + 32;
+  }
+
+  it("refuses to settle when no energy mint is pinned (SettlementEnergyMintUnset), no tokens move", async () => {
+    seedAccounts();
+    const { buy, sell } = await makePair(buyerKp, sellerKp);
+    const acct = svm.getAccount(marketPda)!;
+    const original = Buffer.from(acct.data);
+
+    // There is no unpin instruction (set_settlement_energy_mint rejects the default
+    // pubkey), so the unset state is reproduced by clearing the flag byte — the state every
+    // Market created before this change is already in.
+    const cleared = Buffer.from(original);
+    cleared[energyPinOffset(cleared)] = 0;
+    svm.setAccount(marketPda, { ...acct, data: cleared } as any);
+
+    try {
+      const before = {
+        energy: tokenAmount(sellerEnergyEscrow),
+        currency: tokenAmount(buyerCurrencyEscrow),
+      };
+      const res = sendRaw([await settleIx(buy, sell)], [escrowAuthority]);
+      expect(res instanceof FailedTransactionMetadata, "an unpinned market must not settle").to.be.true;
+      expect((res as FailedTransactionMetadata).meta().logs().join("\n"))
+        .to.include("SettlementEnergyMintUnset");
+
+      expect(tokenAmount(sellerEnergyEscrow), "no energy moved").to.eq(before.energy);
+      expect(tokenAmount(buyerCurrencyEscrow), "no currency moved").to.eq(before.currency);
+    } finally {
+      svm.setAccount(marketPda, { ...acct, data: original } as any);
+    }
+  });
+
+  it("refuses to settle a trade in a mint the market did not pin (InvalidEnergyMint)", async () => {
+    seedAccounts();
+    const { buy, sell } = await makePair(buyerKp, sellerKp);
+
+    // A coherent trade in the wrong asset: decoy mint, decoy escrows holding it, source
+    // authority = escrow_authority so the CPI itself would succeed. Everything the runtime
+    // checks is satisfied — only the market's policy says no.
+    const decoyMint = Keypair.generate().publicKey;
+    const decoySellerEnergy = Keypair.generate().publicKey;
+    const decoyBuyerEnergy = Keypair.generate().publicKey;
+    installMint(decoyMint, 9, TOKEN_2022_PROGRAM_ID);
+    installTokenAccount(decoySellerEnergy, decoyMint, ENERGY_FUND, TOKEN_2022_PROGRAM_ID, escrowAuthority.publicKey);
+    installTokenAccount(decoyBuyerEnergy, decoyMint, 0, TOKEN_2022_PROGRAM_ID, buyerKp.publicKey);
+
+    const res = sendRaw([await settleIx(buy, sell, freshTradeId(), {
+      eMint: decoyMint, sellerEnergy: decoySellerEnergy, buyerEnergy: decoyBuyerEnergy,
+    })], [escrowAuthority]);
+    expect(res instanceof FailedTransactionMetadata, "an unpinned mint must not settle").to.be.true;
+    expect((res as FailedTransactionMetadata).meta().logs().join("\n")).to.include("InvalidEnergyMint");
+
+    expect(tokenAmount(decoySellerEnergy), "the decoy asset did not move").to.eq(ENERGY_FUND);
+    expect(tokenAmount(decoyBuyerEnergy), "the buyer received no decoy asset").to.eq(0);
   });
 });

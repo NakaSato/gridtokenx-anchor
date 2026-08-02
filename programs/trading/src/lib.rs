@@ -640,6 +640,25 @@ pub mod trading {
             clock.unix_timestamp,
         )?;
 
+        // `energy_mint` is a bare InterfaceAccount here with no constraint, and the two
+        // energy escrows are matcher-supplied UncheckedAccounts (the custodial model), so
+        // nothing else in this context says WHICH token is energy. `transfer_checked` only
+        // proves both accounts agree with whatever mint was passed, and `escrow_authority`
+        // signs for the source — so this cannot drain a third party's asset the way an
+        // unpinned BURN could. What it can do without the pin is settle a trade denominated
+        // in an arbitrary token and record it on-chain as an energy trade, inflating volume,
+        // price history and settled value with something that was never metered surplus.
+        //
+        // Pinned to the same market policy `settle_offchain_match` uses, and for the same
+        // reason the REC leg below pins `rec_mint` to the governance PDA — this handler
+        // already refuses to take one caller-supplied mint on trust.
+        //
+        // Ordered AFTER the self-trade and expiry checks deliberately, mirroring
+        // `settle_offchain_match`: those describe the PAIR and should keep reporting their
+        // own error codes, rather than every malformed pair on an unpinned market coming
+        // back as a configuration error.
+        instructions::require_energy_mint_pinned(&market, &ctx.accounts.energy_mint.key())?;
+
         // Slippage Protection: Ensure match price is within limits of both orders
         require!(
             price <= buy_order.price_per_kwh,
@@ -901,6 +920,17 @@ pub mod trading {
     ) -> Result<()> {
         compute_fn!("set_settlement_thbc_mint" => {
             instructions::set_settlement_thbc_mint(ctx, thbc_mint)
+        })
+    }
+
+    /// Pin the energy mint this market may burn on settlement. Settlement refuses to
+    /// burn until this is set — see `instructions::set_settlement_energy_mint`.
+    pub fn set_settlement_energy_mint(
+        ctx: Context<SetSettlementEnergyMintContext>,
+        energy_mint: Pubkey,
+    ) -> Result<()> {
+        compute_fn!("set_settlement_energy_mint" => {
+            instructions::set_settlement_energy_mint(ctx, energy_mint)
         })
     }
 

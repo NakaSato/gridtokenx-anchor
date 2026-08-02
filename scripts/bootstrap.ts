@@ -294,6 +294,35 @@ async function main() {
     console.log('  ℹ️  Market already exists or failed:', e.message);
   }
 
+  // 4d. Pin the energy mint this market may BURN on settlement.
+  //
+  // NOT optional, and not a hardening nicety: settle_offchain_match /
+  // batch_settle_offchain_match fail CLOSED without it (SettlementEnergyMintUnset), so a
+  // chain bootstrapped without this step accepts and matches orders while every
+  // settlement reverts. It must be set for the same reason it exists — settlement RETIRES
+  // the seller's energy, the escrow burned is derived `[b"escrow", user, energy_mint]`
+  // from a CALLER-supplied mint, and the seller's signed payload never names the mint. So
+  // the market has to say, once, which mint a burn is allowed to destroy.
+  //
+  // Idempotent: it is a plain overwrite of a Market field (no `init`), so re-running
+  // bootstrap re-pins the same PDA-derived mint rather than erroring.
+  console.log('\n[4d/5] Pinning settlement energy mint (burn target)...');
+  try {
+    await tradingProgram.methods
+      .setSettlementEnergyMint(mintPda)
+      .accounts({
+        market: marketPda,
+        authority: authority,
+      })
+      .rpc();
+    console.log('  ✅ Settlement energy mint pinned:', mintPda.toBase58());
+  } catch (e: any) {
+    // Loud, unlike the "already exists" cases above — leaving this unset does not degrade
+    // settlement, it stops it entirely, and the failure surfaces far away at settle time.
+    console.error('  ❌ set_settlement_energy_mint FAILED — settlement will revert with');
+    console.error('     SettlementEnergyMintUnset until this succeeds:', e.message);
+  }
+
   // 4a. Initialize Tariff Config (wheeling/loss rates — role-map.md fix #7b).
   // wheeling_authority = MEA/PEA, loss_authority = MEA/PEA — both distribution-level
   // tariffs, since retail P2P trades never leave the local distribution grid to reach

@@ -12,9 +12,11 @@
 //! Invariants:
 //!   I1  Currency conservation: buyer+seller currency escrows + ALL 16×3 sharded
 //!       collectors sum to a constant (settle only MOVES currency between them).
-//!   I2  Energy conservation: seller+buyer energy escrows sum to a constant.
-//!   I3  Delivered-energy accounting: buyer energy escrow == Σ match_amount over
-//!       first-time-settled matches.
+//!   I2  Energy RETIREMENT: settle burns the seller's energy, so escrowed == funded - Σ
+//!       burned AND the mint supply falls by exactly Σ burned (both halves required).
+//!   I3  The buyer is never credited energy: their escrow stays 0. Load-bearing rather
+//!       than vacuous — the batch context still CARRIES a buyer energy escrow (its
+//!       remaining_accounts layout is fixed at 7 per match), present and writable.
 //!   I4  Double-settle guard: re-settling an already-committed trade_id must FAIL
 //!       (per-match TradeNullifier). A success trips `double_settle_detected`.
 
@@ -44,6 +46,12 @@ const ENERGY_FUND: u64 = 1_000_000_000_000_000;
 const CURRENCY_DECIMALS: u8 = 6;
 const ENERGY_DECIMALS: u8 = 9;
 const TOK_AMOUNT: usize = 64;
+/// Mint-level supply the energy mint starts with. Must exceed everything the fuzzer can
+/// burn (bounded by ENERGY_FUND, all of which sits in the seller's escrow), or the burn
+/// underflows instead of failing an invariant.
+const ENERGY_SUPPLY_SEED: u64 = ENERGY_FUND * 2;
+/// classic spl_token Mint.supply offset: COption<Pubkey> mint_authority (4 + 32).
+const MINT_SUPPLY: usize = 36;
 
 const GOVERNANCE_ID: &str = "FokVuBSPXP11aeL7VZWd8n8aVAhWqVpyPZETToSxdvTS";
 
@@ -139,7 +147,7 @@ struct BatchFixture {
     currency_total: u64,
     energy_total: u64,
     settled_seeds: Vec<u32>,
-    expected_buyer_energy: u64,
+    expected_burned_energy: u64,
     double_settle_detected: bool,
 }
 
@@ -179,6 +187,13 @@ impl BatchFixture {
             .pubkey(Keypair::new().pubkey())
             .mint_authority(admin.pubkey())
             .decimals(ENERGY_DECIMALS)
+            // Settlement BURNS this mint, and a burn decrements the mint's own supply
+            // counter. The escrows below are forged by writing balances directly, which
+            // never touches that counter — so a mint left at the builder's default 0 makes
+            // the very first burn underflow (`Operation overflowed`, 0xe) even though the
+            // escrow is full, and every generated batch would be rejected for a reason that
+            // has nothing to do with the invariants. Assertions compare deltas.
+            .supply(ENERGY_SUPPLY_SEED)
             .create()
             .unwrap();
 
@@ -205,6 +220,19 @@ impl BatchFixture {
                 market,
                 authority: admin.pubkey(),
                 system_program: system_program::ID,
+            })
+            .signers(&[&*admin])
+            .send()
+            .unwrap();
+        // Settlement refuses to burn energy until the market pins WHICH mint it may burn
+        // (SettlementEnergyMintUnset). Without this every generated batch would be rejected
+        // before reaching a single invariant — the harness would still run green while
+        // fuzzing nothing at all.
+        ctx.program(program_id)
+            .call(instruction::SetSettlementEnergyMint { energy_mint })
+            .accounts(accounts::SetSettlementEnergyMint {
+                market,
+                authority: admin.pubkey(),
             })
             .signers(&[&*admin])
             .send()
@@ -346,7 +374,7 @@ impl BatchFixture {
             currency_total: CURRENCY_FUND,
             energy_total: ENERGY_FUND,
             settled_seeds: Vec::new(),
-            expected_buyer_energy: 0,
+            expected_burned_energy: 0,
             double_settle_detected: false,
         }
     }
@@ -355,6 +383,18 @@ impl BatchFixture {
         match self.ctx.read_account(pk) {
             Ok(a) if a.data.len() >= TOK_AMOUNT + 8 => {
                 u64::from_le_bytes(a.data[TOK_AMOUNT..TOK_AMOUNT + 8].try_into().unwrap())
+            }
+            _ => 0,
+        }
+    }
+
+    /// The mint's own supply counter. Settlement RETIRES energy, so this — not a debited
+    /// escrow — is what distinguishes a burn from a transfer: a handler that quietly moved
+    /// the tokens somewhere instead of destroying them would leave supply untouched.
+    fn mint_supply(&self, pk: &Pubkey) -> u64 {
+        match self.ctx.read_account(pk) {
+            Ok(a) if a.data.len() >= MINT_SUPPLY + 8 => {
+                u64::from_le_bytes(a.data[MINT_SUPPLY..MINT_SUPPLY + 8].try_into().unwrap())
             }
             _ => 0,
         }
@@ -495,7 +535,7 @@ impl BatchFixture {
                 self.double_settle_detected = true;
             } else {
                 self.settled_seeds.push(seed);
-                self.expected_buyer_energy += match_amount;
+                self.expected_burned_energy += match_amount;
             }
         }
         ok
@@ -520,25 +560,42 @@ fn invariant_test(fixture: &mut BatchFixture) {
         fixture.currency_total
     );
 
-    // I2 — energy conservation.
+    // I2 — energy RETIREMENT, not conservation. The batch path burns the seller's energy
+    // per match, so the escrows no longer sum to a constant. Both halves asserted: either
+    // alone is satisfiable by a bug — a debited seller with no burn passes the escrow
+    // check, a burn that skipped the escrow passes the supply check.
     let energy_now =
         fixture.tok(&fixture.seller_eng_escrow) + fixture.tok(&fixture.buyer_eng_escrow);
+    let expected_escrowed = fixture.energy_total - fixture.expected_burned_energy;
     fuzz_assert_eq!(
         energy_now,
-        fixture.energy_total,
-        "energy conservation broken: {} != {}",
+        expected_escrowed,
+        "escrowed energy {} != funded {} - burned {}",
         energy_now,
-        fixture.energy_total
+        fixture.energy_total,
+        fixture.expected_burned_energy
+    );
+    let supply_now = fixture.mint_supply(&fixture.energy_mint);
+    let expected_supply = ENERGY_SUPPLY_SEED - fixture.expected_burned_energy;
+    fuzz_assert_eq!(
+        supply_now,
+        expected_supply,
+        "energy supply {} != seeded {} - burned {}",
+        supply_now,
+        ENERGY_SUPPLY_SEED,
+        fixture.expected_burned_energy
     );
 
-    // I3 — buyer received exactly the sum of first-time-settled matches.
+    // I3 — the buyer is never credited energy. The batch context still CARRIES a buyer
+    // energy escrow (its remaining_accounts layout is fixed at 7 per match and every client
+    // builds that list), which makes this assertion load-bearing rather than vacuous: the
+    // account is present and writable, and must still end at 0.
     let buyer_energy = fixture.tok(&fixture.buyer_eng_escrow);
     fuzz_assert_eq!(
         buyer_energy,
-        fixture.expected_buyer_energy,
-        "buyer energy {} != Σ settled match_amount {}",
-        buyer_energy,
-        fixture.expected_buyer_energy
+        0,
+        "buyer was credited {} energy — settlement must burn, not transfer",
+        buyer_energy
     );
 
     // I4 — the per-match TradeNullifier double-settle guard was never bypassed.

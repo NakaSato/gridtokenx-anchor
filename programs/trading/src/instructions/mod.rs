@@ -16,6 +16,7 @@ pub mod private_shield;
 #[cfg(feature = "privacy")]
 pub mod private_transfer;
 pub mod record_order_custodial;
+pub mod set_settlement_energy_mint;
 pub mod set_settlement_thbc_mint;
 pub mod settle_offchain;
 pub mod sharded_match_orders;
@@ -45,6 +46,7 @@ pub use private_shield::*;
 #[cfg(feature = "privacy")]
 pub use private_transfer::*;
 pub use record_order_custodial::*;
+pub use set_settlement_energy_mint::*;
 pub use set_settlement_thbc_mint::*;
 pub use settle_offchain::*;
 pub use sharded_match_orders::*;

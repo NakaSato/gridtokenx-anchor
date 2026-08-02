@@ -6,8 +6,9 @@ async function main() {
   anchor.setProvider(provider);
   
   const tradingProgram = anchor.workspace.Trading;
+  const energyTokenProgram = anchor.workspace.EnergyToken;
   const authority = provider.wallet;
-  
+
   console.log('═══════════════════════════════════════════════════════════════');
   console.log('  Initialize Trading Market');
   console.log('═══════════════════════════════════════════════════════════════');
@@ -19,10 +20,17 @@ async function main() {
     [Buffer.from('market')],
     tradingProgram.programId
   );
-  
+  // The energy mint is a PDA of the energy-token program, so it needs no config or
+  // keypair file — the same derivation bootstrap.ts and fund-platform-sources.ts use.
+  const [energyMintPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('mint_2022')],
+    energyTokenProgram.programId
+  );
+
   console.log('\nPDAs:');
   console.log('  Market PDA:', marketPda.toBase58());
-  
+  console.log('  Energy Mint PDA:', energyMintPda.toBase58());
+
   // Initialize Market
   console.log('\n🚀 Initializing Trading Market on-chain...');
   try {
@@ -61,6 +69,32 @@ async function main() {
     } else {
       throw e;
     }
+  }
+
+  // Pin the energy mint this market may BURN on settlement. Runs whether the market was
+  // just created or already existed — a market initialized before this instruction
+  // existed reads has_settlement_energy_mint = 0, which is exactly the state that must be
+  // repaired, so skipping it on the "already initialized" branch would miss every market
+  // that needs it most.
+  //
+  // Settlement fails CLOSED without it (SettlementEnergyMintUnset): orders still place
+  // and match, but nothing settles. See programs/trading/src/instructions/
+  // set_settlement_energy_mint.rs for why the mint cannot be trusted from the caller.
+  console.log('\n🔒 Pinning settlement energy mint...');
+  try {
+    const tx = await tradingProgram.methods
+      .setSettlementEnergyMint(energyMintPda)
+      .accounts({
+        market: marketPda,
+        authority: authority.publicKey,
+      })
+      .rpc();
+    console.log('✅ Settlement energy mint pinned:', energyMintPda.toBase58());
+    console.log('   TX:', tx);
+  } catch (e: any) {
+    console.error('❌ set_settlement_energy_mint failed — settlement will revert with');
+    console.error('   SettlementEnergyMintUnset until this succeeds:', e.message);
+    throw e;
   }
 }
 

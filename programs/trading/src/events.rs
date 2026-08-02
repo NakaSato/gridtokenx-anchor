@@ -73,6 +73,13 @@ pub struct SettlementThbcMintSet {
 }
 
 #[event]
+pub struct SettlementEnergyMintSet {
+    pub authority: Pubkey,
+    pub energy_mint: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
 pub struct MaintenanceModeChanged {
     pub authority: Pubkey,
     pub maintenance_mode: bool,

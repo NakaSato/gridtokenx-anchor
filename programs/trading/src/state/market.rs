@@ -46,8 +46,22 @@ pub struct Market {
     // off) so the layout/size is unchanged and backward compatible.
     pub settlement_thbc_mint: Pubkey,  // 32
     pub has_settlement_thbc_mint: u8,  // 1
-    pub _padding_depth_4: [u8; 31],    // 32 + 1 + 31 = 64 (was [u8; 64])
-    pub _padding_depth_5: [u8; 6], // 512+256+128+64+6 = 966
+    // The ONLY energy mint this market may burn on settlement. `settle_offchain_match`
+    // burns the seller's escrow rather than transferring it (GRX is minted solely from
+    // metered surplus, so a trade must retire it, not hand a buyer surplus they never
+    // generated). A burn destroys whatever mint it is pointed at, and the escrow it
+    // spends is derived `[b"escrow", user, energy_mint]` from a CALLER-supplied mint —
+    // so without this pin the settlement authority could burn any Token-2022 asset a
+    // user holds in escrow, not just their energy. Same class as the 2026-07-30
+    // `retire_energy_tokens` fix (repo invariant #8: a burn must pin its mint).
+    // Carved from the same former depth padding as the THBC pin above; existing Market
+    // accounts read these as 0, so `has_settlement_energy_mint == 0` = policy off and
+    // the account size is unchanged (see the byte accounting on `_padding_depth_4`).
+    pub settlement_energy_mint: Pubkey,  // 32
+    pub has_settlement_energy_mint: u8,  // 1
+    // 32+1 (thbc) + 32+1 (energy) + 4 = 70, exactly the 64+6 the two former padding
+    // fields held. `_padding_depth_5` is gone — its bytes live here.
+    pub _padding_depth_4: [u8; 4],
     pub price_history_count: u8,   // 1 — number of valid entries (0..=24)
     pub price_history_head: u8,    // 1 — ring-buffer write head (next slot to overwrite)
 
@@ -161,3 +175,14 @@ pub fn get_shard_id(authority: &Pubkey, num_shards: u8) -> u8 {
     // Use first byte of pubkey for simple sharding
     authority.to_bytes()[0] % num_shards
 }
+
+// The Market account is zero-copy and ALREADY DEPLOYED: its size is baked into every
+// existing `[b"market"]` account (2760 bytes on chain = 8 discriminator + 2752), and
+// `initialize_market` sizes new ones as `8 + size_of::<Market>()`. Fields are carved out
+// of reserved padding precisely so this number never moves — a change here silently
+// re-interprets or orphans live accounts rather than failing loudly. This assertion is
+// what makes that failure loud, at compile time.
+//
+// If you are here because this broke: you changed a field without taking the bytes back
+// out of an adjacent `_padding*`. Fix the padding, don't edit the number.
+const _: () = assert!(std::mem::size_of::<Market>() == 2752);
