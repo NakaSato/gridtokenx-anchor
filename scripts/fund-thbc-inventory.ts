@@ -20,7 +20,10 @@ import { createHash } from 'crypto';
 //   ANCHOR_PROVIDER_URL=http://localhost:8899 ANCHOR_WALLET=../dev-wallet.json \
 //     npx tsx scripts/fund-thbc-inventory.ts
 //
-// Env: FUND_THBC_MINOR (default 500_000000 = 500 THBC), FUND_BANK_REF.
+// Env: FUND_THBC_MINOR (default 500_000000 = 500 THBC), FUND_BANK_REF,
+// FUND_BENEFICIARY_WALLET — when set, issue to THAT wallet's ATA and skip the
+// inventory transfer entirely (a simulated user bank deposit instead of
+// platform inventory buying).
 async function main() {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -45,8 +48,14 @@ async function main() {
     .rpc();
   console.log('✅ on-chain reserve attested (1,000,000 THB, encumbered 0)');
 
-  // 2. Issue THBC to the authority's ATA (nullifier `init` = the F3 replay guard).
-  const ata = getAssociatedTokenAddressSync(thbcMint, authority.publicKey, false, TOKEN_2022_PROGRAM_ID);
+  // 2. Issue THBC (nullifier `init` = the F3 replay guard). Beneficiary is the
+  //    authority (inventory-buy mode) or FUND_BENEFICIARY_WALLET (user-deposit
+  //    mode — the simulated "bank received their THB" outcome).
+  const beneficiaryOwner = process.env.FUND_BENEFICIARY_WALLET
+    ? new PublicKey(process.env.FUND_BENEFICIARY_WALLET)
+    : authority.publicKey;
+  const userMode = !beneficiaryOwner.equals(authority.publicKey);
+  const ata = getAssociatedTokenAddressSync(thbcMint, beneficiaryOwner, false, TOKEN_2022_PROGRAM_ID);
   const issueSig = await treasuryProgram.methods
     .issueThbc(amountMinor, Array.from(refHash))
     .accounts({
@@ -60,14 +69,20 @@ async function main() {
     })
     .preInstructions([
       createAssociatedTokenAccountIdempotentInstruction(
-        authority.publicKey, ata, authority.publicKey, thbcMint, TOKEN_2022_PROGRAM_ID
+        authority.publicKey, ata, beneficiaryOwner, thbcMint, TOKEN_2022_PROGRAM_ID
       ),
     ])
     .rpc();
-  console.log(`✅ issued ${amountMinor.toString()} minor THBC to ${ata.toBase58()} (bank_ref='${bankRef}') tx=${issueSig}`);
+  console.log(`✅ issued ${amountMinor.toString()} minor THBC to ${beneficiaryOwner.toBase58()} (bank_ref='${bankRef}') tx=${issueSig}`);
 
-  // 3. Plain SPL transfer into the inventory vault (exactly how the platform
-  //    "buys its inventory like anyone else").
+  if (userMode) {
+    const bal = await provider.connection.getTokenAccountBalance(ata);
+    console.log(`📊 beneficiary THBC balance: ${bal.value.uiAmountString}`);
+    return;
+  }
+
+  // 3. Inventory-buy mode only: plain SPL transfer into the inventory vault
+  //    (exactly how the platform "buys its inventory like anyone else").
   const tx = new Transaction().add(
     createTransferCheckedInstruction(
       ata, thbcMint, thbcInventory, authority.publicKey,
